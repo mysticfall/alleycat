@@ -26,7 +26,52 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import generate_body_colliders
+import forearm_twist_generator_run_ownership
+import forearm_twist_weights
 import update_character_import_retarget_metadata
+from rigging.forearm_twist_bridge import (
+    BEND_EVIDENCE_ASSERTIONS,
+    BEND_EXTENSION_DEGREES,
+    BEND_FLEXION_DEGREES,
+    BEND_POPULATION_BIN_WIDTH,
+    BEND_POPULATION_RADIUS_MAXIMUM,
+    BEND_POPULATION_SOURCE_POOL_MINIMUM,
+    BEND_POPULATION_T_MAX,
+    BEND_POPULATION_T_MIN,
+    BIN_WIDTH,
+    GODOT_FROM_BLENDER,
+    MINIMUM_RADIUS_METRES,
+    POSITION_GRID_METRES,
+    ProvenanceError,
+    RUNTIME_TWIST_WEIGHT,
+    SCHEMA_VERSION as FOREARM_TWIST_MANIFEST_SCHEMA_VERSION,
+    BridgeVertex,
+    anatomical_hand_pose,
+    anatomical_wrist_frame,
+    assert_bend_sign_convention,
+    canonicalise_vertices,
+    canonical_triangle_id,
+    godot_position,
+    helper_twist_pose,
+    m_inverse,
+    m_mul,
+    m_transform_direction,
+    m_transform_point,
+    palm_forward_alignment,
+    pin_bend_population,
+    pin_bridge_population,
+    projected_wrist_hinge_axis,
+    propagate_poses,
+    q_from_matrix,
+    signed_principal_twist,
+    skin_point,
+    subject_forward_frame,
+    triangle_area,
+    v_dot,
+    v_length,
+    v_normalised,
+    v_sub,
+)
 
 
 USAGE = (
@@ -47,6 +92,555 @@ RIGIFY_RETARGET_PRESET_NAME = "Rigify_Deform.py"
 ACTION_CLEAN_THRESHOLD = 0.001
 ACTION_VARIATION_THRESHOLD = 0.0001
 BAKED_ACTION_COLLISION_SUFFIX = ".baked"
+# Per-side forearm-twist chain (RIG-002 TR1): lower arm -> twist helper -> hand,
+# plus the mirrored-contamination suffixes.  The generator emits exactly one
+# helper bone per side and re-parents the matching hand onto it.
+FOREARM_TWIST_WEIGHT_GROUPS = (
+    ("lowerarm_l", "LeftForearmTwist", "hand_l", "_r", "_l"),
+    ("lowerarm_r", "RightForearmTwist", "hand_r", "_l", "_r"),
+)
+# Subject-frame and finger-geometry bone names for the anatomical bend fixture
+# (RIG-002 TR8); the MPFB export rig naming.
+FOREARM_TWIST_SUBJECT_BONES = {
+    "pelvis": "pelvis",
+    "head": "head",
+    "left_upper_arm": "upperarm_l",
+    "right_upper_arm": "upperarm_r",
+}
+FOREARM_TWIST_FINGER_BONES = {
+    "left": {
+        "middle_distal": "middle_03_l",
+        "thumb_proximal": "thumb_01_l",
+        "little_distal": "pinky_03_l",
+        "side_sign": 1.0,
+    },
+    "right": {
+        "middle_distal": "middle_03_r",
+        "thumb_proximal": "thumb_01_r",
+        "little_distal": "pinky_03_r",
+        "side_sign": -1.0,
+    },
+}
+
+
+def _bridge_tuple_matrix(matrix) -> tuple[tuple[float, float, float, float], ...]:
+    """Convert a mathutils matrix to the bridge's float64 row-major tuples."""
+
+    return tuple(tuple(float(component) for component in row) for row in matrix)
+
+
+def _required_manifest_bone(armature: bpy.types.Object, name: str):
+    bone = armature.data.bones.get(name)
+    if bone is None:
+        raise ScriptError(f'Cannot capture forearm provenance: armature lacks bone "{name}".')
+    return bone
+
+
+def _manifest_source_influences(armature: bpy.types.Object, weights: dict[str, float]) -> list[tuple[str, float]]:
+    """Deform-bone influences with audit-identical filtering."""
+
+    return [
+        (name, weight)
+        for name, weight in weights.items()
+        if (bone := armature.data.bones.get(name)) is not None and bone.use_deform
+    ]
+
+
+def reparent_hands_onto_twist_helpers(armature: bpy.types.Object) -> None:
+    """Complete the per-side RIG-002 chain ``LowerArm -> ForearmTwist -> Hand``.
+
+    The generic MPFB source rig already emits exactly one deform-only twist
+    helper per side, directly parented to its lower arm, with the hand still
+    parented to the lower arm.  This step re-parents each matching hand onto its
+    twist helper while preserving every bone's world rest placement, so the
+    exported chain is ``LowerArm -> ForearmTwist -> Hand`` with no second helper
+    bone.  Because no bone is appended, the export's existing bone indices do
+    not shift; the template bone-binding guard (RIG-002 TR12) still verifies the
+    serialised ``bone_idx <-> bone_name`` agreement after regeneration.
+    """
+
+    bpy.context.view_layer.objects.active = armature
+    if bpy.context.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        edit_bones = armature.data.edit_bones
+        for _lower, twist, hand, _wrong, _correct in FOREARM_TWIST_WEIGHT_GROUPS:
+            twist_bone = edit_bones.get(twist)
+            hand_bone = edit_bones.get(hand)
+            if twist_bone is None or hand_bone is None:
+                raise ScriptError(
+                    "Cannot complete the forearm-twist chain: armature lacks the RIG-002 bones "
+                    f'"{twist}" and "{hand}".'
+                )
+            hand_bone.parent = twist_bone
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    for _lower, twist, hand, _wrong, _correct in FOREARM_TWIST_WEIGHT_GROUPS:
+        helper = armature.data.bones.get(twist)
+        hand_bone = armature.data.bones.get(hand)
+        if helper is None or hand_bone is None:
+            raise ScriptError(f'Twist-chain emission lost bone "{twist}" or "{hand}" while leaving edit mode.')
+        if hand_bone.parent != helper:
+            raise ScriptError(
+                f'Twist-chain emission did not produce the chain "{helper.name}" -> "{hand_bone.name}".'
+            )
+        if not helper.use_deform:
+            raise ScriptError(f'Twist helper "{helper.name}" is not deformation-only-enabled.')
+
+
+def capture_forearm_twist_anatomical_bend(
+    mesh: bpy.types.Object,
+    armature: bpy.types.Object,
+    source_weights: list[dict[str, float]],
+    side_name: str,
+    lower: str,
+    helper: str,
+    hand: str,
+    required: bool,
+) -> dict[str, object] | None:
+    """Capture the twist-only anatomical bend population and per-pose deformation.
+
+    Membership is frozen from neutral geometry and pre-redistribution source
+    ownership; per-scenario deformed positions use real-hierarchy propagation
+    and the same bridge pose construction the audit re-derives, so the audit can
+    parity-check this record against its own execution (RIG-002 TR9-10).  The
+    single twist helper is posed per scenario at the runtime weight times the
+    extracted twist; the swing component of the hand delta is never applied
+    anywhere.  The body mesh must carry a dense population; clothing without
+    forearm surface coverage is skipped rather than failing generation.
+    """
+
+    lower_bone = _required_manifest_bone(armature, lower)
+    hand_bone = _required_manifest_bone(armature, hand)
+    helper_bone = _required_manifest_bone(armature, helper)
+    fingers = FOREARM_TWIST_FINGER_BONES[side_name]
+
+    subject = subject_forward_frame(
+        _required_manifest_bone(armature, FOREARM_TWIST_SUBJECT_BONES["pelvis"]).head_local[:],
+        _required_manifest_bone(armature, FOREARM_TWIST_SUBJECT_BONES["head"]).head_local[:],
+        _required_manifest_bone(armature, FOREARM_TWIST_SUBJECT_BONES["left_upper_arm"]).head_local[:],
+        _required_manifest_bone(armature, FOREARM_TWIST_SUBJECT_BONES["right_upper_arm"]).head_local[:],
+    )
+    lower_rest = _bridge_tuple_matrix(lower_bone.matrix_local)
+    hand_rest = _bridge_tuple_matrix(hand_bone.matrix_local)
+    helper_rest = _bridge_tuple_matrix(helper_bone.matrix_local)
+    frame = anatomical_wrist_frame(
+        lower_rest,
+        hand_rest,
+        subject["forward"],
+        _required_manifest_bone(armature, fingers["middle_distal"]).head_local[:],
+        _required_manifest_bone(armature, fingers["thumb_proximal"]).head_local[:],
+        _required_manifest_bone(armature, fingers["little_distal"]).head_local[:],
+        float(fingers["side_sign"]),
+    )
+    longitudinal = frame["longitudinal"]
+    flex_axis = frame["flex_axis"]
+    wrist = frame["wrist"]
+    pronation = float(frame["pronation_radians"])
+
+    # Declared frame: the lower-arm rest frame; the only place world and
+    # armature quantities meet is the documented conversion below.
+    lower_rest_inverse = m_inverse(lower_rest)
+    world_to_declared = (armature.matrix_world @ lower_bone.matrix_local).inverted()
+    world_to_armature = armature.matrix_world.inverted()
+
+    def declared_position(world_position) -> tuple[float, float, float]:
+        return tuple(world_to_declared @ world_position)
+
+    longitudinal_declared = v_normalised(m_transform_direction(lower_rest_inverse, longitudinal))
+    flex_axis_declared = v_normalised(m_transform_direction(lower_rest_inverse, flex_axis))
+    wrist_declared = m_transform_point(lower_rest_inverse, wrist)
+
+    # Population: neutral geometry plus pre-redistribution source ownership.
+    elbow_world = armature.matrix_world @ lower_bone.head_local
+    wrist_world = armature.matrix_world @ lower_bone.tail_local
+    axis_vector = wrist_world - elbow_world
+    axis_length = axis_vector.length
+    axis_unit = axis_vector.normalized()
+    population_vertices: list[BridgeVertex] = []
+    member_declared: dict[int, tuple[float, float, float]] = {}
+    for vertex, weights in zip(mesh.data.vertices, source_weights, strict=True):
+        position = mesh.matrix_world @ vertex.co
+        relative = position - elbow_world
+        t = float(relative.dot(axis_unit)) / axis_length
+        radius = float((relative - axis_unit * relative.dot(axis_unit)).length)
+        lower_weight = weights.get(lower, 0.0)
+        hand_weight = weights.get(hand, 0.0)
+        candidate = BridgeVertex(
+            mesh.name,
+            0,
+            side_name,
+            vertex.index,
+            tuple(position),
+            t,
+            radius,
+            lower_weight,
+            weights.get(helper, 0.0),
+            hand_weight,
+            tuple(sorted(weights.items())),
+        )
+        if not (
+            BEND_POPULATION_T_MIN <= t < BEND_POPULATION_T_MAX
+            and radius <= BEND_POPULATION_RADIUS_MAXIMUM
+            and lower_weight + weights.get(helper, 0.0) + hand_weight >= BEND_POPULATION_SOURCE_POOL_MINIMUM
+            and radius >= MINIMUM_RADIUS_METRES
+        ):
+            continue
+        member_declared[vertex.index] = declared_position(position)
+        population_vertices.append(candidate)
+    try:
+        bend_bins = pin_bend_population(population_vertices)
+    except ProvenanceError:
+        if required:
+            raise
+        # Clothing without dense forearm-surface coverage carries no bend
+        # population; the bend gates are defined on the body mesh.
+        return None
+    canonical = canonicalise_vertices(
+        [member for members in bend_bins.values() for member in members]
+    )
+    source_to_id = {
+        member.source_index: identifier
+        for identifier, members in canonical
+        for member in members
+    }
+    if len(source_to_id) != len(member_declared):
+        raise ScriptError("Anatomical bend population welding lost or duplicated a source vertex.")
+
+    # Local neutral edge scale per member: mean incident authored-polygon edge
+    # length in the declared frame, manifest-frozen and candidate-independent.
+    incident: dict[int, list[float]] = {}
+    for polygon in mesh.data.polygons:
+        vertices = list(polygon.vertices)
+        for index, first in enumerate(vertices):
+            second = vertices[(index + 1) % len(vertices)]
+            if first in member_declared and second in member_declared:
+                length = v_length(v_sub(member_declared[first], member_declared[second]))
+                incident.setdefault(first, []).append(length)
+                incident.setdefault(second, []).append(length)
+
+    def radial_distance_declared(identifier_position: tuple[float, float, float], axis: tuple[float, float, float]) -> float:
+        relative = v_sub(identifier_position, wrist_declared)
+        along = v_dot(relative, axis)
+        return v_length(v_sub(relative, (axis[0] * along, axis[1] * along, axis[2] * along)))
+
+    radius_longitudinal: dict[str, float] = {}
+    radius_flex: dict[str, float] = {}
+    vertex_rows: list[dict[str, object]] = []
+    for identifier, members in canonical:
+        source_index = members[0].source_index
+        position = member_declared[source_index]
+        radius_longitudinal[identifier] = radial_distance_declared(position, longitudinal_declared)
+        radius_flex[identifier] = radial_distance_declared(position, flex_axis_declared)
+        lengths = incident.get(source_index, [])
+        vertex_rows.append(
+            {
+                "id": identifier,
+                "members": [member.source_index for member in members],
+                "position_declared": list(position),
+                "position_godot": godot_position(members[0].position),
+                "t": members[0].t,
+                "bin": math.floor(members[0].t / BEND_POPULATION_BIN_WIDTH),
+                "radius_longitudinal_metres": radius_longitudinal[identifier],
+                "radius_flex_metres": radius_flex[identifier],
+                "local_edge_metres": (sum(lengths) / len(lengths)) if lengths else 0.0,
+                "source_ownership": dict(members[0].candidate),
+            }
+        )
+
+    member_ids = set(source_to_id)
+    mesh.data.calc_loop_triangles()
+    triangle_rows: list[dict[str, object]] = []
+    for triangle in mesh.data.loop_triangles:
+        indices = list(triangle.vertices)
+        if not all(index in member_ids for index in indices):
+            continue
+        identifiers = [source_to_id[index] for index in indices]
+        area = triangle_area(*[member_declared[index] for index in indices])
+        if area < 1.0e-10:
+            continue
+        triangle_rows.append(
+            {"id": canonical_triangle_id(identifiers), "vertices": identifiers, "neutral_area_metres_squared": area}
+        )
+    triangle_rows.sort(key=lambda item: str(item["id"]))
+
+    bones = [
+        (bone.name, bone.parent.name if bone.parent else None, _bridge_tuple_matrix(bone.matrix_local))
+        for bone in armature.data.bones
+    ]
+    rests = {name: rest for name, _parent, rest in bones}
+    armature_positions = {
+        index: tuple(world_to_armature @ (mesh.matrix_world @ mesh.data.vertices[index].co))
+        for index in member_declared
+    }
+
+    scenarios: dict[str, object] = {}
+    for name, bend_degrees in (
+        ("palm_forward", 0.0),
+        ("flexion_60", BEND_FLEXION_DEGREES),
+        ("extension_60", BEND_EXTENSION_DEGREES),
+    ):
+        bend_radians = math.radians(bend_degrees)
+        if abs(bend_radians) > 0.0:
+            assert_bend_sign_convention(frame, bend_radians)
+        posed_hand = anatomical_hand_pose(lower_rest, hand_rest, frame, bend_radians)
+        hand_delta = m_mul(posed_hand, m_inverse(hand_rest))
+        twist = signed_principal_twist(q_from_matrix(hand_delta), longitudinal)
+        posed_helper = helper_twist_pose(helper_rest, longitudinal, twist, RUNTIME_TWIST_WEIGHT)
+        posed_palm = v_normalised(m_transform_direction(posed_hand, (0.0, 0.0, 1.0)))
+        # The palm normal may tilt along the forearm axis; the forward-facing
+        # contract applies to its perpendicular component.
+        palm_forward_dot = palm_forward_alignment(posed_palm, frame["palm_target"], longitudinal)
+        palm_minimum = float(BEND_EVIDENCE_ASSERTIONS["palm_forward_minimum_dot"]["value"])
+        twist_tolerance = float(BEND_EVIDENCE_ASSERTIONS["twist_recovery_tolerance_radians"]["value"])
+        if palm_forward_dot < palm_minimum:
+            raise ScriptError(
+                f'Anatomical capture: pronation did not face the {side_name} palm forward (dot={palm_forward_dot:.9f}).'
+            )
+        if abs(twist - pronation) > twist_tolerance:
+            raise ScriptError(
+                f'Anatomical capture: {side_name} twist did not recover the pronation ({twist} vs {pronation}).'
+            )
+        posed = propagate_poses(bones, {hand: posed_hand, helper: posed_helper})
+        deformed_declared: dict[str, list[float]] = {}
+        for index in member_declared:
+            influences = _manifest_source_influences(armature, source_weights[index])
+            deformed_armature = skin_point(armature_positions[index], influences, posed, rests)
+            deformed_declared[source_to_id[index]] = list(m_transform_point(lower_rest_inverse, deformed_armature))
+        scenarios[name] = {
+            "bend_degrees": bend_degrees,
+            "helper_degrees": math.degrees(RUNTIME_TWIST_WEIGHT * twist),
+            "pronation_degrees": math.degrees(pronation),
+            "extracted_twist_degrees": math.degrees(twist),
+            "palm_forward_dot": palm_forward_dot,
+            "deformed_declared": deformed_declared,
+        }
+
+    return {
+        "declared_frame": "lower_arm_rest",
+        "conversions": {
+            "positions": "declared = (armature.matrix_world @ lower_arm.matrix_local)^-1 @ world",
+            "axes": "declared = lower_arm.matrix_local.to_3x3().inverted() @ armature-space axis",
+            "godot": "position_godot = godot_position(world) per the manifest coordinate convention",
+            "note": "All pose maths and metrics live in the declared lower-arm rest frame; the armature object transform participates only through the documented world conversion.",
+        },
+        "elbow_armature": list(lower_bone.head_local),
+        "wrist_armature": list(hand_bone.head_local),
+        "longitudinal_axis_armature": list(longitudinal),
+        "flex_axis_armature": list(flex_axis),
+        "longitudinal_axis_declared": list(longitudinal_declared),
+        "flex_axis_declared": list(flex_axis_declared),
+        "subject_forward_armature": list(subject["forward"]),
+        "palm_rest_armature": list(frame["palm_rest"]),
+        "palm_target_declared": list(frame["palm_target"]),
+        "palm_thumb_alignment": float(frame["thumb_alignment"]),
+        "palm_little_alignment": float(frame["little_alignment"]),
+        "pronation_degrees": math.degrees(pronation),
+        "population_bin_counts": {str(index): len(members) for index, members in sorted(bend_bins.items())},
+        "population_vertex_count": len(vertex_rows),
+        "population_triangle_count": len(triangle_rows),
+        "vertices": vertex_rows,
+        "triangles": triangle_rows,
+        "scenarios": scenarios,
+    }
+
+
+def capture_forearm_twist_neutral_manifest(
+    exported_objects: set[bpy.types.Object],
+    armature: bpy.types.Object,
+) -> dict[str, object]:
+    """Capture source ownership before helper redistribution changes it.
+
+    The sidecar is intentionally assembled from the freshly exported MPFB mesh,
+    not from a later checked-in generated file.  The latter has already had its
+    candidate helper weights applied and is not valid provenance for a fixed
+    bridge population.
+    """
+
+    from mathutils import Vector
+
+    meshes: list[dict[str, object]] = []
+    for mesh in sorted(exported_objects, key=lambda item: item.name):
+        if mesh.type != "MESH" or not any(
+            modifier.type == "ARMATURE" and modifier.object == armature for modifier in mesh.modifiers
+        ):
+            continue
+        names = {group.index: group.name for group in mesh.vertex_groups}
+        source_weights = [
+            {
+                names[item.group]: float(item.weight)
+                for item in vertex.groups
+                if item.group in names and item.weight > 0.0
+            }
+            for vertex in mesh.data.vertices
+        ]
+        sides: dict[str, object] = {}
+        for side_name, (lower, helper, hand, _wrong, _correct) in zip(
+            ("left", "right"), FOREARM_TWIST_WEIGHT_GROUPS, strict=True
+        ):
+            lower_bone = armature.data.bones.get(lower)
+            hand_bone = armature.data.bones.get(hand)
+            if lower_bone is None or hand_bone is None:
+                continue
+            elbow = armature.matrix_world @ lower_bone.head_local
+            axis_vector = (armature.matrix_world @ lower_bone.tail_local) - elbow
+            if axis_vector.length <= 1.0e-8:
+                raise ScriptError(f'Cannot capture forearm provenance: bone "{lower}" has no length.')
+            axis = axis_vector.normalized()
+            lower_basis = armature.matrix_world.to_3x3() @ lower_bone.matrix_local.to_3x3()
+            lower_basis_inverse = lower_basis.inverted()
+            lower_axis_rest = lower_basis_inverse @ axis
+            hand_z_rest = lower_basis_inverse @ (armature.matrix_world.to_3x3() @ hand_bone.matrix_local.to_3x3() @ Vector((0.0, 0.0, 1.0)))
+            hinge_axis_rest = Vector(projected_wrist_hinge_axis(tuple(hand_z_rest), tuple(lower_axis_rest)))
+            hinge_axis = lower_basis @ hinge_axis_rest
+            hinge_pivot = armature.matrix_world @ hand_bone.head_local
+            vertices = []
+            for vertex, weights in zip(mesh.data.vertices, source_weights, strict=True):
+                position = mesh.matrix_world @ vertex.co
+                relative = position - elbow
+                t = relative.dot(axis) / axis_vector.length
+                hinge_relative = position - hinge_pivot
+                radius = (hinge_relative - (hinge_axis * hinge_relative.dot(hinge_axis))).length
+                vertices.append(
+                    BridgeVertex(
+                        mesh.name,
+                        0,
+                        side_name,
+                        vertex.index,
+                        tuple(position),
+                        t,
+                        radius,
+                        weights.get(lower, 0.0),
+                        weights.get(helper, 0.0),
+                        weights.get(hand, 0.0),
+                        tuple(sorted(weights.items())),
+                    )
+                )
+            mixed_bins, bridge_vertices, single_anchor = pin_bridge_population(vertices)
+            canonical = canonicalise_vertices(bridge_vertices)
+            source_to_id = {
+                member.source_index: identifier
+                for identifier, members in canonical
+                for member in members
+            }
+            mixed_indices = {member.source_index for members in mixed_bins.values() for member in members}
+            mesh.data.calc_loop_triangles()
+            triangles = []
+            for triangle in mesh.data.loop_triangles:
+                source_indices = list(triangle.vertices)
+                if not all(index in source_to_id for index in source_indices) or not any(index in mixed_indices for index in source_indices):
+                    continue
+                points = [mesh.matrix_world @ mesh.data.vertices[index].co for index in source_indices]
+                area = ((points[1] - points[0]).cross(points[2] - points[0])).length * 0.5
+                if area < 1.0e-10:
+                    continue
+                ids = [source_to_id[index] for index in source_indices]
+                triangles.append({"id": canonical_triangle_id(ids), "vertices": ids, "neutral_area_metres_squared": area})
+            sides[side_name] = {
+                "pivot_godot_metres": godot_position(hinge_pivot),
+                "axis_godot": godot_position(hinge_axis),
+                "lower_arm_longitudinal_axis_godot": godot_position(axis),
+                "axis_lower_arm_rest": tuple(hinge_axis_rest),
+                "mixed_bin_counts": {str(index): len(members) for index, members in sorted(mixed_bins.items())},
+                "fixed_bridge_count": len(bridge_vertices),
+                "single_anchor_count": len(single_anchor),
+                "vertices": [
+                    {
+                        "id": identifier,
+                        "members": [member.source_index for member in members],
+                        "duplicate_count": len(members),
+                        "position_godot_metres": godot_position(members[0].position),
+                        "t": members[0].t,
+                        "bin": math.floor(members[0].t / BIN_WIDTH),
+                        "radius_metres": members[0].radius,
+                        "baseline": {"lower_arm": members[0].lower, "helper": members[0].helper, "hand": members[0].hand},
+                        "source_ownership": dict(members[0].candidate),
+                        "classification": "mixed" if members[0].source_index in mixed_indices else "single_anchor",
+                    }
+                    for identifier, members in canonical
+                ],
+                "triangles": sorted(triangles, key=lambda item: str(item["id"])),
+                **(
+                    {}
+                    if (anatomical_bend := capture_forearm_twist_anatomical_bend(
+                        mesh,
+                        armature,
+                        source_weights,
+                        side_name,
+                        lower,
+                        helper,
+                        hand,
+                        required=mesh.name.endswith(".body"),
+                    ))
+                    is None
+                    else {"anatomical_bend": anatomical_bend}
+                ),
+            }
+        if sides:
+            meshes.append({"name": mesh.name, "surface": 0, "sides": sides})
+    return {
+        "schema_version": FOREARM_TWIST_MANIFEST_SCHEMA_VERSION,
+        "producer": "tools/generate_character.py (pre-helper redistribution)",
+        "coordinate_convention": {
+            "positions": "Godot skeleton-local metres",
+            "godot_from_blender": GODOT_FROM_BLENDER,
+            "winding": "orientation-preserving; cyclic triangle rotations only",
+            "units": "metres",
+            "grid_origin_metres": [0.0, 0.0, 0.0],
+            "position_quantisation_metres": POSITION_GRID_METRES,
+            "anatomical_bend_positions": "declared lower-arm rest frame metres (see sides.<side>.anatomical_bend.conversions)",
+        },
+        "fixed_population": {
+            "t": [0.85, 1.10],
+            "source_lower_arm_plus_hand_minimum": 0.50,
+            "radius_minimum_metres": 1.0e-5,
+            "mixed": {"lower_arm_minimum": 0.05, "hand_minimum": 0.05, "bin_width": BIN_WIDTH, "minimum_reference_vertices": 10},
+            "single_anchor": "every pinned window vertex whose pre-tuning lower+hand ownership is not a two-anchor blend row",
+            "anatomical_bend": {
+                "t": [BEND_POPULATION_T_MIN, BEND_POPULATION_T_MAX],
+                "radius_maximum_metres": BEND_POPULATION_RADIUS_MAXIMUM,
+                "source_forearm_chain_pool_minimum": BEND_POPULATION_SOURCE_POOL_MINIMUM,
+                "minimum_reference_vertices_per_bin": 10,
+                "rationale": "Widens the measured region to the surrounding wrist and distal-forearm transition so pinch relocation cannot evade the bend gates (RIG-002 TR9); the pool covers the lower-arm, helper, and hand chain.",
+            },
+        },
+        "meshes": meshes,
+    }
+
+
+def capture_forearm_twist_candidate_weight_evidence(
+    exported_objects: set[bpy.types.Object], neutral_manifest: dict[str, object]
+) -> dict[str, object]:
+    """Record redistributed candidate weights without mutating neutral ownership."""
+
+    meshes = {mesh.name: mesh for mesh in exported_objects if mesh.type == "MESH"}
+    records = []
+    for manifest_mesh in neutral_manifest["meshes"]:
+        mesh = meshes.get(manifest_mesh["name"])
+        if mesh is None:
+            raise ScriptError(f'Candidate evidence cannot find exported mesh "{manifest_mesh["name"]}".')
+        names = {group.index: group.name for group in mesh.vertex_groups}
+        sides = {}
+        for side_name, manifest_side in manifest_mesh["sides"].items():
+            rows = []
+            for row in manifest_side["vertices"]:
+                weights = []
+                for index in row["members"]:
+                    weights.append({names[item.group]: float(item.weight) for item in mesh.data.vertices[index].groups if item.group in names and item.weight > 0.0})
+                if any(candidate != weights[0] for candidate in weights[1:]):
+                    raise ScriptError(f'Candidate seam weights disagree for canonical vertex "{row["id"]}".')
+                rows.append({"id": row["id"], "weights": weights[0]})
+            sides[side_name] = {"vertices": rows}
+        records.append({"name": manifest_mesh["name"], "sides": sides})
+    return {
+        "schema_version": FOREARM_TWIST_MANIFEST_SCHEMA_VERSION,
+        "producer": "tools/generate_character.py (post-helper redistribution candidate weights)",
+        "neutral_manifest_schema_version": FOREARM_TWIST_MANIFEST_SCHEMA_VERSION,
+        "meshes": records,
+    }
 
 
 class ScriptError(Exception):
@@ -226,6 +820,321 @@ def get_mpfb_export_operator():
             "MPFB operator bpy.ops.mpfb.export_copy is not available. "
             "Ensure the MPFB add-on is installed and enabled."
         ) from exc
+
+
+def snapshot_export_physical_memberships(
+    exported_objects: set[bpy.types.Object],
+) -> dict[int, tuple[int, tuple[tuple[int, str], ...], list[dict[str, float]]]]:
+    """Freeze every export mesh's physical rows before any generator cleanup."""
+
+    snapshots = {}
+    for mesh in exported_objects:
+        if mesh.type != "MESH":
+            continue
+        pointer = mesh.as_pointer()
+        if not pointer or pointer in snapshots:
+            raise ScriptError(f'Cannot snapshot export mesh "{mesh.name}": duplicate or invalid object identity.')
+        groups = [(group.index, group.name) for group in mesh.vertex_groups]
+        if len({index for index, _ in groups}) != len(groups) or len({name for _, name in groups}) != len(groups):
+            raise ScriptError(f'Cannot snapshot export mesh "{mesh.name}": ambiguous group index or name.')
+        names = dict(groups)
+        rows = []
+        for position, vertex in enumerate(mesh.data.vertices):
+            if vertex.index != position:
+                raise ScriptError(f'Cannot snapshot export mesh "{mesh.name}": vertex ordering changed.')
+            row = {}
+            for assignment in vertex.groups:
+                name = names.get(assignment.group)
+                if name is None or name in row or not 0.0 <= assignment.weight <= 1.0:
+                    raise ScriptError(f'Cannot snapshot export mesh "{mesh.name}" vertex {position}: ambiguous physical group.')
+                row[name] = float(assignment.weight)
+            rows.append(row)
+        data_pointer = mesh.data.as_pointer()
+        if not data_pointer:
+            raise ScriptError(f'Cannot snapshot export mesh "{mesh.name}": invalid mesh data identity.')
+        snapshots[pointer] = (data_pointer, tuple(sorted(groups)), rows)
+    if not snapshots:
+        raise ScriptError("MPFB export_copy created no export meshes for physical snapshot.")
+    return snapshots
+
+
+def verify_export_physical_memberships(
+    exported_objects: set[bpy.types.Object],
+    snapshots: dict[int, tuple[int, tuple[tuple[int, str], ...], list[dict[str, float]]]],
+    objects_before_export_pointers: set[int] | None = None,
+) -> dict[str, list[dict[str, float]]]:
+    """Bind the frozen export rows to final names only after verifying the entire interval."""
+
+    live_pointers = {obj.as_pointer() for obj in bpy.data.objects}
+    if any(pointer not in live_pointers for pointer in snapshots):
+        raise ScriptError("Export physical snapshot: dropped export object before authoring.")
+    if objects_before_export_pointers is not None:
+        unexpected = {obj.as_pointer() for obj in bpy.data.objects if obj.type == "MESH"} - objects_before_export_pointers - snapshots.keys()
+        if unexpected:
+            raise ScriptError("Export physical snapshot: newly introduced mesh before authoring.")
+    current = snapshot_export_physical_memberships(exported_objects)
+    if current.keys() != snapshots.keys():
+        raise ScriptError("Export physical snapshot: missing, duplicate, newly introduced or dropped mesh identity.")
+    by_name = {}
+    for mesh in exported_objects:
+        if mesh.type != "MESH":
+            continue
+        pointer = mesh.as_pointer()
+        if current[pointer] != snapshots[pointer]:
+            raise ScriptError(f'Export physical snapshot changed before authoring on "{mesh.name}" (data, groups, vertices or memberships).')
+        if mesh.name in by_name:
+            raise ScriptError(f'Export physical snapshot: duplicate final mesh name "{mesh.name}".')
+        by_name[mesh.name] = snapshots[pointer][2]
+    return by_name
+
+
+def capture_forearm_twist_axial_input(
+    exported_objects: set[bpy.types.Object],
+    armature: bpy.types.Object,
+    physical_memberships: dict[str, list[dict[str, float]]] | None = None,
+) -> dict[str, list[dict[str, float]]]:
+    """Capture complete physical rows separately from positive axial input."""
+
+    prepared: dict[str, list[dict[str, float]]] = {}
+    for mesh in exported_objects:
+        if mesh.type != "MESH" or not any(
+            modifier.type == "ARMATURE" and modifier.object == armature
+            for modifier in mesh.modifiers
+        ):
+            continue
+        group_names = {group.index: group.name for group in mesh.vertex_groups}
+        physical_rows = []
+        for vertex in mesh.data.vertices:
+            row = {}
+            for assignment in vertex.groups:
+                name = group_names.get(assignment.group)
+                if name is None:
+                    raise ScriptError(
+                        f'Cannot snapshot physical row on "{mesh.name}" vertex {vertex.index}: '
+                        f'unknown vertex group index {assignment.group}.'
+                    )
+                if assignment.weight < 0.0:
+                    raise ScriptError(
+                        f'Cannot snapshot physical row on "{mesh.name}" vertex {vertex.index} '
+                        f'group {name!r}: negative membership.'
+                    )
+                if name in row:
+                    raise ScriptError(f'Cannot snapshot duplicate group {name!r} on "{mesh.name}" vertex {vertex.index}.')
+                row[name] = float(assignment.weight)
+            physical_rows.append(row)
+        # No exporter-ghost attribution is available for these rows. Preserve
+        # every zero, including opposite-hand finger memberships, by default.
+        prepared[mesh.name] = [{name: weight for name, weight in row.items() if weight > 0.0}
+                               for row in physical_rows]
+        if physical_memberships is not None:
+            physical_memberships[mesh.name] = physical_rows
+    return prepared
+
+
+def capture_forearm_twist_generator_run_ownership(
+    exported_objects: set[bpy.types.Object],
+    axial_reference: dict[str, list[dict[str, float]]],
+    authoring_eligible: dict[str, dict[str, list[int]]],
+    physical_memberships: dict[str, list[dict[str, float]]],
+    source_domain: dict[str, dict[str, list[int]]],
+) -> list[dict[str, object]]:
+    """Capture the immutable axial reference and original export-local physical key presence."""
+
+    records: list[dict[str, object]] = []
+    for mesh in sorted(exported_objects, key=lambda item: item.name):
+        if mesh.type != "MESH" or mesh.name not in axial_reference:
+            continue
+        rows = axial_reference[mesh.name]
+        if len(rows) != len(mesh.data.vertices):
+            raise ScriptError(f'Cannot capture generator-run ownership: mesh "{mesh.name}" vertex count changed.')
+        if mesh.name not in authoring_eligible:
+            raise ScriptError(f'Cannot capture generator-run ownership: missing authoring eligibility for "{mesh.name}".')
+        if mesh.name not in source_domain:
+            raise ScriptError(f'Cannot capture generator-run ownership: missing source domain for "{mesh.name}".')
+        original = physical_memberships.get(mesh.name)
+        if original is None or len(original) != len(rows):
+            raise ScriptError(f'Cannot capture generator-run ownership: missing physical snapshot for "{mesh.name}".')
+        records.append(
+            {
+                "name": mesh.name,
+                "vertex_count": len(rows),
+                "authoring_eligible": authoring_eligible[mesh.name],
+                "source_domain": source_domain[mesh.name],
+                "original_zero_rows": [
+                    {"vertex": index, "zeros": sorted(name for name, weight in weights.items() if weight == 0.0)}
+                    for index, weights in enumerate(original)
+                    if any(weight == 0.0 for weight in weights.values())
+                ],
+                "original_positive_rows": [
+                    {"vertex": index, "positives": sorted(name for name, weight in weights.items() if weight > 0.0)}
+                    for index, weights in enumerate(original)
+                    if any(weight > 0.0 for weight in weights.values())
+                ],
+                "axial_rows": [
+                    {"vertex": index, "weights": weights}
+                    for index, weights in enumerate(rows)
+                ],
+            }
+        )
+    return records
+
+
+def capture_skipped_export_physical_meshes(
+    exported_objects: set[bpy.types.Object],
+    axial_mesh_names: set[str],
+    physical_memberships: dict[str, list[dict[str, float]]],
+    export_snapshot: dict[int, tuple[int, tuple[tuple[int, str], ...], list[dict[str, float]]]],
+) -> list[dict[str, object]]:
+    """Keep the untouched export-stage rows for every non-axial export mesh."""
+
+    records = []
+    exported_names = {mesh.name for mesh in exported_objects if mesh.type == "MESH"}
+    if not axial_mesh_names <= exported_names or set(physical_memberships) != exported_names:
+        raise ScriptError("Export physical census does not partition every export mesh.")
+    for mesh in sorted(exported_objects, key=lambda item: item.name):
+        if mesh.type != "MESH" or mesh.name in axial_mesh_names:
+            continue
+        original = physical_memberships[mesh.name]
+        snapshot = export_snapshot.get(mesh.as_pointer())
+        if snapshot is None or len(original) != len(mesh.data.vertices):
+            raise ScriptError(f'Export physical census lost mesh identity or rows on "{mesh.name}".')
+        groups = tuple(sorted((group.index, group.name) for group in mesh.vertex_groups))
+        if mesh.data.as_pointer() != snapshot[0] or groups != snapshot[1]:
+            raise ScriptError(f'Export physical census changed mesh data or groups on "{mesh.name}".')
+        records.append({
+            "name": mesh.name,
+            "vertex_count": len(original),
+            "group_indices": [[index, name] for index, name in snapshot[1]],
+            "original_physical_rows": [
+                {"vertex": index, "weights": row} for index, row in enumerate(original)
+            ],
+        })
+    return records
+
+
+def apply_forearm_twist_gradient_on_export(
+    exported_objects: set[bpy.types.Object],
+    armature: bpy.types.Object,
+    axial_input: dict[str, list[dict[str, float]]],
+    authoring_eligible: dict[str, dict[str, list[int]]] | None = None,
+    physical_memberships: dict[str, list[dict[str, float]]] | None = None,
+    source_domain: dict[str, dict[str, list[int]]] | None = None,
+) -> dict[str, list[dict[str, float]]]:
+    """Author axial ownership and freeze its immutable physical reference."""
+
+    references: dict[str, list[dict[str, float]]] = {}
+    for mesh in exported_objects:
+        if mesh.type != "MESH" or not any(
+            modifier.type == "ARMATURE" and modifier.object == armature
+            for modifier in mesh.modifiers
+        ):
+            continue
+        polygons = [tuple(polygon.vertices) for polygon in mesh.data.polygons]
+        if mesh.name not in axial_input:
+            raise ScriptError(f'Cannot apply forearm twist: missing axial input ownership for "{mesh.name}".')
+        source_weights = [dict(weights) for weights in axial_input[mesh.name]]
+        if len(source_weights) != len(mesh.data.vertices):
+            raise ScriptError(f'Cannot apply forearm twist: mesh "{mesh.name}" vertex count changed.')
+        deform_bones = {bone.name for bone in armature.data.bones if bone.use_deform}
+        sides = []
+        projections = {}
+        for lower_arm, helper, hand, _wrong_suffix, _correct_suffix in FOREARM_TWIST_WEIGHT_GROUPS:
+            if lower_arm not in deform_bones or helper not in deform_bones or hand not in deform_bones:
+                raise ScriptError(f'Cannot author forearm twist: missing deform chain for "{lower_arm}".')
+
+            hand_bone = armature.data.bones[hand]
+            finger_groups = frozenset(
+                bone.name for bone in armature.data.bones
+                if bone.use_deform and bone != hand_bone and
+                any(ancestor == hand_bone for ancestor in bone.parent_recursive)
+            )
+            sides.append(forearm_twist_weights.AxialSide(lower_arm, helper, hand, finger_groups))
+
+            lower_arm_bone = armature.data.bones[lower_arm]
+            elbow = armature.matrix_world @ lower_arm_bone.head_local
+            axis = (armature.matrix_world @ lower_arm_bone.tail_local) - elbow
+            axis_length_squared = axis.length_squared
+            if axis_length_squared <= 1e-8:
+                raise ScriptError(f'Cannot apply forearm twist: bone "{lower_arm}" has no length.')
+
+            projected = []
+            for vertex in mesh.data.vertices:
+                relative = (mesh.matrix_world @ vertex.co) - elbow
+                along_lower_arm = relative.dot(axis) / axis_length_squared
+                radial_offset = relative - axis * along_lower_arm
+                projected.append((along_lower_arm, radial_offset.length))
+            projections[lower_arm[-2:]] = projected
+
+        vertices = [forearm_twist_weights.ForearmVertex(0.0, 0.0, weights)
+                    for weights in source_weights]
+        try:
+            authored = forearm_twist_weights.author_axial_weights(vertices, polygons, sides, projections)
+        except (ValueError, IndexError) as exc:
+            raise ScriptError(f'Cannot author forearm twist on "{mesh.name}": {exc}') from exc
+        final = [dict(row) for row in authored.reference]
+        # Provisional pre-export ceiling for Godot's configured All Influences skin import;
+        # passing this check does not prove exported/imported channel retention.
+        for index, row in enumerate(final):
+            if sum(weight > 0.0 and name in deform_bones for name, weight in row.items()) > 8:
+                raise ScriptError(f'Cannot author forearm twist: "{mesh.name}" vertex {index} exceeds eight deform influences.')
+        references[mesh.name] = [dict(row) for row in authored.reference]
+        if source_domain is not None:
+            source_domain[mesh.name] = {
+                side.helper: [index for index, allowed in enumerate(authored.source_domain[position]) if allowed]
+                for position, side in enumerate(sides)
+            }
+        if authoring_eligible is not None:
+            authoring_eligible[mesh.name] = {
+                side.helper: [index for index, beta in enumerate(authored.beta[position])
+                              if beta > 0.0 and authored.logical_twist[position][index] > 0.0]
+                for position, side in enumerate(sides)
+            }
+        if physical_memberships is None or mesh.name not in physical_memberships:
+            raise ScriptError(f'Cannot write forearm twist: missing physical snapshot for "{mesh.name}".')
+        write_forearm_twist_vertex_weights(mesh, final, physical_memberships[mesh.name])
+    return references
+
+
+def write_forearm_twist_vertex_weights(
+    mesh: bpy.types.Object, rows: list[dict[str, float]], physical_rows: list[dict[str, float]]
+) -> None:
+    """Write positive ownership and retain every original physical zero key."""
+
+    if len(rows) != len(mesh.data.vertices) or len(physical_rows) != len(rows):
+        raise ScriptError(f'Cannot write forearm twist on "{mesh.name}": vertex count changed.')
+    required_groups = sorted({name for weights in rows for name, weight in weights.items() if weight > 0.0})
+    existing_names = {group.index: group.name for group in mesh.vertex_groups}
+    # Validate all rows before mutating any group: unknown indices, missing
+    # source keys and unapproved new physical zeros cannot be silently repaired.
+    for vertex, weights, physical in zip(mesh.data.vertices, rows, physical_rows, strict=True):
+        current = {}
+        for assignment in vertex.groups:
+            name = existing_names.get(assignment.group)
+            if name is None:
+                raise ScriptError(f'Cannot write physical row on "{mesh.name}" vertex {vertex.index}: unknown vertex group index {assignment.group}.')
+            current[name] = assignment.weight
+        if set(current) != set(physical):
+            raise ScriptError(f'Cannot write physical row on "{mesh.name}" vertex {vertex.index}: membership changed since snapshot.')
+        if any(weight < 0.0 for weight in weights.values()):
+            raise ScriptError(f'Cannot write physical row on "{mesh.name}" vertex {vertex.index}: negative weight.')
+        new_positive = {name for name, weight in weights.items() if weight > 0.0 and name not in physical}
+        helper_names = {side[1] for side in FOREARM_TWIST_WEIGHT_GROUPS}
+        if new_positive - helper_names:
+            raise ScriptError(f'Cannot write physical row on "{mesh.name}" vertex {vertex.index}: unexpected new physical keys {sorted(new_positive - helper_names)}.')
+    groups = {
+        name: mesh.vertex_groups.get(name) or mesh.vertex_groups.new(name=name)
+        for name in required_groups
+    }
+    for vertex, weights, physical in zip(mesh.data.vertices, rows, physical_rows, strict=True):
+        for assignment in tuple(vertex.groups):
+            name = existing_names.get(assignment.group)
+            if weights.get(name, 0.0) <= 0.0 and name not in physical:
+                mesh.vertex_groups[name].remove([vertex.index])
+            elif name in physical and weights.get(name, 0.0) <= 0.0:
+                mesh.vertex_groups[name].add([vertex.index], 0.0, "REPLACE")
+        for name, weight in weights.items():
+            if weight > 0.0:
+                groups[name].add([vertex.index], weight, "REPLACE")
 
 
 def get_orphans_purge_operator():
@@ -2369,6 +3278,7 @@ def generate_character(config: CharacterConfig) -> Path:
     source_armature = select_generated_armature(scene, preset)
     source_hierarchy = collect_object_hierarchy(source_armature)
     objects_before_export = set(bpy.data.objects)
+    objects_before_export_pointers = {obj.as_pointer() for obj in objects_before_export}
 
     export_property_names = [
         "MPFB_EXPO_bake_shapekeys",
@@ -2396,6 +3306,7 @@ def generate_character(config: CharacterConfig) -> Path:
     exported_objects = set(bpy.data.objects) - objects_before_export - source_hierarchy
     if not exported_objects:
         raise ScriptError(f'MPFB export_copy did not create exported objects for preset "{preset}".')
+    export_physical_snapshot = snapshot_export_physical_memberships(exported_objects)
 
     delete_objects(source_hierarchy)
     purge_orphans()
@@ -2404,7 +3315,43 @@ def generate_character(config: CharacterConfig) -> Path:
     exported_animation_owner = select_exported_animation_owner(
         scene, exported_objects, character_name
     )
+    reparent_hands_onto_twist_helpers(exported_animation_owner)
     collider_body = find_generated_body_mesh(exported_animation_owner, character_name)
+    neutral_manifest = capture_forearm_twist_neutral_manifest(
+        exported_objects,
+        exported_animation_owner,
+    )
+    axial_input = capture_forearm_twist_axial_input(
+        exported_objects,
+        exported_animation_owner,
+    )
+    physical_memberships = verify_export_physical_memberships(
+        exported_objects, export_physical_snapshot, objects_before_export_pointers
+    )
+    authoring_eligible: dict[str, dict[str, list[int]]] = {}
+    source_domain: dict[str, dict[str, list[int]]] = {}
+    axial_reference = apply_forearm_twist_gradient_on_export(
+        exported_objects,
+        exported_animation_owner,
+        axial_input,
+        authoring_eligible,
+        physical_memberships,
+        source_domain,
+    )
+    generator_run_ownership = capture_forearm_twist_generator_run_ownership(
+        exported_objects,
+        axial_reference,
+        authoring_eligible,
+        physical_memberships,
+        source_domain,
+    )
+    skipped_export_meshes = capture_skipped_export_physical_meshes(
+        exported_objects, set(axial_reference), physical_memberships, export_physical_snapshot
+    )
+    candidate_weight_evidence = capture_forearm_twist_candidate_weight_evidence(
+        exported_objects,
+        neutral_manifest,
+    )
     exported_animation_owner_name = exported_animation_owner.name
     collider_profile = detect_character_collider_profile(exported_animation_owner)
     print(
@@ -2413,6 +3360,11 @@ def generate_character(config: CharacterConfig) -> Path:
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_path.with_suffix(".forearm_twist_manifest.json")
+    manifest_path.write_text(json.dumps(neutral_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    candidate_weights_path = output_path.with_suffix(".forearm_twist_candidate_weights.json")
+    candidate_weights_path.write_text(json.dumps(candidate_weight_evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"Captured pre-helper forearm-twist neutral manifest: {manifest_path}")
 
     # Blender resolves USE_LOCAL unpack paths relative to the current .blend file.
     # Save to the final target first so local texture paths land under the output directory.
@@ -2481,6 +3433,14 @@ def generate_character(config: CharacterConfig) -> Path:
                 )
 
     bpy.ops.wm.save_as_mainfile(filepath=str(output_path), check_existing=False)
+    generator_run_ownership_path = forearm_twist_generator_run_ownership.write_evidence(
+        TOOLS_DIR.parent,
+        output_path,
+        preset,
+        generator_run_ownership,
+        skipped_export_meshes,
+    )
+    print(f"Captured generator-run authored axial reference validation: {generator_run_ownership_path}")
     for message in update_character_import_retarget_metadata.update_existing_character_sidecars(
         output_path,
         character_name,

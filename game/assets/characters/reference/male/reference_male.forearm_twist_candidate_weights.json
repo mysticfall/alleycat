@@ -1,0 +1,2108 @@
+{
+  "meshes": [
+    {
+      "name": "Male.body",
+      "sides": {
+        "left": {
+          "vertices": [
+            {
+              "id": "Male.body|s0|left|22417:54983:9724",
+              "weights": {
+                "LeftForearmTwist": 0.9966402649879456,
+                "body": 1.0,
+                "hand_l": 0.0033597254659980536
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22448:54641:9480",
+              "weights": {
+                "LeftForearmTwist": 0.9963260889053345,
+                "body": 1.0,
+                "hand_l": 0.003673952305689454
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22514:55314:9920",
+              "weights": {
+                "LeftForearmTwist": 0.9946442246437073,
+                "body": 1.0,
+                "hand_l": 0.005355769768357277
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22581:54287:9167",
+              "weights": {
+                "LeftForearmTwist": 0.9953842163085938,
+                "body": 1.0,
+                "hand_l": 0.004615780431777239
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22749:55638:10040",
+              "weights": {
+                "LeftForearmTwist": 0.9904146194458008,
+                "body": 1.0,
+                "hand_l": 0.0095853665843606
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22794:54732:10332",
+              "weights": {
+                "LeftForearmTwist": 0.8308535814285278,
+                "body": 1.0,
+                "hand_l": 0.16914644837379456
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22805:54393:10081",
+              "weights": {
+                "LeftForearmTwist": 0.8347814679145813,
+                "body": 1.0,
+                "hand_l": 0.1652185469865799
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22822:53988:8841",
+              "weights": {
+                "LeftForearmTwist": 0.9927470684051514,
+                "body": 1.0,
+                "hand_l": 0.0072529613971710205
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22917:55039:10511",
+              "weights": {
+                "LeftForearmTwist": 0.8157355785369873,
+                "body": 1.0,
+                "hand_l": 0.1842644214630127
+              }
+            },
+            {
+              "id": "Male.body|s0|left|22944:54038:9746",
+              "weights": {
+                "LeftForearmTwist": 0.8339523673057556,
+                "body": 1.0,
+                "hand_l": 0.16603875160217285
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23021:54223:10521",
+              "weights": {
+                "LeftForearmTwist": 0.6301977634429932,
+                "body": 1.0,
+                "hand_l": 0.36980223655700684
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23034:54531:10775",
+              "weights": {
+                "LeftForearmTwist": 0.6124622821807861,
+                "body": 1.0,
+                "hand_l": 0.3875376880168915
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23075:55886:10049",
+              "weights": {
+                "LeftForearmTwist": 0.9846369624137878,
+                "body": 1.0,
+                "hand_l": 0.0153689906001091
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23144:53796:8567",
+              "weights": {
+                "LeftForearmTwist": 0.9866927862167358,
+                "body": 1.0,
+                "hand_l": 0.013307208195328712
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23151:53877:10173",
+              "weights": {
+                "LeftForearmTwist": 0.6375553011894226,
+                "body": 1.0,
+                "hand_l": 0.3624447286128998
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23169:55316:10627",
+              "weights": {
+                "LeftForearmTwist": 0.7870231866836548,
+                "body": 1.0,
+                "hand_l": 0.21297965943813324
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23178:54082:10832",
+              "weights": {
+                "LeftForearmTwist": 0.4626764953136444,
+                "body": 1.0,
+                "hand_l": 0.537323534488678
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23178:54810:10959",
+              "weights": {
+                "LeftForearmTwist": 0.29070818424224854,
+                "body": 1.0,
+                "hand_l": 0.3935418128967285,
+                "lowerarm_l": 0.31575000286102295
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23189:53725:9402",
+              "weights": {
+                "LeftForearmTwist": 0.8235654234886169,
+                "body": 1.0,
+                "hand_l": 0.17643457651138306
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23201:54374:11123",
+              "weights": {
+                "LeftForearmTwist": 0.21327251195907593,
+                "body": 1.0,
+                "hand_l": 0.5097274780273438,
+                "lowerarm_l": 0.2770000100135803
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23302:53752:10470",
+              "weights": {
+                "LeftForearmTwist": 0.47937655448913574,
+                "body": 1.0,
+                "hand_l": 0.5206234455108643
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23318:53913:11098",
+              "weights": {
+                "LeftForearmTwist": 0.15517953038215637,
+                "body": 1.0,
+                "hand_l": 0.5874490141868591,
+                "lowerarm_l": 0.25738000869750977
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23323:53996:11837",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.48425158858299255,
+                "lowerarm_l": 0.24488000571727753,
+                "thumb_01_l": 0.2546745240688324,
+                "thumb_02_l": 0.016198379918932915
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23344:54190:11459",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5181000232696533,
+                "lowerarm_l": 0.45570001006126404,
+                "thumb_01_l": 0.026200000196695328
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23377:54627:11325",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5369000434875488,
+                "lowerarm_l": 0.4596000015735626,
+                "thumb_01_l": 0.0035000003408640623
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23383:53328:11650",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6306999921798706,
+                "lowerarm_l": 0.08089999854564667,
+                "thumb_01_l": 0.28839999437332153
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23394:53001:11857",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6103999614715576,
+                "thumb_01_l": 0.3633999824523926,
+                "thumb_02_l": 0.02619999647140503
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23409:53545:9797",
+              "weights": {
+                "LeftForearmTwist": 0.6279448866844177,
+                "body": 1.0,
+                "hand_l": 0.37205514311790466
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23418:53696:11367",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.560699999332428,
+                "lowerarm_l": 0.34049999713897705,
+                "thumb_01_l": 0.09880000352859497
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23439:53600:10731",
+              "weights": {
+                "LeftForearmTwist": 0.1660468578338623,
+                "body": 1.0,
+                "hand_l": 0.6219531297683716,
+                "lowerarm_l": 0.21199999749660492
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23451:55052:11067",
+              "weights": {
+                "LeftForearmTwist": 0.2682453691959381,
+                "body": 1.0,
+                "hand_l": 0.4360046088695526,
+                "lowerarm_l": 0.2957499921321869
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23459:56010:9920",
+              "weights": {
+                "LeftForearmTwist": 0.9789261817932129,
+                "body": 1.0,
+                "hand_l": 0.02107379212975502
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23510:55520:10637",
+              "weights": {
+                "LeftForearmTwist": 0.7551082372665405,
+                "body": 1.0,
+                "hand_l": 0.24489177763462067
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23518:53514:9111",
+              "weights": {
+                "LeftForearmTwist": 0.8015317916870117,
+                "body": 1.0,
+                "hand_l": 0.19847145676612854
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23522:54485:11722",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6233000159263611,
+                "lowerarm_l": 0.32359999418258667,
+                "thumb_01_l": 0.05310000106692314
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23526:53719:8379",
+              "weights": {
+                "LeftForearmTwist": 0.9733371138572693,
+                "body": 1.0,
+                "hand_l": 0.02666289731860161
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23535:54393:12206",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5659999847412109,
+                "lowerarm_l": 0.163100004196167,
+                "thumb_01_l": 0.2490999698638916,
+                "thumb_02_l": 0.021799998357892036
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23552:53419:10977",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6229000091552734,
+                "lowerarm_l": 0.3490000069141388,
+                "thumb_01_l": 0.02810000069439411
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23553:53426:10085",
+              "weights": {
+                "LeftForearmTwist": 0.4752417802810669,
+                "body": 1.0,
+                "hand_l": 0.5247582197189331
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23599:53191:11272",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5339000225067139,
+                "lowerarm_l": 0.3107999861240387,
+                "thumb_01_l": 0.15530000627040863
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23657:52923:11488",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.8034999966621399,
+                "thumb_01_l": 0.1965000033378601
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23667:54860:11449",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5814000368118286,
+                "lowerarm_l": 0.4124999940395355,
+                "thumb_01_l": 0.006100000347942114
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23676:53282:10340",
+              "weights": {
+                "LeftForearmTwist": 0.16735997796058655,
+                "body": 1.0,
+                "hand_l": 0.5915900468826294,
+                "lowerarm_l": 0.24105000495910645
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23740:53313:9484",
+              "weights": {
+                "LeftForearmTwist": 0.6030806303024292,
+                "body": 1.0,
+                "hand_l": 0.3969193398952484
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23767:53122:10601",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5917999744415283,
+                "lowerarm_l": 0.3630000054836273,
+                "thumb_01_l": 0.04520000144839287
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23806:55217:11077",
+              "weights": {
+                "LeftForearmTwist": 0.24371978640556335,
+                "body": 1.0,
+                "hand_l": 0.4805302321910858,
+                "lowerarm_l": 0.2757500112056732
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23819:52915:10920",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6442644000053406,
+                "lowerarm_l": 0.23382000625133514,
+                "thumb_01_l": 0.12191218882799149
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23823:54723:11862",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.652899980545044,
+                "lowerarm_l": 0.25859999656677246,
+                "thumb_01_l": 0.0885000005364418
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23824:56010:9730",
+              "weights": {
+                "LeftForearmTwist": 0.9713071584701538,
+                "body": 1.0,
+                "hand_l": 0.028692834079265594
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23865:52746:11165",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.8909891247749329,
+                "thumb_01_l": 0.10901090502738953
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23872:55599:10481",
+              "weights": {
+                "LeftForearmTwist": 0.7416195273399353,
+                "body": 1.0,
+                "hand_l": 0.2583804726600647
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23890:53171:9752",
+              "weights": {
+                "LeftForearmTwist": 0.4498973488807678,
+                "body": 1.0,
+                "hand_l": 0.5501026511192322
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23891:54633:12353",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6238999962806702,
+                "lowerarm_l": 0.12460000067949295,
+                "thumb_01_l": 0.23659999668598175,
+                "thumb_02_l": 0.01489999983459711
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23909:53432:8919",
+              "weights": {
+                "LeftForearmTwist": 0.7629580497741699,
+                "body": 1.0,
+                "hand_l": 0.23703473806381226
+              }
+            },
+            {
+              "id": "Male.body|s0|left|23966:53817:8269",
+              "weights": {
+                "LeftForearmTwist": 0.9557874202728271,
+                "body": 1.0,
+                "hand_l": 0.0442083403468132
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24000:53034:10004",
+              "weights": {
+                "LeftForearmTwist": 0.31617194414138794,
+                "body": 1.0,
+                "hand_l": 0.68382328748703
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24040:55025:11476",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6258999705314636,
+                "lowerarm_l": 0.3653999865055084,
+                "thumb_01_l": 0.008700000122189522
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24083:52861:10263",
+              "weights": {
+                "LeftForearmTwist": 0.09565367549657822,
+                "body": 1.0,
+                "hand_l": 0.7773463726043701,
+                "lowerarm_l": 0.12700000405311584
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24101:52601:10578",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.9761024117469788,
+                "thumb_01_l": 0.02389761246740818
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24138:55926:9496",
+              "weights": {
+                "LeftForearmTwist": 0.9657053351402283,
+                "body": 1.0,
+                "hand_l": 0.03429466485977173
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24139:52373:10839",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.9472054243087769,
+                "thumb_01_l": 0.05279472470283508
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24146:53184:9271",
+              "weights": {
+                "LeftForearmTwist": 0.5508966445922852,
+                "body": 1.0,
+                "hand_l": 0.4490954577922821
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24183:55276:10935",
+              "weights": {
+                "LeftForearmTwist": 0.22972095012664795,
+                "body": 1.0,
+                "hand_l": 0.5109290480613708,
+                "lowerarm_l": 0.2593500018119812
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24212:55575:10288",
+              "weights": {
+                "LeftForearmTwist": 0.7226309776306152,
+                "body": 1.0,
+                "hand_l": 0.2773621380329132
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24228:54833:11879",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6825000643730164,
+                "lowerarm_l": 0.19359999895095825,
+                "thumb_01_l": 0.12390000373125076
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24309:53009:9534",
+              "weights": {
+                "LeftForearmTwist": 0.38947245478630066,
+                "body": 1.0,
+                "hand_l": 0.6105275750160217
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24344:54062:8222",
+              "weights": {
+                "LeftForearmTwist": 0.947376549243927,
+                "body": 1.0,
+                "hand_l": 0.05262346193194389
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24367:53515:8825",
+              "weights": {
+                "LeftForearmTwist": 0.7123637199401855,
+                "body": 1.0,
+                "hand_l": 0.28763625025749207
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24398:54657:12347",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6818000078201294,
+                "lowerarm_l": 0.0860000029206276,
+                "thumb_01_l": 0.2240999937057495,
+                "thumb_02_l": 0.008100000210106373
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24406:55779:9243",
+              "weights": {
+                "LeftForearmTwist": 0.9609986543655396,
+                "body": 1.0,
+                "hand_l": 0.0390113927423954
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24420:55034:11352",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6789320707321167,
+                "lowerarm_l": 0.3115600049495697,
+                "thumb_01_l": 0.009499049745500088
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24431:52833:9760",
+              "weights": {
+                "LeftForearmTwist": 0.25744783878326416,
+                "body": 1.0,
+                "hand_l": 0.7425521016120911
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24498:55474:10058",
+              "weights": {
+                "LeftForearmTwist": 0.7105996012687683,
+                "body": 1.0,
+                "hand_l": 0.28940045833587646
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24502:52161:10313",
+              "weights": {
+                "LeftForearmTwist": 0.014459543861448765,
+                "body": 1.0,
+                "hand_l": 0.9818411469459534,
+                "lowerarm_l": 0.003700000001117587
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24521:55230:10744",
+              "weights": {
+                "LeftForearmTwist": 0.43360763788223267,
+                "body": 1.0,
+                "hand_l": 0.5663923621177673
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24523:52595:10017",
+              "weights": {
+                "LeftForearmTwist": 0.13079234957695007,
+                "body": 1.0,
+                "hand_l": 0.8692023754119873
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24591:54384:8253",
+              "weights": {
+                "LeftForearmTwist": 0.9491366744041443,
+                "body": 1.0,
+                "hand_l": 0.0508633553981781
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24620:53260:9182",
+              "weights": {
+                "LeftForearmTwist": 0.4871681034564972,
+                "body": 1.0,
+                "hand_l": 0.5128319263458252
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24624:55588:8984",
+              "weights": {
+                "LeftForearmTwist": 0.9574400186538696,
+                "body": 1.0,
+                "hand_l": 0.04256001487374306
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24646:54814:11763",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.7294999957084656,
+                "lowerarm_l": 0.13259999454021454,
+                "thumb_01_l": 0.1378999948501587
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24732:53741:8797",
+              "weights": {
+                "LeftForearmTwist": 0.688805341720581,
+                "body": 1.0,
+                "hand_l": 0.3112027645111084
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24742:55331:9810",
+              "weights": {
+                "LeftForearmTwist": 0.704103410243988,
+                "body": 1.0,
+                "hand_l": 0.29589661955833435
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24761:54965:11159",
+              "weights": {
+                "LeftForearmTwist": 0.10130129754543304,
+                "body": 1.0,
+                "hand_l": 0.717748761177063,
+                "lowerarm_l": 0.18095000088214874
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24765:55343:8739",
+              "weights": {
+                "LeftForearmTwist": 0.9546275734901428,
+                "body": 1.0,
+                "hand_l": 0.04537244513630867
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24770:54733:8360",
+              "weights": {
+                "LeftForearmTwist": 0.9491642713546753,
+                "body": 1.0,
+                "hand_l": 0.0508357435464859
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24792:55123:10517",
+              "weights": {
+                "LeftForearmTwist": 0.4214528799057007,
+                "body": 1.0,
+                "hand_l": 0.5785471200942993
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24802:53009:9458",
+              "weights": {
+                "LeftForearmTwist": 0.30398958921432495,
+                "body": 1.0,
+                "hand_l": 0.6960004568099976
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24820:55062:8522",
+              "weights": {
+                "LeftForearmTwist": 0.9529080390930176,
+                "body": 1.0,
+                "hand_l": 0.047091975808143616
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24952:55139:9552",
+              "weights": {
+                "LeftForearmTwist": 0.6983432173728943,
+                "body": 1.0,
+                "hand_l": 0.3016566336154938
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24959:54020:8837",
+              "weights": {
+                "LeftForearmTwist": 0.6847715973854065,
+                "body": 1.0,
+                "hand_l": 0.3152284026145935
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24975:52733:9685",
+              "weights": {
+                "LeftForearmTwist": 0.15572141110897064,
+                "body": 1.0,
+                "hand_l": 0.8442786335945129
+              }
+            },
+            {
+              "id": "Male.body|s0|left|24991:54711:11564",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.7324267625808716,
+                "lowerarm_l": 0.16568000614643097,
+                "thumb_01_l": 0.10188981145620346
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25008:54969:10276",
+              "weights": {
+                "LeftForearmTwist": 0.41619935631752014,
+                "body": 1.0,
+                "hand_l": 0.5838006138801575
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25017:53474:9189",
+              "weights": {
+                "LeftForearmTwist": 0.43994131684303284,
+                "body": 1.0,
+                "hand_l": 0.5600542426109314
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25036:54828:10925",
+              "weights": {
+                "LeftForearmTwist": 0.09423521161079407,
+                "body": 1.0,
+                "hand_l": 0.7532147765159607,
+                "lowerarm_l": 0.15254999697208405
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25102:54902:9311",
+              "weights": {
+                "LeftForearmTwist": 0.6906212568283081,
+                "body": 1.0,
+                "hand_l": 0.30938223004341125
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25111:54330:8955",
+              "weights": {
+                "LeftForearmTwist": 0.6797387003898621,
+                "body": 1.0,
+                "hand_l": 0.32026126980781555
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25160:54630:9116",
+              "weights": {
+                "LeftForearmTwist": 0.6815149188041687,
+                "body": 1.0,
+                "hand_l": 0.3184850811958313
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25182:52427:9949",
+              "weights": {
+                "LeftForearmTwist": 0.03666157275438309,
+                "body": 1.0,
+                "hand_l": 0.9633383750915527
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25195:54775:10032",
+              "weights": {
+                "LeftForearmTwist": 0.4103034734725952,
+                "body": 1.0,
+                "hand_l": 0.5896965265274048
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25224:53718:9290",
+              "weights": {
+                "LeftForearmTwist": 0.4133495092391968,
+                "body": 1.0,
+                "hand_l": 0.5866572260856628
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25226:53200:9504",
+              "weights": {
+                "LeftForearmTwist": 0.24001730978488922,
+                "body": 1.0,
+                "hand_l": 0.759982705116272
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25238:54662:10691",
+              "weights": {
+                "LeftForearmTwist": 0.18290910124778748,
+                "body": 1.0,
+                "hand_l": 0.8170908689498901
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25260:54554:11336",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.8290658593177795,
+                "lowerarm_l": 0.1287200003862381,
+                "thumb_01_l": 0.04220844432711601
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25333:54541:9809",
+              "weights": {
+                "LeftForearmTwist": 0.39978498220443726,
+                "body": 1.0,
+                "hand_l": 0.6002064943313599
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25364:54002:9435",
+              "weights": {
+                "LeftForearmTwist": 0.3963572680950165,
+                "body": 1.0,
+                "hand_l": 0.6036427617073059
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25395:54287:9605",
+              "weights": {
+                "LeftForearmTwist": 0.3960968554019928,
+                "body": 1.0,
+                "hand_l": 0.6039031744003296
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25410:54460:10463",
+              "weights": {
+                "LeftForearmTwist": 0.1751672327518463,
+                "body": 1.0,
+                "hand_l": 0.8248327970504761
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25450:53429:9653",
+              "weights": {
+                "LeftForearmTwist": 0.19787615537643433,
+                "body": 1.0,
+                "hand_l": 0.8021194934844971
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25460:52893:9787",
+              "weights": {
+                "LeftForearmTwist": 0.081807941198349,
+                "body": 1.0,
+                "hand_l": 0.9181920289993286
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25461:54376:11099",
+              "weights": {
+                "LeftForearmTwist": 0.01615428924560547,
+                "body": 1.0,
+                "hand_l": 0.8932876586914062,
+                "lowerarm_l": 0.09055999666452408
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25532:54227:10235",
+              "weights": {
+                "LeftForearmTwist": 0.17128990590572357,
+                "body": 1.0,
+                "hand_l": 0.8287100791931152
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25573:53708:9843",
+              "weights": {
+                "LeftForearmTwist": 0.17480964958667755,
+                "body": 1.0,
+                "hand_l": 0.8251851797103882
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25592:53977:10029",
+              "weights": {
+                "LeftForearmTwist": 0.17005300521850586,
+                "body": 1.0,
+                "hand_l": 0.8299469947814941
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25608:54164:10873",
+              "weights": {
+                "LeftForearmTwist": 0.029739554971456528,
+                "body": 1.0,
+                "hand_l": 0.9702640771865845
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25670:53122:9998",
+              "weights": {
+                "LeftForearmTwist": 0.047131214290857315,
+                "body": 1.0,
+                "hand_l": 0.9528594613075256
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25717:53919:10649",
+              "weights": {
+                "LeftForearmTwist": 0.027552062645554543,
+                "body": 1.0,
+                "hand_l": 0.9724403619766235
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25737:52548:10110",
+              "weights": {
+                "LeftForearmTwist": 0.00021815353829879314,
+                "body": 1.0,
+                "hand_l": 0.9491819143295288,
+                "lowerarm_l": 0.05059000104665756
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25775:53398:10229",
+              "weights": {
+                "LeftForearmTwist": 0.03095831535756588,
+                "body": 1.0,
+                "hand_l": 0.9690329432487488
+              }
+            },
+            {
+              "id": "Male.body|s0|left|25779:53664:10437",
+              "weights": {
+                "LeftForearmTwist": 0.027033966034650803,
+                "body": 1.0,
+                "hand_l": 0.9729660153388977
+              }
+            }
+          ]
+        },
+        "right": {
+          "vertices": [
+            {
+              "id": "Male.body|s0|right|-25779:53664:10437",
+              "weights": {
+                "RightForearmTwist": 0.027033967897295952,
+                "body": 1.0,
+                "hand_r": 0.9729660153388977
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25775:53398:10229",
+              "weights": {
+                "RightForearmTwist": 0.030958587303757668,
+                "body": 1.0,
+                "hand_r": 0.9690414667129517
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25737:52548:10110",
+              "weights": {
+                "RightForearmTwist": 0.00021815570653416216,
+                "body": 1.0,
+                "hand_r": 0.949181854724884,
+                "lowerarm_r": 0.050599999725818634
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25717:53919:10649",
+              "weights": {
+                "RightForearmTwist": 0.027552273124456406,
+                "body": 1.0,
+                "hand_r": 0.9724477529525757
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25670:53122:9998",
+              "weights": {
+                "RightForearmTwist": 0.047131653875112534,
+                "body": 1.0,
+                "hand_r": 0.9528684020042419
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25608:54164:10873",
+              "weights": {
+                "RightForearmTwist": 0.02973932959139347,
+                "body": 1.0,
+                "hand_r": 0.9702567458152771
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25592:53977:10029",
+              "weights": {
+                "RightForearmTwist": 0.17005282640457153,
+                "body": 1.0,
+                "hand_r": 0.8299461007118225
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25573:53708:9843",
+              "weights": {
+                "RightForearmTwist": 0.17481054365634918,
+                "body": 1.0,
+                "hand_r": 0.8251894116401672
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25532:54227:10235",
+              "weights": {
+                "RightForearmTwist": 0.17128871381282806,
+                "body": 1.0,
+                "hand_r": 0.8287042379379272
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25461:54376:11099",
+              "weights": {
+                "RightForearmTwist": 0.01615428738296032,
+                "body": 1.0,
+                "hand_r": 0.892837405204773,
+                "lowerarm_r": 0.09100999683141708
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25460:52893:9787",
+              "weights": {
+                "RightForearmTwist": 0.081807941198349,
+                "body": 1.0,
+                "hand_r": 0.9181920289993286
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25450:53429:9653",
+              "weights": {
+                "RightForearmTwist": 0.19787700474262238,
+                "body": 1.0,
+                "hand_r": 0.802122950553894
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25410:54460:10463",
+              "weights": {
+                "RightForearmTwist": 0.1751672327518463,
+                "body": 1.0,
+                "hand_r": 0.8248327970504761
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25395:54287:9605",
+              "weights": {
+                "RightForearmTwist": 0.3960936963558197,
+                "body": 1.0,
+                "hand_r": 0.6038983464241028
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25364:54002:9435",
+              "weights": {
+                "RightForearmTwist": 0.3963572680950165,
+                "body": 1.0,
+                "hand_r": 0.6036427617073059
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25333:54541:9809",
+              "weights": {
+                "RightForearmTwist": 0.3997849225997925,
+                "body": 1.0,
+                "hand_r": 0.6002064347267151
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25260:54554:11336",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.8303830623626709,
+                "lowerarm_r": 0.12732000648975372,
+                "thumb_01_r": 0.042304232716560364
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25238:54662:10691",
+              "weights": {
+                "RightForearmTwist": 0.18290910124778748,
+                "body": 1.0,
+                "hand_r": 0.8170908689498901
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25226:53200:9504",
+              "weights": {
+                "RightForearmTwist": 0.24001729488372803,
+                "body": 1.0,
+                "hand_r": 0.759982705116272
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25224:53718:9290",
+              "weights": {
+                "RightForearmTwist": 0.4133467376232147,
+                "body": 1.0,
+                "hand_r": 0.5866532921791077
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25195:54775:10032",
+              "weights": {
+                "RightForearmTwist": 0.4103034734725952,
+                "body": 1.0,
+                "hand_r": 0.5896965265274048
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25182:52427:9949",
+              "weights": {
+                "RightForearmTwist": 0.036661576479673386,
+                "body": 1.0,
+                "hand_r": 0.9633384943008423
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25160:54630:9116",
+              "weights": {
+                "RightForearmTwist": 0.6815166473388672,
+                "body": 1.0,
+                "hand_r": 0.3184858560562134
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25111:54330:8955",
+              "weights": {
+                "RightForearmTwist": 0.6797387003898621,
+                "body": 1.0,
+                "hand_r": 0.32026126980781555
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25102:54902:9311",
+              "weights": {
+                "RightForearmTwist": 0.6906188726425171,
+                "body": 1.0,
+                "hand_r": 0.3093811571598053
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25036:54828:10925",
+              "weights": {
+                "RightForearmTwist": 0.09423521161079407,
+                "body": 1.0,
+                "hand_r": 0.7506148219108582,
+                "lowerarm_r": 0.15514999628067017
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25017:53474:9189",
+              "weights": {
+                "RightForearmTwist": 0.4399432837963104,
+                "body": 1.0,
+                "hand_r": 0.560056746006012
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-25008:54969:10276",
+              "weights": {
+                "RightForearmTwist": 0.41619935631752014,
+                "body": 1.0,
+                "hand_r": 0.5838006138801575
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24991:54711:11564",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.73170006275177,
+                "lowerarm_r": 0.1665000021457672,
+                "thumb_01_r": 0.10180000960826874
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24975:52733:9685",
+              "weights": {
+                "RightForearmTwist": 0.15572139620780945,
+                "body": 1.0,
+                "hand_r": 0.8442785739898682
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24959:54020:8837",
+              "weights": {
+                "RightForearmTwist": 0.6847715973854065,
+                "body": 1.0,
+                "hand_r": 0.3152284026145935
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24952:55139:9552",
+              "weights": {
+                "RightForearmTwist": 0.6983433365821838,
+                "body": 1.0,
+                "hand_r": 0.30165666341781616
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24820:55062:8522",
+              "weights": {
+                "RightForearmTwist": 0.9529080390930176,
+                "body": 1.0,
+                "hand_r": 0.047091975808143616
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24802:53009:9458",
+              "weights": {
+                "RightForearmTwist": 0.3039926290512085,
+                "body": 1.0,
+                "hand_r": 0.6960073709487915
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24792:55123:10517",
+              "weights": {
+                "RightForearmTwist": 0.4214528799057007,
+                "body": 1.0,
+                "hand_r": 0.5785471200942993
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24770:54733:8360",
+              "weights": {
+                "RightForearmTwist": 0.9491642713546753,
+                "body": 1.0,
+                "hand_r": 0.0508357435464859
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24765:55343:8739",
+              "weights": {
+                "RightForearmTwist": 0.9546275734901428,
+                "body": 1.0,
+                "hand_r": 0.04537244513630867
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24761:54965:11159",
+              "weights": {
+                "RightForearmTwist": 0.10130129754543304,
+                "body": 1.0,
+                "hand_r": 0.7168487310409546,
+                "lowerarm_r": 0.18185000121593475
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24742:55331:9810",
+              "weights": {
+                "RightForearmTwist": 0.7041030526161194,
+                "body": 1.0,
+                "hand_r": 0.2958964705467224
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24732:53741:8797",
+              "weights": {
+                "RightForearmTwist": 0.6888052225112915,
+                "body": 1.0,
+                "hand_r": 0.311202734708786
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24646:54814:11763",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.7304269671440125,
+                "lowerarm_r": 0.1318800002336502,
+                "thumb_01_r": 0.13768622279167175
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24624:55588:8984",
+              "weights": {
+                "RightForearmTwist": 0.9574329257011414,
+                "body": 1.0,
+                "hand_r": 0.04255969822406769
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24620:53260:9182",
+              "weights": {
+                "RightForearmTwist": 0.4871681034564972,
+                "body": 1.0,
+                "hand_r": 0.5128319263458252
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24591:54384:8253",
+              "weights": {
+                "RightForearmTwist": 0.9491309523582458,
+                "body": 1.0,
+                "hand_r": 0.05086304992437363
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24523:52595:10017",
+              "weights": {
+                "RightForearmTwist": 0.13079231977462769,
+                "body": 1.0,
+                "hand_r": 0.8692021369934082
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24521:55230:10744",
+              "weights": {
+                "RightForearmTwist": 0.4336117208003998,
+                "body": 1.0,
+                "hand_r": 0.5663976669311523
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24502:52161:10313",
+              "weights": {
+                "RightForearmTwist": 0.014459543861448765,
+                "body": 1.0,
+                "hand_r": 0.9818411469459534,
+                "lowerarm_r": 0.003700000001117587
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24498:55474:10058",
+              "weights": {
+                "RightForearmTwist": 0.7105972170829773,
+                "body": 1.0,
+                "hand_r": 0.28939947485923767
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24431:52833:9760",
+              "weights": {
+                "RightForearmTwist": 0.25744786858558655,
+                "body": 1.0,
+                "hand_r": 0.7425521612167358
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24420:55034:11352",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6761000156402588,
+                "lowerarm_r": 0.31439998745918274,
+                "thumb_01_r": 0.009499999694526196
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24406:55779:9243",
+              "weights": {
+                "RightForearmTwist": 0.9609889984130859,
+                "body": 1.0,
+                "hand_r": 0.03901100158691406
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24398:54657:12347",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6773000955581665,
+                "lowerarm_r": 0.09049999713897705,
+                "thumb_01_r": 0.2241000086069107,
+                "thumb_02_r": 0.008100001141428947
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24367:53515:8825",
+              "weights": {
+                "RightForearmTwist": 0.7123637199401855,
+                "body": 1.0,
+                "hand_r": 0.28763625025749207
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24344:54062:8222",
+              "weights": {
+                "RightForearmTwist": 0.9473713636398315,
+                "body": 1.0,
+                "hand_r": 0.05262317508459091
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24309:53009:9534",
+              "weights": {
+                "RightForearmTwist": 0.38947147130966187,
+                "body": 1.0,
+                "hand_r": 0.6105260252952576
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24228:54833:11879",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6876687407493591,
+                "lowerarm_r": 0.18841999769210815,
+                "thumb_01_r": 0.12391239404678345
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24212:55575:10288",
+              "weights": {
+                "RightForearmTwist": 0.7226359248161316,
+                "body": 1.0,
+                "hand_r": 0.277364045381546
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24183:55276:10935",
+              "weights": {
+                "RightForearmTwist": 0.22972095012664795,
+                "body": 1.0,
+                "hand_r": 0.5094790458679199,
+                "lowerarm_r": 0.26080000400543213
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24146:53184:9271",
+              "weights": {
+                "RightForearmTwist": 0.5509009957313538,
+                "body": 1.0,
+                "hand_r": 0.44909900426864624
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24139:52373:10839",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.9472053050994873,
+                "thumb_01_r": 0.052794720977544785
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24138:55926:9496",
+              "weights": {
+                "RightForearmTwist": 0.9657053351402283,
+                "body": 1.0,
+                "hand_r": 0.03429466485977173
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24101:52601:10578",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.9761001467704773,
+                "thumb_01_r": 0.023900002241134644
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24083:52861:10263",
+              "weights": {
+                "RightForearmTwist": 0.09565366804599762,
+                "body": 1.0,
+                "hand_r": 0.7767463326454163,
+                "lowerarm_r": 0.12759999930858612
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24040:55025:11476",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6521652340888977,
+                "lowerarm_r": 0.33913999795913696,
+                "thumb_01_r": 0.008700869977474213
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-24000:53034:10004",
+              "weights": {
+                "RightForearmTwist": 0.31617212295532227,
+                "body": 1.0,
+                "hand_r": 0.6838236451148987
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23966:53817:8269",
+              "weights": {
+                "RightForearmTwist": 0.9557914733886719,
+                "body": 1.0,
+                "hand_r": 0.04420853033661842
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23909:53432:8919",
+              "weights": {
+                "RightForearmTwist": 0.7629635334014893,
+                "body": 1.0,
+                "hand_r": 0.23703645169734955
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23891:54633:12353",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6234999895095825,
+                "lowerarm_r": 0.125,
+                "thumb_01_r": 0.23659999668598175,
+                "thumb_02_r": 0.01489999983459711
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23890:53171:9752",
+              "weights": {
+                "RightForearmTwist": 0.44989731907844543,
+                "body": 1.0,
+                "hand_r": 0.5501026511192322
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23872:55599:10481",
+              "weights": {
+                "RightForearmTwist": 0.7416195273399353,
+                "body": 1.0,
+                "hand_r": 0.2583804726600647
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23865:52746:11165",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.8909890651702881,
+                "thumb_01_r": 0.10901090502738953
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23824:56010:9730",
+              "weights": {
+                "RightForearmTwist": 0.9713072180747986,
+                "body": 1.0,
+                "hand_r": 0.028692835941910744
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23823:54723:11862",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6463000178337097,
+                "lowerarm_r": 0.2651999890804291,
+                "thumb_01_r": 0.0885000005364418
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23819:52915:10920",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6443355679512024,
+                "lowerarm_r": 0.23377999663352966,
+                "thumb_01_r": 0.12188781052827835
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23806:55217:11077",
+              "weights": {
+                "RightForearmTwist": 0.24371977150440216,
+                "body": 1.0,
+                "hand_r": 0.4804801940917969,
+                "lowerarm_r": 0.2757999897003174
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23767:53122:10601",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5954999923706055,
+                "lowerarm_r": 0.35929998755455017,
+                "thumb_01_r": 0.04520000144839287
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23740:53313:9484",
+              "weights": {
+                "RightForearmTwist": 0.603083610534668,
+                "body": 1.0,
+                "hand_r": 0.396921306848526
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23676:53282:10340",
+              "weights": {
+                "RightForearmTwist": 0.1673586219549179,
+                "body": 1.0,
+                "hand_r": 0.5923133492469788,
+                "lowerarm_r": 0.24031999707221985
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23667:54860:11449",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5767577290534973,
+                "lowerarm_r": 0.41714000701904297,
+                "thumb_01_r": 0.006100610829889774
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23657:52923:11488",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.8035000562667847,
+                "thumb_01_r": 0.1965000033378601
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23599:53191:11272",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5339999794960022,
+                "lowerarm_r": 0.310699999332428,
+                "thumb_01_r": 0.15530000627040863
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23553:53426:10085",
+              "weights": {
+                "RightForearmTwist": 0.47524186968803406,
+                "body": 1.0,
+                "hand_r": 0.5247583389282227
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23552:53419:10977",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6230999827384949,
+                "lowerarm_r": 0.34880000352859497,
+                "thumb_01_r": 0.02810000069439411
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23535:54393:12206",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5655999779701233,
+                "lowerarm_r": 0.16349999606609344,
+                "thumb_01_r": 0.2490999698638916,
+                "thumb_02_r": 0.021799998357892036
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23526:53719:8379",
+              "weights": {
+                "RightForearmTwist": 0.9733371138572693,
+                "body": 1.0,
+                "hand_r": 0.02666289731860161
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23522:54485:11722",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6243375539779663,
+                "lowerarm_r": 0.32256001234054565,
+                "thumb_01_r": 0.053094688802957535
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23518:53514:9111",
+              "weights": {
+                "RightForearmTwist": 0.8015291690826416,
+                "body": 1.0,
+                "hand_r": 0.198470801115036
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23510:55520:10637",
+              "weights": {
+                "RightForearmTwist": 0.7551082372665405,
+                "body": 1.0,
+                "hand_r": 0.24489177763462067
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23459:56010:9920",
+              "weights": {
+                "RightForearmTwist": 0.9789261817932129,
+                "body": 1.0,
+                "hand_r": 0.02107379212975502
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23451:55052:11067",
+              "weights": {
+                "RightForearmTwist": 0.2682453989982605,
+                "body": 1.0,
+                "hand_r": 0.43050462007522583,
+                "lowerarm_r": 0.30125001072883606
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23439:53600:10731",
+              "weights": {
+                "RightForearmTwist": 0.1660468578338623,
+                "body": 1.0,
+                "hand_r": 0.6220531463623047,
+                "lowerarm_r": 0.211899995803833
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23418:53696:11367",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5575000047683716,
+                "lowerarm_r": 0.34369999170303345,
+                "thumb_01_r": 0.09880000352859497
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23409:53545:9797",
+              "weights": {
+                "RightForearmTwist": 0.6279448866844177,
+                "body": 1.0,
+                "hand_r": 0.37205514311790466
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23394:53001:11857",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6103999614715576,
+                "thumb_01_r": 0.3633999824523926,
+                "thumb_02_r": 0.02619999647140503
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23383:53328:11650",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6306999921798706,
+                "lowerarm_r": 0.08089999854564667,
+                "thumb_01_r": 0.28839999437332153
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23377:54627:11325",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5361536145210266,
+                "lowerarm_r": 0.4603399932384491,
+                "thumb_01_r": 0.0035003500524908304
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23344:54190:11459",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5187481641769409,
+                "lowerarm_r": 0.4550600051879883,
+                "thumb_01_r": 0.02619738131761551
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23323:53996:11837",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.481551855802536,
+                "lowerarm_r": 0.24758000671863556,
+                "thumb_01_r": 0.2546745240688324,
+                "thumb_02_r": 0.016198379918932915
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23318:53913:11098",
+              "weights": {
+                "RightForearmTwist": 0.15517953038215637,
+                "body": 1.0,
+                "hand_r": 0.5874490141868591,
+                "lowerarm_r": 0.25738000869750977
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23302:53752:10470",
+              "weights": {
+                "RightForearmTwist": 0.47937652468681335,
+                "body": 1.0,
+                "hand_r": 0.5206234455108643
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23201:54374:11123",
+              "weights": {
+                "RightForearmTwist": 0.2132735550403595,
+                "body": 1.0,
+                "hand_r": 0.5109013319015503,
+                "lowerarm_r": 0.2758300006389618
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23189:53725:9402",
+              "weights": {
+                "RightForearmTwist": 0.8235654234886169,
+                "body": 1.0,
+                "hand_r": 0.17643457651138306
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23178:54082:10832",
+              "weights": {
+                "RightForearmTwist": 0.46267932653427124,
+                "body": 1.0,
+                "hand_r": 0.5373268127441406
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23178:54810:10959",
+              "weights": {
+                "RightForearmTwist": 0.29070818424224854,
+                "body": 1.0,
+                "hand_r": 0.39259183406829834,
+                "lowerarm_r": 0.3167000114917755
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23169:55316:10627",
+              "weights": {
+                "RightForearmTwist": 0.7870209217071533,
+                "body": 1.0,
+                "hand_r": 0.2129790484905243
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23151:53877:10173",
+              "weights": {
+                "RightForearmTwist": 0.6375553011894226,
+                "body": 1.0,
+                "hand_r": 0.36244475841522217
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23144:53796:8567",
+              "weights": {
+                "RightForearmTwist": 0.9866928458213806,
+                "body": 1.0,
+                "hand_r": 0.013307208195328712
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23075:55886:10049",
+              "weights": {
+                "RightForearmTwist": 0.9846349358558655,
+                "body": 1.0,
+                "hand_r": 0.015368958935141563
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23034:54531:10775",
+              "weights": {
+                "RightForearmTwist": 0.6124622821807861,
+                "body": 1.0,
+                "hand_r": 0.38753771781921387
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-23021:54223:10521",
+              "weights": {
+                "RightForearmTwist": 0.6301977634429932,
+                "body": 1.0,
+                "hand_r": 0.36980223655700684
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22944:54038:9746",
+              "weights": {
+                "RightForearmTwist": 0.8339597582817078,
+                "body": 1.0,
+                "hand_r": 0.16604022681713104
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22917:55039:10511",
+              "weights": {
+                "RightForearmTwist": 0.8157355785369873,
+                "body": 1.0,
+                "hand_r": 0.1842644214630127
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22822:53988:8841",
+              "weights": {
+                "RightForearmTwist": 0.9927505850791931,
+                "body": 1.0,
+                "hand_r": 0.007252987008541822
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22805:54393:10081",
+              "weights": {
+                "RightForearmTwist": 0.8347814679145813,
+                "body": 1.0,
+                "hand_r": 0.1652185469865799
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22794:54732:10332",
+              "weights": {
+                "RightForearmTwist": 0.8308535814285278,
+                "body": 1.0,
+                "hand_r": 0.16914644837379456
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22749:55638:10040",
+              "weights": {
+                "RightForearmTwist": 0.9904146790504456,
+                "body": 1.0,
+                "hand_r": 0.009585367515683174
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22581:54287:9167",
+              "weights": {
+                "RightForearmTwist": 0.9953842163085938,
+                "body": 1.0,
+                "hand_r": 0.004615780431777239
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22514:55314:9920",
+              "weights": {
+                "RightForearmTwist": 0.9946514964103699,
+                "body": 1.0,
+                "hand_r": 0.005355808883905411
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22448:54641:9480",
+              "weights": {
+                "RightForearmTwist": 0.9963260889053345,
+                "body": 1.0,
+                "hand_r": 0.003673952305689454
+              }
+            },
+            {
+              "id": "Male.body|s0|right|-22417:54983:9724",
+              "weights": {
+                "RightForearmTwist": 0.9966402649879456,
+                "body": 1.0,
+                "hand_r": 0.0033597254659980536
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Male.eyebrow002",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.eyelashes01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.high-poly",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.male_worksuit01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.shoes03",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.short02",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.teeth_base",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Male.tongue01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    }
+  ],
+  "neutral_manifest_schema_version": 5,
+  "producer": "tools/generate_character.py (post-helper redistribution candidate weights)",
+  "schema_version": 5
+}

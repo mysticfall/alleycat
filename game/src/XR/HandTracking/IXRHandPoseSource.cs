@@ -41,6 +41,15 @@ public interface IXRHandPoseSource
     }
 
     /// <summary>
+    /// Gets whether the selected source currently serves its frozen last-valid wrist sample
+    /// (XR-002 TR38).
+    /// </summary>
+    bool IsWristFrozen
+    {
+        get;
+    }
+
+    /// <summary>
     /// Tries to get the calibrated world-space wrist transform of the selected source for this side.
     /// </summary>
     /// <remarks>

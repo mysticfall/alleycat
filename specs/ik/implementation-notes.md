@@ -14,10 +14,11 @@ Child guidance under [IK: VRIK System](index.md).
 - Set all bone names explicitly. The solver requires `root_bone_name`, `middle_bone_name`,
   and `end_bone_name`. Missing `middle_bone_name` causes the solver to run with no visible
   effect and no error.
-- Use canonical humanoid bone names: arm chain is
+- Use canonical humanoid solver endpoints: arm chain is
   `LeftUpperArm → LeftLowerArm → LeftHand` (right-arm equivalents for right side).
-  Shoulder, hips, and neck bones are needed for the body-space frame used by pole
-  controllers.
+  RIG-002 adds `LeftForearmTwist`/`RightForearmTwist` as deform-only chain bones, not solver-chain bones or
+  endpoints; the hand remains the solver end bone. Shoulder, hips, and neck bones are needed for the body-space
+  frame used by pole controllers.
 - Bind target and pole nodes by path. Store target markers inside the test scene to keep
   paths stable (see Test Scene Self-Containment Rule in TEST-002).
 
@@ -29,6 +30,10 @@ Child guidance under [IK: VRIK System](index.md).
 - Godot executes skeleton modifiers in child order. Place custom controllers (for example
   the pole-target driver) **before** the IK solver nodes so that inputs are updated
   before the solver runs.
+- `ForearmTwistModifier` runs after hand-copy modifiers that establish final hand pose, so it consumes rather
+  than competes with arm IK. It writes only the twist helpers and never originates or alters the authoritative
+  hand pose. It runs before the optical-last finger-retargeting modifier; see
+  [RIG-002: Forearm Twist](../rigging/002-forearm-twist/index.md).
 
 ## Lower-Limb Convention Alignment
 
@@ -200,6 +205,7 @@ Child guidance under [IK: VRIK System](index.md).
 - @specs/core/004-global-service-resolution/index.md
 - @specs/xr/001-xr-manager/index.md
 - @specs/xr/002-optical-hand-tracking/index.md
+- @specs/rigging/002-forearm-twist/index.md
 - @game/src/IK/CharacterIK.cs
 - @game/src/IK/PlayerVRIK.cs
 - @game/src/IK/PlayerVRIKStartupBinder.cs

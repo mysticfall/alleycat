@@ -27,4 +27,4 @@ GENERATOR_PATH="$SCRIPT_DIR/generate_character.py"
 BLENDER_EXECUTABLE="${BLENDER_BIN:-blender}"
 CONFIG_PATH="$1"
 
-exec "$BLENDER_EXECUTABLE" --background --python "$GENERATOR_PATH" -- "$CONFIG_PATH"
+exec "$BLENDER_EXECUTABLE" --background --python-exit-code 1 --python "$GENERATOR_PATH" -- "$CONFIG_PATH"

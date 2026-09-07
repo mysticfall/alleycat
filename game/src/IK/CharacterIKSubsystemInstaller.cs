@@ -43,6 +43,7 @@ public partial class CharacterIKSubsystemInstaller : RigSubsystemInstaller
             {
                 CharacterIK ik = ResolveIKNode(context.TargetRoot);
                 ValidateIK(ik);
+                ValidateAndOrderForearmTwistModifier(context.Skeleton);
                 ActivateBoundModifierPipeline(ik, context.Skeleton);
                 ik.ResetRuntimeBindings();
 
@@ -130,6 +131,43 @@ public partial class CharacterIKSubsystemInstaller : RigSubsystemInstaller
     }
 
     /// <summary>
+    /// Validates the authored bilateral forearm helper chain and restores its required modifier position after
+    /// template reconciliation.
+    /// </summary>
+    protected virtual void ValidateAndOrderForearmTwistModifier(Skeleton3D skeleton)
+    {
+        ForearmTwistModifier modifier = FindSingleDirectChildForearmTwistModifier(skeleton)
+            ?? throw new InvalidOperationException(
+                $"Character IK subsystem installer requires exactly one template-authored {nameof(ForearmTwistModifier)} under skeleton '{skeleton.GetPath()}'.");
+        Node rightHandCopy = skeleton.GetNodeOrNull("RightHandCopyRotation")
+            ?? throw new InvalidOperationException(
+                $"Character IK subsystem installer requires 'RightHandCopyRotation' under skeleton '{skeleton.GetPath()}' before the forearm twist modifier.");
+        Node leftHandCopy = skeleton.GetNodeOrNull("LeftHandCopyRotation")
+            ?? throw new InvalidOperationException(
+                $"Character IK subsystem installer requires 'LeftHandCopyRotation' under skeleton '{skeleton.GetPath()}' before the forearm twist modifier.");
+        Node rightLeg = skeleton.GetNodeOrNull("RightLegIKController")
+            ?? throw new InvalidOperationException(
+                $"Character IK subsystem installer requires 'RightLegIKController' under skeleton '{skeleton.GetPath()}' after the forearm twist modifier.");
+        Node leftLeg = skeleton.GetNodeOrNull("LeftLegIKController")
+            ?? throw new InvalidOperationException(
+                $"Character IK subsystem installer requires 'LeftLegIKController' under skeleton '{skeleton.GetPath()}' after the forearm twist modifier.");
+
+        modifier.ValidateProductionTopology(skeleton);
+
+        int desiredIndex = Math.Max(rightHandCopy.GetIndex(), leftHandCopy.GetIndex()) + 1;
+        if (modifier.GetIndex() != desiredIndex)
+        {
+            skeleton.MoveChild(modifier, desiredIndex);
+        }
+
+        if (modifier.GetIndex() >= rightLeg.GetIndex() || modifier.GetIndex() >= leftLeg.GetIndex())
+        {
+            throw new InvalidOperationException(
+                $"Character IK subsystem installer could not order {nameof(ForearmTwistModifier)} after both hand-copy modifiers and before both leg modifiers on skeleton '{skeleton.GetPath()}'.");
+        }
+    }
+
+    /// <summary>
     /// Restores a bound modifier to full influence after template installation's safe inactive default.
     /// </summary>
     protected static void ActivateModifier(SkeletonModifier3D modifier)
@@ -195,6 +233,30 @@ public partial class CharacterIKSubsystemInstaller : RigSubsystemInstaller
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolves one direct child of the requested type, returning <see langword="null" /> when absent or ambiguous.
+    /// </summary>
+    private static ForearmTwistModifier? FindSingleDirectChildForearmTwistModifier(Node node)
+    {
+        ForearmTwistModifier? match = null;
+        foreach (Node child in node.GetChildren())
+        {
+            if (child is not ForearmTwistModifier modifier)
+            {
+                continue;
+            }
+
+            if (match is not null)
+            {
+                return null;
+            }
+
+            match = modifier;
+        }
+
+        return match;
     }
 
     /// <summary>

@@ -70,7 +70,7 @@
 
 - [IK: VRIK System](ik/index.md)
   - [IK Implementation Notes](ik/implementation-notes.md)
-  - [IK-001: Reusable Neck-Spine CCDIK Setup](ik/001-neck-spine-ik/index.md)
+  - [IK-001: Neck-Spine CCDIK Configuration](ik/001-neck-spine-ik/index.md)
   - [IK-002: Arm And Shoulder IK System](ik/002-arm-shoulder-ik/index.md)
     - [Arm IK Contract](ik/002-arm-shoulder-ik/arm-ik-contract.md)
     - [Shoulder Correction Contract](ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
@@ -86,6 +86,7 @@
 ## Rigging
 
 - [RIG-001: Physical Collision](rigging/001-physical-collision/index.md)
+- [RIG-002: Forearm Twist](rigging/002-forearm-twist/index.md)
 
 ## Vision
 

@@ -430,10 +430,11 @@ internal static class OpticalFingerTrackingTestTopology
 
     /// <summary>
     /// The test-owned Reset palm-plane correspondence frame <c>(u, t, n_palm,H)</c> of one side in hand-local
-    /// space (XR-002 TR28.3): derived from the hand bone's imported rest (the wrist anchor is the hand's own
-    /// rest origin mapped through its rest basis, negated) and the four non-thumb proximal roots' imported
-    /// hand-local rest origins — direct children of the hand bone on this rig, so their rest origins are
-    /// already hand-local — with the normative <c>t × u</c> cross order and the sigma side sign.
+    /// space (XR-002 TR28.3): derived from the hand bone's imported rest segment relative to its nearest
+    /// canonical wrist ancestor (the wrist anchor is that segment's rest origin mapped through its rest
+    /// basis, negated) and the four non-thumb proximal roots' imported hand-local rest origins — direct
+    /// children of the hand bone on this rig, so their rest origins are already hand-local — with the
+    /// normative <c>t × u</c> cross order and the sigma side sign.
     /// </summary>
     public static (Vector3 Longitudinal, Vector3 SpanAxis, Vector3 PalmNormal) ExpectedThumbCorrespondenceFrame(
         Skeleton3D skeleton,
@@ -441,9 +442,11 @@ internal static class OpticalFingerTrackingTestTopology
     {
         string prefix = side == LimbSide.Left ? "Left" : "Right";
         int handBone = RequireBone(skeleton, prefix + "Hand");
-        Transform3D handRest = skeleton.GetBoneRest(handBone);
-        Quaternion handRotation = handRest.Basis.Orthonormalized().GetRotationQuaternion().Normalized();
-        Vector3 wrist = -(new Basis(handRotation.Inverse()) * handRest.Origin);
+        int wristBone = ResolveCanonicalWristBone(skeleton, handBone, prefix);
+        Transform3D handFromWrist = skeleton.GetBoneGlobalRest(wristBone).AffineInverse()
+            * skeleton.GetBoneGlobalRest(handBone);
+        Quaternion handRotation = handFromWrist.Basis.Orthonormalized().GetRotationQuaternion().Normalized();
+        Vector3 wrist = -(new Basis(handRotation.Inverse()) * handFromWrist.Origin);
 
         var roots = new Vector3[4];
         int rootIndex = 0;
@@ -751,6 +754,30 @@ internal static class OpticalFingerTrackingTestTopology
             ? boneIndex
             : throw new InvalidOperationException($"Expected skeleton to contain {boneName}.");
     }
+
+    /// <summary>
+    /// Resolves the hand's nearest canonical wrist ancestor for the palm-plane anchor, mirroring the
+    /// production authored-FK wrist resolution: the RIG-002 deform-only forearm-twist helper between
+    /// the lower arm and the hand is skipped, so the authored
+    /// <c>LowerArm → ForearmTwist → Hand</c> chain resolves to the same canonical wrist frame.
+    /// </summary>
+    private static int ResolveCanonicalWristBone(Skeleton3D skeleton, int handBone, string prefix)
+    {
+        int wristBone = skeleton.GetBoneParent(handBone);
+        while (wristBone >= 0 && IsForearmHelperBoneName(skeleton.GetBoneName(wristBone)))
+        {
+            wristBone = skeleton.GetBoneParent(wristBone);
+        }
+
+        return wristBone >= 0
+            ? wristBone
+            : throw new InvalidOperationException(
+                $"Expected {prefix}Hand to have a canonical wrist ancestor for the palm-plane anchor.");
+    }
+
+    /// <summary>Whether a bone name belongs to the RIG-002 deform-only forearm helper set (TR2 exclusions).</summary>
+    private static bool IsForearmHelperBoneName(StringName boneName)
+        => boneName.ToString().EndsWith("ForearmTwist", StringComparison.Ordinal);
 
     public static void ValidateExpectedSourceNeutralMappings()
         => _expectedSourceNeutralByIdentity ??= BuildExpectedSourceNeutralMap();

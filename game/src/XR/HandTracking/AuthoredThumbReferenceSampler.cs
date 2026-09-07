@@ -145,7 +145,16 @@ public static class AuthoredThumbReferenceSampler
         string prefix = side == LimbSide.Left ? "Left" : "Right";
 
         int handBoneIndex = skeleton.FindBone(prefix + "Hand");
+        // The authored Reset FK's wrist is the hand's nearest CANONICAL ancestor: the RIG-002
+        // deform-only forearm-twist helper sits between the lower arm and the hand on the
+        // authored chain, carries no authored tracks, and is excluded from this contract
+        // (RIG-002 TR2), so it is skipped when resolving the wrist.
         int wristBoneIndex = handBoneIndex >= 0 ? skeleton.GetBoneParent(handBoneIndex) : -1;
+        while (wristBoneIndex >= 0 && IsForearmHelperBoneName(skeleton.GetBoneName(wristBoneIndex)))
+        {
+            wristBoneIndex = skeleton.GetBoneParent(wristBoneIndex);
+        }
+
         if (handBoneIndex < 0 || wristBoneIndex < 0)
         {
             error = $"{prefix} hand: the authored Reset forward kinematics requires a {prefix}Hand bone with a " +
@@ -287,7 +296,13 @@ public static class AuthoredThumbReferenceSampler
         }
 
         Quaternion handGlobal = (wristGlobal * handKey).Normalized();
-        Vector3 handPosition = wristPosition + (new Basis(wristGlobal) * skeleton.GetBoneRest(handBoneIndex).Origin);
+        // The hand's rest origin is accumulated relative to the RESOLVED wrist, not the hand's direct local
+        // rest: on the authored chain the hand's local rest sits under the inert forearm-twist helper
+        // (a near-zero local segment), while the authored references key the hand in the wrist's frame.
+        Vector3 handRestOriginFromWrist = handBoneIndex == wristBoneIndex
+            ? Vector3.Zero
+            : (skeleton.GetBoneGlobalRest(wristBoneIndex).AffineInverse() * skeleton.GetBoneGlobalRest(handBoneIndex)).Origin;
+        Vector3 handPosition = wristPosition + (new Basis(wristGlobal) * handRestOriginFromWrist);
         Quaternion metacarpalGlobal = (handGlobal * resetKeys[0]).Normalized();
 
         Vector3 indexPosition = handPosition + (new Basis(handGlobal) * skeleton.GetBoneRest(rootBoneIndices[0]).Origin);
@@ -375,6 +390,13 @@ public static class AuthoredThumbReferenceSampler
         error = string.Empty;
         return true;
     }
+
+    /// <summary>
+    /// Whether a bone name belongs to the RIG-002 deform-only forearm helper set, which the authored
+    /// reference forward kinematics skips when resolving the canonical wrist (RIG-002 TR2 exclusions).
+    /// </summary>
+    private static bool IsForearmHelperBoneName(StringName boneName)
+        => boneName.ToString().EndsWith("ForearmTwist", StringComparison.Ordinal);
 
     private static bool TryReadRequiredKey(
         Animation animation,

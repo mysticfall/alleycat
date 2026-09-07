@@ -1,0 +1,144 @@
+{
+    "clothes": [
+        "male_worksuit01/male_worksuit01.mhclo",
+        "shoes03/shoes03.mhclo"
+    ],
+    "color_adjustments": {
+        "0a5ec82a-0d5f-43ce-a765-8f076f95692d": {
+            "Color1": [
+                0.6399999856948853,
+                0.6399999856948853,
+                0.6399999856948853,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "52ad91a3-caad-4e50-8c38-67634e5e789c": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "6afd98fa-381b-456f-aa46-3dd15b27b2f0": {
+            "Color1": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "a4e73c2f-3a12-47c8-b706-31a68cac6907": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "ad622a26-da1e-4e3c-9f8e-454edf10d504": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "c104cd4a-1edc-43f9-8b94-f63345a44638": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "d533836f-13ad-4836-8b65-051108253cd2": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        }
+    },
+    "expressions": [],
+    "eyebrows": "eyebrow002/eyebrow002.mhclo",
+    "eyelashes": "eyelashes01/eyelashes01.mhclo",
+    "eyes": "high-poly/high-poly.mhclo",
+    "eyes_material_settings": {},
+    "eyes_material_type": "MAKESKIN",
+    "hair": "short02/short02.mhclo",
+    "makeup": [],
+    "phenotype": {
+        "age": 0.5,
+        "cupsize": 0.550000011920929,
+        "firmness": 0.550000011920929,
+        "gender": 1.0,
+        "height": 0.47999998927116394,
+        "muscle": 0.7999999523162842,
+        "proportions": 0.4699999988079071,
+        "race": {
+            "african": 0.0,
+            "asian": 0.0,
+            "caucasian": 1.0
+        },
+        "weight": 0.7399999499320984
+    },
+    "proxy": "",
+    "rig": "custom.alleycat_male",
+    "skin_material_settings": {},
+    "skin_material_type": "MAKESKIN",
+    "skin_mhmat": "middleage_caucasian_male/middleage_caucasian_male.mhmat",
+    "targets": [],
+    "teeth": "teeth_base/teeth_base.mhclo",
+    "tongue": "tongue01/tongue01.mhclo"
+}

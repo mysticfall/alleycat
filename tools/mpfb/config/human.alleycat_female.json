@@ -1,0 +1,143 @@
+{
+    "clothes": [
+        "cortu_jeans_shorts/cortu_jeans_shorts.mhclo",
+        "wolgade_female_top_01/wolgade_female_top_01.mhclo"
+    ],
+    "color_adjustments": {
+        "52ad91a3-caad-4e50-8c38-67634e5e789c": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "766436e9-63ed-4f6a-afa9-99f3acff70a8": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "784ee1fc-0362-42b6-8f13-c36294bb4bd3": {
+            "Color1": [
+                0.6399999856948853,
+                0.6399999856948853,
+                0.6399999856948853,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "81c9f0d5-848e-40ec-b5d7-0b26990227be": {
+            "Color1": [
+                0.6399999856948853,
+                0.6399999856948853,
+                0.6399999856948853,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "b9e2b8c1-cd02-42dd-ac56-cbca25e6ad4c": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "bb953a1a-db43-44db-a0ad-ed8a5d6000c9": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        },
+        "d533836f-13ad-4836-8b65-051108253cd2": {
+            "Color1": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "Color2": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "Factor": 1.0
+        }
+    },
+    "eyebrows": "eyebrow006/eyebrow006.mhclo",
+    "eyelashes": "eyelashes01/eyelashes01.mhclo",
+    "eyes": "high-poly/high-poly.mhclo",
+    "eyes_material_settings": {},
+    "eyes_material_type": "MAKESKIN",
+    "hair": "short01/short01.mhclo",
+    "makeup": [],
+    "phenotype": {
+        "age": 0.5,
+        "cupsize": 0.6000000238418579,
+        "firmness": 0.44999998807907104,
+        "gender": 0.0,
+        "height": 0.5799999833106995,
+        "muscle": 0.5,
+        "proportions": 0.5,
+        "race": {
+            "african": 0.0,
+            "asian": 1.0,
+            "caucasian": 0.0
+        },
+        "weight": 0.6000000238418579
+    },
+    "proxy": "",
+    "rig": "custom.alleycat_female",
+    "skin_material_settings": {},
+    "skin_material_type": "MAKESKIN",
+    "skin_mhmat": "toigo_light_skin_female_bronze/toigo_light_skin_female_bronze.mhmat",
+    "targets": [],
+    "teeth": "teeth_shape01/teeth_shape01.mhclo",
+    "tongue": "tongue01/tongue01.mhclo"
+}

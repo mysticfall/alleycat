@@ -21,6 +21,19 @@ Use this skill to modify Godot scenes/resources through engine APIs, not by hand
 5. Verify results.
 6. Remove the temporary script unless asked to keep it.
 
+## Importing Changed Assets
+
+For assets in the delivery project, try `godot-mono --editor --quit --path game`. This may open an editor window;
+use a virtual framebuffer if a window would be disruptive. `--path game` targets that project's assets, not scratch
+assets elsewhere. Exit code `0` does not establish that a changed asset was imported: inspect import logs, the
+`.import` sidecar, and relevant cache/source hashes to confirm a new import occurred.
+
+When batch import must finish before quitting, use `godot-mono --headless --xr-mode off --path game --import`.
+Direct `.blend` import needs a valid Blender executable path in Editor Settings
+(`filesystem/import/blender/blender_path`); the separate project setting `filesystem/import/blender/enabled` must
+also permit import. Inspect errors, sidecars, and cache results regardless of exit code. Headless import is not a
+substitute for visual screenshot capture.
+
 ## Temporary Script Rule
 
 Always create a dedicated script before making scene/resource changes.

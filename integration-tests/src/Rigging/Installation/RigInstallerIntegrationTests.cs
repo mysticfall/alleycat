@@ -3,6 +3,7 @@ using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.IK.Pose;
+using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
@@ -42,6 +43,9 @@ public sealed class RigInstallerIntegrationTests
     private const string PlayerScenePath =
         "res://assets/characters/reference/ally_player.tscn";
 
+    private const string MirrorRoomScenePath =
+        "res://assets/testing/mirror_room/mirror_room.tscn";
+
     private const string ReferenceFemaleBodyColliderProfilePath =
         "res://assets/characters/reference/female/body_collider_profile.tres";
 
@@ -66,6 +70,7 @@ public sealed class RigInstallerIntegrationTests
         "LeftArmTwoBoneIKController",
         "RightHandCopyRotation",
         "LeftHandCopyRotation",
+        "ForearmTwistModifier",
         "RightLegIKController",
         "LeftLegIKController",
         "RightLegTwoBoneIKController",
@@ -686,6 +691,76 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
+    /// The production MirrorRoom player template retains its complete head pipeline before the ordered player-rig slot
+    /// runs, and that slot installs the complete modifier sequence onto the production target exactly once.
+    /// </summary>
+    [Fact]
+    public void MirrorRoomPlayerInstaller_InstallsCompleteHeadAndForearmModifierPipeline()
+    {
+        using Node mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate();
+        Node player = mirrorRoom.GetNode("Actors/Player");
+        Node roleInstaller = player.GetNode("PlayerCharacterInstaller");
+        object[] installers = GetInstallerArray(roleInstaller);
+        Assert.Equal(6, installers.Length);
+        AssertInstallerType(installers[5], typeof(PlayerRigInstaller));
+
+        PackedScene playerTemplate = Assert.IsType<PackedScene>(
+            GetPropertyValue(roleInstaller, nameof(RigRoleTemplateSceneInstaller.Template)));
+        using Node templateRoot = playerTemplate.Instantiate();
+        AssertModifierGroupTargets(
+            templateRoot.GetNode("VRIK"),
+            nameof(CharacterIK.HeadModifierGroup),
+            templateRoot.GetNode("Female/GeneralSkeleton"),
+            "NeckSpineIK",
+            "HeadCopyRotation",
+            "NeckTwistDisperser");
+
+        object result = InvokeLoadedInstaller(roleInstaller, player);
+        AssertLoadedInstallSucceeded(result);
+
+        Node playerVRIK = player.GetNode("VRIK");
+        Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        AssertModifierGroupTargets(
+            playerVRIK,
+            nameof(CharacterIK.HeadModifierGroup),
+            skeleton,
+            "NeckSpineIK",
+            "HeadCopyRotation",
+            "NeckTwistDisperser");
+        AssertModifierOrder(skeleton, expectOpticalFingerTrackingModifier: true);
+        ForearmTwistModifier installedTwist = Assert.IsType<ForearmTwistModifier>(skeleton.GetNode("ForearmTwistModifier"), exactMatch: false);
+        Assert.Equal(0.50f, installedTwist.TwistWeight);
+        Assert.True(installedTwist.Active);
+        Assert.Equal(1.0f, installedTwist.Influence);
+
+        Node missingHeadModifier = skeleton.GetNode("NeckSpineIK");
+        skeleton.RemoveChild(missingHeadModifier);
+        SetEmptyArrayProperty(playerVRIK, nameof(CharacterIK.HeadModifierGroup));
+
+        object missingNodeResult = InvokeLoadedRigInstaller(installers[5], player, templateRoot);
+        AssertLoadedInstallFailedContaining(missingNodeResult, nameof(CharacterIK.HeadModifierGroup));
+        missingHeadModifier.Dispose();
+    }
+
+    /// <summary>Mirror Room's player and NPC installers inherit the twist configuration from their role templates.</summary>
+    [Fact]
+    public void MirrorRoomRoleTemplates_UseShippedTwistConfiguration()
+    {
+        using Node mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate();
+        foreach (string actorPath in new[] { "Actors/Player", "Actors/Vadim" })
+        {
+            Node actor = mirrorRoom.GetNode(actorPath);
+            Node installer = Assert.Single(actor.GetChildren(), child => child is RigRoleTemplateSceneInstaller);
+            PackedScene packed = Assert.IsType<PackedScene>(GetPropertyValue(installer, nameof(RigRoleTemplateSceneInstaller.Template)));
+            using Node template = packed.Instantiate();
+            ForearmTwistModifier modifier = Assert.Single(template.FindChildren("*", "ForearmTwistModifier", true, false).OfType<ForearmTwistModifier>());
+            Assert.Equal(0.50f, modifier.TwistWeight);
+            Assert.True(modifier.Active);
+            Assert.Equal(1.0f, modifier.Influence);
+        }
+    }
+
+    /// <summary>
     /// The optical finger retargeting modifier is player-template-only topology: exactly one instance under
     /// the actual skeleton in the player template, none in the base or NPC templates (XR-002 TR16, AC21).
     /// </summary>
@@ -766,14 +841,14 @@ public sealed class RigInstallerIntegrationTests
             }
         }
 
-        AssertModifierOrder(skeleton);
+        AssertModifierOrder(skeleton, expectOpticalFingerTrackingModifier: true);
 
         // Re-running the install must not duplicate or displace the modifier.
         object repeatResult = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller"), playerRoot);
 
         AssertLoadedInstallSucceeded(repeatResult);
         Assert.Equal(1, CountDirectChildren(skeleton, "OpticalFingerTrackingModifier"));
-        AssertModifierOrder(skeleton);
+        AssertModifierOrder(skeleton, expectOpticalFingerTrackingModifier: true);
     }
 
     /// <summary>
@@ -1122,6 +1197,7 @@ public sealed class RigInstallerIntegrationTests
         Assert.Equal(1, CountDirectChildren(skeleton, "Head"));
         Assert.Equal(1, CountDirectChildren(skeleton, "DynamicPhysicalRig"));
         Assert.Equal(1, CountDirectChildren(skeleton, "RightArmIKController"));
+        AssertModifierOrder(skeleton, expectOpticalFingerTrackingModifier: false);
     }
 
     /// <summary>
@@ -1340,15 +1416,42 @@ public sealed class RigInstallerIntegrationTests
         AssertLoadedInstallSucceeded(result);
     }
 
-    private static void AssertModifierOrder(Skeleton3D skeleton)
+    private static void AssertModifierOrder(Skeleton3D skeleton, bool expectOpticalFingerTrackingModifier)
     {
         int previousIndex = -1;
         foreach (string modifierName in _expectedSkeletonModifierOrder)
         {
+            if (modifierName == "OpticalFingerTrackingModifier" && !expectOpticalFingerTrackingModifier)
+            {
+                Assert.Equal(0, CountDirectChildren(skeleton, modifierName));
+                continue;
+            }
+
+            Assert.Equal(1, CountDirectChildren(skeleton, modifierName));
             Node modifier = skeleton.GetNode(modifierName);
             int index = modifier.GetIndex();
             Assert.True(index > previousIndex, $"Modifier '{modifierName}' should appear after previous IK modifier.");
             previousIndex = index;
+        }
+    }
+
+    private static void AssertModifierGroupTargets(
+        Node ik,
+        string propertyName,
+        Node expectedParent,
+        params string[] expectedNames)
+    {
+        object? propertyValue = GetPropertyValue(ik, propertyName);
+        var actualModifiers = new List<Node>();
+        foreach (object? value in Assert.IsAssignableFrom<System.Collections.IEnumerable>(propertyValue))
+        {
+            actualModifiers.Add(Assert.IsAssignableFrom<Node>(value));
+        }
+
+        Assert.Equal(expectedNames, actualModifiers.Select(static modifier => modifier.Name.ToString()));
+        foreach (Node modifier in actualModifiers)
+        {
+            Assert.Same(expectedParent, modifier.GetParent());
         }
     }
 
@@ -1529,6 +1632,15 @@ public sealed class RigInstallerIntegrationTests
         property.SetValue(installer, value);
     }
 
+    private static void SetEmptyArrayProperty(object instance, string propertyName)
+    {
+        System.Reflection.PropertyInfo? property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        Type elementType = property.PropertyType.GetElementType()
+            ?? throw new InvalidOperationException($"Property '{propertyName}' is not an array.");
+        property.SetValue(instance, Array.CreateInstance(elementType, 0));
+    }
+
     private static object? GetPropertyValue(object instance, string propertyName)
     {
         System.Reflection.PropertyInfo? property = instance.GetType().GetProperty(propertyName);
@@ -1580,6 +1692,32 @@ public sealed class RigInstallerIntegrationTests
             ?? throw new InvalidOperationException("Failed to resolve loaded SceneInstallationContext type.");
         object context = Activator.CreateInstance(contextType, targetRoot, SceneInstallationMetadata.DefaultNamespace)
             ?? throw new InvalidOperationException("Failed to create loaded scene installation context.");
+        System.Reflection.MethodInfo? installMethod = installerType.GetMethod(nameof(SceneInstaller.Install), [contextType]);
+        Assert.NotNull(installMethod);
+        object? result = installMethod.Invoke(installer, [context]);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static object InvokeLoadedRigInstaller(object installer, Node targetRoot, Node templateRoot)
+    {
+        Assert.True(TryResolveSingleSkeleton(targetRoot, out Skeleton3D? targetSkeleton));
+        Assert.True(TryResolveSingleSkeleton(templateRoot, out Skeleton3D? templateSkeleton));
+
+        Type installerType = installer.GetType();
+        Type contextType = installerType.Assembly.GetType(typeof(RigInstallationContext).FullName!)
+            ?? throw new InvalidOperationException("Failed to resolve loaded RigInstallationContext type.");
+        object context = Activator.CreateInstance(
+            contextType,
+            targetRoot,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            targetSkeleton,
+            templateSkeleton,
+            null,
+            null,
+            null)
+            ?? throw new InvalidOperationException("Failed to create loaded rig installation context.");
         System.Reflection.MethodInfo? installMethod = installerType.GetMethod(nameof(SceneInstaller.Install), [contextType]);
         Assert.NotNull(installMethod);
         object? result = installMethod.Invoke(installer, [context]);

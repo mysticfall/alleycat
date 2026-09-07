@@ -29,6 +29,10 @@ architecture, contributor model, and actuator abstraction before adding constrai
 6. Hand collision and obstruction behaviour must be preserved as the physical actuation layer.
 7. Grab approach and hold remain safe when a target cannot converge: the player sees no false attachment or
    calibration correction, and can withdraw or release normally.
+8. Neither arm may transiently deform when the pipeline starts or its side authority changes; valid animation, grab,
+   live-tracking, and frozen-tracking wrist poses remain correct.
+9. Ordinary animation remains correct at zero IK influence, while a frozen last-valid optical wrist remains visibly
+   authoritative until ownership changes.
 
 ## Technical Requirements
 
@@ -77,6 +81,19 @@ architecture, contributor model, and actuator abstraction before adding constrai
 22. Bounded non-convergence must preserve lifecycle safety and report the blocking reason for unreachable or
     collision-limited commands. It must allow withdrawal/release without unbounded compensation or relaxing
     INTR-002's 8 mm, 5°, two-process-frame direct-attachment gate.
+23. Each hand side shall publish a neutral atomic target-intent sample with a finite canonical pose, `Ready` status,
+    `AuthorityKind` (`Animation`, `IKProvider`, `Grab`, or `FrozenTracking`), stable `SourceIdentity`, an
+    `AuthorityGeneration` epoch, and a same-pass stamp. `Ready` means finite canonical-pose availability, not
+    live-tracking availability.
+24. A side's authority epoch advances only when authority ownership changes. Normal movement and interpolation
+    never advance it. Tracking loss and reacquisition advance it; frozen tracking remains `Ready`; grab keeps a stable
+    identity for its ownership phase; and animation authority is published whenever no provider owns that side.
+25. IK influence is separate from authority publication. Zero influence may deactivate the arm solve path but must not
+    suppress valid animation authority.
+26. The IK-owned adapter submits the current atomic side authority after canonical hand/copy/animation work and
+    immediately before RIG-002 forearm twist. Stale or absent same-pass stamps fail closed. Only a genuinely unready
+    side rests its helper without advancing state; an authority-epoch change resets only that side. RIG-002 consumes
+    this contract without referencing IK types, and the optical finger modifier remains last.
 
 ## In Scope
 
@@ -91,6 +108,7 @@ architecture, contributor model, and actuator abstraction before adding constrai
 - Pipeline validation tests proving equivalence to current actuator output when no extra contributors are active.
 - Canonical epoch and boundary observability for grab approach, physical actuation, and solved attachment.
 - Bounded non-convergence behaviour required by the INTR-002 grab contract.
+- Atomic side authority publication and the RIG-002 adapter ordering contract.
 
 ## Out Of Scope
 
@@ -140,6 +158,11 @@ architecture, contributor model, and actuator abstraction before adding constrai
 16. Technical Requirement 22 validated: unreachable and collision-limited cases report bounded
     non-convergence, preserve the INTR-002 direct-attachment gate, and do not chase residual
     through unbounded commands or calibration.
+17. User Requirements 8–9 validated: start-up and authority transitions preserve valid per-side wrist poses without
+    transient deformation; zero IK influence preserves animation and frozen tracking remains visibly authoritative.
+18. Technical Requirements 23–26 validated: fixtures verify the finite/`Ready` atomic sample, authority kinds and
+    stable identities, generation-only ownership advancement, loss/reacquisition, same-pass stamping, stale-stamp
+    fail-closed behaviour, affected-side-only reset, zero-influence separation, and optical-last ordering.
 
 ## References
 
@@ -149,5 +172,6 @@ architecture, contributor model, and actuator abstraction before adding constrai
 - [DynamicPhysicalRig Implementation](@game/src/Rigging/Physics/DynamicPhysicalRig.cs)
 - [IK Implementation Notes](../implementation-notes.md)
 - [IK-002: Arm And Shoulder IK System](../002-arm-shoulder-ik/index.md)
+- [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md)
 - [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)

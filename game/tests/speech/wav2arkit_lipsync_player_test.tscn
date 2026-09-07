@@ -11,7 +11,7 @@
 [node name="HeadBone" type="BoneAttachment3D" parent="Subject/Female/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="9" unique_id=772110435]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4594107, 0.04187462)
 bone_name = "Head"
-bone_idx = 46
+bone_idx = 48
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Subject/Female/Female/GeneralSkeleton/HeadBone" index="0" unique_id=1740537098]
 

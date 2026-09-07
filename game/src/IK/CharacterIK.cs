@@ -1,4 +1,6 @@
+using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
+using AlleyCat.XR.HandTracking;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -22,6 +24,8 @@ public partial class CharacterIK : Node3D
     private int _runtimeBindingAttempts;
     private bool _stageModifiersInserted;
     private IKTargetPipeline? _rightHandTargetPipeline;
+    private HandAuthorityState _rightHandAuthority = HandAuthorityState.Animation(LimbSide.Right);
+    private HandAuthorityState _leftHandAuthority = HandAuthorityState.Animation(LimbSide.Left);
 
     private IKTargetActivityGate? _headTargetActivityGate;
     private IKTargetActivityGate? _rightHandTargetActivityGate;
@@ -371,6 +375,11 @@ public partial class CharacterIK : Node3D
     /// </summary>
     public void ResetRuntimeBindings()
     {
+        if (_skeleton is { } skeleton && IsInstanceValid(skeleton))
+        {
+            RemoveInsertedStageModifiers(skeleton);
+        }
+
         _skeleton = null;
         _headActuator = null;
         _leftHandActuator = null;
@@ -384,6 +393,8 @@ public partial class CharacterIK : Node3D
         _rightFootTargetActivityGate = null;
         _leftFootTargetActivityGate = null;
         _stageModifiersInserted = false;
+        _rightHandAuthority = HandAuthorityState.Animation(LimbSide.Right);
+        _leftHandAuthority = HandAuthorityState.Animation(LimbSide.Left);
         ResolvedViewpoint = null;
         ResolvedHeadIKTarget = null;
         ResolvedHeadIKSolveTarget = null;
@@ -804,7 +815,8 @@ public partial class CharacterIK : Node3D
             RightHandIKTargetIntentProvider,
             RightHandFallbackIntentProvider,
             ResolvedRightHandIKTarget,
-            RightHandModifierGroup);
+            RightHandModifierGroup,
+            LimbSide.Right);
     }
 
     /// <summary>
@@ -816,22 +828,25 @@ public partial class CharacterIK : Node3D
             LeftHandIKTargetIntentProvider,
             LeftHandFallbackIntentProvider,
             ResolvedLeftHandIKTarget,
-            LeftHandModifierGroup);
+            LeftHandModifierGroup,
+            LimbSide.Left);
     }
 
     private Transform3D BuildHandTargetTransform(
         IKTargetIntentProvider? provider,
         IKTargetIntentProvider? fallbackProvider,
         AnimatableBody3D? target,
-        SkeletonModifier3D[] modifierGroup)
-        => BuildHandTargetFollowState(provider, fallbackProvider, target, modifierGroup).WorldTransform;
+        SkeletonModifier3D[] modifierGroup,
+        LimbSide side)
+        => BuildHandTargetFollowState(provider, fallbackProvider, target, modifierGroup, side).WorldTransform;
 
     private IKTargetFollowState BuildRightHandTargetFollowState()
         => BuildHandTargetFollowState(
             RightHandIKTargetIntentProvider,
             RightHandFallbackIntentProvider,
             ResolvedRightHandIKTarget,
-            RightHandModifierGroup);
+            RightHandModifierGroup,
+            LimbSide.Right);
 
     private IKTargetFollowState BuildLeftHandTargetFollowState()
     {
@@ -839,19 +854,22 @@ public partial class CharacterIK : Node3D
             LeftHandIKTargetIntentProvider,
             LeftHandFallbackIntentProvider,
             ResolvedLeftHandIKTarget,
-            LeftHandModifierGroup);
+            LeftHandModifierGroup,
+            LimbSide.Left);
     }
 
     private IKTargetFollowState BuildHandTargetFollowState(
         IKTargetIntentProvider? provider,
         IKTargetIntentProvider? fallbackProvider,
         AnimatableBody3D? target,
-        SkeletonModifier3D[] modifierGroup)
+        SkeletonModifier3D[] modifierGroup,
+        LimbSide side)
     {
         Transform3D currentTargetTransform = target?.GlobalTransform ?? Transform3D.Identity;
         IKTargetActivityGate? targetActivityGate = ResolveHandTargetActivityGate(target);
         if (provider is null && fallbackProvider is null)
         {
+            PublishHandAuthority(side, HandAuthorityState.Animation(side));
             _ = ApplyModifierInfluence(new IKTargetIntent(currentTargetTransform, 0.0f), modifierGroup);
             targetActivityGate?.Apply(active: false);
             return new IKTargetFollowState(currentTargetTransform, active: false);
@@ -860,6 +878,7 @@ public partial class CharacterIK : Node3D
         if (provider is not null && IsInstanceValid(provider))
         {
             IKTargetIntent providerIntent = provider.GetTargetIntent();
+            PublishHandAuthority(side, WithInfluence(ResolveHandAuthority(side, provider, providerIntent), providerIntent));
             float influence = ApplyModifierInfluence(providerIntent, modifierGroup);
             bool active = influence > 0.0f;
             targetActivityGate?.Apply(active);
@@ -869,15 +888,74 @@ public partial class CharacterIK : Node3D
         if (fallbackProvider is not null && IsInstanceValid(fallbackProvider))
         {
             IKTargetIntent fallbackIntent = fallbackProvider.GetTargetIntent();
+            PublishHandAuthority(side, WithInfluence(ResolveHandAuthority(side, fallbackProvider, fallbackIntent), fallbackIntent));
             float influence = ApplyModifierInfluence(fallbackIntent, modifierGroup);
             bool active = influence > 0.0f;
             targetActivityGate?.Apply(active);
             return new IKTargetFollowState(active ? fallbackIntent.WorldTransform : currentTargetTransform, active);
         }
 
+        PublishHandAuthority(side, HandAuthorityState.Animation(side));
         targetActivityGate?.Apply(active: false);
         return new IKTargetFollowState(currentTargetTransform, active: false);
     }
+
+    private void PublishHandAuthority(LimbSide side, HandAuthorityState next)
+    {
+        HandAuthorityState current = side == LimbSide.Right ? _rightHandAuthority : _leftHandAuthority;
+        next = next with
+        {
+            Epoch = current.Kind != next.Kind || current.SourceIdentity != next.SourceIdentity
+                ? current.Epoch + 1
+                : current.Epoch,
+        };
+
+        if (side == LimbSide.Right)
+        {
+            _rightHandAuthority = next;
+        }
+        else
+        {
+            _leftHandAuthority = next;
+        }
+    }
+
+    private static HandAuthorityState ResolveHandAuthority(
+        LimbSide side,
+        IKTargetIntentProvider provider,
+        IKTargetIntent intent)
+        => !IsFinite(intent.DesiredInfluence) || intent.DesiredInfluence <= 0.0f
+            ? HandAuthorityState.Animation(side)
+            : ResolveReadyHandAuthority(side, provider, intent);
+
+    private static HandAuthorityState ResolveReadyHandAuthority(
+        LimbSide side,
+        IKTargetIntentProvider provider,
+        IKTargetIntent intent)
+        => provider switch
+        {
+            HandGrabTargetProvider { IsGrabOverrideActive: true } grabProvider
+                => new HandAuthorityState(ForearmTwistAuthorityKind.Grab, GetSourceIdentity(grabProvider), 0),
+            HandGrabTargetProvider { DefaultProvider: { } defaultProvider } when IsInstanceValid(defaultProvider)
+                => ResolveHandAuthority(side, defaultProvider, intent),
+            XRHandPoseTargetProvider xrProvider when xrProvider.ResolvedSource is
+            {
+                SelectedMode: XRHandTrackingMode.Optical,
+                IsWristFrozen: true,
+            }
+                => new HandAuthorityState(ForearmTwistAuthorityKind.FrozenTracking, GetSourceIdentity(provider), 0),
+            _ => new HandAuthorityState(ForearmTwistAuthorityKind.IKProvider, GetSourceIdentity(provider), 0),
+        };
+
+    private static HandAuthorityState WithInfluence(HandAuthorityState authority, IKTargetIntent intent)
+        => authority with
+        {
+            Influence = Mathf.Clamp(intent.DesiredInfluence, 0.0f, 1.0f),
+        };
+
+    private static ulong GetSourceIdentity(Node provider) => provider.GetInstanceId();
+
+    private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
     private IKTargetActivityGate? ResolveHandTargetActivityGate(AnimatableBody3D? target)
     {
@@ -987,6 +1065,18 @@ public partial class CharacterIK : Node3D
             Influence = 1.0f,
         };
 
+        ForearmTwistModifier? forearmTwistModifier = skeleton.GetNodeOrNull<ForearmTwistModifier>("ForearmTwistModifier");
+        HandAuthorityStageModifier? handAuthorityModifier = forearmTwistModifier is not null
+            ? new HandAuthorityStageModifier
+            {
+                Name = "CharacterIKHandAuthorityStage",
+                CharacterIK = this,
+                ForearmTwistModifier = forearmTwistModifier,
+                Active = true,
+                Influence = 1.0f,
+            }
+            : null;
+
         StageModifier endModifier = new()
         {
             Name = "CharacterIKEndStage",
@@ -1001,8 +1091,37 @@ public partial class CharacterIK : Node3D
         skeleton.AddChild(footProviderModifier);
         skeleton.MoveChild(footProviderModifier, beginModifier.GetIndex() + 1);
 
+        if (handAuthorityModifier is not null && forearmTwistModifier is not null)
+        {
+            skeleton.AddChild(handAuthorityModifier);
+            // The hand-copy modifiers commit canonical hand pose before this stage. The forearm writer consumes the
+            // resulting atomically stamped side samples immediately afterwards.
+            skeleton.MoveChild(handAuthorityModifier, forearmTwistModifier.GetIndex());
+        }
+
         skeleton.AddChild(endModifier);
-        skeleton.MoveChild(endModifier, skeleton.GetChildCount() - 1);
+        Node? opticalFingerModifier = skeleton.GetNodeOrNull<OpticalFingerTrackingModifier>("OpticalFingerTrackingModifier");
+        skeleton.MoveChild(endModifier, opticalFingerModifier?.GetIndex() ?? (skeleton.GetChildCount() - 1));
+    }
+
+    private static void RemoveInsertedStageModifiers(Skeleton3D skeleton)
+    {
+        foreach (string name in new[]
+                 {
+                     "CharacterIKBeginStage",
+                     "CharacterIKFootProviderStage",
+                     "CharacterIKHandAuthorityStage",
+                     "CharacterIKEndStage",
+                 })
+        {
+            if (skeleton.GetNodeOrNull<Node>(name) is not { } stage || !IsInstanceValid(stage))
+            {
+                continue;
+            }
+
+            skeleton.RemoveChild(stage);
+            stage.QueueFree();
+        }
     }
 
     private static int ResolveBeginStageIndex(Skeleton3D skeleton)
@@ -1368,6 +1487,88 @@ public partial class CharacterIK : Node3D
 
         public override void _ProcessModificationWithDelta(double delta)
             => CharacterIK?.OnFootProviderStage(delta);
+    }
+
+    /// <summary>Publishes canonical hand authority after hand copy and immediately before forearm twist.</summary>
+    private sealed partial class HandAuthorityStageModifier : SkeletonModifier3D
+    {
+        public CharacterIK? CharacterIK
+        {
+            get;
+            set;
+        }
+
+        public ForearmTwistModifier? ForearmTwistModifier
+        {
+            get;
+            set;
+        }
+
+        public override void _ProcessModificationWithDelta(double delta)
+        {
+            _ = delta;
+            if (CharacterIK is not { } characterIK || ForearmTwistModifier is not { } forearmTwistModifier)
+            {
+                return;
+            }
+
+            Skeleton3D? skeleton = GetSkeleton();
+            if (skeleton is null || !IsInstanceValid(skeleton))
+            {
+                return;
+            }
+
+            ulong token = ForearmTwistModificationPass.Begin(skeleton);
+            SubmitSide(characterIK, forearmTwistModifier, skeleton, LimbSide.Left, token);
+            SubmitSide(characterIK, forearmTwistModifier, skeleton, LimbSide.Right, token);
+        }
+
+        private static void SubmitSide(
+            CharacterIK characterIK,
+            ForearmTwistModifier modifier,
+            Skeleton3D skeleton,
+            LimbSide side,
+            ulong token)
+        {
+            int handBoneIndex = skeleton.FindBone(side == LimbSide.Left ? "LeftHand" : "RightHand");
+            if (handBoneIndex < 0)
+            {
+                modifier.SubmitAuthoritySample(side, ForearmTwistAuthoritySample.Unready(token));
+                return;
+            }
+
+            Transform3D canonicalHandTransform = skeleton.GetBoneGlobalPose(handBoneIndex);
+            HandAuthorityState authority = side == LimbSide.Left ? characterIK._leftHandAuthority : characterIK._rightHandAuthority;
+            modifier.SubmitAuthoritySample(
+                side,
+                new ForearmTwistAuthoritySample(
+                    canonicalHandTransform,
+                    authority.Influence,
+                    ForearmTwistAuthoritySample.IsFinite(canonicalHandTransform),
+                    authority.Kind,
+                    authority.SourceIdentity,
+                    authority.Epoch,
+                    token));
+        }
+    }
+
+    private readonly record struct HandAuthorityState(
+        ForearmTwistAuthorityKind Kind,
+        ulong SourceIdentity,
+        ulong Epoch,
+        float Influence)
+    {
+        public static HandAuthorityState Animation(LimbSide side)
+            => new(
+                ForearmTwistAuthorityKind.Animation,
+                side == LimbSide.Left ? 1UL : 2UL,
+                0,
+                0.0f);
+
+        public HandAuthorityState(ForearmTwistAuthorityKind kind, ulong sourceIdentity, ulong epoch)
+            : this(kind, sourceIdentity, epoch, 1.0f)
+        {
+        }
     }
 
     /// <summary>

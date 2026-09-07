@@ -1,5 +1,5 @@
 {
-  "preset": "Male",
+  "preset": "alleycat_male",
   "name": "Male",
   "outputFile": "assets/characters/reference/male/reference_male.blend",
   "amimations": [

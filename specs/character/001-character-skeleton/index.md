@@ -161,6 +161,13 @@ authored template contents without requiring generators to know internal node pl
 50. The player role template owns the optical finger-retargeting modifier topology
     ([XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)); base and NPC templates do not
     include it.
+51. RIG-002 twist helpers are deform-only; the per-side chain is
+     `LowerArm → ForearmTwist → Hand`, with exactly one helper bone per side, and helpers remain outside
+     `SkeletonProfileHumanoid`, BoneMap, retargeting, IK chains and endpoints, physical rigs, and hand targets.
+     The installed-template topology and runtime-writer, skeleton-level transform/authority, and
+     visual-acceptance contracts are normative only in
+     [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md).
+     Topology/profile acceptance does not certify helper runtime motion, skinning quality, or visual acceptance.
 
 ## In Scope
 
@@ -299,6 +306,12 @@ authored template contents without requiring generators to know internal node pl
     - The portable contract's finger-bone set is exactly the 30 canonical `SkeletonProfileHumanoid` finger bones
       (15 per side), with no palm, fingertip, or non-thumb metacarpal destination bones, and the optical finger
       modifier topology exists only in the player template (XR-002).
+    - RIG-002 helper bones remain outside the humanoid profile and preserve the
+      `LowerArm → ForearmTwist → Hand` helper chain with exactly one helper bone per side. The canonical profile
+      hierarchy is unchanged, and helpers remain outside profile, BoneMap, retargeting, IK, physical rigs, and
+      hand targets. Installed-template validation confirms the single-helper-per-side helper/modifier topology
+      without extending profile or retarget contracts. Skeleton-level transform/authority validation and binding
+      visual acceptance remain RIG-002 responsibilities.
 
 ## References
 
@@ -322,5 +335,6 @@ authored template contents without requiring generators to know internal node pl
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
+- [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md)
 - [CHAR-002: Character Root](../002-character-root/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

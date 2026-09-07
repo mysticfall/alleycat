@@ -654,6 +654,10 @@ internal sealed class OpenXROpticalHandTracking : IOpenXRHandTracking, IXRHandJo
         public bool EverCapturedWrist => side.WristCache.EverCaptured;
 
         /// <inheritdoc />
+        public bool IsWristFrozen
+            => owner._arbiter.CommittedMode == XRHandTrackingMode.Optical && side.WristCache.IsFrozen;
+
+        /// <inheritdoc />
         /// <remarks>
         /// In optical mode the frozen world-space wrist is served with freeze-on-loss semantics (XR-002 TR5, TR25);
         /// in controller mode the live calibrated controller hand-position anchor is returned unchanged

@@ -53,6 +53,9 @@ internal sealed class XRControllerHandPoseSource(LimbSide side, IXRHandControlle
     /// <inheritdoc />
     public XRHandTrackingMode SelectedMode => XRHandTrackingMode.Controller;
 
+    /// <summary>The controller source never freezes; it always serves the live controller anchor.</summary>
+    public bool IsWristFrozen => false;
+
     /// <inheritdoc />
     public XRHandSourceObservation Observation => XRHandSourceObservation.Controller;
 

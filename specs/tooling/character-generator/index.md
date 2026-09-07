@@ -32,6 +32,18 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Generated characters keep the eye animation support required by runtime eye and face systems.
 - Generated characters with ready collider imports receive refreshed body collider wrapper/profile assets automatically.
 - When Godot has not created import sidecars yet, users receive a clear rerun workflow instead of fabricated data.
+- Contributors can manually install the generic MPFB forearm-twist source assets before ordinary character
+  regeneration.
+- Regenerated characters carry the RIG-002 forearm-twist helper bones — one per side, with no second helper
+  bone — and hand attachment bindings remain intact.
+- In an ordinarily regenerated character, selecting the left middle-finger group in Blender Edit Mode does not select
+  right-hand body-mesh vertices, including after removing the right-hand and right-finger groups.
+- Ordinary regeneration preserves ambiguous bilateral source ownership on both physical sides without moving finger
+  or unrelated mass; the approved female finger correction is not a blanket wrong-side reassignment rule.
+- Ordinary regeneration retains pre-existing zero-weight Blender group memberships in the saved character, except
+  eligible, nonprotected same-side twist-helper zeros promoted to positive through conserved axial authoring and
+  independently attributed opposite-hand finger zero ghosts removed from their groups. Every other original zero key,
+  including protected and out-of-domain memberships, remains physical; a calculated zero creates no selectable group.
 - Configuration uses a simple JSON schema with `preset`, `name`, `outputFile`, and `amimations` fields.
 
 ## Technical Requirements
@@ -106,6 +118,51 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - create or refresh the visual/import root node used as the scene root;
   - delegate skeleton, animation, collider, and gameplay setup to module installers;
   - keep reusable topology visible in template scenes/assets for inspection and testing.
+- Forearm-twist source rig generation follows [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md):
+  generic source assets under `tools/mpfb/` target Blender 5.2, MPFB 2.0.17, and schema `110`; contributors install
+  them manually, then use ordinary regeneration without direct generated-`.blend` edits or an automatic installation
+  script.
+- Helper-chain emission follows RIG-002: regenerated characters carry `LeftForearmTwist` and `RightForearmTwist`
+  under the matching lower arms, with each matching hand re-parented to its twist helper, completing the per-side
+  chain `LowerArm → ForearmTwist → Hand`. The generator emits no second helper bone. Helper rest placement is
+  deterministic from the installed generic sources and wrist joint geometry, never hand-tuned per character.
+- Twist helpers are excluded from `SkeletonProfileHumanoid`, BoneMap, and retarget and animation mapping, and
+  remain deform-only.
+- Immediately after MPFB `export_copy`, before cleanup or writing groups, snapshot each export mesh vertex's complete
+  physical group membership map, including present zero-weight keys; keep this separate from the positive
+  post-axial reference used for ownership and import validation. Before mirrored cleanup, protect complete physical
+  group assignments on both sides of each ambiguous source-present bilateral row. Suffix, zero or small weight, and
+  position do not prove exporter contamination. Cleanup may remove an independently identified exporter-introduced
+  counterpart, but cannot transfer a positive source-present bilateral assignment without approved, independently
+  justified row-specific attribution. If none is evidenced, perform no speculative positive transfer. Do not require
+  a general per-vertex provenance system or invent source-to-export vertex correspondence; an uncorrelated bilateral
+  row remains protected rather than inferred from position or suffix.
+- The forearm-twist weight pipeline runs that safe cleanup, recensuses eligibility on the resulting input, and
+  constructs axial lower-arm/twist-helper/hand ownership (including eligible rows with no original helper weight),
+  snapshotting the completed axial distribution as the immutable ownership and import-validation reference.
+  Exclude protected bilateral rows from axial authoring unless an independently justified, approved narrow
+  attribution resolves them. Preserve their original full physical membership maps through output. Axial
+  authoring may promote an existing zero twist-helper membership to positive only on an eligible, nonprotected
+  same-side row, within the conserved lower-arm/helper/hand pool; verify axial construction conservation. All
+  other pre-existing zero memberships persist in the saved `.blend` unless the row-specific finger-ghost
+  exception below applies. Logical zero influence in a calculation must not create a new physical membership.
+  The authored pool and protected physical channels are preserved through output. Finger, unrelated,
+  opposite-side and out-of-domain influences remain protected at the applicable stage.
+  `helper_fraction = 0.5` is the initial ownership setting, independently tunable from runtime `TwistWeight`
+  within RIG-002's bounded visual review, not a fixed release value. Generation evidence does not certify runtime
+  deformation quality or define visual thresholds.
+- For the known right-hand source point (vertex 1945) in the project-owned female custom preset, remove its unintended
+  positive `middle_01_l` assignment directly in that source. This bounded correction does not authorise moving other
+  source-present bilateral assignments. During ordinary generation, remove a physical zero-weight opposite-hand
+  finger membership before writing groups only when independent physical and anatomical evidence attributes that
+  particular export row's membership as an exporter-introduced ghost. Suffix, zero magnitude, or position alone does
+  not suffice. If no such ghost is established, generate normally without speculative deletion. Preserve the corrected
+  same-side total and unrelated group assignments; do not edit generated `.blend` files by hand. The corrected female
+  export has no zero finger memberships and does not itself evidence this conditional cleanup. This does not classify
+  other bilateral source weights or prescribe global reassignment.
+- Whenever bone insertion shifts the bone order, the regeneration pipeline refreshes stored `BoneAttachment3D`
+  indices so `bone_idx` and `bone_name` agree at load (the RIG-002 bone-binding guard); the check tool and
+  integration test prove the contract.
 
 ## In Scope
 - JSON configuration parsing and validation.
@@ -120,9 +177,13 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Preserving and applying the CHAR-002 main character root import metadata for generated character `.blend` outputs.
 - Preserving and applying the modular character import-script sidecar contract for generated character `.blend` outputs.
 - Godot post-import generation of eye animation libraries and collider wrapper/profile companion assets.
+- Generic MPFB forearm-twist source assets under `tools/mpfb/`, their manual installation, and ordinary regeneration.
+- Twist-helper chain emission, exclusions, axial authoring and reference snapshot, and bone-binding index
+  refresh for RIG-002.
 
 ## Out Of Scope
-- Creating new character presets or modifying existing ones.
+- Creating new character presets or modifying existing ones beyond the known female custom-source weight correction
+  above.
 - Manual character sculpting or mesh editing.
 - Animation creation or keyframe editing outside of baking.
 - Direct Godot scene/resource serialisation or installer execution from this Blender generation script.
@@ -133,6 +194,7 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Support for other character generation systems beyond MPFB/MakeHuman.
 - Real-time viewport rendering or interactive feedback during generation.
 - Defining character-specific gameplay attributes or abilities.
+- MPFB source assets beyond the generic forearm-twist sources required by RIG-002.
 
 ## Acceptance Criteria
 - User Requirements:
@@ -159,6 +221,17 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Root role installer scene/profile assignment remains handled by the role scene workflow, not by the first
         post-import asset generation pass.
   - [ ] Missing sidecars produce a clear instruction to run Godot import and rerun the helper or generator.
+  - [ ] Regenerated reference characters contain the single forearm-twist helper per side with the re-parented
+        hand chain and intact `BoneAttachment3D` bindings.
+  - [ ] In the ordinarily generated female `.blend`, with all body-mesh vertices visible, selecting `middle_01_l`
+        in Blender Edit Mode selects no right-hand vertices, both before and after deleting right-hand and
+        right-finger groups; the left middle finger remains selectable.
+  - [ ] Ordinary female/male regeneration preserves ambiguous bilateral source physical channels on both sides,
+        without moving finger or unrelated ownership or weakening the RIG-002 twist visual gates.
+  - [ ] Saved and reopened Blender characters retain pre-existing zero-weight group memberships outside eligible
+        same-side helper promotion and independently attributed opposite-hand finger-ghost removal; calculated zeros
+        introduce no selectable memberships.
+  - [ ] Forearm-twist generation uses the RIG-002 manual generic-asset and ordinary-regeneration workflow.
 - Technical Requirements:
   - [ ] Configuration schema validation requires exactly preset, name, outputFile, and amimations fields.
   - [ ] All file paths are resolved relative to the @game directory.
@@ -195,6 +268,39 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Blender/Python tooling does not serialise Godot scenes/resources or fabricate Godot UID, remap, dependency,
         import, or imported-scene metadata.
   - [ ] Godot installer-backed role scene generation is handled by CORE-005 workflows, not this Blender script.
+  - [ ] Generic forearm-twist sources target Blender 5.2, MPFB 2.0.17, and schema `110`; their installation is manual,
+        and the configuration schema remains exactly four fields.
+  - [ ] Regenerated reference characters carry exactly one twist helper per side under the matching lower arm,
+        with each hand re-parented to its twist helper, completing the `LowerArm → ForearmTwist → Hand` chain and
+        no second helper bone; a disposable-generation test proves the regenerated assets through the ordinary
+        pipeline without direct generated-`.blend` edits.
+  - [ ] Twist helpers are excluded from `SkeletonProfileHumanoid`, BoneMap, and retarget and animation mapping.
+  - [ ] Ordinary generation and focused tests snapshot every export-stage physical membership, including zero keys,
+        before cleanup or writing; bilateral protection precedes scoped cleanup. Only independently evidenced
+        exporter-added counterparts or approved row-specific corrections can change positive wrong-side assignments.
+        Unproven source-present bilateral rows retain their complete physical maps and are excluded from axial
+        authoring. Check source-to-export correspondence where available; do not assert exact row equivalence where
+        it cannot be established. With no evidenced exporter-added assignment, cleanup makes no speculative
+        positive transfer. Recensus eligibility after cleanup and before axial authoring, including eligible
+        zero-helper rows; capture the immutable positive axial reference after authoring. Verify axial construction
+        conservation, with protected physical maps and the post-authoring pool unchanged through output. Unrelated,
+        finger, opposite-side and out-of-domain influences remain protected at the applicable stage. Positive
+        ownership/import validation uses the axial reference, not the export-stage physical snapshot. Validator
+        coverage confirms equivalence to that authored reference, not adequacy of the input distribution or runtime
+        visual quality. `helper_fraction = 0.5` is only the initial ownership setting; RIG-002's bounded visual
+        approval selects the release setting independently of runtime `TwistWeight`.
+  - [ ] Comparing export-stage physical maps with saved and reopened `.blend` group memberships confirms every
+        pre-existing zero key persists except eligible nonprotected same-side twist-helper zeros promoted to positive
+        with conserved axial pool, or independently attributed opposite-hand finger ghosts removed row by row.
+        Calculated logical zeros do not create physical keys; protected and out-of-domain maps remain intact.
+  - [ ] The project-owned female custom source has no positive `middle_01_l` assignment at right-hand vertex 1945;
+        an ordinary regeneration leaves that right-hand vertex unassigned to `middle_01_l`, not merely at zero
+        weight. A synthetic attributed ghost tests conditional removal, conservation of same-side total and unrelated
+        group assignments, and no manual generated-`.blend` edits; it is not evidence of a ghost in the female export.
+        With no attributable ghost, generation succeeds without deleting pre-existing zero memberships.
+  - [ ] After generator bone insertion, every `BoneAttachment3D` in emitted or updated templates satisfies stored
+        `bone_idx` ↔ `bone_name` agreement at load (binding guard), proved by the check tool and integration
+        test.
 
 ## References
 - Source script: `tools/generate_character.py`
@@ -205,6 +311,9 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Eye animation post-import module: `game/assets/characters/import/character_eye_animation_import.gd`
 - Collider profile post-import module: `game/assets/characters/import/character_collider_profile_import.gd`
 - Import sidecar metadata updater: `tools/update_character_import_retarget_metadata.py`
+- Forearm-twist weight pipeline: `tools/forearm_twist_weights.py`
+- Bone-binding guard: `tools/character_template_bone_bindings.py` and `tools/check_character_template_bone_bindings.py`
 - Portable character contract: @specs/character/001-character-skeleton/index.md
 - Character root import contract: @specs/character/002-character-root/index.md
 - Scene Installer System: @specs/core/005-scene-installer-system/index.md
+- Forearm twist: @specs/rigging/002-forearm-twist/index.md

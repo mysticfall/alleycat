@@ -24,6 +24,8 @@ setups.
 3. Arm behaviour must remain consistent when the character body orientation changes, such as standing, stooping, or
    lying down.
 4. Provider influence of 0 on a hand must deactivate all corresponding arm and shoulder modifiers for that side.
+5. Provider influence of 0 must not interrupt ordinary animation authority or deform either forearm; valid animation,
+   grab, live-tracking, and frozen-tracking wrist poses remain correct during start-up and authority changes.
 
 ## Technical Requirements
 
@@ -58,6 +60,12 @@ setups.
     by [INTR-002 Technical Requirement 18 and AC-42](../../interaction/002-hand-grab-execution/index.md).
 17. IK-005 `RealisedTarget` remains physical target-actuator state; it does not describe skeletal terminal hand
     attachment outcome.
+18. Provider influence is separate from the per-side authority publication defined by
+    [IK-005](../005-target-pipeline/index.md). At zero influence, the arm and shoulder modifiers deactivate.
+    Animation authority remains publishable when no provider owns the side.
+19. The arm path preserves the RIG-002 ordering bridge: canonical hand/copy/animation work completes before the
+    same-pass authority adapter submits the side authority immediately before forearm twist. Arm IK does not make
+    rigging depend on IK types.
 
 ## In Scope
 
@@ -74,6 +82,7 @@ setups.
 - A standalone reusable IK scene for reuse in character scenes.
 - Provider-driven target and influence support for hands via IKTargetIntentProvider.
 - Provider influence gating that deactivates arm and shoulder modifiers when influence is 0.
+- The IK-005 authority-publication and RIG-002 ordering bridge required to preserve animation at zero influence.
 
 ## Out Of Scope
 
@@ -132,6 +141,10 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-35 | `RealisedTarget` is physical target-actuator state, not skeletal attachment outcome. |
 |       | Direct terminal hand `BoneAttachment3D` residual is observable downstream. |
 |       | INTR-002 owns the Movable final gate. | Arm IK Contract |
+| AC-36 | At zero provider influence, arm and shoulder modifiers deactivate without suppressing |
+|       | animation authority or transiently deforming either forearm. | IK-005 And RIG-002 |
+| AC-37 | The arm path preserves the same-pass authority bridge after canonical hand/copy/animation |
+|       | work and before RIG-002 forearm twist. | IK-005 And RIG-002 |
 
 ## References
 
@@ -144,3 +157,4 @@ All criteria remain normative. IDs are provided for traceability to component co
 - @specs/ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
 - [IK-005: IK Target Pipeline Foundation](../005-target-pipeline/index.md)
+- @specs/rigging/002-forearm-twist/index.md

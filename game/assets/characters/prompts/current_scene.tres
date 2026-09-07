@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="PromptStack" load_steps=4 format=3 uid="uid://b4j2nqhwnkrxw"]
+[gd_resource type="Resource" script_class="PromptStack" format=3 uid="uid://b4j2nqhwnkrxw"]
 
 [ext_resource type="Script" uid="uid://bji3uvqm0d0ay" path="res://src/Mind/AI/Prompting/ProjectionPromptSection.cs" id="1_projection"]
 [ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="2_stack"]

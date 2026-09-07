@@ -453,6 +453,11 @@ public partial class MockXRRuntimeNode : Node3D, IXRRuntime, IXROrigin, IXRHandJ
         public bool EverCapturedWrist => runtime._wristCaches[side].EverCaptured;
 
         /// <inheritdoc />
+        public bool IsWristFrozen
+            => runtime._handModeArbiter.CommittedMode == XRHandTrackingMode.Optical
+            && runtime._wristCaches[side].IsFrozen;
+
+        /// <inheritdoc />
         public bool TryGetCalibratedWristTransform(out Transform3D transform)
             => runtime.TryGetCalibratedWrist(side, out transform);
     }

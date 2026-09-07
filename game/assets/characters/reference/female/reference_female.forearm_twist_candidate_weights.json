@@ -1,0 +1,2126 @@
+{
+  "meshes": [
+    {
+      "name": "Female.body",
+      "sides": {
+        "left": {
+          "vertices": [
+            {
+              "id": "Female.body|s0|left|19556:49402:7531",
+              "weights": {
+                "LeftForearmTwist": 0.9922638535499573,
+                "body": 1.0,
+                "hand_l": 0.007736183237284422
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19561:49639:7735",
+              "weights": {
+                "LeftForearmTwist": 0.9924241900444031,
+                "body": 1.0,
+                "hand_l": 0.007575778756290674
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19610:49128:7259",
+              "weights": {
+                "LeftForearmTwist": 0.9912264347076416,
+                "body": 1.0,
+                "hand_l": 0.008773546665906906
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19634:49846:7929",
+              "weights": {
+                "LeftForearmTwist": 0.9867316484451294,
+                "body": 1.0,
+                "hand_l": 0.013268394395709038
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19758:48893:6978",
+              "weights": {
+                "LeftForearmTwist": 0.9873515367507935,
+                "body": 1.0,
+                "hand_l": 0.012648493982851505
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19821:50067:8059",
+              "weights": {
+                "LeftForearmTwist": 0.97777259349823,
+                "body": 1.0,
+                "hand_l": 0.022227436304092407
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19918:49138:7930",
+              "weights": {
+                "LeftForearmTwist": 0.8133424520492554,
+                "body": 1.0,
+                "hand_l": 0.18665756285190582
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19937:49359:8114",
+              "weights": {
+                "LeftForearmTwist": 0.8124867677688599,
+                "body": 1.0,
+                "hand_l": 0.18751326203346252
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19945:48887:7688",
+              "weights": {
+                "LeftForearmTwist": 0.813197135925293,
+                "body": 1.0,
+                "hand_l": 0.1867939978837967
+              }
+            },
+            {
+              "id": "Female.body|s0|left|19986:48741:6734",
+              "weights": {
+                "LeftForearmTwist": 0.9798429012298584,
+                "body": 1.0,
+                "hand_l": 0.02015712298452854
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20028:49541:8283",
+              "weights": {
+                "LeftForearmTwist": 0.7885395288467407,
+                "body": 1.0,
+                "hand_l": 0.21146050095558167
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20068:50245:8070",
+              "weights": {
+                "LeftForearmTwist": 0.9711064696311951,
+                "body": 1.0,
+                "hand_l": 0.02889948897063732
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20069:48644:7403",
+              "weights": {
+                "LeftForearmTwist": 0.8043091297149658,
+                "body": 1.0,
+                "hand_l": 0.1956908255815506
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20107:48946:8216",
+              "weights": {
+                "LeftForearmTwist": 0.613855242729187,
+                "body": 1.0,
+                "hand_l": 0.3861447870731354
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20129:48730:7978",
+              "weights": {
+                "LeftForearmTwist": 0.6245111227035522,
+                "body": 1.0,
+                "hand_l": 0.37548890709877014
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20148:49132:8388",
+              "weights": {
+                "LeftForearmTwist": 0.5995822548866272,
+                "body": 1.0,
+                "hand_l": 0.4004177153110504
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20213:49731:8421",
+              "weights": {
+                "LeftForearmTwist": 0.7512467503547668,
+                "body": 1.0,
+                "hand_l": 0.24875612556934357
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20225:48827:8401",
+              "weights": {
+                "LeftForearmTwist": 0.4746207594871521,
+                "body": 1.0,
+                "hand_l": 0.5253792405128479
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20234:49313:8556",
+              "weights": {
+                "LeftForearmTwist": 0.2857972979545593,
+                "body": 1.0,
+                "hand_l": 0.3984526991844177,
+                "lowerarm_l": 0.31575000286102295
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20237:48486:7680",
+              "weights": {
+                "LeftForearmTwist": 0.6224899291992188,
+                "body": 1.0,
+                "hand_l": 0.37751007080078125
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20248:48621:8167",
+              "weights": {
+                "LeftForearmTwist": 0.48660027980804443,
+                "body": 1.0,
+                "hand_l": 0.5133997201919556
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20271:48986:8608",
+              "weights": {
+                "LeftForearmTwist": 0.2185198962688446,
+                "body": 1.0,
+                "hand_l": 0.5044801235198975,
+                "lowerarm_l": 0.2770000100135803
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20290:48466:7148",
+              "weights": {
+                "LeftForearmTwist": 0.7798900008201599,
+                "body": 1.0,
+                "hand_l": 0.22011324763298035
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20306:48704:6578",
+              "weights": {
+                "LeftForearmTwist": 0.9620850682258606,
+                "body": 1.0,
+                "hand_l": 0.03791498392820358
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20313:47882:9260",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6103999614715576,
+                "thumb_01_l": 0.3633999824523926,
+                "thumb_02_l": 0.02619999647140503
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20320:48159:9108",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6306999921798706,
+                "lowerarm_l": 0.08089999854564667,
+                "thumb_01_l": 0.28839999437332153
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20326:48652:9235",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.48425158858299255,
+                "lowerarm_l": 0.24488000571727753,
+                "thumb_01_l": 0.2546745240688324,
+                "thumb_02_l": 0.016198379918932915
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20340:48681:8594",
+              "weights": {
+                "LeftForearmTwist": 0.16336075961589813,
+                "body": 1.0,
+                "hand_l": 0.5792677998542786,
+                "lowerarm_l": 0.25738000869750977
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20341:50334:7938",
+              "weights": {
+                "LeftForearmTwist": 0.9699212908744812,
+                "body": 1.0,
+                "hand_l": 0.030078724026679993
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20359:48383:7869",
+              "weights": {
+                "LeftForearmTwist": 0.4856676757335663,
+                "body": 1.0,
+                "hand_l": 0.5143323540687561
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20366:48485:8356",
+              "weights": {
+                "LeftForearmTwist": 0.1710047423839569,
+                "body": 1.0,
+                "hand_l": 0.6169952154159546,
+                "lowerarm_l": 0.21199999749660492
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20377:49144:8801",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5369000434875488,
+                "lowerarm_l": 0.4596000015735626,
+                "thumb_01_l": 0.0035000003408640623
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20398:48811:8881",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5181000232696533,
+                "lowerarm_l": 0.45570001006126404,
+                "thumb_01_l": 0.026200000196695328
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20419:48492:8832",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.560699999332428,
+                "lowerarm_l": 0.34049999713897705,
+                "thumb_01_l": 0.09880000352859497
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20424:49492:8703",
+              "weights": {
+                "LeftForearmTwist": 0.26016944646835327,
+                "body": 1.0,
+                "hand_l": 0.44408053159713745,
+                "lowerarm_l": 0.2957499921321869
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20442:48935:9599",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5659999847412109,
+                "lowerarm_l": 0.163100004196167,
+                "thumb_01_l": 0.2490999698638916,
+                "thumb_02_l": 0.021799998357892036
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20454:49893:8468",
+              "weights": {
+                "LeftForearmTwist": 0.7194672226905823,
+                "body": 1.0,
+                "hand_l": 0.2805327773094177
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20456:48287:7403",
+              "weights": {
+                "LeftForearmTwist": 0.5953434705734253,
+                "body": 1.0,
+                "hand_l": 0.4046564996242523
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20470:48339:8549",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6229000091552734,
+                "lowerarm_l": 0.3490000069141388,
+                "thumb_01_l": 0.02810000069439411
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20482:48269:8062",
+              "weights": {
+                "LeftForearmTwist": 0.1724366694688797,
+                "body": 1.0,
+                "hand_l": 0.586513340473175,
+                "lowerarm_l": 0.24105000495910645
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20489:48102:8797",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5339000225067139,
+                "lowerarm_l": 0.3107999861240387,
+                "thumb_01_l": 0.15530000627040863
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20495:49009:9147",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6233000159263611,
+                "lowerarm_l": 0.32359999418258667,
+                "thumb_01_l": 0.05310000106692314
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20525:47868:8958",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.8034999966621399,
+                "thumb_01_l": 0.1965000033378601
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20560:49320:8969",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5814000368118286,
+                "lowerarm_l": 0.4124999940395355,
+                "thumb_01_l": 0.006100000347942114
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20580:48183:7592",
+              "weights": {
+                "LeftForearmTwist": 0.45733189582824707,
+                "body": 1.0,
+                "hand_l": 0.5426681041717529
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20593:48137:8250",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.5917999744415283,
+                "lowerarm_l": 0.3630000054836273,
+                "thumb_01_l": 0.04520000144839287
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20601:50334:7791",
+              "weights": {
+                "LeftForearmTwist": 0.9609116911888123,
+                "body": 1.0,
+                "hand_l": 0.03908832371234894
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20621:48410:6983",
+              "weights": {
+                "LeftForearmTwist": 0.7316464185714722,
+                "body": 1.0,
+                "hand_l": 0.26834636926651
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20661:49623:8765",
+              "weights": {
+                "LeftForearmTwist": 0.23534704744815826,
+                "body": 1.0,
+                "hand_l": 0.4889029860496521,
+                "lowerarm_l": 0.2757500112056732
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20662:49207:9315",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.652899980545044,
+                "lowerarm_l": 0.25859999656677246,
+                "thumb_01_l": 0.0885000005364418
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20666:47924:8509",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6442644000053406,
+                "lowerarm_l": 0.23382000625133514,
+                "thumb_01_l": 0.12191218882799149
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20684:49964:8354",
+              "weights": {
+                "LeftForearmTwist": 0.7167344689369202,
+                "body": 1.0,
+                "hand_l": 0.28326553106307983
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20687:49159:9756",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6238999962806702,
+                "lowerarm_l": 0.12460000067949295,
+                "thumb_01_l": 0.23659999668598175,
+                "thumb_02_l": 0.01489999983459711
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20695:47756:8688",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.8909891247749329,
+                "thumb_01_l": 0.10901090502738953
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20698:48082:7764",
+              "weights": {
+                "LeftForearmTwist": 0.330635130405426,
+                "body": 1.0,
+                "hand_l": 0.6693601608276367
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20711:48835:6504",
+              "weights": {
+                "LeftForearmTwist": 0.9391839504241943,
+                "body": 1.0,
+                "hand_l": 0.060811806470155716
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20793:48175:7208",
+              "weights": {
+                "LeftForearmTwist": 0.5321286916732788,
+                "body": 1.0,
+                "hand_l": 0.46786338090896606
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20812:47958:7952",
+              "weights": {
+                "LeftForearmTwist": 0.10202372819185257,
+                "body": 1.0,
+                "hand_l": 0.7709763050079346,
+                "lowerarm_l": 0.12700000405311584
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20829:49481:9066",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6258999705314636,
+                "lowerarm_l": 0.3653999865055084,
+                "thumb_01_l": 0.008700000122189522
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20835:50270:7612",
+              "weights": {
+                "LeftForearmTwist": 0.950152575969696,
+                "body": 1.0,
+                "hand_l": 0.049847424030303955
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20876:47688:8210",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.9761024117469788,
+                "thumb_01_l": 0.02389761246740818
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20913:47476:8401",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.9472054243087769,
+                "thumb_01_l": 0.05279472470283508
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20915:49949:8212",
+              "weights": {
+                "LeftForearmTwist": 0.697309136390686,
+                "body": 1.0,
+                "hand_l": 0.3026839792728424
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20932:49692:8677",
+              "weights": {
+                "LeftForearmTwist": 0.22248052060604095,
+                "body": 1.0,
+                "hand_l": 0.5181694626808167,
+                "lowerarm_l": 0.2593500018119812
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20941:48047:7386",
+              "weights": {
+                "LeftForearmTwist": 0.3836611211299896,
+                "body": 1.0,
+                "hand_l": 0.6163389086723328
+              }
+            },
+            {
+              "id": "Female.body|s0|left|20971:49325:9373",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6825000643730164,
+                "lowerarm_l": 0.19359999895095825,
+                "thumb_01_l": 0.12390000373125076
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21033:49072:6468",
+              "weights": {
+                "LeftForearmTwist": 0.9366686344146729,
+                "body": 1.0,
+                "hand_l": 0.06333138048648834
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21047:50174:7408",
+              "weights": {
+                "LeftForearmTwist": 0.9409939050674438,
+                "body": 1.0,
+                "hand_l": 0.05901610851287842
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21055:48529:6923",
+              "weights": {
+                "LeftForearmTwist": 0.6697511076927185,
+                "body": 1.0,
+                "hand_l": 0.3302488327026367
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21064:47935:7541",
+              "weights": {
+                "LeftForearmTwist": 0.26279959082603455,
+                "body": 1.0,
+                "hand_l": 0.7372003793716431
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21096:49167:9757",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6818000078201294,
+                "lowerarm_l": 0.0860000029206276,
+                "thumb_01_l": 0.2240999937057495,
+                "thumb_02_l": 0.008100000210106373
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21115:49501:8970",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.6789320707321167,
+                "lowerarm_l": 0.3115600049495697,
+                "thumb_01_l": 0.009499049745500088
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21123:49875:8032",
+              "weights": {
+                "LeftForearmTwist": 0.6791583895683289,
+                "body": 1.0,
+                "hand_l": 0.32084164023399353
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21166:47748:7718",
+              "weights": {
+                "LeftForearmTwist": 0.13752572238445282,
+                "body": 1.0,
+                "hand_l": 0.862468957901001
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21179:49662:8529",
+              "weights": {
+                "LeftForearmTwist": 0.41758573055267334,
+                "body": 1.0,
+                "hand_l": 0.5824142694473267
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21193:47333:7969",
+              "weights": {
+                "LeftForearmTwist": 0.008576356805860996,
+                "body": 1.0,
+                "hand_l": 0.9877243041992188,
+                "lowerarm_l": 0.003700000001117587
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21210:50075:7181",
+              "weights": {
+                "LeftForearmTwist": 0.9424474239349365,
+                "body": 1.0,
+                "hand_l": 0.057552583515644073
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21232:49331:6509",
+              "weights": {
+                "LeftForearmTwist": 0.9415818452835083,
+                "body": 1.0,
+                "hand_l": 0.05841818079352379
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21260:48303:7157",
+              "weights": {
+                "LeftForearmTwist": 0.454628050327301,
+                "body": 1.0,
+                "hand_l": 0.5453720092773438
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21285:49323:9280",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.7294999957084656,
+                "lowerarm_l": 0.13259999454021454,
+                "thumb_01_l": 0.1378999948501587
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21295:49786:7844",
+              "weights": {
+                "LeftForearmTwist": 0.6686551570892334,
+                "body": 1.0,
+                "hand_l": 0.331344872713089
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21324:49933:6971",
+              "weights": {
+                "LeftForearmTwist": 0.9410573244094849,
+                "body": 1.0,
+                "hand_l": 0.05894267186522484
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21359:49566:6626",
+              "weights": {
+                "LeftForearmTwist": 0.9395816922187805,
+                "body": 1.0,
+                "hand_l": 0.06041835993528366
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21365:48752:6909",
+              "weights": {
+                "LeftForearmTwist": 0.6563318371772766,
+                "body": 1.0,
+                "hand_l": 0.34367623925209045
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21370:49586:8363",
+              "weights": {
+                "LeftForearmTwist": 0.3976457417011261,
+                "body": 1.0,
+                "hand_l": 0.6023542881011963
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21377:49454:8813",
+              "weights": {
+                "LeftForearmTwist": 0.1031108945608139,
+                "body": 1.0,
+                "hand_l": 0.7159391641616821,
+                "lowerarm_l": 0.18095000088214874
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21386:49768:6784",
+              "weights": {
+                "LeftForearmTwist": 0.9394571781158447,
+                "body": 1.0,
+                "hand_l": 0.06054287031292915
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21396:48071:7338",
+              "weights": {
+                "LeftForearmTwist": 0.28115391731262207,
+                "body": 1.0,
+                "hand_l": 0.7188360691070557
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21453:49662:7632",
+              "weights": {
+                "LeftForearmTwist": 0.6603123545646667,
+                "body": 1.0,
+                "hand_l": 0.3396875262260437
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21463:49102:9632",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.7504750490188599,
+                "lowerarm_l": 0.05469999834895134,
+                "thumb_01_l": 0.19481948018074036
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21509:48971:6972",
+              "weights": {
+                "LeftForearmTwist": 0.661332905292511,
+                "body": 1.0,
+                "hand_l": 0.3386670649051666
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21525:49465:8180",
+              "weights": {
+                "LeftForearmTwist": 0.38002070784568787,
+                "body": 1.0,
+                "hand_l": 0.6199792623519897
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21544:47812:7475",
+              "weights": {
+                "LeftForearmTwist": 0.13627368211746216,
+                "body": 1.0,
+                "hand_l": 0.8637263178825378
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21558:49247:9110",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.7324267625808716,
+                "lowerarm_l": 0.16568000614643097,
+                "thumb_01_l": 0.10188981145620346
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21565:49514:7418",
+              "weights": {
+                "LeftForearmTwist": 0.6577833890914917,
+                "body": 1.0,
+                "hand_l": 0.3422200679779053
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21580:49347:8626",
+              "weights": {
+                "LeftForearmTwist": 0.09264569729566574,
+                "body": 1.0,
+                "hand_l": 0.754804253578186,
+                "lowerarm_l": 0.15254999697208405
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21610:49174:7099",
+              "weights": {
+                "LeftForearmTwist": 0.6515868902206421,
+                "body": 1.0,
+                "hand_l": 0.3484130799770355
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21622:49344:7245",
+              "weights": {
+                "LeftForearmTwist": 0.6498081088066101,
+                "body": 1.0,
+                "hand_l": 0.3501918911933899
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21625:48505:7180",
+              "weights": {
+                "LeftForearmTwist": 0.4047071933746338,
+                "body": 1.0,
+                "hand_l": 0.5952883362770081
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21654:49323:7971",
+              "weights": {
+                "LeftForearmTwist": 0.3726668059825897,
+                "body": 1.0,
+                "hand_l": 0.6273331642150879
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21709:47583:7631",
+              "weights": {
+                "LeftForearmTwist": 0.0351579524576664,
+                "body": 1.0,
+                "hand_l": 0.9648420214653015
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21727:49222:8447",
+              "weights": {
+                "LeftForearmTwist": 0.17083172500133514,
+                "body": 1.0,
+                "hand_l": 0.8291682600975037
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21728:48661:7296",
+              "weights": {
+                "LeftForearmTwist": 0.3829825520515442,
+                "body": 1.0,
+                "hand_l": 0.6170241832733154
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21755:49158:7769",
+              "weights": {
+                "LeftForearmTwist": 0.3637893497943878,
+                "body": 1.0,
+                "hand_l": 0.6362021565437317
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21765:49131:8910",
+              "weights": {
+                "body": 1.0,
+                "hand_l": 0.8290658593177795,
+                "lowerarm_l": 0.1287200003862381,
+                "thumb_01_l": 0.04220844432711601
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21780:48243:7395",
+              "weights": {
+                "LeftForearmTwist": 0.21295571327209473,
+                "body": 1.0,
+                "hand_l": 0.7870442867279053
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21793:48835:7454",
+              "weights": {
+                "LeftForearmTwist": 0.36328887939453125,
+                "body": 1.0,
+                "hand_l": 0.6367111206054688
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21799:48998:7605",
+              "weights": {
+                "LeftForearmTwist": 0.3589392304420471,
+                "body": 1.0,
+                "hand_l": 0.6410607695579529
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21840:49068:8253",
+              "weights": {
+                "LeftForearmTwist": 0.1615286022424698,
+                "body": 1.0,
+                "hand_l": 0.8384714126586914
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21903:48381:7550",
+              "weights": {
+                "LeftForearmTwist": 0.17386139929294586,
+                "body": 1.0,
+                "hand_l": 0.8261342644691467
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21915:48998:8717",
+              "weights": {
+                "LeftForearmTwist": 0.017521141096949577,
+                "body": 1.0,
+                "hand_l": 0.891920804977417,
+                "lowerarm_l": 0.09055999666452408
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21924:48896:8060",
+              "weights": {
+                "LeftForearmTwist": 0.15413422882556915,
+                "body": 1.0,
+                "hand_l": 0.8458657264709473
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21973:48561:7723",
+              "weights": {
+                "LeftForearmTwist": 0.15445037186145782,
+                "body": 1.0,
+                "hand_l": 0.8455444574356079
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21974:48727:7884",
+              "weights": {
+                "LeftForearmTwist": 0.1503230184316635,
+                "body": 1.0,
+                "hand_l": 0.8496769666671753
+              }
+            },
+            {
+              "id": "Female.body|s0|left|21997:47936:7570",
+              "weights": {
+                "LeftForearmTwist": 0.05815740302205086,
+                "body": 1.0,
+                "hand_l": 0.9418425559997559
+              }
+            },
+            {
+              "id": "Female.body|s0|left|22029:48840:8530",
+              "weights": {
+                "LeftForearmTwist": 0.028832612559199333,
+                "body": 1.0,
+                "hand_l": 0.9711710214614868
+              }
+            },
+            {
+              "id": "Female.body|s0|left|22107:48089:7773",
+              "weights": {
+                "LeftForearmTwist": 0.03295417129993439,
+                "body": 1.0,
+                "hand_l": 0.9670365452766418
+              }
+            },
+            {
+              "id": "Female.body|s0|left|22113:48665:8347",
+              "weights": {
+                "LeftForearmTwist": 0.023747745901346207,
+                "body": 1.0,
+                "hand_l": 0.9762446284294128
+              }
+            },
+            {
+              "id": "Female.body|s0|left|22165:48474:8163",
+              "weights": {
+                "LeftForearmTwist": 0.020684028044342995,
+                "body": 1.0,
+                "hand_l": 0.9793159365653992
+              }
+            },
+            {
+              "id": "Female.body|s0|left|22168:48295:7984",
+              "weights": {
+                "LeftForearmTwist": 0.022712700068950653,
+                "body": 1.0,
+                "hand_l": 0.9772785305976868
+              }
+            },
+            {
+              "id": "Female.body|s0|left|22190:47640:7749",
+              "weights": {
+                "LeftForearmTwist": 5.088485522719566e-06,
+                "body": 1.0,
+                "hand_l": 0.9493950009346008,
+                "lowerarm_l": 0.05059000104665756
+              }
+            }
+          ]
+        },
+        "right": {
+          "vertices": [
+            {
+              "id": "Female.body|s0|right|-22190:47640:7749",
+              "weights": {
+                "RightForearmTwist": 5.088535999675514e-06,
+                "body": 1.0,
+                "hand_r": 0.949394941329956,
+                "lowerarm_r": 0.050599999725818634
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-22168:48295:7984",
+              "weights": {
+                "RightForearmTwist": 0.02271289937198162,
+                "body": 1.0,
+                "hand_r": 0.9772871136665344
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-22165:48474:8163",
+              "weights": {
+                "RightForearmTwist": 0.020684028044342995,
+                "body": 1.0,
+                "hand_r": 0.979315996170044
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-22113:48665:8347",
+              "weights": {
+                "RightForearmTwist": 0.023747926577925682,
+                "body": 1.0,
+                "hand_r": 0.9762520790100098
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-22107:48089:7773",
+              "weights": {
+                "RightForearmTwist": 0.03295448049902916,
+                "body": 1.0,
+                "hand_r": 0.9670456051826477
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-22029:48840:8530",
+              "weights": {
+                "RightForearmTwist": 0.028832394629716873,
+                "body": 1.0,
+                "hand_r": 0.9711636900901794
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21997:47936:7570",
+              "weights": {
+                "RightForearmTwist": 0.05815740302205086,
+                "body": 1.0,
+                "hand_r": 0.9418425559997559
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21974:48727:7884",
+              "weights": {
+                "RightForearmTwist": 0.15032285451889038,
+                "body": 1.0,
+                "hand_r": 0.8496760725975037
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21973:48561:7723",
+              "weights": {
+                "RightForearmTwist": 0.1544511616230011,
+                "body": 1.0,
+                "hand_r": 0.8455488085746765
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21924:48896:8060",
+              "weights": {
+                "RightForearmTwist": 0.154133141040802,
+                "body": 1.0,
+                "hand_r": 0.8458598256111145
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21915:48998:8717",
+              "weights": {
+                "RightForearmTwist": 0.01752113737165928,
+                "body": 1.0,
+                "hand_r": 0.8914705514907837,
+                "lowerarm_r": 0.09100999683141708
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21903:48381:7550",
+              "weights": {
+                "RightForearmTwist": 0.17386215925216675,
+                "body": 1.0,
+                "hand_r": 0.8261378407478333
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21840:49068:8253",
+              "weights": {
+                "RightForearmTwist": 0.1615286022424698,
+                "body": 1.0,
+                "hand_r": 0.8384714126586914
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21799:48998:7605",
+              "weights": {
+                "RightForearmTwist": 0.3589363694190979,
+                "body": 1.0,
+                "hand_r": 0.6410556435585022
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21793:48835:7454",
+              "weights": {
+                "RightForearmTwist": 0.36328884959220886,
+                "body": 1.0,
+                "hand_r": 0.6367111206054688
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21780:48243:7395",
+              "weights": {
+                "RightForearmTwist": 0.21295571327209473,
+                "body": 1.0,
+                "hand_r": 0.7870442867279053
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21765:49131:8910",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.8303830623626709,
+                "lowerarm_r": 0.12732000648975372,
+                "thumb_01_r": 0.042304232716560364
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21755:49158:7769",
+              "weights": {
+                "RightForearmTwist": 0.36378929018974304,
+                "body": 1.0,
+                "hand_r": 0.6362020373344421
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21728:48661:7296",
+              "weights": {
+                "RightForearmTwist": 0.38297998905181885,
+                "body": 1.0,
+                "hand_r": 0.6170200109481812
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21727:49222:8447",
+              "weights": {
+                "RightForearmTwist": 0.17083172500133514,
+                "body": 1.0,
+                "hand_r": 0.8291682600975037
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21709:47583:7631",
+              "weights": {
+                "RightForearmTwist": 0.035157956182956696,
+                "body": 1.0,
+                "hand_r": 0.9648420810699463
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21654:49323:7971",
+              "weights": {
+                "RightForearmTwist": 0.3726668059825897,
+                "body": 1.0,
+                "hand_r": 0.6273331642150879
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21625:48505:7180",
+              "weights": {
+                "RightForearmTwist": 0.40470901131629944,
+                "body": 1.0,
+                "hand_r": 0.595291018486023
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21622:49344:7245",
+              "weights": {
+                "RightForearmTwist": 0.649809718132019,
+                "body": 1.0,
+                "hand_r": 0.35019275546073914
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21610:49174:7099",
+              "weights": {
+                "RightForearmTwist": 0.6515868902206421,
+                "body": 1.0,
+                "hand_r": 0.3484130799770355
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21580:49347:8626",
+              "weights": {
+                "RightForearmTwist": 0.09264570474624634,
+                "body": 1.0,
+                "hand_r": 0.7522042989730835,
+                "lowerarm_r": 0.15514999628067017
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21565:49514:7418",
+              "weights": {
+                "RightForearmTwist": 0.6577811241149902,
+                "body": 1.0,
+                "hand_r": 0.34221887588500977
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21558:49247:9110",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.73170006275177,
+                "lowerarm_r": 0.1665000021457672,
+                "thumb_01_r": 0.10180000960826874
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21544:47812:7475",
+              "weights": {
+                "RightForearmTwist": 0.13627368211746216,
+                "body": 1.0,
+                "hand_r": 0.8637263178825378
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21525:49465:8180",
+              "weights": {
+                "RightForearmTwist": 0.38002070784568787,
+                "body": 1.0,
+                "hand_r": 0.6199792623519897
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21509:48971:6972",
+              "weights": {
+                "RightForearmTwist": 0.6613329648971558,
+                "body": 1.0,
+                "hand_r": 0.338667094707489
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21463:49102:9632",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.7519999742507935,
+                "lowerarm_r": 0.05429999902844429,
+                "thumb_01_r": 0.19370000064373016
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21453:49662:7632",
+              "weights": {
+                "RightForearmTwist": 0.6603124141693115,
+                "body": 1.0,
+                "hand_r": 0.3396875858306885
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21396:48071:7338",
+              "weights": {
+                "RightForearmTwist": 0.2811567187309265,
+                "body": 1.0,
+                "hand_r": 0.7188432812690735
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21386:49768:6784",
+              "weights": {
+                "RightForearmTwist": 0.9394571185112,
+                "body": 1.0,
+                "hand_r": 0.060542866587638855
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21377:49454:8813",
+              "weights": {
+                "RightForearmTwist": 0.1031108945608139,
+                "body": 1.0,
+                "hand_r": 0.7150391340255737,
+                "lowerarm_r": 0.18185000121593475
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21370:49586:8363",
+              "weights": {
+                "RightForearmTwist": 0.3976457417011261,
+                "body": 1.0,
+                "hand_r": 0.6023542881011963
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21365:48752:6909",
+              "weights": {
+                "RightForearmTwist": 0.6563317775726318,
+                "body": 1.0,
+                "hand_r": 0.3436761796474457
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21359:49566:6626",
+              "weights": {
+                "RightForearmTwist": 0.9395816326141357,
+                "body": 1.0,
+                "hand_r": 0.06041835993528366
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21324:49933:6971",
+              "weights": {
+                "RightForearmTwist": 0.9410573244094849,
+                "body": 1.0,
+                "hand_r": 0.05894267186522484
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21295:49786:7844",
+              "weights": {
+                "RightForearmTwist": 0.6686548590660095,
+                "body": 1.0,
+                "hand_r": 0.33134469389915466
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21285:49323:9280",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.7304269671440125,
+                "lowerarm_r": 0.1318800002336502,
+                "thumb_01_r": 0.13768622279167175
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21260:48303:7157",
+              "weights": {
+                "RightForearmTwist": 0.454628050327301,
+                "body": 1.0,
+                "hand_r": 0.5453720092773438
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21232:49331:6509",
+              "weights": {
+                "RightForearmTwist": 0.9415761828422546,
+                "body": 1.0,
+                "hand_r": 0.05841783061623573
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21210:50075:7181",
+              "weights": {
+                "RightForearmTwist": 0.9424404501914978,
+                "body": 1.0,
+                "hand_r": 0.05755215883255005
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21193:47333:7969",
+              "weights": {
+                "RightForearmTwist": 0.008576356805860996,
+                "body": 1.0,
+                "hand_r": 0.9877243041992188,
+                "lowerarm_r": 0.003700000001117587
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21179:49662:8529",
+              "weights": {
+                "RightForearmTwist": 0.4175896644592285,
+                "body": 1.0,
+                "hand_r": 0.582419753074646
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21166:47748:7718",
+              "weights": {
+                "RightForearmTwist": 0.13752569258213043,
+                "body": 1.0,
+                "hand_r": 0.8624687790870667
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21123:49875:8032",
+              "weights": {
+                "RightForearmTwist": 0.6791561245918274,
+                "body": 1.0,
+                "hand_r": 0.3208405673503876
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21115:49501:8970",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6761000156402588,
+                "lowerarm_r": 0.31439998745918274,
+                "thumb_01_r": 0.009499999694526196
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21096:49167:9757",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6773000955581665,
+                "lowerarm_r": 0.09049999713897705,
+                "thumb_01_r": 0.2241000086069107,
+                "thumb_02_r": 0.008100001141428947
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21064:47935:7541",
+              "weights": {
+                "RightForearmTwist": 0.26279959082603455,
+                "body": 1.0,
+                "hand_r": 0.7372003793716431
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21055:48529:6923",
+              "weights": {
+                "RightForearmTwist": 0.6697511672973633,
+                "body": 1.0,
+                "hand_r": 0.3302488327026367
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21047:50174:7408",
+              "weights": {
+                "RightForearmTwist": 0.9409844875335693,
+                "body": 1.0,
+                "hand_r": 0.059015512466430664
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-21033:49072:6468",
+              "weights": {
+                "RightForearmTwist": 0.9366635084152222,
+                "body": 1.0,
+                "hand_r": 0.06333103030920029
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20971:49325:9373",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6876687407493591,
+                "lowerarm_r": 0.18841999769210815,
+                "thumb_01_r": 0.12391239404678345
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20941:48047:7386",
+              "weights": {
+                "RightForearmTwist": 0.38366013765335083,
+                "body": 1.0,
+                "hand_r": 0.6163373589515686
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20932:49692:8677",
+              "weights": {
+                "RightForearmTwist": 0.22248052060604095,
+                "body": 1.0,
+                "hand_r": 0.5167194604873657,
+                "lowerarm_r": 0.26080000400543213
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20915:49949:8212",
+              "weights": {
+                "RightForearmTwist": 0.6973139047622681,
+                "body": 1.0,
+                "hand_r": 0.30268606543540955
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20913:47476:8401",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.9472053050994873,
+                "thumb_01_r": 0.052794720977544785
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20876:47688:8210",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.9761001467704773,
+                "thumb_01_r": 0.023900002241134644
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20835:50270:7612",
+              "weights": {
+                "RightForearmTwist": 0.950152575969696,
+                "body": 1.0,
+                "hand_r": 0.049847424030303955
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20829:49481:9066",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6521652340888977,
+                "lowerarm_r": 0.33913999795913696,
+                "thumb_01_r": 0.008700869977474213
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20812:47958:7952",
+              "weights": {
+                "RightForearmTwist": 0.10202371329069138,
+                "body": 1.0,
+                "hand_r": 0.7703762650489807,
+                "lowerarm_r": 0.12759999930858612
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20793:48175:7208",
+              "weights": {
+                "RightForearmTwist": 0.5321329236030579,
+                "body": 1.0,
+                "hand_r": 0.4678671061992645
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20711:48835:6504",
+              "weights": {
+                "RightForearmTwist": 0.9391879439353943,
+                "body": 1.0,
+                "hand_r": 0.06081206724047661
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20698:48082:7764",
+              "weights": {
+                "RightForearmTwist": 0.33063527941703796,
+                "body": 1.0,
+                "hand_r": 0.6693604588508606
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20695:47756:8688",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.8909890651702881,
+                "thumb_01_r": 0.10901090502738953
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20687:49159:9756",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6234999895095825,
+                "lowerarm_r": 0.125,
+                "thumb_01_r": 0.23659999668598175,
+                "thumb_02_r": 0.01489999983459711
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20684:49964:8354",
+              "weights": {
+                "RightForearmTwist": 0.7167344689369202,
+                "body": 1.0,
+                "hand_r": 0.28326553106307983
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20666:47924:8509",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6443355679512024,
+                "lowerarm_r": 0.23377999663352966,
+                "thumb_01_r": 0.12188781052827835
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20662:49207:9315",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6463000178337097,
+                "lowerarm_r": 0.2651999890804291,
+                "thumb_01_r": 0.0885000005364418
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20661:49623:8765",
+              "weights": {
+                "RightForearmTwist": 0.23534703254699707,
+                "body": 1.0,
+                "hand_r": 0.48885294795036316,
+                "lowerarm_r": 0.2757999897003174
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20621:48410:6983",
+              "weights": {
+                "RightForearmTwist": 0.7316517233848572,
+                "body": 1.0,
+                "hand_r": 0.2683483064174652
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20601:50334:7791",
+              "weights": {
+                "RightForearmTwist": 0.9609116911888123,
+                "body": 1.0,
+                "hand_r": 0.039088327437639236
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20593:48137:8250",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5954999923706055,
+                "lowerarm_r": 0.35929998755455017,
+                "thumb_01_r": 0.04520000144839287
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20580:48183:7592",
+              "weights": {
+                "RightForearmTwist": 0.4573318660259247,
+                "body": 1.0,
+                "hand_r": 0.5426681041717529
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20560:49320:8969",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5767577290534973,
+                "lowerarm_r": 0.41714000701904297,
+                "thumb_01_r": 0.006100610829889774
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20525:47868:8958",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.8035000562667847,
+                "thumb_01_r": 0.1965000033378601
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20495:49009:9147",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6243375539779663,
+                "lowerarm_r": 0.32256001234054565,
+                "thumb_01_r": 0.053094688802957535
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20489:48102:8797",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5339999794960022,
+                "lowerarm_r": 0.310699999332428,
+                "thumb_01_r": 0.15530000627040863
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20482:48269:8062",
+              "weights": {
+                "RightForearmTwist": 0.17243528366088867,
+                "body": 1.0,
+                "hand_r": 0.5872367024421692,
+                "lowerarm_r": 0.24031999707221985
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20470:48339:8549",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6230999827384949,
+                "lowerarm_r": 0.34880000352859497,
+                "thumb_01_r": 0.02810000069439411
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20456:48287:7403",
+              "weights": {
+                "RightForearmTwist": 0.5953463912010193,
+                "body": 1.0,
+                "hand_r": 0.4046584963798523
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20454:49893:8468",
+              "weights": {
+                "RightForearmTwist": 0.7194672226905823,
+                "body": 1.0,
+                "hand_r": 0.2805327773094177
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20442:48935:9599",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5655999779701233,
+                "lowerarm_r": 0.16349999606609344,
+                "thumb_01_r": 0.2490999698638916,
+                "thumb_02_r": 0.021799998357892036
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20424:49492:8703",
+              "weights": {
+                "RightForearmTwist": 0.26016944646835327,
+                "body": 1.0,
+                "hand_r": 0.43858057260513306,
+                "lowerarm_r": 0.30125001072883606
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20419:48492:8832",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5575000047683716,
+                "lowerarm_r": 0.34369999170303345,
+                "thumb_01_r": 0.09880000352859497
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20398:48811:8881",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5187481641769409,
+                "lowerarm_r": 0.4550600051879883,
+                "thumb_01_r": 0.02619738131761551
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20377:49144:8801",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.5361536145210266,
+                "lowerarm_r": 0.4603399932384491,
+                "thumb_01_r": 0.0035003500524908304
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20366:48485:8356",
+              "weights": {
+                "RightForearmTwist": 0.1710047572851181,
+                "body": 1.0,
+                "hand_r": 0.6170952320098877,
+                "lowerarm_r": 0.211899995803833
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20359:48383:7869",
+              "weights": {
+                "RightForearmTwist": 0.48566779494285583,
+                "body": 1.0,
+                "hand_r": 0.5143324136734009
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20341:50334:7938",
+              "weights": {
+                "RightForearmTwist": 0.9699212908744812,
+                "body": 1.0,
+                "hand_r": 0.030078724026679993
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20340:48681:8594",
+              "weights": {
+                "RightForearmTwist": 0.16336075961589813,
+                "body": 1.0,
+                "hand_r": 0.5792677998542786,
+                "lowerarm_r": 0.25738000869750977
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20326:48652:9235",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.481551855802536,
+                "lowerarm_r": 0.24758000671863556,
+                "thumb_01_r": 0.2546745240688324,
+                "thumb_02_r": 0.016198379918932915
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20320:48159:9108",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6306999921798706,
+                "lowerarm_r": 0.08089999854564667,
+                "thumb_01_r": 0.28839999437332153
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20313:47882:9260",
+              "weights": {
+                "body": 1.0,
+                "hand_r": 0.6103999614715576,
+                "thumb_01_r": 0.3633999824523926,
+                "thumb_02_r": 0.02619999647140503
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20306:48704:6578",
+              "weights": {
+                "RightForearmTwist": 0.9620850682258606,
+                "body": 1.0,
+                "hand_r": 0.03791498392820358
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20290:48466:7148",
+              "weights": {
+                "RightForearmTwist": 0.7798874378204346,
+                "body": 1.0,
+                "hand_r": 0.22011253237724304
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20271:48986:8608",
+              "weights": {
+                "RightForearmTwist": 0.21852095425128937,
+                "body": 1.0,
+                "hand_r": 0.5056539177894592,
+                "lowerarm_r": 0.2758300006389618
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20248:48621:8167",
+              "weights": {
+                "RightForearmTwist": 0.48660025000572205,
+                "body": 1.0,
+                "hand_r": 0.5133997201919556
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20237:48486:7680",
+              "weights": {
+                "RightForearmTwist": 0.6224899291992188,
+                "body": 1.0,
+                "hand_r": 0.37751007080078125
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20234:49313:8556",
+              "weights": {
+                "RightForearmTwist": 0.2857972979545593,
+                "body": 1.0,
+                "hand_r": 0.39750272035598755,
+                "lowerarm_r": 0.3167000114917755
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20225:48827:8401",
+              "weights": {
+                "RightForearmTwist": 0.4746236503124237,
+                "body": 1.0,
+                "hand_r": 0.5253824591636658
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20213:49731:8421",
+              "weights": {
+                "RightForearmTwist": 0.7512446045875549,
+                "body": 1.0,
+                "hand_r": 0.24875539541244507
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20148:49132:8388",
+              "weights": {
+                "RightForearmTwist": 0.5995822548866272,
+                "body": 1.0,
+                "hand_r": 0.4004177451133728
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20129:48730:7978",
+              "weights": {
+                "RightForearmTwist": 0.6245111227035522,
+                "body": 1.0,
+                "hand_r": 0.37548893690109253
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20107:48946:8216",
+              "weights": {
+                "RightForearmTwist": 0.613855242729187,
+                "body": 1.0,
+                "hand_r": 0.3861447870731354
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20069:48644:7403",
+              "weights": {
+                "RightForearmTwist": 0.8043091297149658,
+                "body": 1.0,
+                "hand_r": 0.1956908255815506
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20068:50245:8070",
+              "weights": {
+                "RightForearmTwist": 0.9711045026779175,
+                "body": 1.0,
+                "hand_r": 0.028899429365992546
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-20028:49541:8283",
+              "weights": {
+                "RightForearmTwist": 0.7885395288467407,
+                "body": 1.0,
+                "hand_r": 0.21146050095558167
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19986:48741:6734",
+              "weights": {
+                "RightForearmTwist": 0.9798429012298584,
+                "body": 1.0,
+                "hand_r": 0.02015712484717369
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19945:48887:7688",
+              "weights": {
+                "RightForearmTwist": 0.8132043480873108,
+                "body": 1.0,
+                "hand_r": 0.1867956668138504
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19937:49359:8114",
+              "weights": {
+                "RightForearmTwist": 0.8124867677688599,
+                "body": 1.0,
+                "hand_r": 0.18751326203346252
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19918:49138:7930",
+              "weights": {
+                "RightForearmTwist": 0.8133424520492554,
+                "body": 1.0,
+                "hand_r": 0.18665756285190582
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19821:50067:8059",
+              "weights": {
+                "RightForearmTwist": 0.97777259349823,
+                "body": 1.0,
+                "hand_r": 0.022227436304092407
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19758:48893:6978",
+              "weights": {
+                "RightForearmTwist": 0.9873549938201904,
+                "body": 1.0,
+                "hand_r": 0.012648538686335087
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19634:49846:7929",
+              "weights": {
+                "RightForearmTwist": 0.9867388010025024,
+                "body": 1.0,
+                "hand_r": 0.013268491253256798
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19610:49128:7259",
+              "weights": {
+                "RightForearmTwist": 0.9912264347076416,
+                "body": 1.0,
+                "hand_r": 0.00877354759722948
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19561:49639:7735",
+              "weights": {
+                "RightForearmTwist": 0.9924242496490479,
+                "body": 1.0,
+                "hand_r": 0.0075757792219519615
+              }
+            },
+            {
+              "id": "Female.body|s0|right|-19556:49402:7531",
+              "weights": {
+                "RightForearmTwist": 0.9922638535499573,
+                "body": 1.0,
+                "hand_r": 0.007736183237284422
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Female.cortu_jeans_shorts",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.eyebrow006",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.eyelashes01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.high-poly",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.short01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.teeth_shape01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.tongue01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    },
+    {
+      "name": "Female.wolgade_female_top_01",
+      "sides": {
+        "left": {
+          "vertices": []
+        },
+        "right": {
+          "vertices": []
+        }
+      }
+    }
+  ],
+  "neutral_manifest_schema_version": 5,
+  "producer": "tools/generate_character.py (post-helper redistribution candidate weights)",
+  "schema_version": 5
+}

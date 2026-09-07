@@ -75,6 +75,8 @@ opposition roll.
 8. Controller-driven gameplay other than grabbing (for example locomotion, menus, and transcription input) is
    unaffected by the active mode; controller grab buttons work in every committed mode and optical grab edges
    are recognised only in `Optical` mode.
+8a. A frozen last-valid optical wrist remains visibly authoritative while its side is frozen; start-up, tracking loss,
+    reacquisition, and other authority changes do not transiently deform either forearm.
 9. When the tracked non-thumb fingers are straight and together, the avatar avoids an exaggerated directional fan while
    retaining the accepted neutral alignment and slight natural bend authored into the rig.
 10. Both hands repeatedly curl into and open from a fist without flexion-dependent cumulative lateral phalange twist or
@@ -82,7 +84,7 @@ opposition roll.
 11. Deliberate finger spread remains signed, visible, and useful on both hands. Straight, fist, and spread poses do not
     require the player to adopt the avatar rig's authored rest orientation when optical mode starts.
 12. Partial curl combined with deliberate spread remains coherent on both hands: fingers keep bending in their natural
-     bend planes while spread is retained, and releasing the pose returns to the accepted neutral.
+    bend planes while spread is retained, and releasing the pose returns to the accepted neutral.
 13. The calibrated thumb rests at the avatar's authored natural thumb pose when the player's real thumb is relaxed.
     Stage 1 maps opposition palmward but deliberately discards thumb-metacarpal axial opposition roll. A fist may
     therefore retain an open thumb web/V; this is an accepted Stage 1 limitation. Neutral, spread, and non-thumb
@@ -131,6 +133,8 @@ opposition roll.
 
 5. Loss of one or both optical samples while committed `Optical` does not change the committed mode; affected poses
    freeze at their last valid values.
+5a. A frozen wrist is a valid, visibly authoritative `FrozenTracking` side source for the IK-005 atomic target-intent
+   contract. Loss and reacquisition advance that side's authority epoch; ordinary frozen-pose retention does not.
 
 ### Standard APIs
 
@@ -190,6 +194,8 @@ opposition roll.
 16. The modifier topology is player-template only (see
     [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)); base and NPC templates do
     not include it.
+    `ForearmTwistModifier` is a separate deform-only RIG-002 concern: it runs after hand-copy modifiers and before
+    this optical-last finger modifier, and neither modifier may write the other's destination bones.
 
 ### Anatomical Frames
 
@@ -572,6 +578,8 @@ opposition roll.
 36. Whole-hand tracking loss freezes that hand; the other hand continues independently.
 37. On mode exit, the optical-session cache is cleared so the current authored pose immediately regains authority.
 38. The frozen wrist pose is cached in world space.
+38a. The frozen world-space wrist is published as a finite, `Ready` `FrozenTracking` atomic sample with stable source
+    identity and the current same-pass stamp. It remains valid without live tracking until ownership changes.
 
 ### Enablement And Runtime Abstraction
 
@@ -783,6 +791,8 @@ opposition roll.
 | 8 | User | Controller-driven gameplay other than grab edges is unaffected in both |
 |   |                   | modes; controller grab edges work in optical mode and optical grab edges |
 |   |                   | are inactive in controller mode. |
+| 8a | User | A frozen last-valid optical wrist remains visibly authoritative, and mode, loss, and |
+|    |      | reacquisition changes cause no transient forearm deformation. |
 | 9 | Technical | Implementation uses only `XRServer`, `XRHandTracker`, and |
 |   |                   | `/user/hand_tracker/left\|right`; no excluded dependency or API is |
 |   |                   | introduced. |
@@ -822,11 +832,16 @@ opposition roll.
 |   |                   | modifier execution order. |
 | 21 | Technical | The modifier topology exists only in the player template (CHAR-001); |
 |   |                   | base and NPC templates do not include it. |
+| 21a | Technical | The ordered `ForearmTwistModifier` runs after hand copy and before this optical-last |
+|     |                   | modifier, remains confined to its RIG-002 helper bones, and leaves finger retargeting |
+|     |                   | confined to the 30 canonical finger bones. |
 | 22 | Technical | Mock runtime hooks deterministically drive committed-mode transitions |
 |   |                   | and per-side sample validity for tests without hardware. |
 | 23 | Technical | `IXRHandController` surfaces are unchanged; non-grab controller consumers |
 |    |                   | (PlayerController, game menu, Transcriber) are unaffected in both modes, |
 |    |                   | with optical grab recognition the only grab input gated by the mode. |
+| 23a | Technical | Loss publishes a finite, `Ready` `FrozenTracking` sample with stable source identity |
+|     |           | and a current same-pass stamp; reacquisition advances only that side's authority epoch. |
 | 24 | User | On both hands, tracked straight and together fingers avoid exaggerated |
 |   |                   | directional fan while retaining the accepted slight rig-authored natural |
 |   |                   | bend. Deliberate tracked spread remains visible and signed. |
@@ -1027,6 +1042,7 @@ opposition roll.
 - [INTR-003: Hands](../../interaction/003-hands/index.md)
 - [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md)
 - [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)
+- [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md)
 - @game/src/XR/HandTracking/
 - @game/src/XR/OpenXR/OpenXRRuntimeNode.cs
 - @game/assets/xr/openxr_runtime.tscn
