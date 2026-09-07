@@ -535,8 +535,10 @@ public sealed partial class GameMenuIntegrationTests
     }
 
     /// <summary>
-    /// Verifies grab presses and releases are suppressed while the menu is paused and act again after unpause,
-    /// including the analogue grab tracker freezing across the pause.
+    /// Verifies grab presses and releases are suppressed while the menu is paused — no grab or release action
+    /// fires mid-pause — and that the approved resume reconciliation then acts exactly once: the open-grip
+    /// observation recorded during the pause releases a single time on unpause, and the analogue tracker's
+    /// cleared latch makes the next rising edge a genuine fresh grab.
     /// </summary>
     [Fact]
     public async Task PlayerController_WhileMenuPaused_GrabInputIsSuppressedUntilUnpause()
@@ -571,22 +573,25 @@ public sealed partial class GameMenuIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
             Assert.False(fixture.Global.Paused);
 
+            // The open-grip observation recorded during the pause reconciles exactly once on resume.
+            Assert.Equal(1, fixture.RightHand.ReleaseCallCount);
+
             rightController.TriggerActionButtonPressed(GrabAction);
             Assert.Equal(3, fixture.RightHand.GrabCallCount);
 
             rightController.TriggerActionButtonReleased(GrabAction);
-            Assert.Equal(1, fixture.RightHand.ReleaseCallCount);
-
-            // The analogue tracker kept its pressed state across the pause, so the rising edge is
-            // consumed without a grab and the following release edge clears the tracker.
-            rightController.TriggerActionFloatInputChanged(GrabFloatAction, 0.95f);
-            Assert.Equal(3, fixture.RightHand.GrabCallCount);
-
-            rightController.TriggerActionFloatInputChanged(GrabFloatAction, 0.1f);
             Assert.Equal(2, fixture.RightHand.ReleaseCallCount);
 
+            // The analogue tracker cleared its pressed state when the paused release was observed, so the
+            // rising edge is a genuine fresh grab rather than a consumed repeat.
             rightController.TriggerActionFloatInputChanged(GrabFloatAction, 0.95f);
             Assert.Equal(4, fixture.RightHand.GrabCallCount);
+
+            rightController.TriggerActionFloatInputChanged(GrabFloatAction, 0.1f);
+            Assert.Equal(3, fixture.RightHand.ReleaseCallCount);
+
+            rightController.TriggerActionFloatInputChanged(GrabFloatAction, 0.95f);
+            Assert.Equal(5, fixture.RightHand.GrabCallCount);
         }
         finally
         {

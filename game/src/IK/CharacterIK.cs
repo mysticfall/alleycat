@@ -932,10 +932,39 @@ public partial class CharacterIK : Node3D
         }
 
         BeforeProviderTargetProcessing();
+        // The canonical source-sampling epoch: simulation-driven providers advance exactly once per
+        // authoritative physics-actuation tick, after the XR origin reset and before the pipelines sample
+        // source intent (IK-005 TR19-TR20). Consumers read the captured epoch snapshot instead of
+        // phase-dependent global transforms.
+        AdvanceSimulationDrivenProviders(delta);
         BeforeHandTargetActuators();
         PhysicsActuatorTickCount += 1;
         RightHandTargetPipelineDebugState = _rightHandTargetPipeline?.Run(delta) ?? RightHandTargetPipelineDebugState;
         LeftHandTargetPipelineDebugState = _leftHandTargetPipeline?.Run(delta) ?? LeftHandTargetPipelineDebugState;
+    }
+
+    private void AdvanceSimulationDrivenProviders(double delta)
+    {
+        AdvanceSimulationDrivenProvider(RightHandIKTargetIntentProvider, RightHandFallbackIntentProvider, delta);
+        AdvanceSimulationDrivenProvider(LeftHandIKTargetIntentProvider, LeftHandFallbackIntentProvider, delta);
+        AdvanceSimulationDrivenProvider(HeadTargetIntentProvider, HeadFallbackIntentProvider, delta);
+    }
+
+    private static void AdvanceSimulationDrivenProvider(
+        IKTargetIntentProvider? provider,
+        IKTargetIntentProvider? fallbackProvider,
+        double delta)
+    {
+        if (provider is IIKSimulationAdvancable advancable && IsInstanceValid(provider))
+        {
+            advancable.AdvanceSimulation(delta);
+            return;
+        }
+
+        if (fallbackProvider is IIKSimulationAdvancable fallbackAdvancable && IsInstanceValid(fallbackProvider))
+        {
+            fallbackAdvancable.AdvanceSimulation(delta);
+        }
     }
 
     private void InsertStageModifiers()

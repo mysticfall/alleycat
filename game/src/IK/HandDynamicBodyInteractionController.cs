@@ -14,6 +14,7 @@ public sealed class HandDynamicBodyInteractionController(
     private const float Epsilon = 1e-5f;
     private const float QueryMargin = 0.001f;
     private const int MaximumContactsPerShape = 8;
+    private const string RuntimeShapeOwnerRevisionMetaKey = "alleycat_runtime_shape_owner_revision";
     // TODO: Profile and generated movement shapes may duplicate query sources; consider deduplicating.
 
     /// <summary>
@@ -51,6 +52,13 @@ public sealed class HandDynamicBodyInteractionController(
     /// </summary>
     public const string DynamicInteractionGroupName = "hand_dynamic_interaction_body";
 
+    /// <summary>
+    /// Scene-tree group marking dynamic rigid bodies that are the pending grab candidate of an approaching
+    /// hand. While protected, the explicit interaction channel must not push them: the authorised approach
+    /// itself may not displace the item it is trying to acquire (INTR-002 pending approach protection).
+    /// </summary>
+    public const string ApproachProtectedBodyGroupName = "hand_approach_protected_body";
+
     private readonly Dictionary<ulong, ContactState> _contacts = [];
 
     private Vector3 _previousTargetOrigin = Vector3.Zero;
@@ -61,10 +69,11 @@ public sealed class HandDynamicBodyInteractionController(
     /// Initialises explicit dynamic-body interaction handling for a hand actuator body.
     /// </summary>
     private readonly AnimatableBody3D _handBody = handBody;
-    private readonly QueryShapeSource[] _queryShapeSources = CollectQueryShapeSources(handBody, profileQueryShapes);
-    private readonly ShapeCast3D[] _shapeCasts = CreateQueryShapeCasts(
+    private QueryShapeSource[] _queryShapeSources = CollectQueryShapeSources(handBody, profileQueryShapes);
+    private ShapeCast3D[] _shapeCasts = CreateQueryShapeCasts(
         handBody,
         CollectQueryShapeSources(handBody, profileQueryShapes));
+    private int _runtimeShapeOwnerRevision = ReadRuntimeShapeOwnerRevision(handBody);
 
     /// <inheritdoc />
     public IReadOnlySet<string> Tags { get; } = BuildSourceTags(handBody);
@@ -133,6 +142,7 @@ public sealed class HandDynamicBodyInteractionController(
     /// </summary>
     public void Update(Transform3D targetTransform, double delta)
     {
+        RefreshRuntimeShapeOwnersIfChanged();
         float deltaSeconds = (float)delta;
         Vector3 targetVelocity = BuildTargetVelocity(targetTransform.Origin, deltaSeconds);
 
@@ -157,6 +167,42 @@ public sealed class HandDynamicBodyInteractionController(
 
         ClearEndedContacts([.. activeContacts.Keys]);
     }
+
+    /// <summary>
+    /// Marks runtime shape-owner changes so dynamic interaction query shapes are rebuilt once at the ownership boundary.
+    /// </summary>
+    internal static void NotifyRuntimeShapeOwnersChanged(CollisionObject3D body)
+    {
+        int revision = ReadRuntimeShapeOwnerRevision(body);
+        body.SetMeta(RuntimeShapeOwnerRevisionMetaKey, revision + 1);
+    }
+
+    private void RefreshRuntimeShapeOwnersIfChanged()
+    {
+        int revision = ReadRuntimeShapeOwnerRevision(_handBody);
+        if (revision == _runtimeShapeOwnerRevision)
+        {
+            return;
+        }
+
+        _runtimeShapeOwnerRevision = revision;
+        foreach (ShapeCast3D shapeCast in _shapeCasts)
+        {
+            if (GodotObject.IsInstanceValid(shapeCast))
+            {
+                shapeCast.QueueFree();
+            }
+        }
+
+        _queryShapeSources = CollectQueryShapeSources(_handBody, profileQueryShapes);
+        _shapeCasts = CreateQueryShapeCasts(_handBody, _queryShapeSources);
+        _contacts.Clear();
+    }
+
+    private static int ReadRuntimeShapeOwnerRevision(CollisionObject3D body)
+        => body.HasMeta(RuntimeShapeOwnerRevisionMetaKey)
+            ? body.GetMeta(RuntimeShapeOwnerRevisionMetaKey).AsInt32()
+            : 0;
 
     /// <summary>
     /// Computes the capped impact impulse magnitude for an explicit hand contact.
@@ -322,6 +368,7 @@ public sealed class HandDynamicBodyInteractionController(
         if (shapeCast.GetCollider(contactIndex) is not RigidBody3D rigidBody
             || !GodotObject.IsInstanceValid(rigidBody)
             || rigidBody.Freeze
+            || rigidBody.IsInGroup(ApproachProtectedBodyGroupName)
             || !rigidBody.IsInGroup(DynamicInteractionGroupName)
             || (rigidBody.CollisionLayer & collisionMask) == 0)
         {
@@ -406,6 +453,22 @@ public sealed class HandDynamicBodyInteractionController(
             }
         }
 
+        foreach (int rawOwnerId in handBody.GetShapeOwners())
+        {
+            uint ownerId = (uint)rawOwnerId;
+            GodotObject? owner = handBody.ShapeOwnerGetOwner(ownerId);
+            if (owner is CollisionShape3D collisionShape && ReferenceEquals(collisionShape.GetParent(), handBody))
+            {
+                continue;
+            }
+
+            int shapeCount = handBody.ShapeOwnerGetShapeCount(ownerId);
+            for (int shapeIndex = 0; shapeIndex < shapeCount; shapeIndex += 1)
+            {
+                queryShapeSources.Add(new QueryShapeSource(handBody, ownerId, shapeIndex));
+            }
+        }
+
         if (profileQueryShapes is not null)
         {
             foreach (HandDynamicInteractionShape queryShape in profileQueryShapes)
@@ -445,18 +508,36 @@ public sealed class HandDynamicBodyInteractionController(
     private readonly struct QueryShapeSource
     {
         private readonly CollisionShape3D? _collisionShape;
+        private readonly CollisionObject3D? _shapeOwnerBody;
+        private readonly uint _shapeOwnerId;
+        private readonly int _shapeIndex;
         private readonly HandDynamicInteractionShape _queryShape;
 
         public QueryShapeSource(CollisionShape3D collisionShape)
         {
             _collisionShape = collisionShape;
+            _shapeOwnerBody = null;
+            _shapeOwnerId = 0;
+            _shapeIndex = 0;
             _queryShape = default;
         }
 
         public QueryShapeSource(HandDynamicInteractionShape queryShape)
         {
             _collisionShape = null;
+            _shapeOwnerBody = null;
+            _shapeOwnerId = 0;
+            _shapeIndex = 0;
             _queryShape = queryShape;
+        }
+
+        public QueryShapeSource(CollisionObject3D shapeOwnerBody, uint shapeOwnerId, int shapeIndex)
+        {
+            _collisionShape = null;
+            _shapeOwnerBody = shapeOwnerBody;
+            _shapeOwnerId = shapeOwnerId;
+            _shapeIndex = shapeIndex;
+            _queryShape = default;
         }
 
         public bool TryResolve(out Shape3D? shape, out Transform3D transform)
@@ -467,6 +548,15 @@ public sealed class HandDynamicBodyInteractionController(
                     ? _collisionShape.Shape
                     : null;
                 transform = _collisionShape.Transform;
+                return shape is not null;
+            }
+
+            if (_shapeOwnerBody is not null)
+            {
+                bool valid = GodotObject.IsInstanceValid(_shapeOwnerBody)
+                    && _shapeIndex < _shapeOwnerBody.ShapeOwnerGetShapeCount(_shapeOwnerId);
+                shape = valid ? _shapeOwnerBody.ShapeOwnerGetShape(_shapeOwnerId, _shapeIndex) : null;
+                transform = valid ? _shapeOwnerBody.ShapeOwnerGetTransform(_shapeOwnerId) : Transform3D.Identity;
                 return shape is not null;
             }
 

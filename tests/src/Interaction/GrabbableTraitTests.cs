@@ -107,6 +107,28 @@ public sealed class GrabbableTraitTests
     }
 
     /// <summary>
+    /// INTR-001 TR18: occupancy is part of candidate validity — a held holder returns no candidate without
+    /// consulting owned grab points, and becomes queryable again once released.
+    /// </summary>
+    [Fact]
+    public void GetGrabPoint_HeldHolder_ReturnsNullWithoutQueryingGrabPoints()
+    {
+        var calls = new List<string>();
+        FakeGrabbable holder = new(new FakeGrabPoint("first", calls, CreateCandidate))
+        {
+            IsGrabbed = true,
+        };
+
+        Assert.Null(((IGrabbable)holder).GetGrabPoint(LimbSide.Left, Transform3D.Identity));
+        Assert.Empty(calls);
+
+        holder.IsGrabbed = false;
+
+        Assert.NotNull(((IGrabbable)holder).GetGrabPoint(LimbSide.Left, Transform3D.Identity));
+        Assert.Equal(["first"], calls);
+    }
+
+    /// <summary>
     /// Grab-point candidates carry the component reference that produced them for execution-time ownership checks.
     /// </summary>
     [Fact]
@@ -175,6 +197,11 @@ public sealed class GrabbableTraitTests
         public IReadOnlyList<IComponent> Components { get; } = components;
 
         public GrabbableMobility Mobility => GrabbableMobility.Movable;
+
+        public bool IsGrabbed
+        {
+            get; set;
+        }
 
         public bool Grab(GrabPointCandidate grabPoint) => Components.Contains(grabPoint.Source);
     }

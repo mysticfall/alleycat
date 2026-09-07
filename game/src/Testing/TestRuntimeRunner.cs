@@ -923,6 +923,7 @@ public partial class TestRuntimeRunner : Node
             or "AlleyCat.IntegrationTests.UI.GameMenuIntegrationTests"
             or "AlleyCat.IntegrationTests.Speech.TranscriberIntegrationTests"
             or "AlleyCat.IntegrationTests.Control.PlayerControllerGrabInputIntegrationTests"
+            or "AlleyCat.IntegrationTests.Control.HandGrabInputCoordinatorIntegrationTests"
             or "AlleyCat.IntegrationTests.Testing.ReusableSessionIsolatedGameIntegrationTests";
 
     private static Assembly? ResolveTestAssemblyDependency(
@@ -943,7 +944,6 @@ public partial class TestRuntimeRunner : Node
         string? dependencyPath = dependencyResolver.ResolveAssemblyToPath(assemblyName);
         return dependencyPath is null ? null : context.LoadFromAssemblyPath(dependencyPath);
     }
-
     private static bool TryGetLoadTarget(string assemblyPath,
         out string absoluteAssemblyPath,
         out AssemblyDependencyResolver? dependencyResolver)

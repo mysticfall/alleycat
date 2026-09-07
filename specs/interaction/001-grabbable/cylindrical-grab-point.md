@@ -39,6 +39,9 @@ Provide a grab point that:
 - Exposes authored `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
   so items sit naturally in the hand.
 - Supports physical RigidBody3D objects with physics suspended while held.
+- Supplies the mandatory `GrabAnimation` that serves as the generic grip
+  reference for optical-mode recognition as well as the committed grab pose;
+  optical recognition itself is not implemented in this component.
 
 ## User Requirements
 
@@ -81,6 +84,10 @@ Provide a grab point that:
 10. Authors can select a `CylindricalGrabPoint` in the Godot editor and see visual
     cues for the local-Y grab segment, acquisition area, and authored hand offset,
     making it easier to tune grab zones and verify offset direction.
+11. The same grab point yields identical candidate semantics for controller and
+     optical input: the supplied hand transform is the active hand-pose source's
+     hand pose, and `GrabAnimation` is mandatory for both modes because it is
+     the optical grip reference as well as the committed pose.
 
 ## Technical Requirements
 
@@ -161,7 +168,9 @@ Provide a grab point that:
     - `PalmLocalDirection` — hand-local palm axis (exported, tunable, defaults
       to local negative Y).
     - `PalmFacingMinimumDot` — minimum palm-to-closest-point dot product for validity.
-    - `GrabAnimation` — animation clip for a valid candidate.
+    - `GrabAnimation` — animation clip for a valid candidate; also the
+      mandatory generic grip reference for optical-mode recognition (see
+      Requirement 22).
     - `GrabPointPositionOffsetFromHand: Vector3` — authored position offset from
       hand attachment to the selected/contact grab point when held. Defaults to
       zero.
@@ -242,6 +251,15 @@ Provide a grab point that:
        gizmo (axes showing local X/Y/Z after applying the authored rotation) or
        as a position vector arrow from the marker origin, labelled or colour-coded
        to indicate it represents the authored offset.
+22. `CylindricalGrabPoint` implements no optical gesture recognition. The
+     candidate it returns is identical for controller and optical input — the
+     supplied hand transform is the active source's hand pose — and
+     `GrabAnimation` is consumed by the generic optical recogniser as the
+     mandatory grip reference ([INTR-001](index.md),
+     [CTRL-002](../../ctrl/002-hand-grab-input/index.md),
+     [XR-002](../../xr/002-optical-hand-tracking/index.md)). Content whose
+     animation cannot supply the required side-specific reference fails
+     validation fail-closed (INTR-001 Requirement 16).
 
 ## In Scope
 
@@ -261,12 +279,16 @@ Provide a grab point that:
   affecting final held pose or authored offsets.
 - Rejection conditions for invalid configuration or candidate state.
 - Support for physical RigidBody3D objects with physics suspended while held.
+- Supply of the mandatory `GrabAnimation` as the generic optical grip
+  reference (recognition itself lives in the generic recogniser).
 
 ## Out Of Scope
 
 - Grab execution (how the object behaves when held).
 - Release mechanics.
 - Animation blending details.
+- Optical gesture recognition mechanics (generic recogniser per INTR-001 and
+  CTRL-002; this component only supplies the animation reference).
 - Multi-hand grab scenarios.
 - Network replication.
 - Physics state management beyond suspension awareness (handled by INTR-002).
@@ -389,7 +411,13 @@ Provide a grab point that:
 |    |                   | from GrabPointPositionOffsetFromHand and GrabPointRotationOffsetFromHand. |
 | 36 | Technical         | The snap indicator uses a tube perpendicular to the cylinder length axis, |
 |    |                   | visually distinct from the reach tube, and does not use rounded end caps |
-|    |                   | that would misrepresent snap as extending beyond the cylinder ends.
+|    |                   | that would misrepresent snap as extending beyond the cylinder ends. |
+| 37 | User              | The same cylindrical grab point yields identical candidate semantics for |
+|    |                   | controller and optical input; `GrabAnimation` is mandatory for both. |
+| 38 | Technical         | The component implements no optical recognition; `GrabAnimation` is |
+|    |                   | consumed by the generic optical recogniser as the mandatory grip |
+|    |                   | reference, and content whose animation cannot supply the side-specific |
+|    |                   | reference fails validation fail-closed. |
 
 ## Test Props
 

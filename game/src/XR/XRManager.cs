@@ -75,6 +75,13 @@ public partial class XRManager : Node, IServiceRegistrar
             : throw new InvalidOperationException("XR runtime is not initialised.");
 
     /// <summary>
+    /// Per-hand optical grab presentation arbitration state (XR-002 TR30-TR31; INTR-003 TR19): written
+    /// authoritatively by the hand grab lifecycle at commit/release and queried by the finger modifier before
+    /// each hand's writes. Independent of runtime initialisation so the seam exists as soon as the manager does.
+    /// </summary>
+    public IOpticalGrabPresentationArbiter OpticalGrabArbiter { get; } = new OpticalGrabPresentationArbiter();
+
+    /// <summary>
     /// Gets the per-side hand-pose source forwarded from the active runtime (XR-002 TR27).
     /// </summary>
     /// <param name="side">Limb side of the hand.</param>

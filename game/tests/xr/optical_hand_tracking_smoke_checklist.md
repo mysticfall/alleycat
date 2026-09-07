@@ -40,12 +40,45 @@ Check these while both hands are optically tracked:
 
 - [ ] In optical mode, the avatar's fingers visibly follow real finger articulation — curl each finger
       individually and check the matching avatar finger responds.
-- [ ] In optical mode, authored hand poses are fully overridden by the tracked fingers (the authored rest shape
-      should not fight the tracked shape).
-- [ ] Switch to controller mode (pick the controllers up) and perform a grab on a grabbable object: the authored
-      grab pose plays exactly as before optical tracking existed.
+- [ ] In optical mode, on hands with no committed grab, authored hand poses are overridden by the tracked fingers
+      (the authored rest shape should not fight the tracked shape). While a hand holds a grabbed item, that hand
+      instead shows the fixed authored grab pose.
+- [ ] Switch to controller mode (pick the controllers up) and perform a grab on a grabbable object with the grab
+      button: the authored grab pose plays exactly as before optical tracking existed.
 - [ ] Return to controller mode after optical tracking: the authored hand pose becomes visible again immediately,
       with no stuck tracked pose and no pose clearing.
+
+## Optical Grab Behaviour
+
+Verify these while both hands are optically tracked, using a grabbable test ball (and a cylindrical stick where
+noted). The grab lifecycle contract is in
+[INTR-002: Hand Grab Execution](../../../specs/interaction/002-hand-grab-execution/index.md); the input contract is
+in [CTRL-002: Hand Grab Input](../../../specs/ctrl/002-hand-grab-input/index.md).
+
+- [ ] **Grab by closing the hand:** move an open hand near the ball and close it around the ball; the approach
+      starts, the item stays still until the hand settles, then the grab commits and the ball follows the hand.
+      Closing the hand with no grabbable in range must do nothing.
+- [ ] **Seamless commit:** during the approach the fingers stay live tracked; on commit they blend smoothly into
+      the fixed authored grab pose with no visible pop or snap.
+- [ ] **Pending cancel:** close the hand to start an approach, then open the hand before the grab commits; the
+      approach cancels and the hand returns to idle.
+- [ ] **Hidden-open release while held:** while holding, open the real hand (the avatar hand keeps the fixed
+      authored pose); after a stable opening the item releases and the avatar fingers blend back to the current
+      tracked pose.
+- [ ] **Over-clench and finger tolerance while held:** squeeze harder or extend one unrelated finger while
+      holding; the item must stay held. Only a stable opening of the whole hand releases.
+- [ ] **Held tracking loss preserves the item:** while holding, occlude the grabbing hand completely; the held
+      item and the fixed pose are preserved, no release happens, and after the hand becomes visible again an open
+      hand releases normally.
+- [ ] **Mode switch releases:** while holding (or mid-approach), pick both controllers up so the committed mode
+      switches to `Controller`; the pending grab cancels or the held item releases, and the controller grab button
+      — not the optical hand — owns grabbing afterwards.
+- [ ] **Opposite hand live:** hold an item with one hand (fixed authored pose) and check the other hand's fingers
+      still follow real tracked articulation freely.
+- [ ] **Cylindrical stick:** repeat the grab, hidden-open release, and held-loss checks on a cylindrical stick
+      grabbed away from its centre; recognition must behave identically to the ball.
+- [ ] **Pause suppression:** open the game menu while in optical mode; closing the hand must not start a grab and
+      opening must not release a held item until the menu closes.
 
 ## Thumb Behaviour (Stage 1)
 

@@ -1,16 +1,17 @@
 using System.Collections;
 using System.Reflection;
+using AlleyCat.IK;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Interaction;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
+using AlleyCat.XR;
+using AlleyCat.XR.HandTracking;
+using AlleyCat.XR.Mock;
 using Godot;
 using Xunit;
-using HandGrabTargetProvider = AlleyCat.IK.HandGrabTargetProvider;
-using IKTargetIntent = AlleyCat.IK.IKTargetIntent;
-using IKTargetIntentProvider = AlleyCat.IK.IKTargetIntentProvider;
 
 namespace AlleyCat.IntegrationTests.Interaction;
 
@@ -27,7 +28,39 @@ public sealed partial class HandGrabAssetIntegrationTests
     private const float TestPipeReachDistanceMetres = 0.08f;
     private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
     private const string TestStickScenePath = "res://assets/items/test_stick.tscn";
+    private const string ValidGrabPoseAnimationPath =
+        "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
     private const string ReferencePlayerFixtureScenePath = "res://assets/testing/reference_player_fixture/reference_player_fixture.tscn";
+    // World-space contacts near the mock-runtime-calibrated reference target rest frame (0.497, 1.063, 0.012).
+    // They are deliberately fixed fixture geometry, never derived from the solved bone attachment.
+    private static readonly Transform3D _referenceBallContactTransform = new(Basis.Identity, new Vector3(0.430f, 1.120f, 0.012f));
+    // Static authoring-qualified cylinder contact; it is independent of the solved bone attachment.
+    private static readonly Transform3D _referenceStickContactTransform = new(
+        new Basis(new Vector3(1f, 0f, 0f), new Vector3(0f, 0f, 1f), new Vector3(0f, -1f, 0f)),
+        new Vector3(0.429f, 1.102f, -0.088f));
+    private static readonly Transform3D _referenceBallCommitAttachmentTransform = new(
+        Basis.Identity,
+        new Vector3(0.419f, 1.049f, -0.037f));
+    private static readonly Transform3D _referenceMockQueryTarget = new(Basis.Identity, new Vector3(0.497f, 1.063f, 0.012f));
+    private const string MockRuntimeScenePath = "res://assets/xr/mock_runtime.tscn";
+    private const float MovableAttachmentPositionToleranceMetres = 0.008f;
+    private const float MovableAttachmentOrientationToleranceDegrees = 5.0f;
+    private const int MovableAttachmentSettleProcessFrames = 2;
+    private const int TargetConvergencePhysicsFrames = 90;
+    // These are authored optical/controller inputs. Ball placement is derived from the shared asset offset, never
+    // from a solved hand attachment, so a later wrist motion remains an independent source stimulus.
+    private static readonly Transform3D _authoredOpticalBallWrist = new(
+        Basis.Identity,
+        new Vector3(0.419f, 1.049f, -0.037f));
+    private static readonly Transform3D _authoredOpticalBallWristMoved = new(
+        Basis.Identity.Rotated(Vector3.Up, 0.13f),
+        new Vector3(0.500f, 1.035f, -0.040f));
+    private static readonly Transform3D _authoredOpticalBallWristIsolationMoved = new(
+        Basis.Identity.Rotated(Vector3.Up, 0.27f),
+        new Vector3(0.590f, 1.040f, -0.060f));
+    private static readonly Transform3D _authoredControllerBallWrist = new(
+        Basis.Identity.Rotated(Vector3.Up, 0.16f),
+        new Vector3(0.405f, 1.025f, -0.025f));
     private static readonly Vector3 _testBallGrabPositionOffsetFromHand = new(0.001f, 0.071f, 0.049f);
     private static readonly Vector3 _testBallGrabRotationOffsetFromHand = new(-0.00048048052f, 0.011107354f, -1.5504136f);
     private static readonly StringName _pendingGrabGroupName = new("pending_grab_test_grabbable");
@@ -573,94 +606,346 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the template-installed reference player can drive a real hand grab into provider state and commit it.
+    /// Verifies both live player hands retain their authored actuator-owned held collision targets.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task ReferencePlayerFixture_PlayerRightHandGrabActivatesProviderAndCommitsTestBall()
+    public async Task ReferencePlayerFixture_RuntimeHandsUseActuatorOwnedHeldCollisionTargets()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>(ReferencePlayerFixtureScenePath);
-        Node root = scene.Instantiate();
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
 
         try
         {
-            await TestUtils.WaitForFramesAsync(sceneTree, 8);
-            Node player = root.GetNode("Actors/Player");
-            EnsureRuntimeRoleInstalled(player);
-            await TestUtils.WaitForFramesAsync(sceneTree, 4);
-
-            Node rightHand = player.GetNode("Hands/RightHand");
-            Node provider = player.GetNode("VRIK/RightHandGrabProvider");
-            Node3D authoredHandTarget = player.GetNode<Node3D>("IKTargets/RightHand");
-            Node3D handTarget = new()
-            {
-                Name = "RightHandGrabProbe"
-            };
-            root.AddChild(handTarget);
-            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
-            RigidBody3D ball = root.GetNode<RigidBody3D>("Items/Ball");
-            Node3D grabPoint = ball.GetNode<Node3D>("SphericalGrabPoint");
-
-            Assert.Equal(typeof(GrabbableRigidBody3D).FullName, ball.GetType().FullName);
-            Assert.Equal(typeof(SphericalGrabPoint).FullName, grabPoint.GetType().FullName);
-            Assert.Equal(typeof(HandPoseBehaviour).FullName, rightHand.GetType().FullName);
-            Assert.Equal(typeof(HandGrabTargetProvider).FullName, provider.GetType().FullName);
-            Assert.Same(provider, rightHand.Get("GrabTargetProvider").AsGodotObject());
-            Assert.Same(authoredHandTarget, rightHand.Get("HandTargetNode").AsGodotObject());
-            Assert.Same(player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"), rightHand.Get("HandBoneAttachment").AsGodotObject());
-            Assert.Equal(new StringName("grabbable"), rightHand.Get("GrabbableGroupName").AsStringName());
-            Assert.False(GetLoadedProperty<bool>(provider, "IsGrabOverrideActive"));
-            Assert.Null(GetLoadedPropertyValue(rightHand, "CurrentGrabbed"));
-            rightHand.Set("HandTargetNode", handTarget);
-
-            ball.Freeze = true;
-            ball.LinearVelocity = Vector3.Zero;
-            ball.AngularVelocity = Vector3.Zero;
-            Transform3D queryHandTransform = new(
-                Basis.Identity,
-                grabPoint.GlobalPosition + new Vector3(0.0f, TestBallReachDistanceMetres * 0.5f, 0.0f));
-            handTarget.GlobalTransform = queryHandTransform;
-            SetSkeletonBoneWorldTransform(skeleton, "RightHand", queryHandTransform);
-            handTarget.ForceUpdateTransform();
-            ball.ForceUpdateTransform();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            Assert.True(ball.IsInsideTree());
-            Assert.True(ball.IsInGroup(new StringName("grabbable")));
-            Assert.Contains(sceneTree.GetNodesInGroup(new StringName("grabbable")), node => ReferenceEquals(node, ball));
-            queryHandTransform = new Transform3D(
-                Basis.Identity,
-                grabPoint.GlobalPosition + new Vector3(0.0f, TestBallReachDistanceMetres * 0.5f, 0.0f));
-            handTarget.GlobalTransform = queryHandTransform;
-            SetSkeletonBoneWorldTransform(skeleton, "RightHand", queryHandTransform);
-            handTarget.ForceUpdateTransform();
-            Assert.NotNull(grabPoint.Get("GrabAnimation").AsGodotObject());
-            float reachDistanceMetres = grabPoint.Get("ReachDistanceMetres").AsSingle();
-            Assert.True(handTarget.GlobalPosition.DistanceTo(grabPoint.GlobalPosition) < reachDistanceMetres);
-            object? candidate = InvokeLoadedMethod(grabPoint, "GetGrabPoint", GetLoadedPropertyValue(rightHand, "Side")!, handTarget.GlobalTransform);
-            Assert.NotNull(candidate);
-
-            object? grabResult = InvokeLoadedMethod(rightHand, "Grab");
-
-            Assert.Null(grabResult);
-            Assert.True(GetLoadedProperty<bool>(provider, "IsGrabOverrideActive"));
-            Transform3D providerGrabTarget = GetLoadedProperty<Transform3D>(provider, "GrabTarget");
-            Assert.NotEqual(Transform3D.Identity, providerGrabTarget);
-
-            handTarget.GlobalTransform = providerGrabTarget;
-            SetSkeletonBoneWorldTransform(skeleton, "RightHand", providerGrabTarget);
-            await TestUtils.WaitForFramesAsync(sceneTree, 3);
-
-            Assert.Same(ball, GetLoadedPropertyValue(rightHand, "CurrentGrabbed"));
-            Assert.Same(player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"), ball.GetParent());
-            Assert.False(GetLoadedProperty<bool>(provider, "IsGrabOverrideActive"));
+            Assert.Same(fixture.RightHandTarget, fixture.RightHand.HeldCollisionTarget);
+            Assert.Same(fixture.LeftHandTarget, fixture.LeftHand.HeldCollisionTarget);
         }
         finally
         {
-            root.QueueFree();
-            await TestUtils.WaitForNextFrameAsync(sceneTree);
+            await fixture.DisposeAsync(sceneTree);
         }
+    }
+
+    /// <summary>
+    /// Verifies the reference player uses the mock XR runtime through its declared grab-provider default and preserves
+    /// the independently measured hand-attachment residual for movable authored props.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_MockXRProviderDrivesPlayerVRIKAndReportsMovableAttachmentResiduals()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            Assert.Equal(typeof(HandGrabTargetProvider), fixture.RightHandGrabProvider.GetType());
+            Assert.Same(fixture.RightHandGrabProvider, fixture.RightHand.GrabTargetProvider);
+            Assert.Same(fixture.RightHandTarget, fixture.RightHand.HandTargetNode);
+            Assert.Same(fixture.RightHandAttachment, fixture.RightHand.HandBoneAttachment);
+            Assert.Same(fixture.RightHandGrabProvider, fixture.PlayerVRIK.RightHandIKTargetIntentProvider);
+            Assert.Same(fixture.RightHandFallbackProvider, fixture.RightHandGrabProvider.DefaultProvider);
+            Assert.Equal(MovableAttachmentPositionToleranceMetres, fixture.RightHand.MovableAttachmentPositionToleranceMetres);
+            Assert.Equal(MovableAttachmentOrientationToleranceDegrees, fixture.RightHand.MovableAttachmentOrientationToleranceDegrees);
+            Assert.Equal(MovableAttachmentSettleProcessFrames, fixture.RightHand.MovableAttachmentSettleProcessFrames);
+
+            IKTargetIntent priorIntent = fixture.RightHandGrabProvider.GetTargetIntent();
+            Transform3D firstMockSource = new(
+                Basis.Identity.Rotated(Vector3.Up, 0.35f),
+                priorIntent.WorldTransform.Origin + new Vector3(0.42f, 0.18f, -0.31f));
+            SetMockRightWristTransform(fixture.Runtime, firstMockSource);
+
+            Assert.True(
+                priorIntent.WorldTransform.Origin.DistanceTo(firstMockSource.Origin) > 0.25f,
+                "The injected mock wrist must differ materially from the previous provider target.");
+
+            IKTargetIntent firstProviderIntent = fixture.RightHandGrabProvider.GetTargetIntent();
+            AssertTransformApproximatelyEqual(firstMockSource, firstProviderIntent.WorldTransform, PositionToleranceMetres);
+            Assert.Equal(1.0f, firstProviderIntent.DesiredInfluence);
+            AssertProviderRequestReachesPipeline(fixture);
+
+            IKTargetPipelineResult firstPipeline = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+            AssertTransformApproximatelyEqual(firstPipeline.SourceTarget, firstPipeline.RequestedTarget, PositionToleranceMetres);
+            AssertTransformApproximatelyEqual(firstPipeline.RealisedTarget, fixture.RightHandTarget.GlobalTransform, PositionToleranceMetres);
+            AssertPhysicalTargetAgreesWithRequest(firstPipeline, "first mock wrist source");
+
+            Transform3D secondMockSource = new(
+                Basis.Identity.Rotated(Vector3.Up, -0.29f),
+                firstMockSource.Origin + new Vector3(0.34f, 0.11f, -0.27f));
+            SetMockRightWristTransform(fixture.Runtime, secondMockSource);
+            IKTargetIntent secondProviderIntent = fixture.RightHandGrabProvider.GetTargetIntent();
+
+            Assert.True(
+                firstProviderIntent.WorldTransform.Origin.DistanceTo(secondProviderIntent.WorldTransform.Origin) > 0.25f,
+                "Changing the mock wrist must materially change the grab provider request; this detects a disconnected default source.");
+            AssertTransformApproximatelyEqual(secondMockSource, secondProviderIntent.WorldTransform, PositionToleranceMetres);
+            AssertProviderRequestReachesPipeline(fixture);
+
+            IKTargetPipelineResult secondPipeline = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+            Assert.True(
+                firstPipeline.SourceTarget.Origin.DistanceTo(secondPipeline.SourceTarget.Origin) > 0.25f,
+                "The physical target pipeline source must change with the provider request, not retain a test-local value.");
+            AssertPhysicalTargetAgreesWithRequest(secondPipeline, "changed mock wrist source");
+
+            AttachmentResidual ballResidual = await MeasureMovableAttachmentResidualAsync(
+                sceneTree,
+                fixture,
+                fixture.Ball,
+                "ball");
+            AttachmentResidual stickResidual = await MeasureMovableAttachmentResidualAsync(
+                sceneTree,
+                fixture,
+                fixture.Stick,
+                "stick");
+
+            Console.WriteLine(
+                "Mock-XR VRIK attachment residuals: ball={0:F3} m/{1:F1}°, stick={2:F3} m/{3:F1}°.",
+                ballResidual.PositionMetres,
+                ballResidual.OrientationDegrees,
+                stickResidual.PositionMetres,
+                stickResidual.OrientationDegrees);
+
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the real reference-player ball commits only after two consecutive direct attachment samples meet the
+    /// Movable 8 mm/5° gate. The mock wrist is the normal authored PlayerVRIK source; this test neither replaces
+    /// the hand target nor writes skeleton bone poses.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_MockXRReachQualifiedBall_CommitsOnlyAfterTwoDirectAttachmentSamples()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            fixture.Stick.GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
+            fixture.Stick.ForceUpdateTransform();
+            Transform3D expectedAttachment = ConfigureBallExpectedAttachment(
+                fixture,
+                _referenceBallCommitAttachmentTransform.Origin);
+            SetMockRightWristTransformForPlayerVRIK(fixture, expectedAttachment);
+            _ = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+
+            GrabPointCandidate candidate = ((IGrabbable)fixture.Ball).GetGrabPoint(
+                LimbSide.Right,
+                fixture.RightHandTarget.GlobalTransform)
+                ?? throw new Xunit.Sdk.XunitException("Expected the authored test ball to remain reach-qualified.");
+            Transform3D candidateExpectedAttachment = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+            AssertTransformApproximatelyEqual(expectedAttachment, candidateExpectedAttachment, PositionToleranceMetres);
+            Node originalParent = fixture.Ball.GetParent() ?? throw new InvalidOperationException("Ball has no parent.");
+            Vector3 originalPosition = fixture.Ball.GlobalPosition;
+
+            Assert.Null(fixture.RightHand.Grab());
+            Assert.True(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+            Assert.Same(originalParent, fixture.Ball.GetParent());
+
+            // Yield the next process frame so the first qualifying direct-attachment sample is consumed.
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+
+            AssertDirectAttachmentWithinMovableGate(
+                candidateExpectedAttachment,
+                fixture.RightHandAttachment.GlobalTransform,
+                "first ball sample");
+            Assert.Null(fixture.RightHand.CurrentGrabbed);
+            Assert.True(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+            Assert.Same(originalParent, fixture.Ball.GetParent());
+            Assert.True(fixture.Ball.GlobalPosition.DistanceTo(originalPosition) <= PositionToleranceMetres);
+
+            // The second consecutive process sample commits; the following frame observes the committed state.
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
+            Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+            Assert.Same(fixture.RightHandAttachment, fixture.Ball.GetParent());
+            Assert.True(fixture.Ball.Freeze);
+            Assert.Equal(Vector3.Zero, fixture.Ball.LinearVelocity);
+            Assert.Equal(Vector3.Zero, fixture.Ball.AngularVelocity);
+            Assert.Same(candidate.Animation, fixture.RightHand.CurrentPose);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Reproduces the reported held-hand path with a real PlayerVRIK and active optical wrist source. After a movable
+    /// ball commits, an independently authored 9 cm optical wrist movement through clear air must propagate through
+    /// every runtime stage while the held collision proxy remains on the collision-aware hand actuator.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_HeldBall_OpticalWristMovesAllTargetsAndHeldItemThroughClearAir()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            await CommitBallFromAuthoredOpticalWristAsync(sceneTree, fixture);
+
+            AnimatableBody3D heldCollisionTarget = Assert.IsType<AnimatableBody3D>(fixture.RightHand.HeldCollisionTarget);
+            CollisionShape3D heldBallShape = fixture.Ball.GetNode<CollisionShape3D>("CollisionShape3D");
+            Assert.Same(fixture.RightHandTarget, heldCollisionTarget);
+            Assert.Equal(fixture.RightHandTarget.CollisionLayer, heldCollisionTarget.CollisionLayer);
+            Assert.Equal(fixture.RightHandTarget.CollisionMask, heldCollisionTarget.CollisionMask);
+            Assert.Contains(
+                heldCollisionTarget.GetShapeOwners(),
+                ownerId => ShapeOwnerContainsShape(heldCollisionTarget, ownerId, heldBallShape.Shape));
+            Assert.Contains(
+                fixture.RightHandTarget.GetShapeOwners(),
+                ownerId => ShapeOwnerContainsShape(fixture.RightHandTarget, ownerId, heldBallShape.Shape));
+            Assert.True(heldBallShape.Disabled);
+
+            OpticalHeldMotionObservation motion = await MoveHeldOpticalWristAsync(
+                sceneTree,
+                fixture,
+                _authoredOpticalBallWristMoved);
+
+            Assert.InRange(motion.CalibratedSourceMovementMetres, 0.08f, 0.10f);
+            Assert.True(motion.ProviderMovementMetres > 0.08f, "The grab provider intent must follow the valid optical wrist.");
+            Assert.True(motion.RequestedTargetMovementMetres > 0.08f, "PlayerVRIK must request the moved provider target.");
+            Assert.True(motion.RealisedTargetMovementMetres > 0.01f, "The physical hand target must not freeze after the held proxy is present.");
+            Assert.True(motion.AttachmentMovementMetres > 0.01f, "The right-hand BoneAttachment3D must follow the moved target.");
+            Assert.True(motion.HeldItemMovementMetres > 0.01f, "The parented held ball must follow the moving hand attachment.");
+            Assert.Equal("None", motion.CollisionFeedbackReason);
+            Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+
+            fixture.RightHand.Release();
+
+            Assert.DoesNotContain(
+                heldCollisionTarget.GetShapeOwners(),
+                ownerId => ShapeOwnerContainsShape(heldCollisionTarget, ownerId, heldBallShape.Shape));
+            Assert.False(heldBallShape.Disabled);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the clear-air held optical wrist path remains collision-free without a test-only hand-target collision
+    /// mask bypass while held-item proxy shapes remain on the actuator-swept IK target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_HeldBall_OpticalWristMovesThroughClearAirWithoutCollisionMaskBypass()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            await CommitBallFromAuthoredOpticalWristAsync(sceneTree, fixture);
+            OpticalHeldMotionObservation motion = await MoveHeldOpticalWristAsync(
+                sceneTree,
+                fixture,
+                _authoredOpticalBallWristIsolationMoved);
+
+            Assert.InRange(motion.CalibratedSourceMovementMetres, 0.16f, 0.19f);
+            Assert.True(motion.ProviderMovementMetres > 0.16f);
+            Assert.True(motion.RequestedTargetMovementMetres > 0.16f);
+            Assert.True(motion.RealisedTargetMovementMetres > 0.01f);
+            Assert.True(motion.AttachmentMovementMetres > 0.01f);
+            Assert.True(motion.HeldItemMovementMetres > 0.01f);
+            Assert.Equal("None", motion.CollisionFeedbackReason);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Keeps controller compatibility tied to the shared test-ball asset: a calibrated controller input must
+    /// reconstruct the selected grab point through its existing authored offset, without a source-specific offset.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_ControllerCalibratedInput_ReconstructsSharedBallSelectedGrabPoint()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            SetMockRightWristTransformForPlayerVRIK(fixture, _authoredControllerBallWrist);
+            IKTargetPipelineResult pipeline = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+            ConfigureBallForAuthoredWrist(fixture, pipeline.SourceTarget);
+            GrabPointCandidate candidate = ((IGrabbable)fixture.Ball).GetGrabPoint(
+                LimbSide.Right,
+                fixture.RightHandTarget.GlobalTransform)
+                ?? throw new Xunit.Sdk.XunitException("Expected the shared test ball to be reachable from the calibrated controller target.");
+
+            Assert.Equal(XRHandTrackingMode.Controller, fixture.Runtime.HandTrackingMode);
+            AssertTransformApproximatelyEqual(_authoredControllerBallWrist, pipeline.SourceTarget, PositionToleranceMetres);
+            AssertTransformApproximatelyEqual(
+                candidate.GrabPointTransform,
+                candidate.HandTarget * candidate.GrabPointOffsetFromHand,
+                PositionToleranceMetres);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies provider refresh lets a non-centre cylindrical contact converge through the same Movable direct gate.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_MockXRNonCentreStick_RefreshesProviderAndCommitsThroughDirectGate()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+        try
+        {
+            AttachmentResidual residual = await MeasureMovableAttachmentResidualAsync(
+                sceneTree,
+                fixture,
+                fixture.Stick,
+                "stick");
+            Assert.InRange(residual.PositionMetres, 0.0f, MovableAttachmentPositionToleranceMetres);
+            Assert.InRange(residual.OrientationDegrees, 0.0f, MovableAttachmentOrientationToleranceDegrees);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies exact direct-target controls remain stable through the authored mock-XR source, player VRIK pipeline,
+    /// physical target, and right-hand attachment without beginning a grab.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayerFixture_StaticDirectTargets_ExactControlsRemainStable()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        StaticTargetTrace ballInterior = await CaptureStaticTargetTraceAsync(
+            sceneTree,
+            "ball-interior",
+            static fixture => ConfigureBallExpectedAttachment(fixture, new Vector3(0.419f, 1.049f, -0.037f)));
+        StaticTargetTrace stickOffset = await CaptureStaticTargetTraceAsync(sceneTree, "stick-offset", static fixture =>
+        {
+            GrabPointCandidate candidate = ((IGrabbable)fixture.Stick).GetGrabPoint(LimbSide.Right, _referenceMockQueryTarget)
+                ?? throw new Xunit.Sdk.XunitException("Expected the fixed authored stick query to resolve.");
+            return candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+        });
+
+        AssertStaticTargetExact(ballInterior);
+        AssertStaticTargetExact(stickOffset);
     }
 
     /// <summary>
@@ -708,7 +993,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             GrabPointCandidate candidate = new(
                 grabPoint,
                 grabPoint.GlobalTransform,
-                new Animation(),
+                LoadValidGrabPoseAnimation(),
                 LimbSide.Right,
                 handTarget.GlobalTransform,
                 grabPoint.GlobalTransform,
@@ -890,9 +1175,9 @@ public sealed partial class HandGrabAssetIntegrationTests
             Transform3D selectedPointInPipeSpace = pipe.GlobalTransform.AffineInverse() * candidateGrabPointTransform;
 
             GrabPointCandidate candidate = new(
-                new MutableGrabPoint(),
+                new MutableGrabPoint { Animation = LoadValidGrabPoseAnimation() },
                 handTarget.GlobalTransform,
-                new Animation(),
+                LoadValidGrabPoseAnimation(),
                 LimbSide.Right,
                 handTarget.GlobalTransform,
                 candidateGrabPointTransform,
@@ -1129,10 +1414,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             DiscoveryRangeMetres = 0.3f,
             GrabCommitDistanceMetres = 0.005f,
         };
-        Animation grabPose = new()
-        {
-            ResourceName = "MovingBallGrabPose"
-        };
+        Animation grabPose = LoadValidGrabPoseAnimation();
         GrabbableRigidBody3D ball = new()
         {
             Name = "MovingRigidBall",
@@ -1264,15 +1546,25 @@ public sealed partial class HandGrabAssetIntegrationTests
             _ = hand.Grab();
             Assert.Null(hand.CurrentGrabbed);
             Assert.True(provider.IsGrabOverrideActive);
+            Assert.Equal(HandGrabLifecycleState.Pending, hand.GrabLifecycle);
 
             grabPoint.TargetOrigin = new Vector3(0.115f, 0.0f, 0.0f);
             grabPoint.HandTargetOrigin = Vector3.Zero;
             Assert.Null(((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform));
-            Assert.NotNull(((IGrabbable)ball).GetGrabPoint(
+            GrabPointCandidate? refreshedCandidate = ((IGrabbable)ball).GetGrabPoint(
                 LimbSide.Right,
                 handTarget.GlobalTransform,
-                hand.PendingMovableGrabAcquisitionToleranceMetres));
+                hand.PendingMovableGrabAcquisitionToleranceMetres);
+            Assert.NotNull(refreshedCandidate);
             _ = hand.Grab();
+            Assert.Equal(HandGrabLifecycleState.Pending, hand.GrabLifecycle);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            // The same-source tolerance refresh changes the attachment target. It cannot bypass the movable
+            // gate: settle the actual bone attachment at the refreshed expected transform for two frames.
+            SetHandAttachmentTransform(
+                skeleton,
+                refreshedCandidate.GrabPointTransform * refreshedCandidate.GrabPointOffsetFromHand.AffineInverse());
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             Assert.Same(ball, hand.CurrentGrabbed);
@@ -1287,11 +1579,11 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies pending tolerance does not let refresh switch to a different grab-point source.
+    /// Verifies a Movable pending grab is abandoned when refresh can only select a different grab-point source.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task HandPoseBehaviour_MovingPendingGrabTolerance_DoesNotAcceptDifferentSource()
+    public async Task HandPoseBehaviour_MovingPendingGrabTolerance_AbandonsWhenRefreshChangesSource()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         Node3D root = new()
@@ -1325,10 +1617,11 @@ public sealed partial class HandGrabAssetIntegrationTests
             GrabCommitDistanceMetres = 0.005f,
             PendingMovableGrabAcquisitionToleranceMetres = 0.03f,
         };
-        GrabbableNode ball = new()
+        GrabbableRigidBody3D ball = new()
         {
             Name = "MultiSourceBall",
             Mobility = GrabbableMobility.Movable,
+            GravityScale = 0.0f,
         };
         MutableGrabPoint originalGrabPoint = new()
         {
@@ -1336,7 +1629,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             TargetOrigin = new Vector3(0.1f, 0.0f, 0.0f),
             HandTargetOrigin = Vector3.Zero,
             ReachDistanceMetres = 0.1f,
-            Animation = new Animation(),
+            Animation = LoadValidGrabPoseAnimation(),
         };
         MutableGrabPoint alternateGrabPoint = new()
         {
@@ -1344,7 +1637,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             TargetOrigin = new Vector3(0.2f, 0.0f, 0.0f),
             HandTargetOrigin = Vector3.Zero,
             ReachDistanceMetres = 0.1f,
-            Animation = new Animation(),
+            Animation = LoadValidGrabPoseAnimation(),
         };
         ball.AddChild(originalGrabPoint);
         ball.AddChild(alternateGrabPoint);
@@ -1369,24 +1662,204 @@ public sealed partial class HandGrabAssetIntegrationTests
             GrabPointCandidate? initialCandidate = ((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform);
             Assert.NotNull(initialCandidate);
             Assert.Same(originalGrabPoint, initialCandidate.Source);
+            Node originalParent = ball.GetParent() ?? throw new InvalidOperationException("Ball has no parent.");
+            bool originalFreeze = ball.Freeze;
+            RigidBody3D.FreezeModeEnum originalFreezeMode = ball.FreezeMode;
+            Vector3 originalLinearVelocity = ball.LinearVelocity;
+            Vector3 originalAngularVelocity = ball.AngularVelocity;
 
             _ = hand.Grab();
             Assert.Null(hand.CurrentGrabbed);
             Assert.True(provider.IsGrabOverrideActive);
+            Assert.Equal(HandGrabLifecycleState.Pending, hand.GrabLifecycle);
 
             originalGrabPoint.TargetOrigin = new Vector3(0.2f, 0.0f, 0.0f);
             alternateGrabPoint.TargetOrigin = new Vector3(0.115f, 0.0f, 0.0f);
             _ = hand.Grab();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             Assert.Null(hand.CurrentGrabbed);
+            Assert.Equal(HandGrabLifecycleState.None, hand.GrabLifecycle);
             Assert.False(ball.IsGrabbed);
-            Assert.True(provider.IsGrabOverrideActive);
+            Assert.False(provider.IsGrabOverrideActive);
+            Assert.Same(originalParent, ball.GetParent());
+            Assert.Equal(originalFreeze, ball.Freeze);
+            Assert.Equal(originalFreezeMode, ball.FreezeMode);
+            Assert.Equal(originalLinearVelocity, ball.LinearVelocity);
+            Assert.Equal(originalAngularVelocity, ball.AngularVelocity);
         }
         finally
         {
             root.QueueFree();
             await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies repeated translation observations below the 8 mm refresh tolerance are accumulated against the last
+    /// provider command rather than forgotten after each observation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovablePendingGrab_CumulativeSubToleranceTranslationRefreshesAndSettles()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PendingRefreshFixture fixture = await PendingRefreshFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            Assert.Null(fixture.Hand.Grab());
+            Transform3D initialCommand = fixture.Provider.GrabTarget;
+
+            fixture.GrabPoint.TargetOrigin += new Vector3(0.004f, 0.0f, 0.0f);
+            Assert.Null(fixture.Hand.Grab());
+            AssertTransformApproximatelyEqual(initialCommand, fixture.Provider.GrabTarget, PositionToleranceMetres);
+            fixture.GrabPoint.TargetOrigin += new Vector3(0.004f, 0.0f, 0.0f);
+            Assert.Null(fixture.Hand.Grab());
+            fixture.GrabPoint.TargetOrigin += new Vector3(0.004f, 0.0f, 0.0f);
+            Assert.Null(fixture.Hand.Grab());
+
+            Assert.True(fixture.Hand.TryGetPendingLastCommandedApproachTransform(out Transform3D lastCommanded));
+            Assert.True(fixture.Hand.TryGetPendingExpectedAttachmentTransform(out Transform3D settlement));
+            AssertTransformApproximatelyEqual(fixture.Provider.GrabTarget, lastCommanded, PositionToleranceMetres);
+            Assert.True(
+                initialCommand.Origin.DistanceTo(lastCommanded.Origin) > fixture.Hand.MovableAttachmentPositionToleranceMetres,
+                "Expected accumulated sub-tolerance translation to refresh the provider command.");
+            await fixture.SettleAsync(sceneTree, settlement);
+            Assert.Same(fixture.Grabbable, fixture.Hand.CurrentGrabbed);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies repeated rotation observations below 5 degrees eventually refresh the provider command.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovablePendingGrab_CumulativeSubToleranceRotationRefreshesAndSettles()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PendingRefreshFixture fixture = await PendingRefreshFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            Assert.Null(fixture.Hand.Grab());
+            Transform3D initialCommand = fixture.Provider.GrabTarget;
+
+            foreach (float degrees in new[] { 2.0f, 4.0f, 6.0f })
+            {
+                fixture.GrabPoint.TargetBasis = new Basis(Vector3.Up, Mathf.DegToRad(degrees));
+                Assert.Null(fixture.Hand.Grab());
+            }
+
+            Assert.True(fixture.Hand.TryGetPendingLastCommandedApproachTransform(out Transform3D lastCommanded));
+            Assert.True(fixture.Hand.TryGetPendingExpectedAttachmentTransform(out Transform3D settlement));
+            AssertTransformApproximatelyEqual(fixture.Provider.GrabTarget, lastCommanded, PositionToleranceMetres);
+            Assert.True(
+                GetAngularDifferenceDegrees(initialCommand.Basis, lastCommanded.Basis)
+                    > fixture.Hand.MovableAttachmentOrientationToleranceDegrees,
+                "Expected accumulated sub-tolerance rotation to refresh the provider command.");
+            await fixture.SettleAsync(sceneTree, settlement);
+            Assert.Same(fixture.Grabbable, fixture.Hand.CurrentGrabbed);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies object motion followed by a stop leaves the provider command at the current settlement destination.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovablePendingGrab_ObjectMotionThenStopDoesNotLeaveStaleCommand()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PendingRefreshFixture fixture = await PendingRefreshFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            Assert.Null(fixture.Hand.Grab());
+            for (int step = 0; step < 4; step++)
+            {
+                fixture.GrabPoint.TargetOrigin += new Vector3(0.003f, 0.0f, 0.0f);
+                Assert.Null(fixture.Hand.Grab());
+            }
+
+            Assert.True(fixture.Hand.TryGetPendingLastCommandedApproachTransform(out Transform3D lastCommanded));
+            Assert.True(fixture.Hand.TryGetPendingExpectedAttachmentTransform(out Transform3D settlement));
+            Assert.InRange(
+                settlement.Origin.DistanceTo(lastCommanded.Origin),
+                0.0f,
+                fixture.Hand.MovableAttachmentPositionToleranceMetres);
+            await fixture.SettleAsync(sceneTree, settlement);
+            Assert.Same(fixture.Grabbable, fixture.Hand.CurrentGrabbed);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies pending eligibility is re-evaluated from the current hand rather than the original query transform.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovablePendingGrab_CurrentHandLeavesReach_AbandonsAttempt()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PendingRefreshFixture fixture = await PendingRefreshFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            Assert.Null(fixture.Hand.Grab());
+            fixture.HandTarget.GlobalPosition = new Vector3(0.6f, 0.0f, 0.0f);
+            Assert.Null(fixture.Hand.Grab());
+
+            Assert.Equal(HandGrabLifecycleState.None, fixture.Hand.GrabLifecycle);
+            Assert.True(fixture.Hand.LastPendingGrabAbandonedForCandidateLoss);
+            Assert.False(fixture.Provider.IsGrabOverrideActive);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the same source cannot change candidate content and retarget an existing pending attempt.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovablePendingGrab_SameSourceContentChangeCannotRetarget()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PendingRefreshFixture fixture = await PendingRefreshFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            Assert.Null(fixture.Hand.Grab());
+            Transform3D originalCommand = fixture.Provider.GrabTarget;
+            Animation originalAnimation = fixture.GrabPoint.Animation
+                ?? throw new InvalidOperationException("Pending candidate should retain its valid authored grab pose.");
+            Animation replacementAnimation = CreateDistinctValidGrabPoseAnimation();
+            Assert.NotSame(originalAnimation, replacementAnimation);
+            fixture.GrabPoint.Animation = replacementAnimation;
+            fixture.GrabPoint.TargetOrigin += new Vector3(0.05f, 0.0f, 0.0f);
+            Assert.Null(fixture.Hand.Grab());
+
+            Assert.Equal(HandGrabLifecycleState.None, fixture.Hand.GrabLifecycle);
+            Assert.False(fixture.Provider.IsGrabOverrideActive);
+            Assert.False(fixture.Grabbable.IsGrabbed);
+            AssertTransformApproximatelyEqual(originalCommand, fixture.Provider.GrabTarget, PositionToleranceMetres);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
         }
     }
 
@@ -1493,7 +1966,8 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies a movable pending grab commits after the hand reaches the target and then releases the IK override.
+    /// Verifies a movable pending grab waits for the actual attachment to settle at the candidate offset transform
+    /// for two process frames even when the hand target remains outside the approach-distance threshold.
     /// </summary>
     [Headless]
     [Fact]
@@ -1537,10 +2011,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             DiscoveryRangeMetres = 0.3f,
             GrabCommitDistanceMetres = 0.02f,
         };
-        Animation grabPose = new()
-        {
-            ResourceName = "RuntimeGrabPose"
-        };
+        Animation grabPose = LoadValidGrabPoseAnimation();
         GrabbableNode ball = CreateRuntimeMutableGrabbable(
             new Vector3(0.1f, 0.0f, 0.0f),
             GrabbableMobility.Movable,
@@ -1575,8 +2046,43 @@ public sealed partial class HandGrabAssetIntegrationTests
             _ = hand.Grab();
             Assert.Null(hand.CurrentGrabbed);
 
-            handTarget.GlobalTransform = provider.GrabTarget;
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            float approachDistance = handTarget.GlobalPosition.DistanceTo(provider.GrabTarget.Origin);
+            Assert.True(
+                approachDistance > hand.GrabCommitDistanceMetres,
+                $"Expected hand target to remain outside the {hand.GrabCommitDistanceMetres:F3} m approach gate, observed {approachDistance:F4} m.");
+
+            // The actual bone attachment remains wrong. Movable attachment settlement is the authoritative gate,
+            // so the ball stays put and pending even though the hand target never reaches its approach target.
+            Transform3D expectedAttachment = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+            float positionResidual = expectedAttachment.Origin.DistanceTo(handAttachment.GlobalPosition);
+            Assert.True(
+                positionResidual > MovableAttachmentPositionToleranceMetres,
+                $"Expected the direct attachment to exceed the 8 mm position gate, observed {positionResidual:F4} m.");
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+            Assert.Same(root, ball.GetParent());
+
+            Transform3D overRotationAttachment = new(
+                Basis.Identity.Rotated(Vector3.Up, Mathf.DegToRad(10f)),
+                expectedAttachment.Origin);
+            float angularResidual = GetAngularDifferenceDegrees(expectedAttachment.Basis, overRotationAttachment.Basis);
+            Assert.True(
+                angularResidual > MovableAttachmentOrientationToleranceDegrees,
+                $"Expected the direct attachment to exceed the 5° orientation gate, observed {angularResidual:F2}°.");
+            SetHandAttachmentTransform(skeleton, overRotationAttachment);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            SetHandAttachmentTransform(skeleton, expectedAttachment);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            // The second consecutive settled process frame commits the unchanged candidate.
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
 
             Assert.Same(ball, hand.CurrentGrabbed);
             Assert.False(provider.IsGrabOverrideActive);
@@ -1618,6 +2124,10 @@ public sealed partial class HandGrabAssetIntegrationTests
             Name = "RightHandTarget"
         };
         (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        AnimatableBody3D heldCollisionTarget = new()
+        {
+            Name = "HeldCollisionTarget",
+        };
         DynamicPhysicalRig rig = new()
         {
             Name = nameof(DynamicPhysicalRig),
@@ -1649,6 +2159,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             Side = LimbSide.Right,
             HandTargetNode = handTarget,
             HandBoneAttachment = handAttachment,
+            HeldCollisionTarget = heldCollisionTarget,
             PhysicalRig = rig,
             GrabbableGroupName = _pendingGrabGroupName,
             DiscoveryRangeMetres = 0.3f,
@@ -1658,6 +2169,7 @@ public sealed partial class HandGrabAssetIntegrationTests
 
         root.AddChild(handTarget);
         root.AddChild(skeleton);
+        handAttachment.AddChild(heldCollisionTarget);
         skeleton.AddChild(rig);
         root.AddChild(rightHandProxy);
         root.AddChild(rightLowerArmProxy);
@@ -1695,6 +2207,10 @@ public sealed partial class HandGrabAssetIntegrationTests
             AssertBodiesHaveMutualCollisionException(ball, rightHandProxy);
             AssertBodiesHaveMutualCollisionException(ball, rightLowerArmProxy);
             AssertBodiesHaveMutualCollisionException(ball, rightFingerProxy);
+            AssertBodiesHaveMutualCollisionException(heldCollisionTarget, handTarget);
+            AssertBodiesHaveMutualCollisionException(heldCollisionTarget, rightHandProxy);
+            AssertBodiesHaveMutualCollisionException(heldCollisionTarget, rightLowerArmProxy);
+            AssertBodiesHaveMutualCollisionException(heldCollisionTarget, rightFingerProxy);
             AssertBodiesDoNotHaveCollisionException(ball, leftHandProxy);
             AssertBodiesDoNotHaveCollisionException(ball, leftFingerProxy);
 
@@ -1705,6 +2221,10 @@ public sealed partial class HandGrabAssetIntegrationTests
             AssertBodiesDoNotHaveCollisionException(ball, rightHandProxy);
             AssertBodiesDoNotHaveCollisionException(ball, rightLowerArmProxy);
             AssertBodiesDoNotHaveCollisionException(ball, rightFingerProxy);
+            AssertBodiesDoNotHaveCollisionException(heldCollisionTarget, handTarget);
+            AssertBodiesDoNotHaveCollisionException(heldCollisionTarget, rightHandProxy);
+            AssertBodiesDoNotHaveCollisionException(heldCollisionTarget, rightLowerArmProxy);
+            AssertBodiesDoNotHaveCollisionException(heldCollisionTarget, rightFingerProxy);
         }
         finally
         {
@@ -2205,6 +2725,99 @@ public sealed partial class HandGrabAssetIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies an unsettled immovable approach is abandoned when its selected grab-point source is removed.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_ImmovablePendingGrabRemovedSource_AbandonsWithoutPhysicsOrPoseSideEffects()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "ImmovablePendingRemovedSourceRoot",
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget",
+            Position = new Vector3(-0.1f, 0.0f, 0.0f),
+        };
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider",
+        };
+        AnimationPlayer animationPlayer = new()
+        {
+            Name = "AnimationPlayer",
+        };
+        AnimationTree animationTree = CreateHandPoseAnimationTree();
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            GrabTargetProvider = provider,
+            AnimationTree = animationTree,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.3f,
+            GrabCommitDistanceMetres = 0.02f,
+        };
+        GrabbableRigidBody3D fixedProp = CreateRuntimeRigidMutableGrabbable(
+            new Vector3(0.1f, 0.0f, 0.0f),
+            GrabbableMobility.Immovable);
+
+        root.AddChild(handTarget);
+        root.AddChild(animationPlayer);
+        root.AddChild(animationTree);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(fixedProp);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        fixedProp.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            fixedProp.GlobalPosition = new Vector3(0.1f, 0.0f, 0.0f);
+            handTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(-0.1f, 0.0f, 0.0f));
+            fixedProp.RefreshComponents();
+            MutableGrabPoint originalGrabPoint = fixedProp.GetNode<MutableGrabPoint>("MutableGrabPoint");
+            Assert.NotNull(((IGrabbable)fixedProp).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform));
+            Node originalParent = fixedProp.GetParent() ?? throw new InvalidOperationException("Fixed prop has no parent.");
+            bool originalFreeze = fixedProp.Freeze;
+            RigidBody3D.FreezeModeEnum originalFreezeMode = fixedProp.FreezeMode;
+            Vector3 originalLinearVelocity = fixedProp.LinearVelocity;
+            Vector3 originalAngularVelocity = fixedProp.AngularVelocity;
+
+            _ = hand.Grab();
+
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.Equal(HandGrabLifecycleState.Pending, hand.GrabLifecycle);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            fixedProp.RemoveChild(originalGrabPoint);
+            originalGrabPoint.Free();
+            fixedProp.RefreshComponents();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.Equal(HandGrabLifecycleState.None, hand.GrabLifecycle);
+            Assert.False(provider.IsGrabOverrideActive);
+            Assert.False(fixedProp.IsGrabbed);
+            Assert.Same(originalParent, fixedProp.GetParent());
+            Assert.Equal(originalFreeze, fixedProp.Freeze);
+            Assert.Equal(originalFreezeMode, fixedProp.FreezeMode);
+            Assert.Equal(originalLinearVelocity, fixedProp.LinearVelocity);
+            Assert.Equal(originalAngularVelocity, fixedProp.AngularVelocity);
+            Assert.Null(hand.CurrentPose);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
     private static (Skeleton3D Skeleton, BoneAttachment3D Attachment) CreateHandAttachment(Vector3 position)
     {
         Skeleton3D skeleton = new()
@@ -2385,6 +2998,255 @@ public sealed partial class HandGrabAssetIntegrationTests
     private static Vector3 ProjectOntoPlane(Vector3 vector, Vector3 planeNormal)
         => vector - (planeNormal * vector.Dot(planeNormal));
 
+    private static Transform3D ConfigureBallExpectedAttachment(
+        ReferencePlayerMockXRFixture fixture,
+        Vector3 expectedAttachmentOrigin)
+    {
+        SphericalGrabPoint grabPoint = fixture.Ball.GetNode<SphericalGrabPoint>("SphericalGrabPoint");
+        Transform3D offset = new(
+            Basis.FromEuler(grabPoint.GrabPointRotationOffsetFromHand),
+            grabPoint.GrabPointPositionOffsetFromHand);
+        Transform3D independentlySpecified = new(Basis.Identity, expectedAttachmentOrigin);
+        fixture.Ball.GlobalTransform = independentlySpecified * offset;
+        fixture.Ball.ForceUpdateTransform();
+        Transform3D expected = grabPoint.GlobalTransform * offset.AffineInverse();
+        AssertTransformApproximatelyEqual(independentlySpecified, expected, PositionToleranceMetres);
+        return expected;
+    }
+
+    private static void ConfigureBallForAuthoredWrist(
+        ReferencePlayerMockXRFixture fixture,
+        Transform3D authoredWrist)
+    {
+        SphericalGrabPoint grabPoint = fixture.Ball.GetNode<SphericalGrabPoint>("SphericalGrabPoint");
+        Transform3D assetOffset = new(
+            Basis.FromEuler(grabPoint.GrabPointRotationOffsetFromHand),
+            grabPoint.GrabPointPositionOffsetFromHand);
+        fixture.Ball.GlobalTransform = authoredWrist * assetOffset;
+        fixture.Ball.ForceUpdateTransform();
+
+        GrabPointCandidate candidate = ((IGrabbable)fixture.Ball).GetGrabPoint(LimbSide.Right, authoredWrist)
+            ?? throw new Xunit.Sdk.XunitException("Expected the authored wrist to remain inside the shared ball reach distance.");
+        AssertTransformApproximatelyEqual(
+            candidate.GrabPointTransform,
+            candidate.HandTarget * candidate.GrabPointOffsetFromHand,
+            PositionToleranceMetres);
+    }
+
+    private static async Task CommitBallFromAuthoredOpticalWristAsync(
+        SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture)
+    {
+        fixture.Stick.GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
+        fixture.Stick.ForceUpdateTransform();
+        ConfigureBallForAuthoredWrist(fixture, _authoredOpticalBallWrist);
+        _ = fixture.Runtime.SetHandObservations(
+            XRHandSourceObservation.Optical,
+            XRHandSourceObservation.Optical);
+        SetCalibratedOpticalWristWorld(fixture.Runtime, LimbSide.Right, _authoredOpticalBallWrist);
+        SetCalibratedOpticalWristWorld(
+            fixture.Runtime,
+            LimbSide.Left,
+            new Transform3D(Basis.Identity, new Vector3(-0.25f, 1.00f, -0.35f)));
+
+        _ = await WaitForOpticalPipelineSourceAsync(sceneTree, fixture);
+        GrabPointCandidate candidate = ((IGrabbable)fixture.Ball).GetGrabPoint(
+            LimbSide.Right,
+            fixture.RightHandTarget.GlobalTransform)
+            ?? throw new Xunit.Sdk.XunitException("Expected the authored optical wrist to select the shared ball.");
+        AssertTransformApproximatelyEqual(
+            candidate.GrabPointTransform,
+            candidate.HandTarget * candidate.GrabPointOffsetFromHand,
+            PositionToleranceMetres);
+        Assert.Null(fixture.RightHand.Grab());
+
+        for (int frame = 0; frame < 180 && fixture.RightHand.CurrentGrabbed is null; frame++)
+        {
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+        }
+
+        Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
+        Assert.Same(fixture.RightHandAttachment, fixture.Ball.GetParent());
+        Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+    }
+
+    private static async Task<OpticalHeldMotionObservation> MoveHeldOpticalWristAsync(
+        SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture,
+        Transform3D authoredWrist)
+    {
+        Transform3D calibratedBefore = GetRequiredCalibratedOpticalWrist(fixture.Runtime, LimbSide.Right);
+        Transform3D providerBefore = fixture.RightHandGrabProvider.GetTargetIntent().WorldTransform;
+        IKTargetPipelineResult pipelineBefore = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+        Transform3D attachmentBefore = fixture.RightHandAttachment.GlobalTransform;
+        Transform3D heldBallBefore = fixture.Ball.GlobalTransform;
+
+        SetCalibratedOpticalWristWorld(fixture.Runtime, LimbSide.Right, authoredWrist);
+        IKTargetPipelineResult pipelineAfter = await WaitForOpticalPipelineSourceAsync(sceneTree, fixture);
+        Transform3D calibratedAfter = GetRequiredCalibratedOpticalWrist(fixture.Runtime, LimbSide.Right);
+        IKTargetIntent providerAfter = fixture.RightHandGrabProvider.GetTargetIntent();
+        Transform3D attachmentAfter = fixture.RightHandAttachment.GlobalTransform;
+        Transform3D heldBallAfter = fixture.Ball.GlobalTransform;
+
+        Assert.Equal(1.0f, providerAfter.DesiredInfluence);
+        AssertTransformApproximatelyEqual(calibratedAfter, providerAfter.WorldTransform, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(providerAfter.WorldTransform, pipelineAfter.SourceTarget, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(pipelineAfter.SourceTarget, pipelineAfter.RequestedTarget, PositionToleranceMetres);
+        Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
+        Assert.Same(fixture.RightHandAttachment, fixture.Ball.GetParent());
+        Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+
+        return new OpticalHeldMotionObservation(
+            calibratedBefore.Origin.DistanceTo(calibratedAfter.Origin),
+            providerBefore.Origin.DistanceTo(providerAfter.WorldTransform.Origin),
+            pipelineBefore.RequestedTarget.Origin.DistanceTo(pipelineAfter.RequestedTarget.Origin),
+            pipelineBefore.RealisedTarget.Origin.DistanceTo(pipelineAfter.RealisedTarget.Origin),
+            attachmentBefore.Origin.DistanceTo(attachmentAfter.Origin),
+            heldBallBefore.Origin.DistanceTo(heldBallAfter.Origin),
+            pipelineAfter.Feedback.Reason);
+    }
+
+    private static async Task<IKTargetPipelineResult> WaitForOpticalPipelineSourceAsync(
+        SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture)
+    {
+        for (int frame = 0; frame < TargetConvergencePhysicsFrames; frame++)
+        {
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+        }
+
+        Transform3D calibratedWrist = GetRequiredCalibratedOpticalWrist(fixture.Runtime, LimbSide.Right);
+        IKTargetIntent providerIntent = fixture.RightHandGrabProvider.GetTargetIntent();
+        IKTargetPipelineResult pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+        Assert.Equal(XRHandTrackingMode.Optical, fixture.Runtime.HandTrackingMode);
+        AssertTransformApproximatelyEqual(calibratedWrist, providerIntent.WorldTransform, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(providerIntent.WorldTransform, pipeline.SourceTarget, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(pipeline.SourceTarget, pipeline.RequestedTarget, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(pipeline.RealisedTarget, fixture.RightHandTarget.GlobalTransform, PositionToleranceMetres);
+        return pipeline;
+    }
+
+    private static Transform3D GetRequiredCalibratedOpticalWrist(MockXRRuntimeNode runtime, LimbSide side)
+    {
+        IXRHandPoseSource source = runtime.GetHandPoseSource(side);
+        Assert.True(source.TryGetCalibratedWristTransform(out Transform3D wrist));
+        return wrist;
+    }
+
+    private static void SetCalibratedOpticalWristWorld(
+        MockXRRuntimeNode runtime,
+        LimbSide side,
+        Transform3D worldWrist)
+    {
+        Transform3D calibrationAnchor = Transform3D.Identity;
+        string anchorPath = side == LimbSide.Right
+            ? "RightOpticalHand/WristAnchor/OpticalHandAnchor"
+            : "LeftOpticalHand/WristAnchor/OpticalHandAnchor";
+        if (runtime.GetNodeOrNull<Node3D>(anchorPath) is { } seededAnchor)
+        {
+            calibrationAnchor = seededAnchor.Transform;
+        }
+
+        Transform3D scaledOrigin = runtime.OriginNode.GlobalTransform
+            .Scaled(new Vector3(runtime.WorldScale, runtime.WorldScale, runtime.WorldScale));
+        runtime.SetOpticalWristSample(side, scaledOrigin.AffineInverse() * (worldWrist * calibrationAnchor.AffineInverse()));
+    }
+
+    private static async Task<StaticTargetTrace> CaptureStaticTargetTraceAsync(
+        SceneTree sceneTree,
+        string label,
+        Func<ReferencePlayerMockXRFixture, Transform3D> expectedAttachmentFactory)
+    {
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+        try
+        {
+            Transform3D expectedAttachment = expectedAttachmentFactory(fixture);
+            Assert.Null(fixture.RightHand.CurrentGrabbed);
+            Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+            SetMockRightWristTransformForPlayerVRIK(fixture, expectedAttachment);
+
+            IKTargetPipelineResult pipeline = default;
+            for (int frame = 0; frame < 180; frame++)
+            {
+                await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+                await TestUtils.WaitForFramesAsync(sceneTree, 1);
+                pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+                if (pipeline.SourceTarget.Origin.DistanceTo(expectedAttachment.Origin) <= PositionToleranceMetres
+                    && pipeline.RequestedTarget.Origin.DistanceTo(expectedAttachment.Origin) <= PositionToleranceMetres
+                    && pipeline.Feedback.ErrorDistance <= PositionToleranceMetres
+                    && fixture.RightHandTarget.GlobalPosition.DistanceTo(pipeline.RealisedTarget.Origin) <= PositionToleranceMetres)
+                {
+                    break;
+                }
+
+                if (frame == 179)
+                {
+                    throw new Xunit.Sdk.XunitException(
+                        $"Static target '{label}' did not converge through the source/request/realised pipeline. "
+                        + $"E={expectedAttachment.Origin}, S={pipeline.SourceTarget.Origin}, R={pipeline.RequestedTarget.Origin}, "
+                        + $"P={pipeline.RealisedTarget.Origin}, actuator={pipeline.Feedback.ErrorDistance:F6} m.");
+                }
+            }
+
+            var samples = new List<StaticTargetSample>(30);
+            for (int frame = 0; frame < 30; frame++)
+            {
+                await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+                await TestUtils.WaitForFramesAsync(sceneTree, 1);
+                pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+                Transform3D attachment = fixture.RightHandAttachment.GlobalTransform;
+                samples.Add(new StaticTargetSample(
+                    attachment.Origin.DistanceTo(expectedAttachment.Origin),
+                    GetAngularDifferenceDegrees(expectedAttachment.Basis, attachment.Basis),
+                    pipeline.Feedback.ErrorDistance));
+                Assert.Null(fixture.RightHand.CurrentGrabbed);
+                Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+            }
+
+            int shoulderBone = fixture.Skeleton.FindBone("RightUpperArm");
+            int lowerArmBone = fixture.Skeleton.FindBone("RightLowerArm");
+            int handBone = fixture.Skeleton.FindBone("RightHand");
+            Assert.True(shoulderBone >= 0 && lowerArmBone >= 0 && handBone >= 0, "Expected the authored right-arm rest chain.");
+
+            Vector3 shoulderWorldRest = WorldRestOrigin(fixture.Skeleton, shoulderBone);
+            Vector3 lowerArmWorldRest = WorldRestOrigin(fixture.Skeleton, lowerArmBone);
+            Vector3 handWorldRest = WorldRestOrigin(fixture.Skeleton, handBone);
+            float restChainLength = shoulderWorldRest.DistanceTo(lowerArmWorldRest) + lowerArmWorldRest.DistanceTo(handWorldRest);
+            float shoulderToExpectedAttachment = shoulderWorldRest.DistanceTo(expectedAttachment.Origin);
+            return new StaticTargetTrace(
+                label,
+                expectedAttachment,
+                pipeline.SourceTarget,
+                pipeline.RequestedTarget,
+                pipeline.RealisedTarget,
+                samples,
+                shoulderToExpectedAttachment,
+                restChainLength,
+                restChainLength - shoulderToExpectedAttachment);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    private static Vector3 WorldRestOrigin(Skeleton3D skeleton, int bone)
+        => skeleton.GlobalTransform * skeleton.GetBoneGlobalRest(bone).Origin;
+
+    private static void AssertStaticTargetExact(StaticTargetTrace trace)
+    {
+        Assert.All(
+            trace.Samples,
+            sample =>
+            {
+                Assert.InRange(sample.PositionErrorMetres, 0.0f, PositionToleranceMetres);
+                Assert.InRange(sample.AngleErrorDegrees, 0.0f, 0.01f);
+                Assert.InRange(sample.ActuatorErrorMetres, 0.0f, PositionToleranceMetres);
+            });
+    }
+
     private static void SetHandAttachmentPosition(Skeleton3D skeleton, Vector3 position)
         => SetHandAttachmentTransform(skeleton, new Transform3D(Basis.Identity, position));
 
@@ -2394,13 +3256,238 @@ public sealed partial class HandGrabAssetIntegrationTests
         skeleton.SetBoneGlobalPose(0, transform);
     }
 
-    private static void SetSkeletonBoneWorldTransform(Skeleton3D skeleton, string boneName, Transform3D worldTransform)
+    private static void SetMockRightWristTransform(MockXRRuntimeNode runtime, Transform3D transform)
     {
-        int boneIndex = skeleton.FindBone(boneName);
-        Assert.True(boneIndex >= 0, $"Expected skeleton '{skeleton.GetPath()}' to contain bone '{boneName}'.");
-        Transform3D skeletonSpaceTransform = skeleton.GlobalTransform.AffineInverse() * worldTransform;
-        skeleton.SetBoneGlobalPose(boneIndex, skeletonSpaceTransform);
-        skeleton.ForceUpdateTransform();
+        Node3D wristSource = runtime.RightHandController.HandPositionNode;
+        wristSource.GlobalTransform = transform;
+        wristSource.ForceUpdateTransform();
+    }
+
+    private static void SetMockRightWristTransformForPlayerVRIK(
+        ReferencePlayerMockXRFixture fixture,
+        Transform3D desiredWorldTransform)
+    {
+        Node3D wristSource = fixture.Runtime.RightHandController.HandPositionNode;
+        wristSource.Transform = fixture.PlayerVRIK.GlobalTransform.AffineInverse() * desiredWorldTransform;
+        wristSource.ForceUpdateTransform();
+    }
+
+    private static async Task<IKTargetPipelineResult> WaitForPipelineConvergenceAsync(
+        SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture)
+    {
+        await TestUtils.WaitForPhysicsFramesAsync(sceneTree, TargetConvergencePhysicsFrames);
+
+        IKTargetPipelineResult pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+        Transform3D expectedMockWristAtActuation = fixture.PlayerVRIK.GlobalTransform
+                                                   * fixture.Runtime.RightHandController.ControllerNode.Transform
+                                                   * fixture.Runtime.RightHandController.HandPositionNode.Transform;
+        AssertTransformApproximatelyEqual(expectedMockWristAtActuation, pipeline.SourceTarget, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(pipeline.RealisedTarget, fixture.RightHandTarget.GlobalTransform, PositionToleranceMetres);
+        AssertPhysicalTargetAgreesWithRequest(pipeline, "mock XR source convergence");
+        return pipeline;
+    }
+
+    private static void AssertProviderRequestReachesPipeline(ReferencePlayerMockXRFixture fixture)
+    {
+        // Run the actual player physics path once so the XR origin is at the same actuation-stage pose for both
+        // observations. This avoids comparing a provider read after end-stage origin compensation with a request
+        // sampled before it, while neither the physical target nor the attachment is written by the test.
+        fixture.PlayerVRIK._PhysicsProcess(1.0d / 60.0d);
+
+        IKTargetIntent providerIntent = fixture.RightHandGrabProvider.GetTargetIntent();
+        IKTargetPipelineResult pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+        AssertTransformApproximatelyEqual(providerIntent.WorldTransform, pipeline.SourceTarget, PositionToleranceMetres);
+        AssertTransformApproximatelyEqual(pipeline.SourceTarget, pipeline.RequestedTarget, PositionToleranceMetres);
+    }
+
+    private static void AssertPhysicalTargetAgreesWithRequest(IKTargetPipelineResult pipeline, string context)
+    {
+        float rotationErrorDegrees = GetAngularDifferenceDegrees(pipeline.RequestedTarget.Basis, pipeline.RealisedTarget.Basis);
+        Assert.True(
+            pipeline.Feedback.ErrorDistance <= MovableAttachmentPositionToleranceMetres,
+            $"Expected unobstructed physical target to realise the {context} request within {MovableAttachmentPositionToleranceMetres:F3} m; "
+            + $"observed {pipeline.Feedback.ErrorDistance:F4} m ({pipeline.Feedback.Reason}).");
+        Assert.True(
+            rotationErrorDegrees <= MovableAttachmentOrientationToleranceDegrees,
+            $"Expected unobstructed physical target to realise the {context} orientation within {MovableAttachmentOrientationToleranceDegrees:F1}°; "
+            + $"observed {rotationErrorDegrees:F2}°.");
+    }
+
+    private static async Task AssertMovableRemainsPendingOutsideDirectAttachmentPositionGateAsync(
+        SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture,
+        IGrabbable grabbable,
+        Node3D otherGrabbable,
+        string label,
+        bool requireNonCentreContact)
+    {
+        otherGrabbable.GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
+        otherGrabbable.ForceUpdateTransform();
+        Node3D grabbableNode = Assert.IsAssignableFrom<Node3D>(grabbable);
+        grabbableNode.GlobalTransform = requireNonCentreContact
+            ? _referenceStickContactTransform
+            : _referenceBallContactTransform;
+        grabbableNode.ForceUpdateTransform();
+        SetMockRightWristTransformForPlayerVRIK(fixture, _referenceMockQueryTarget);
+        _ = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+        Assert.True(fixture.RightHandTarget.GlobalPosition.DistanceTo(_referenceMockQueryTarget.Origin) <= 0.002f);
+        _ = fixture.RightHandAttachment.GlobalTransform;
+        GrabPointCandidate candidate = grabbable.GetGrabPoint(LimbSide.Right, fixture.RightHandTarget.GlobalTransform)
+            ?? throw new Xunit.Sdk.XunitException($"Expected independently authored {label} contact to be reachable from the reference target; "
+                + $"H0={fixture.RightHandTarget.GlobalTransform.Origin}, item={grabbableNode.GlobalTransform.Origin}.");
+        _ = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+
+        SetMockRightWristTransformForPlayerVRIK(fixture, candidate.HandTransform);
+        _ = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+        candidate = grabbable.GetGrabPoint(LimbSide.Right, fixture.RightHandTarget.GlobalTransform)
+            ?? throw new Xunit.Sdk.XunitException($"Expected the authored {label} to remain reachable from the physical hand target.");
+        Transform3D expectedAttachment = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+        Transform3D attachmentBeforeGrab = fixture.RightHandAttachment.GlobalTransform;
+
+        if (requireNonCentreContact)
+        {
+            Node3D contactGrabbableNode = Assert.IsAssignableFrom<Node3D>(grabbable);
+            Transform3D selectedPointInGrabbable = contactGrabbableNode.GlobalTransform.AffineInverse() * candidate.GrabPointTransform;
+            Assert.True(
+                candidate.Source is CylindricalGrabPoint);
+            Assert.True(
+                MathF.Abs(selectedPointInGrabbable.Origin.Y) >= 0.08f,
+                $"Expected the stick candidate to select a non-centre point, observed {selectedPointInGrabbable.Origin}.");
+            Assert.InRange(new Vector2(selectedPointInGrabbable.Origin.X, selectedPointInGrabbable.Origin.Z).Length(), 0.0f, 0.08f);
+        }
+
+        Transform3D targetToAttachment = candidate.HandTransform.AffineInverse() * attachmentBeforeGrab;
+        Transform3D expectedApproachTarget = expectedAttachment * targetToAttachment.AffineInverse();
+        Node originalParent = grabbableNode.GetParent() ?? throw new InvalidOperationException($"{label} has no parent.");
+        Vector3 originalPosition = grabbableNode.GlobalPosition;
+        bool originalFreeze = grabbable is RigidBody3D rigidBody && rigidBody.Freeze;
+        Assert.Null(fixture.RightHand.Grab());
+        Assert.True(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+        AssertTransformApproximatelyEqual(
+            expectedApproachTarget,
+            fixture.RightHandGrabProvider.GrabTarget,
+            MovableAttachmentPositionToleranceMetres);
+        // Let the authored PlayerVRIK path complete its ordinary orientation approach. The following samples isolate
+        // the position gate: orientation is acceptable while the non-centre contact remains more than 8 mm away.
+        await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 30);
+        for (int frame = 0; frame < 8; frame++)
+        {
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 2);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+            Transform3D actualAttachment = fixture.RightHandAttachment.GlobalTransform;
+            GrabPointCandidate? sampledCandidate = grabbable.GetGrabPoint(LimbSide.Right, candidate.HandTransform);
+            float positionResidual = expectedAttachment.Origin.DistanceTo(actualAttachment.Origin);
+            float angularResidual = GetAngularDifferenceDegrees(expectedAttachment.Basis, actualAttachment.Basis);
+            Assert.NotNull(sampledCandidate);
+            Assert.Same(candidate.Source, sampledCandidate.Source);
+            Assert.True(
+                positionResidual > MovableAttachmentPositionToleranceMetres,
+                $"Expected {label} direct attachment sample {frame} to stay outside the 8 mm position gate; "
+                + $"observed {positionResidual:F4} m.");
+            Assert.InRange(angularResidual, 0.0f, MovableAttachmentOrientationToleranceDegrees);
+            Assert.Null(fixture.RightHand.CurrentGrabbed);
+            Assert.True(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+            Assert.Same(originalParent, grabbableNode.GetParent());
+            Assert.True(grabbableNode.GlobalPosition.DistanceTo(originalPosition) <= PositionToleranceMetres);
+            if (grabbable is RigidBody3D movableBody)
+            {
+                Assert.Equal(originalFreeze, movableBody.Freeze);
+                Assert.Equal(Vector3.Zero, movableBody.LinearVelocity);
+                Assert.Equal(Vector3.Zero, movableBody.AngularVelocity);
+            }
+        }
+
+        int shoulderBone = fixture.Skeleton.FindBone("RightUpperArm");
+        int lowerArmBone = fixture.Skeleton.FindBone("RightLowerArm");
+        int handBone = fixture.Skeleton.FindBone("RightHand");
+        Assert.True(shoulderBone >= 0 && lowerArmBone >= 0 && handBone >= 0, "Expected the reference right-arm bones.");
+        Vector3 shoulder = fixture.Skeleton.GlobalTransform * fixture.Skeleton.GetBoneGlobalPose(shoulderBone).Origin;
+        float shoulderToExpectedAttachment = shoulder.DistanceTo(expectedAttachment.Origin);
+        float reachableArmLength = fixture.Skeleton.GetBoneGlobalRest(shoulderBone).Origin.DistanceTo(fixture.Skeleton.GetBoneGlobalRest(lowerArmBone).Origin)
+                                   + fixture.Skeleton.GetBoneGlobalRest(lowerArmBone).Origin.DistanceTo(fixture.Skeleton.GetBoneGlobalRest(handBone).Origin);
+        if (requireNonCentreContact)
+        {
+            Assert.True(
+                shoulderToExpectedAttachment <= 0.40f,
+                $"Expected the static {label} attachment to remain inside the 0.40 m rest-arm qualification; "
+                + $"target={shoulderToExpectedAttachment:F4} m, rest={reachableArmLength:F4} m.");
+        }
+        Assert.InRange(reachableArmLength, 0.445f, 0.455f);
+
+    }
+
+    private static async Task<AttachmentResidual> MeasureMovableAttachmentResidualAsync(
+        SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture,
+        IGrabbable grabbable,
+        string propName)
+    {
+        Node3D grabbableNode = Assert.IsAssignableFrom<Node3D>(grabbable);
+        Node3D otherGrabbable = ReferenceEquals(grabbable, fixture.Ball) ? fixture.Stick : fixture.Ball;
+        otherGrabbable.GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
+        grabbableNode.GlobalTransform = propName == "stick"
+            ? _referenceStickContactTransform
+            : _referenceBallContactTransform;
+        grabbableNode.ForceUpdateTransform();
+        SetMockRightWristTransformForPlayerVRIK(fixture, _referenceMockQueryTarget);
+        _ = await WaitForPipelineConvergenceAsync(sceneTree, fixture);
+        AssertTransformApproximatelyEqual(_referenceMockQueryTarget, fixture.RightHandTarget.GlobalTransform, PositionToleranceMetres);
+
+        GrabPointCandidate candidate = grabbable.GetGrabPoint(LimbSide.Right, fixture.RightHandTarget.GlobalTransform)
+            ?? throw new Xunit.Sdk.XunitException($"Expected the authored {propName} to be reachable from the physical target.");
+        Transform3D expectedAttachment = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+
+        Assert.Null(fixture.RightHand.Grab());
+        Assert.True(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+
+        for (int frame = 0; frame < 60 && fixture.RightHand.CurrentGrabbed is null; frame++)
+        {
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+            if (fixture.RightHand.TryGetPendingExpectedAttachmentTransform(out Transform3D currentSettlement))
+            {
+                expectedAttachment = currentSettlement;
+            }
+        }
+
+        Transform3D actualAttachment = fixture.RightHandAttachment.GlobalTransform;
+        AttachmentResidual residual = new(
+            expectedAttachment.Origin.DistanceTo(actualAttachment.Origin),
+            GetAngularDifferenceDegrees(expectedAttachment.Basis, actualAttachment.Basis));
+
+        Assert.Same(grabbable, fixture.RightHand.CurrentGrabbed);
+        Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+        Assert.InRange(residual.PositionMetres, 0.0f, fixture.RightHand.MovableAttachmentPositionToleranceMetres);
+        Assert.InRange(residual.OrientationDegrees, 0.0f, fixture.RightHand.MovableAttachmentOrientationToleranceDegrees);
+
+        fixture.RightHand.Release();
+        await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 45);
+        return residual;
+    }
+
+    private static float GetAngularDifferenceDegrees(Basis expected, Basis actual)
+    {
+        Quaternion expectedRotation = new(expected.Orthonormalized());
+        Quaternion actualRotation = new(actual.Orthonormalized());
+        float absoluteDot = Mathf.Clamp(Mathf.Abs(expectedRotation.Dot(actualRotation)), 0.0f, 1.0f);
+        return Mathf.RadToDeg(2.0f * Mathf.Acos(absoluteDot));
+    }
+
+    private static void AssertDirectAttachmentWithinMovableGate(
+        Transform3D expectedAttachment,
+        Transform3D actualAttachment,
+        string context)
+    {
+        float positionResidual = expectedAttachment.Origin.DistanceTo(actualAttachment.Origin);
+        float angularResidual = GetAngularDifferenceDegrees(expectedAttachment.Basis, actualAttachment.Basis);
+        Assert.True(
+            positionResidual <= MovableAttachmentPositionToleranceMetres,
+            $"Expected {context} direct attachment position residual to be within the 8 mm gate; "
+            + $"observed {positionResidual:F4} m.");
+        Assert.True(
+            angularResidual <= MovableAttachmentOrientationToleranceDegrees,
+            $"Expected {context} direct attachment orientation residual to be within the 5° gate; "
+            + $"observed {angularResidual:F2}°.");
     }
 
     private static GrabbableNode CreateRuntimeBall(Vector3 position)
@@ -2415,7 +3502,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             Name = "SphericalGrabPoint",
             ReachDistanceMetres = 0.3f,
             PalmFacingMinimumDot = -1.0f,
-            GrabAnimation = new Animation(),
+            GrabAnimation = LoadValidGrabPoseAnimation(),
         };
         ball.AddChild(grabPoint);
         ball.AddToGroup("grabbable");
@@ -2437,7 +3524,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             ReachDistanceMetres = TestPipeReachDistanceMetres,
             SnapDistanceMetres = TestPipeReachDistanceMetres,
             PalmFacingMinimumDot = -1.0f,
-            GrabAnimation = new Animation(),
+            GrabAnimation = LoadValidGrabPoseAnimation(),
             GrabPointPositionOffsetFromHand = new Vector3(0.04f, 0.02f, -0.03f),
             GrabPointRotationOffsetFromHand = new Vector3(0.1f, -0.2f, 0.3f),
         };
@@ -2466,7 +3553,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             TargetOrigin = targetOrigin,
             HandTargetOrigin = handTargetOrigin ?? targetOrigin,
             GrabPointOffsetFromHand = grabPointOffsetFromHand ?? Transform3D.Identity,
-            Animation = animation,
+            Animation = animation ?? LoadValidGrabPoseAnimation(),
         });
         grabbable.AddToGroup("grabbable");
 
@@ -2490,7 +3577,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             Name = "MutableGrabPoint",
             TargetOrigin = position,
             HandTargetOrigin = position,
-            Animation = new Animation(),
+            Animation = LoadValidGrabPoseAnimation(),
         });
         ball.AddToGroup("grabbable");
 
@@ -2525,34 +3612,6 @@ public sealed partial class HandGrabAssetIntegrationTests
         FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"Field {fieldName} was not found on {instance.GetType().Name}.");
         return Assert.IsAssignableFrom<T>(field.GetValue(instance));
-    }
-
-    private static T GetLoadedProperty<T>(object instance, string propertyName)
-    {
-        PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
-            ?? throw new InvalidOperationException($"Property {propertyName} was not found on {instance.GetType().Name}.");
-        return Assert.IsAssignableFrom<T>(property.GetValue(instance));
-    }
-
-    private static object? GetLoadedPropertyValue(object instance, string propertyName)
-    {
-        PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
-            ?? throw new InvalidOperationException($"Property {propertyName} was not found on {instance.GetType().Name}.");
-        return property.GetValue(instance);
-    }
-
-    private static object? InvokeLoadedMethod(object instance, string methodName)
-    {
-        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public, [])
-            ?? throw new InvalidOperationException($"Method {methodName} was not found on {instance.GetType().Name}.");
-        return method.Invoke(instance, []);
-    }
-
-    private static object? InvokeLoadedMethod(object instance, string methodName, params object[] arguments)
-    {
-        MethodInfo method = instance.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .Single(candidate => candidate.Name == methodName && candidate.GetParameters().Length == arguments.Length);
-        return method.Invoke(instance, arguments);
     }
 
     private static void EnsureRuntimeRoleInstalled(Node character)
@@ -2614,6 +3673,13 @@ public sealed partial class HandGrabAssetIntegrationTests
         };
     }
 
+    private static Animation LoadValidGrabPoseAnimation()
+        => ResourceLoader.Load<Animation>(ValidGrabPoseAnimationPath)
+            ?? throw new InvalidOperationException($"Could not load valid grab pose '{ValidGrabPoseAnimationPath}'.");
+
+    private static Animation CreateDistinctValidGrabPoseAnimation()
+        => Assert.IsType<Animation>(LoadValidGrabPoseAnimation().Duplicate(), exactMatch: false);
+
     private static void InvokeAttachGrabbedNode(HandPoseBehaviour hand, Node3D grabbedNode, GrabPointCandidate candidate)
     {
         MethodInfo method = typeof(HandPoseBehaviour).GetMethod(
@@ -2623,11 +3689,110 @@ public sealed partial class HandGrabAssetIntegrationTests
         _ = method.Invoke(hand, [grabbedNode, candidate]);
     }
 
+    private sealed class PendingRefreshFixture(
+        Node3D root,
+        Node3D handTarget,
+        Skeleton3D skeleton,
+        BoneAttachment3D handAttachment,
+        HandGrabTargetProvider provider,
+        HandPoseBehaviour hand,
+        GrabbableNode grabbable,
+        MutableGrabPoint grabPoint)
+    {
+        public Node3D Root { get; } = root;
+
+        public Node3D HandTarget { get; } = handTarget;
+
+        public Skeleton3D Skeleton { get; } = skeleton;
+
+        public BoneAttachment3D HandAttachment { get; } = handAttachment;
+
+        public HandGrabTargetProvider Provider { get; } = provider;
+
+        public HandPoseBehaviour Hand { get; } = hand;
+
+        public GrabbableNode Grabbable { get; } = grabbable;
+
+        public MutableGrabPoint GrabPoint { get; } = grabPoint;
+
+        public static async Task<PendingRefreshFixture> CreateAsync(SceneTree sceneTree)
+        {
+            Node3D root = new()
+            {
+                Name = "PendingRefreshRoot"
+            };
+            Node3D handTarget = new()
+            {
+                Name = "HandTarget"
+            };
+            (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+            HandGrabTargetProvider provider = new()
+            {
+                Name = "GrabProvider"
+            };
+            HandPoseBehaviour hand = new()
+            {
+                Name = "RightHandBehaviour",
+                Side = LimbSide.Right,
+                HandTargetNode = handTarget,
+                HandBoneAttachment = handAttachment,
+                GrabTargetProvider = provider,
+                GrabbableGroupName = _pendingGrabGroupName,
+                DiscoveryRangeMetres = 0.3f,
+            };
+            GrabbableNode grabbable = new()
+            {
+                Name = "RefreshGrabbable",
+                Mobility = GrabbableMobility.Movable,
+            };
+            MutableGrabPoint grabPoint = new()
+            {
+                Name = "MutableGrabPoint",
+                TargetOrigin = new Vector3(0.1f, 0.0f, 0.0f),
+                ReachDistanceMetres = 0.3f,
+                Animation = LoadValidGrabPoseAnimation(),
+            };
+            grabbable.AddChild(grabPoint);
+            root.AddChild(handTarget);
+            root.AddChild(skeleton);
+            root.AddChild(provider);
+            root.AddChild(hand);
+            root.AddChild(grabbable);
+            sceneTree.Root.AddChild(root);
+            grabbable.AddToGroup(_pendingGrabGroupName);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            grabbable.RefreshComponents();
+
+            return new PendingRefreshFixture(
+                root,
+                handTarget,
+                skeleton,
+                handAttachment,
+                provider,
+                hand,
+                grabbable,
+                grabPoint);
+        }
+
+        public async Task SettleAsync(SceneTree sceneTree, Transform3D settlement)
+        {
+            HandTarget.GlobalTransform = settlement;
+            SetHandAttachmentTransform(Skeleton, settlement);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+
+        public async Task DisposeAsync(SceneTree sceneTree)
+        {
+            Root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
     private sealed partial class MutableGrabPoint : Node, IGrabPoint
     {
-        private readonly Animation _animation = new();
-
         public Vector3 TargetOrigin { get; set; } = Vector3.Zero;
+
+        public Basis TargetBasis { get; set; } = Basis.Identity;
 
         public Vector3? HandTargetOrigin
         {
@@ -2651,8 +3816,8 @@ public sealed partial class HandGrabAssetIntegrationTests
             Transform3D handTransform,
             float acquisitionToleranceMetres)
         {
-            Transform3D handTarget = new(Basis.Identity, HandTargetOrigin ?? TargetOrigin);
-            Transform3D grabPointTransform = new(Basis.Identity, TargetOrigin);
+            Transform3D handTarget = new(TargetBasis, HandTargetOrigin ?? TargetOrigin);
+            Transform3D grabPointTransform = new(TargetBasis, TargetOrigin);
             float acquisitionDistance = handTransform.Origin.DistanceTo(TargetOrigin);
             float effectiveReachDistanceMetres = ReachDistanceMetres + Mathf.Max(0.0f, acquisitionToleranceMetres);
             return acquisitionDistance > effectiveReachDistanceMetres
@@ -2660,7 +3825,7 @@ public sealed partial class HandGrabAssetIntegrationTests
                 : new GrabPointCandidate(
                 this,
                 handTarget,
-                Animation ?? _animation,
+                Animation ?? LoadValidGrabPoseAnimation(),
                 handSide,
                 handTransform,
                 grabPointTransform,
@@ -2677,5 +3842,179 @@ public sealed partial class HandGrabAssetIntegrationTests
         public IKTargetIntent TargetIntent { get; set; } = new(Transform3D.Identity, 0.0f);
 
         public override IKTargetIntent GetTargetIntent() => TargetIntent;
+    }
+
+    private readonly record struct AttachmentResidual(float PositionMetres, float OrientationDegrees);
+
+    private readonly record struct OpticalHeldMotionObservation(
+        float CalibratedSourceMovementMetres,
+        float ProviderMovementMetres,
+        float RequestedTargetMovementMetres,
+        float RealisedTargetMovementMetres,
+        float AttachmentMovementMetres,
+        float HeldItemMovementMetres,
+        string CollisionFeedbackReason);
+
+    private readonly record struct StaticTargetSample(
+        float PositionErrorMetres,
+        float AngleErrorDegrees,
+        float ActuatorErrorMetres);
+
+    private sealed record StaticTargetTrace(
+        string Label,
+        Transform3D ExpectedAttachment,
+        Transform3D Source,
+        Transform3D Requested,
+        Transform3D Realised,
+        IReadOnlyList<StaticTargetSample> Samples,
+        float ShoulderToExpectedAttachmentMetres,
+        float RestChainLengthMetres,
+        float ReachMarginMetres);
+
+    private sealed class ReferencePlayerMockXRFixture(
+        MockRuntimeTestGame root,
+        MockXRRuntimeNode runtime,
+        PlayerVRIK playerVRIK,
+        HandPoseBehaviour rightHand,
+        HandPoseBehaviour leftHand,
+        HandGrabTargetProvider rightHandGrabProvider,
+        IKTargetIntentProvider rightHandFallbackProvider,
+        AnimatableBody3D rightHandTarget,
+        AnimatableBody3D leftHandTarget,
+        BoneAttachment3D rightHandAttachment,
+        BoneAttachment3D leftHandAttachment,
+        Skeleton3D skeleton,
+        GrabbableRigidBody3D ball,
+        GrabbableRigidBody3D stick)
+    {
+        public MockRuntimeTestGame Root { get; } = root;
+
+        public MockXRRuntimeNode Runtime { get; } = runtime;
+
+        public PlayerVRIK PlayerVRIK { get; } = playerVRIK;
+
+        public HandPoseBehaviour RightHand { get; } = rightHand;
+
+        public HandPoseBehaviour LeftHand { get; } = leftHand;
+
+        public HandGrabTargetProvider RightHandGrabProvider { get; } = rightHandGrabProvider;
+
+        public IKTargetIntentProvider RightHandFallbackProvider { get; } = rightHandFallbackProvider;
+
+        public AnimatableBody3D RightHandTarget { get; } = rightHandTarget;
+
+        public AnimatableBody3D LeftHandTarget { get; } = leftHandTarget;
+
+        public BoneAttachment3D RightHandAttachment { get; } = rightHandAttachment;
+
+        public BoneAttachment3D LeftHandAttachment { get; } = leftHandAttachment;
+
+        public Skeleton3D Skeleton { get; } = skeleton;
+
+        public GrabbableRigidBody3D Ball { get; } = ball;
+
+        public GrabbableRigidBody3D Stick { get; } = stick;
+
+        public static async Task<ReferencePlayerMockXRFixture> CreateAsync(SceneTree sceneTree)
+        {
+            // Match test-session fixture ordering: Game discovers the XR service before the player enters the tree,
+            // while the mock runtime is explicitly initialised instead of allowing XRManager to select OpenXR.
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+
+            MockRuntimeTestGame root = new()
+            {
+                Name = "ReferencePlayerMockXRFixture",
+            };
+            MockRuntimeTestXRManager xrManager = new()
+            {
+                Name = "XR",
+            };
+            MockXRRuntimeNode runtime = ResourceLoader.Load<PackedScene>(MockRuntimeScenePath).Instantiate<MockXRRuntimeNode>();
+            Node referenceFixture = ResourceLoader.Load<PackedScene>(ReferencePlayerFixtureScenePath).Instantiate();
+
+            root.AddChild(xrManager);
+            root.AddChild(runtime);
+            root.AddChild(referenceFixture);
+            Assert.True(runtime.Initialise(new SubViewport(), maximumRefreshRate: 90));
+            xrManager.SetRuntime(runtime);
+
+            sceneTree.Root.AddChild(root);
+            await TestUtils.WaitForFramesAsync(sceneTree, 10);
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            Node player = referenceFixture.GetNode("Actors/Player");
+            EnsureRuntimeRoleInstalled(player);
+            await TestUtils.WaitForFramesAsync(sceneTree, 4);
+
+            PlayerVRIK playerVRIK = player.GetNode<PlayerVRIK>("VRIK");
+            Assert.True(playerVRIK.BindToXRServices());
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 4);
+
+            HandPoseBehaviour rightHand = player.GetNode<HandPoseBehaviour>("Hands/RightHand");
+            HandPoseBehaviour leftHand = player.GetNode<HandPoseBehaviour>("Hands/LeftHand");
+            HandGrabTargetProvider rightHandGrabProvider = player.GetNode<HandGrabTargetProvider>("VRIK/RightHandGrabProvider");
+            IKTargetIntentProvider rightHandFallbackProvider = player.GetNode<IKTargetIntentProvider>("VRIK/RightHandFallbackIntentProvider");
+            AnimatableBody3D rightHandTarget = player.GetNode<AnimatableBody3D>("IKTargets/RightHand");
+            AnimatableBody3D leftHandTarget = player.GetNode<AnimatableBody3D>("IKTargets/LeftHand");
+            BoneAttachment3D rightHandAttachment = player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/RightHand");
+            BoneAttachment3D leftHandAttachment = player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/LeftHand");
+            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            GrabbableRigidBody3D ball = referenceFixture.GetNode<GrabbableRigidBody3D>("Items/Ball");
+            GrabbableRigidBody3D stick = ResourceLoader.Load<PackedScene>(TestStickScenePath).Instantiate<GrabbableRigidBody3D>();
+            Node3D items = referenceFixture.GetNode<Node3D>("Items");
+
+            ball.Freeze = true;
+            ball.LinearVelocity = Vector3.Zero;
+            ball.AngularVelocity = Vector3.Zero;
+            ball.GlobalTransform = _referenceBallContactTransform;
+            ball.ForceUpdateTransform();
+            stick.Freeze = true;
+            stick.GravityScale = 0.0f;
+            items.AddChild(stick);
+            stick.GlobalTransform = _referenceStickContactTransform;
+            stick.ForceUpdateTransform();
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            return new ReferencePlayerMockXRFixture(
+                root,
+                runtime,
+                playerVRIK,
+                rightHand,
+                leftHand,
+                rightHandGrabProvider,
+                rightHandFallbackProvider,
+                rightHandTarget,
+                leftHandTarget,
+                rightHandAttachment,
+                leftHandAttachment,
+                skeleton,
+                ball,
+                stick);
+        }
+
+        public async Task DisposeAsync(SceneTree sceneTree)
+        {
+            if (GodotObject.IsInstanceValid(Root) && Root.IsInsideTree())
+            {
+                Root.QueueFree();
+                await TestUtils.WaitForNextFrameAsync(sceneTree);
+            }
+        }
+    }
+
+    private sealed partial class MockRuntimeTestGame : Game
+    {
+        public override void _Ready()
+        {
+        }
+    }
+
+    private sealed partial class MockRuntimeTestXRManager : XRManager
+    {
+        public override void _Ready()
+        {
+        }
+
+        public void SetRuntime(IXRRuntime runtime) => Runtime = runtime;
     }
 }

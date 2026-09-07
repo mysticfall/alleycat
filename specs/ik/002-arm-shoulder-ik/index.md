@@ -54,6 +54,10 @@ setups.
 14. Provider influence propagates to both the arm solver and the shoulder correction path as a coupled contract.
 15. Arm and shoulder IK must accept target transforms from `IKTargetIntentProvider` in the same manner as the hand
     target body, via the provider contract defined in [IK Implementation Notes](../implementation-notes.md).
+16. Direct terminal hand `BoneAttachment3D` residual is observable downstream. The Movable final gate remains owned
+    by [INTR-002 Technical Requirement 18 and AC-42](../../interaction/002-hand-grab-execution/index.md).
+17. IK-005 `RealisedTarget` remains physical target-actuator state; it does not describe skeletal terminal hand
+    attachment outcome.
 
 ## In Scope
 
@@ -125,6 +129,9 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-32 | Provider influence of 0 deactivates arm TwoBoneIK3D and shoulder correction for that side. | Provider Gating |
 | AC-33 | Provider target transforms drive hand target bodies via IKTargetIntentProvider contract. | Provider Gating |
 | AC-34 | Influence gating propagates to all side-effect modifiers on the same side. | Provider Gating Contract |
+| AC-35 | `RealisedTarget` is physical target-actuator state, not skeletal attachment outcome. |
+|       | Direct terminal hand `BoneAttachment3D` residual is observable downstream. |
+|       | INTR-002 owns the Movable final gate. | Arm IK Contract |
 
 ## References
 
@@ -135,3 +142,5 @@ All criteria remain normative. IDs are provided for traceability to component co
 - @specs/ik/002-arm-shoulder-ik/arm-ik-contract.md
 - @specs/ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md
 - @specs/ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md
+- [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
+- [IK-005: IK Target Pipeline Foundation](../005-target-pipeline/index.md)

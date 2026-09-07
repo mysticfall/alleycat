@@ -1,0 +1,164 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/photobooth/photobooth.gd" id="1_sgyat"]
+[ext_resource type="PackedScene" path="res://assets/characters/templates/reference_female/reference_female_player.tscn" id="2_player"]
+[ext_resource type="Script" path="res://src/Character/Character.cs" id="3_char"]
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/camera_rig.tscn" id="4_camrig"]
+[ext_resource type="Script" path="res://scripts/photobooth/camera_rig.gd" id="5_camscript"]
+[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" id="6_marker"]
+[ext_resource type="Script" path="res://scripts/photobooth/debug_marker.gd" id="7_markerscript"]
+[ext_resource type="PackedScene" path="res://assets/items/test_ball.tscn" id="8_ball"]
+[ext_resource type="PackedScene" path="res://assets/testing/test_environment.tscn" id="8_rodfq"]
+[ext_resource type="Texture2D" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="9_8luat"]
+[ext_resource type="PackedScene" path="res://assets/items/test_stick.tscn" id="9_stick"]
+[ext_resource type="Script" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="11_ar24t"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ux8bu"]
+albedo_color = Color(0.25, 0.25, 0.25, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_v8147"]
+material = SubResource("StandardMaterial3D_ux8bu")
+size = Vector2(10, 10)
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_hbact"]
+panorama = ExtResource("9_8luat")
+
+[sub_resource type="Sky" id="Sky_1blvp"]
+sky_material = SubResource("PanoramaSkyMaterial_hbact")
+
+[sub_resource type="Environment" id="Environment_1blvp"]
+background_mode = 1
+background_color = Color(0.90051246, 0.90051246, 0.9005124, 1)
+sky = SubResource("Sky_1blvp")
+ambient_light_source = 3
+reflected_light_source = 2
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_ux8bu"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_tnaik"]
+bounce = 0.5
+
+[node name="Photobooth" type="Node3D" unique_id=406188165]
+script = ExtResource("1_sgyat")
+metadata/_custom_type_script = "uid://eh0ilarykwv0"
+
+[node name="Subject" type="Node3D" parent="." unique_id=1460378833]
+
+[node name="Player" type="CharacterBody3D" parent="Subject" unique_id=520201001 node_paths=PackedStringArray("Locomotion", "Eyes", "Voice", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "Player", "VisualSubjects"] instance=ExtResource("2_player")]
+script = ExtResource("3_char")
+Id = "reference_player"
+Locomotion = NodePath("Locomotion")
+Eyes = NodePath("Eyes")
+Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+LeftHand = NodePath("Hands/LeftHand")
+RightHand = NodePath("Hands/RightHand")
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
+metadata/_custom_type_script = "uid://bh2t1kkfwpvbf"
+
+[node name="Cameras" type="Node3D" parent="." unique_id=1601084]
+
+[node name="RightHandCamera" type="Node3D" parent="Cameras" unique_id=520201020 instance=ExtResource("4_camrig")]
+transform = Transform3D(-0.9184126, -0.10758553, 0.3807146, 0, 0.9623145, 0.27193892, -0.39562386, 0.24975213, -0.8838018, 0.58, 1.3, -1.12)
+script = ExtResource("5_camscript")
+image_size = Vector2(640, 640)
+orthogonal_scale = 0.34
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="LeftHandCamera" type="Node3D" parent="Cameras" unique_id=520201021 instance=ExtResource("4_camrig")]
+transform = Transform3D(-0.90213424, 0.11926678, -0.41464353, 0, 0.9610343, 0.27642894, 0.43145546, 0.24937601, -0.866982, -0.58, 1.3, -1.12)
+script = ExtResource("5_camscript")
+image_size = Vector2(640, 640)
+orthogonal_scale = 0.34
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="StickCamera" type="Node3D" parent="Cameras" unique_id=520201022 instance=ExtResource("4_camrig")]
+transform = Transform3D(-0.90452564, -0.13580321, 0.40421632, 0, 0.94793177, 0.31847346, -0.42641923, 0.2880674, -0.8574286, 0.64, 1.38, -1.25)
+script = ExtResource("5_camscript")
+image_size = Vector2(640, 640)
+orthogonal_scale = 0.48
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="InteractionOverviewCamera" type="Node3D" parent="Cameras" unique_id=520201023 instance=ExtResource("4_camrig")]
+transform = Transform3D(-0.9395607, -0.06167634, 0.33678132, 0, 0.98364115, 0.18013881, -0.34238228, 0.16925135, -0.92419064, 0.86, 1.54, -2.7)
+script = ExtResource("5_camscript")
+image_size = Vector2(768, 768)
+orthogonal_scale = 2.05
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="PendingCommitCamera" type="Node3D" parent="Cameras" unique_id=417711527 instance=ExtResource("4_camrig")]
+transform = Transform3D(-0.9407479, -0.072475076, 0.33127147, 0, 0.9768942, 0.21372344, -0.33910683, 0.20105988, -0.9190111, 0.62, 1.3, -1.35)
+script = ExtResource("5_camscript")
+image_size = Vector2(768, 768)
+orthogonal_scale = 0.54
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="Markers" type="Node3D" parent="." unique_id=1939127363]
+
+[node name="RightHandRest" type="Node3D" parent="Markers" unique_id=520201030 instance=ExtResource("6_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, 1.08, -0.43)
+visible = false
+script = ExtResource("7_markerscript")
+label_text = "RightHandRest"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="LeftHandRest" type="Node3D" parent="Markers" unique_id=520201031 instance=ExtResource("6_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, 1.08, -0.43)
+visible = false
+script = ExtResource("7_markerscript")
+label_text = "LeftHandRest"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="BallItem" type="Node3D" parent="Markers" unique_id=520201032 instance=ExtResource("6_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.309, 1.163, -0.427)
+visible = false
+script = ExtResource("7_markerscript")
+label_text = "BallItem"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="BallContact" type="Node3D" parent="Markers" unique_id=520201033 instance=ExtResource("6_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.309, 1.163, -0.427)
+visible = false
+script = ExtResource("7_markerscript")
+label_text = "BallContact"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="StickItem" type="Node3D" parent="Markers" unique_id=520201034 instance=ExtResource("6_marker")]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.43, 1.16, -0.58)
+visible = false
+script = ExtResource("7_markerscript")
+label_text = "StickItem"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="StickContact" type="Node3D" parent="Markers" unique_id=520201035 instance=ExtResource("6_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, 1.16, -0.58)
+visible = false
+script = ExtResource("7_markerscript")
+label_text = "StickContact"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=893667457]
+mesh = SubResource("PlaneMesh_v8147")
+
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=1701682303 instance=ExtResource("8_rodfq")]
+environment = SubResource("Environment_1blvp")
+camera_attributes = SubResource("CameraAttributesPractical_ux8bu")
+
+[node name="Items" type="Node3D" parent="." unique_id=520201010]
+
+[node name="Ball" type="RigidBody3D" parent="Items" unique_id=520201011 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("8_ball")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.309, 1.163, -0.427)
+collision_layer = 2
+collision_mask = 11
+physics_material_override = SubResource("PhysicsMaterial_tnaik")
+freeze = true
+script = ExtResource("11_ar24t")
+metadata/_custom_type_script = "uid://d0aaosrbv6dgv"
+
+[node name="Stick" type="RigidBody3D" parent="Items" unique_id=520201012 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("9_stick")]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.43, 1.16, -0.58)
+collision_layer = 2
+collision_mask = 11
+freeze = true
+script = ExtResource("11_ar24t")
+metadata/_custom_type_script = "uid://d0aaosrbv6dgv"

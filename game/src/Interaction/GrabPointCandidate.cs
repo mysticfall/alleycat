@@ -27,11 +27,50 @@ public sealed record GrabPointCandidate(
     float AcquisitionDistance)
 {
     /// <summary>
+    /// Candidate-keyed recognition strategy identifier. The default animation-derived power grip is the only
+    /// shipped strategy; future candidates may select another registered strategy without concrete point branches.
+    /// </summary>
+    public string GripRecognitionStrategyName { get; init; } = "power-grip";
+
+    private GrabPoseReference? CachedValidatedReference
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
     /// Gets additional acquisition tolerance applied when this candidate was produced for a pending grab refresh.
     /// </summary>
     public float AcquisitionToleranceMetres
     {
         get; init;
+    }
+
+    /// <summary>
+    /// Gets the candidate's validated instance-exact authored reference. It is populated at the shared selection
+    /// boundary before controller or optical execution can consume this candidate.
+    /// </summary>
+    public GrabPoseReference? ValidatedReference => CachedValidatedReference;
+
+    /// <summary>
+    /// Validates the candidate's mandatory authored animation directly and returns its shared descriptor.
+    /// </summary>
+    public bool TryGetValidatedReference(out GrabPoseReference reference, out string error)
+    {
+        if (CachedValidatedReference is { } validated)
+        {
+            reference = validated;
+            error = string.Empty;
+            return true;
+        }
+
+        if (!GrabPoseReference.TryCreate(Animation, HandSide, out reference, out error))
+        {
+            return false;
+        }
+
+        CachedValidatedReference = reference;
+        return true;
     }
 
     /// <summary>

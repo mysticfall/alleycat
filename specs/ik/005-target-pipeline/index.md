@@ -27,6 +27,8 @@ architecture, contributor model, and actuator abstraction before adding constrai
    feedback reason or error for debugging.
 5. A no-op contributor must be insertable without changing pipeline output.
 6. Hand collision and obstruction behaviour must be preserved as the physical actuation layer.
+7. Grab approach and hold remain safe when a target cannot converge: the player sees no false attachment or
+   calibration correction, and can withdraw or release normally.
 
 ## Technical Requirements
 
@@ -62,7 +64,19 @@ architecture, contributor model, and actuator abstraction before adding constrai
     `Rigging.Physics`-owned `BodyColliderProfile` data and generated collision proxies, while
     `DynamicPhysicalRig` and physical collision proxy generation remain independent of IK.
 18. Physical actuation layer shall be composable with future chain/grab/collision modes,
-      not exclusive to any single actuation type.
+       not exclusive to any single actuation type.
+19. One authoritative tick shall use one canonical sample epoch. The pipeline must retain distinct values for
+    independent source intent, retained contact identity, commanded approach, physical realised target, and solved
+    attachment. It must publish each at its producer/consumer boundary without substituting one for another.
+20. Contributors and physical actuation may alter commanded approach or realised target, but must not manufacture
+    candidate eligibility, recognition measurements, or retry intent. Observational getters must not advance
+    interpolation; simulation time advances it once per authoritative tick.
+21. `RealisedTarget` remains actuator output, while terminal skeletal attachment is a separately observed solved
+    outcome. Their residual is not authored-frame calibration and must not be fed back as input to recalibrate,
+    select, or chase a grab target.
+22. Bounded non-convergence must preserve lifecycle safety and report the blocking reason for unreachable or
+    collision-limited commands. It must allow withdrawal/release without unbounded compensation or relaxing
+    INTR-002's 8 mm, 5°, two-process-frame direct-attachment gate.
 
 ## In Scope
 
@@ -75,11 +89,14 @@ architecture, contributor model, and actuator abstraction before adding constrai
 - Preservation of existing `AnimatableBody3D` hand obstruction behaviour.
 - Preservation of existing `CharacterBody3D` head actuator behaviour through the pipeline.
 - Pipeline validation tests proving equivalence to current actuator output when no extra contributors are active.
+- Canonical epoch and boundary observability for grab approach, physical actuation, and solved attachment.
+- Bounded non-convergence behaviour required by the INTR-002 grab contract.
 
 ## Out Of Scope
 
 - Impact reaction contributors and hit response behaviour.
-- Chain/grab constraint contributors.
+- New general-purpose chain/grab constraint contributors beyond the required
+  epoch, boundary, and non-convergence contracts above.
 - Stagger and recovery transitions.
 - Ragdoll and physical constraint bridge.
 - Separate modifier and constraint interfaces (deferred to future implementation).
@@ -115,6 +132,14 @@ architecture, contributor model, and actuator abstraction before adding constrai
      future modes.
 13. Tests validate the new pipelines match current actuator output when no extra contributors
     are active.
+14. User Requirement 7 validated: unreachable and obstructed targets preserve safe lifecycle
+    behaviour without a false attachment or calibration correction, and withdrawal/release remains available.
+15. Technical Requirements 19 to 21 validated: one test tick traces distinct source intent,
+    retained contact, commanded approach, realised target, and solved attachment at their
+    canonical boundaries; no observational read advances state and no output becomes eligibility input.
+16. Technical Requirement 22 validated: unreachable and collision-limited cases report bounded
+    non-convergence, preserve the INTR-002 direct-attachment gate, and do not chase residual
+    through unbounded commands or calibration.
 
 ## References
 
@@ -125,3 +150,4 @@ architecture, contributor model, and actuator abstraction before adding constrai
 - [IK Implementation Notes](../implementation-notes.md)
 - [IK-002: Arm And Shoulder IK System](../002-arm-shoulder-ik/index.md)
 - [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
+- [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)

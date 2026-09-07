@@ -30,6 +30,13 @@ internal static class HandGrabCandidateSelector
                 continue;
             }
 
+            // Candidate-content admission is input-source-independent. A controller must not begin an approach for
+            // content that optical recognition would reject, and a valid pathless Animation is sampled in place.
+            if (!candidate.TryGetValidatedReference(out _, out _))
+            {
+                continue;
+            }
+
             if (candidate.AcquisitionDistance > discoveryRangeMetres
                 || candidate.AcquisitionDistance >= bestAcquisitionDistance)
             {

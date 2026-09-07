@@ -20,9 +20,9 @@ discontinuities or snapping, using resource-driven pole anchors.
 - UR-02: Small changes in hand position must produce smooth, corresponding changes in elbow
   direction without visible jumps or snaps.
 - UR-03: Behaviour must remain pose-independent and consistent across upright and non-upright
-  body orientations.
+   body orientations.
 - UR-04: Resource-driven anchor configuration must support editor-based authoring and runtime
-  loading without runtime mirroring toggles.
+   loading without runtime mirroring toggles.
 
 ## Technical Requirements
 
@@ -41,9 +41,12 @@ discontinuities or snapping, using resource-driven pole anchors.
   - Right: LeftShoulder → RightShoulder, orthonormalised against up
   - Forward: cross product of right and up
 - TR-07: `ArmIKController` computes shoulder correction and pole-target positions in
-  `_ProcessModificationWithDelta` before `TwoBoneIK3D` nodes.
+   `_ProcessModificationWithDelta` before `TwoBoneIK3D` nodes.
 - TR-08: Resource-driven pole anchors load from `ArmPoleAnchorSetResource` assets authored via
-  editor bake workflow.
+   editor bake workflow.
+- TR-20: IK-005 `RealisedTarget` remains the physical target-actuator outcome. Direct terminal hand
+  `BoneAttachment3D` residual is observable downstream by
+  [INTR-002](../../interaction/002-hand-grab-execution/index.md), which owns the Movable final gate.
 
 ### Pole-Target Prediction Continuity
 
@@ -107,9 +110,14 @@ discontinuities or snapping, using resource-driven pole anchors.
 - AC-29: Symmetry without runtime mirror toggle.
 - AC-30: Visual verification with resource assets.
 - AC-31: C# integration tests for resource loading.
+- AC-35: `RealisedTarget` is physical target-actuator state, not skeletal attachment outcome.
+  Direct terminal hand `BoneAttachment3D` residual is observable downstream; INTR-002 owns the
+  Movable final gate.
 
 ## References
 
 - [IK-002 Overview](index.md)
 - [Shoulder Correction Contract](shoulder-adjustment-contract.md)
 - [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)
+- [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
+- [IK-005: IK Target Pipeline Foundation](../005-target-pipeline/index.md)

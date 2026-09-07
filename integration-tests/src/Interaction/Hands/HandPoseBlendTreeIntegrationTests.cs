@@ -13,6 +13,7 @@ namespace AlleyCat.IntegrationTests.Interaction.Hands;
 /// </summary>
 public sealed class HandPoseBlendTreeIntegrationTests
 {
+    private const string InstanceExactPoseKeyPrefix = "__alleycat_hand_pose_";
     private const string PoseStateMachineTreePath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
     private const string NpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
     private const string PlayerTemplateScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
@@ -314,8 +315,10 @@ public sealed class HandPoseBlendTreeIntegrationTests
                 rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(LimbSide.Right)),
                 exactMatch: false);
 
-            Assert.True(player.HasAnimation(new StringName("Grab-ball-40")));
-            Assert.Equal(new StringName("Grab-ball-40"), rightPoseNode.Animation);
+            StringName authoredKey = new(grabBall.ResourceName);
+            Assert.True(player.HasAnimation(authoredKey));
+            Assert.NotSame(grabBall, player.GetAnimation(authoredKey));
+            AssertCollisionSafePoseNodeRoutesToExactReference(player, rightPoseNode, grabBall);
         }
         finally
         {
@@ -351,6 +354,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
             TestUtils.EnsureCharacterRuntimeInstalled(root);
             root.GetNode<Node>("Hands").QueueFree();
             AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
             AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
             HandPoseBehaviour rightHand = new()
             {
@@ -387,7 +391,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
             Assert.InRange(rightBlend, 0.99f, 1.0f);
             Assert.Equal(0f, leftBlend);
-            Assert.Equal(new StringName("Grab-ball-40"), rightPoseNode.Animation);
+            AssertCollisionSafePoseNodeRoutesToExactReference(player, rightPoseNode, grabBall);
 
             rightHand.ClearPose(immediate: true);
             tree.Advance(1.0 / 60.0);
@@ -405,7 +409,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
             Assert.InRange(leftBlend, 0.99f, 1.0f);
             Assert.Equal(0f, rightBlend);
-            Assert.Equal(new StringName("Grab-ball-40"), leftPoseNode.Animation);
+            AssertCollisionSafePoseNodeRoutesToExactReference(player, leftPoseNode, grabBall);
         }
         finally
         {
@@ -442,6 +446,17 @@ public sealed class HandPoseBlendTreeIntegrationTests
         Assert.False(blend.IsPathFiltered(new NodePath($"%GeneralSkeleton:{sideName}Hand")));
         Assert.False(blend.IsPathFiltered(new NodePath($"%GeneralSkeleton:{sideName}LowerArm")));
         Assert.False(blend.IsPathFiltered(new NodePath($"%GeneralSkeleton:{sideName}UpperArm")));
+    }
+
+    private static void AssertCollisionSafePoseNodeRoutesToExactReference(
+        AnimationPlayer player,
+        AnimationNodeAnimation poseNode,
+        Animation expectedReference)
+    {
+        StringName key = poseNode.Animation;
+        Assert.StartsWith(InstanceExactPoseKeyPrefix, key.ToString(), StringComparison.Ordinal);
+        Assert.True(player.HasAnimation(key));
+        Assert.Same(expectedReference, player.GetAnimation(key));
     }
 
     private static void AssertConnection(
@@ -486,7 +501,9 @@ public sealed class HandPoseBlendTreeIntegrationTests
             int fingerBoneIndex = skeleton.FindBone(fingerBoneName);
             Assert.True(fingerBoneIndex >= 0, $"Expected skeleton to contain {fingerBoneName}.");
             Assert.True(player.HasAnimation(new StringName(HandPoseAnimationTreePaths.ResetAnimationName)));
-            Assert.True(player.HasAnimation(new StringName("Grab-ball-40")));
+            StringName authoredKey = new(grabBall.ResourceName);
+            Assert.True(player.HasAnimation(authoredKey));
+            Assert.NotSame(grabBall, player.GetAnimation(authoredKey));
 
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
             tree.Active = true;
@@ -504,7 +521,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
             Quaternion grabPose = grabBall.RotationTrackInterpolate(grabTrackIndex, 0.0, backward: false);
             float poseDelta = QuaternionAngleRadians(resetPose, grabPose);
 
-            Assert.Equal(new StringName("Grab-ball-40"), poseNode.Animation);
+            AssertCollisionSafePoseNodeRoutesToExactReference(player, poseNode, grabBall);
             Assert.InRange(blend, 0.99f, 1.0f);
             Assert.True(
                 poseDelta > 0.001f,

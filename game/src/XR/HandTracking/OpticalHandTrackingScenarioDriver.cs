@@ -52,7 +52,7 @@ public partial class OpticalHandTrackingScenarioDriver : Node
     public string LastError
     {
         get;
-        private set;
+        protected set;
     } = string.Empty;
 
     /// <summary>

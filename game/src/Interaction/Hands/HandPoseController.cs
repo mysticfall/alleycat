@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using AlleyCat.Rigging;
+using AlleyCat.XR.HandTracking;
 using Godot;
 
 namespace AlleyCat.Interaction.Hands;
@@ -13,6 +14,9 @@ public sealed class HandPoseController
     private const float TimeSnapTolerance = 0.000001f;
 
     private static readonly ConditionalWeakTable<AnimationTree, HandPoseController> _controllersByTree = [];
+
+    private static readonly Dictionary<OpticalGrabPresentationOwner, WeakReference<HandPoseController>>
+        _controllersByHandoffPublisher = [];
 
     private readonly HandChannel _left = new(LimbSide.Left);
     private readonly HandChannel _right = new(LimbSide.Right);
@@ -105,6 +109,13 @@ public sealed class HandPoseController
     public void SetHandPose(LimbSide side, Animation? pose, float? weight = null, bool immediate = false)
     {
         HandChannel channel = GetChannel(side);
+        if (channel.HandoffReference is Animation handoffReference && !ReferenceEquals(handoffReference, pose))
+        {
+            // A replacement must not inherit the old publisher's readiness. Its legitimate publisher must register
+            // the new generation/reference before modifier writes can relinquish.
+            RevokeOpticalGrabHandoff(channel);
+        }
+
         channel.TargetPose = pose;
         if (weight.HasValue)
         {
@@ -151,6 +162,62 @@ public sealed class HandPoseController
     /// </summary>
     public void ClearHandPose(LimbSide side, bool immediate = false)
         => SetHandPose(side, null, immediate: immediate);
+
+    /// <summary>
+    /// Registers the held optical publisher whose exact authored pose this controller is transitioning into.
+    /// </summary>
+    /// <remarks>
+    /// The publication is deliberately controller-owned: only the hand behaviour which owns the AnimationTree path
+    /// may register it, and the modifier can subsequently read only <see cref="HandPoseHandoffReadiness"/>.
+    /// </remarks>
+    internal void PublishOpticalGrabHandoff(
+        LimbSide side,
+        OpticalGrabPresentationOwner publisher,
+        GrabPoseReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        if (publisher.Side != side || reference.Side != side)
+        {
+            throw new ArgumentException("The optical handoff publisher and reference must belong to the controlled hand side.");
+        }
+
+        HandChannel channel = GetChannel(side);
+        RevokeOpticalGrabHandoff(channel);
+        channel.HandoffPublisher = publisher;
+        channel.HandoffReference = reference.Animation;
+        _controllersByHandoffPublisher[publisher] = new WeakReference<HandPoseController>(this);
+    }
+
+    /// <summary>Revokes this controller's handoff publication for the supplied owner, if it is still current.</summary>
+    internal void RevokeOpticalGrabHandoff(OpticalGrabPresentationOwner publisher)
+    {
+        HandChannel channel = GetChannel(publisher.Side);
+        if (channel.HandoffPublisher != publisher)
+        {
+            return;
+        }
+
+        RevokeOpticalGrabHandoff(channel);
+    }
+
+    /// <summary>
+    /// Reads the current handoff readiness for an exact publisher identity. A missing, stale, or collected publisher
+    /// fails closed and never grants modifier suppression.
+    /// </summary>
+    internal static bool TryGetOpticalGrabHandoffReadiness(
+        OpticalGrabPresentationOwner publisher,
+        out HandPoseHandoffReadiness readiness)
+    {
+        readiness = default;
+        if (!_controllersByHandoffPublisher.TryGetValue(publisher, out WeakReference<HandPoseController>? weakController)
+            || !weakController.TryGetTarget(out HandPoseController? controller))
+        {
+            _ = _controllersByHandoffPublisher.Remove(publisher);
+            return false;
+        }
+
+        return controller.TryCreateOpticalGrabHandoffReadiness(publisher, out readiness);
+    }
 
     /// <summary>
     /// Advances smooth transition state by the supplied frame delta.
@@ -292,8 +359,9 @@ public sealed class HandPoseController
     private void ApplyPoseNode(HandChannel channel, Animation? pose)
     {
         AnimationNodeAnimation poseNode = ResolvePoseNode(channel.Side);
-        StringName animationName = ResolveAnimationName(pose);
-        EnsureAnimationAvailable(animationName, pose);
+        StringName animationName = pose is null
+            ? new StringName(HandPoseAnimationTreePaths.ResetAnimationName)
+            : EnsureAnimationAvailable(pose);
         poseNode.Animation = animationName;
     }
 
@@ -308,17 +376,18 @@ public sealed class HandPoseController
     private static float ResolveTargetBlend(HandChannel channel)
         => channel.TargetPose is null ? 0f : channel.TargetWeight;
 
-    private void EnsureAnimationAvailable(StringName animationName, Animation? pose)
+    /// <summary>
+    /// Resolves an AnimationPlayer key for the exact pose instance. An existing authored key may be reused only
+    /// when it already maps to that instance; name/path equality alone is an alias and must never select another
+    /// candidate resource.
+    /// </summary>
+    private StringName EnsureAnimationAvailable(Animation pose)
     {
-        if (pose is null)
-        {
-            return;
-        }
-
         AnimationPlayer? player = ResolveAnimationPlayer();
-        if (player is null || player.HasAnimation(animationName))
+        StringName preferredName = ResolvePreferredAnimationName(pose);
+        if (player is null)
         {
-            return;
+            return preferredName;
         }
 
         StringName libraryName = new(string.Empty);
@@ -331,7 +400,31 @@ public sealed class HandPoseController
             _ = player.AddAnimationLibrary(libraryName, library);
         }
 
-        _ = library.AddAnimation(animationName, pose);
+        if (!player.HasAnimation(preferredName))
+        {
+            _ = library.AddAnimation(preferredName, pose);
+            return preferredName;
+        }
+
+        if (ReferenceEquals(player.GetAnimation(preferredName), pose))
+        {
+            return preferredName;
+        }
+
+        // A colliding authored key belongs to a different resource. Keep it untouched and register this exact
+        // instance under a deterministic, process-unique key. Instance IDs are identity, not authored content.
+        StringName instanceName = new($"__alleycat_hand_pose_{pose.GetInstanceId()}");
+        if (!player.HasAnimation(instanceName))
+        {
+            _ = library.AddAnimation(instanceName, pose);
+        }
+        else if (!ReferenceEquals(player.GetAnimation(instanceName), pose))
+        {
+            throw new InvalidOperationException(
+                $"AnimationPlayer key '{instanceName}' unexpectedly aliases another Animation instance.");
+        }
+
+        return instanceName;
     }
 
     private AnimationPlayer? ResolveAnimationPlayer()
@@ -342,16 +435,71 @@ public sealed class HandPoseController
             : AnimationTree.GetNodeOrNull<AnimationPlayer>(animPlayerPath);
     }
 
-    private static StringName ResolveAnimationName(Animation? pose)
+    private static StringName ResolvePreferredAnimationName(Animation pose)
     {
-        return pose is null
-            ? new StringName(HandPoseAnimationTreePaths.ResetAnimationName)
-            : string.IsNullOrWhiteSpace(pose.ResourceName)
-            ? new StringName(pose.ResourcePath.GetFile().GetBaseName())
-            : new StringName(pose.ResourceName);
+        if (!string.IsNullOrWhiteSpace(pose.ResourceName))
+        {
+            return new StringName(pose.ResourceName);
+        }
+
+        string pathName = pose.ResourcePath.GetFile().GetBaseName();
+        return string.IsNullOrWhiteSpace(pathName)
+            ? new StringName($"__alleycat_hand_pose_{pose.GetInstanceId()}")
+            : new StringName(pathName);
     }
 
     private HandChannel GetChannel(LimbSide side) => side == LimbSide.Left ? _left : _right;
+
+    private bool TryCreateOpticalGrabHandoffReadiness(
+        OpticalGrabPresentationOwner publisher,
+        out HandPoseHandoffReadiness readiness)
+    {
+        HandChannel channel = GetChannel(publisher.Side);
+        Animation? reference = channel.HandoffReference;
+        if (channel.HandoffPublisher != publisher || reference is null)
+        {
+            readiness = default;
+            return false;
+        }
+
+        float intendedWeight = channel.TargetWeight;
+        bool evaluatedReady = IsHandoffPoseEvaluated(channel, reference, intendedWeight);
+        readiness = new HandPoseHandoffReadiness(publisher.Generation, reference, intendedWeight, evaluatedReady);
+        return true;
+    }
+
+    private bool IsHandoffPoseEvaluated(HandChannel channel, Animation reference, float intendedWeight)
+    {
+        if (!ReferenceEquals(channel.TargetPose, reference)
+            || !ReferenceEquals(channel.CurrentPose, reference)
+            || channel.PendingPose is not null
+            || Mathf.Abs(channel.CurrentBlend - intendedWeight) > BlendSnapTolerance)
+        {
+            return false;
+        }
+
+        float evaluatedWeight = AnimationTree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(channel.Side)).AsSingle();
+        return Mathf.Abs(evaluatedWeight - intendedWeight) <= BlendSnapTolerance
+            && ResolveAnimationPlayer() is AnimationPlayer player
+            && AnimationTree.TreeRoot is AnimationNodeBlendTree tree
+            && tree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(channel.Side)) is AnimationNodeAnimation poseNode
+            && player.HasAnimation(poseNode.Animation)
+            && ReferenceEquals(player.GetAnimation(poseNode.Animation), reference);
+    }
+
+    private void RevokeOpticalGrabHandoff(HandChannel channel)
+    {
+        if (channel.HandoffPublisher is OpticalGrabPresentationOwner publisher
+            && _controllersByHandoffPublisher.TryGetValue(publisher, out WeakReference<HandPoseController>? weakController)
+            && weakController.TryGetTarget(out HandPoseController? controller)
+            && ReferenceEquals(controller, this))
+        {
+            _ = _controllersByHandoffPublisher.Remove(publisher);
+        }
+
+        channel.HandoffPublisher = null;
+        channel.HandoffReference = null;
+    }
 
     private sealed class HandChannel(LimbSide side)
     {
@@ -395,6 +543,16 @@ public sealed class HandPoseController
         }
 
         public float TransitionDuration
+        {
+            get; set;
+        }
+
+        public OpticalGrabPresentationOwner? HandoffPublisher
+        {
+            get; set;
+        }
+
+        public Animation? HandoffReference
         {
             get; set;
         }

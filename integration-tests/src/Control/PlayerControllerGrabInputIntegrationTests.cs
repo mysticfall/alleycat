@@ -92,7 +92,54 @@ public sealed class PlayerControllerGrabInputIntegrationTests
         }
     }
 
-    private static async Task<RuntimeGrabInputFixture> CreateFixtureAsync(SceneTree sceneTree)
+    /// <summary>
+    /// Verifies an unavailable hand holder does not recursively refill Godot's deferred-message queue,
+    /// and that controller binding resumes after a replacement holder is added on a later frame.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerController_RemovedHandHolder_DeferredResolutionDoesNotExhaustQueue_AndBindingRecovers()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeGrabInputFixture fixture = await CreateFixtureAsync(sceneTree, removeHandHolderBeforeControllerReady: true);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 3);
+
+            Assert.False(GodotObject.IsInstanceValid(fixture.Hands));
+            Assert.False(fixture.ControllerIsBound);
+            Assert.Null(GetRuntimeField(fixture.Controller, "_hands").GetValue(fixture.Controller));
+
+            FakeHands replacementHands = new()
+            {
+                Name = "Hands",
+            };
+            FakeHand replacementRightHand = new(LimbSide.Right)
+            {
+                Name = "RightHand",
+            };
+            replacementHands.AddChild(replacementRightHand);
+            fixture.Player.AddChild(replacementHands);
+            replacementHands._Ready();
+            await WaitForFramesAsync(sceneTree, 3);
+
+            Assert.True(fixture.ControllerIsBound, "Expected controller binding to resume after the hand holder was restored.");
+            Assert.Same(replacementHands, GetRuntimeField(fixture.Controller, "_hands").GetValue(fixture.Controller));
+
+            fixture.XRManager.RightController.TriggerActionFloatInputChanged("grip", 0.7f);
+            Assert.Equal(1, replacementRightHand.GrabCallCount);
+        }
+        finally
+        {
+            fixture.Global.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    private static async Task<RuntimeGrabInputFixture> CreateFixtureAsync(
+        SceneTree sceneTree,
+        bool removeHandHolderBeforeControllerReady = false)
     {
         Game global = new()
         {
@@ -145,12 +192,19 @@ public sealed class PlayerControllerGrabInputIntegrationTests
         await WaitForFramesAsync(sceneTree, 10);
         xrManager._Ready();
         hands._Ready();
+        if (removeHandHolderBeforeControllerReady)
+        {
+            player.RemoveChild(hands);
+            hands.Free();
+            controller.HandHolderNode = null;
+        }
+
         controller._Ready();
         xrManager.TriggerInitialised();
         ForceControllerXRInitialised(controller);
         await WaitForFramesAsync(sceneTree, 3);
 
-        return new RuntimeGrabInputFixture(global, xrManager, controller, rightHand, leftHand);
+        return new RuntimeGrabInputFixture(global, player, xrManager, controller, hands, rightHand, leftHand);
     }
 
     private static async Task<ReferencePlayerGrabInputFixture> CreateReferencePlayerFixtureAsync(SceneTree sceneTree)
@@ -189,8 +243,10 @@ public sealed class PlayerControllerGrabInputIntegrationTests
 
     private sealed record RuntimeGrabInputFixture(
         Game Global,
+        Node Player,
         FakeXRManager XRManager,
         PlayerController Controller,
+        FakeHands Hands,
         FakeHand RightHand,
         FakeHand LeftHand)
     {

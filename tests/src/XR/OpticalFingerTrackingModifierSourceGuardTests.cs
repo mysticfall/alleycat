@@ -6,19 +6,20 @@ namespace AlleyCat.Tests.XR;
 /// <summary>Source-level guard for the production finger-retargeting anatomical paths and write boundary.</summary>
 public sealed class OpticalFingerTrackingModifierSourceGuardTests
 {
-    /// <summary>Guards the production contract.</summary>
+    /// <summary>Guards the production contract: the modifier writes through the shared projection seam only.</summary>
     [Fact]
     public void ProcessHandRetargetsNonThumbJointsThroughConstrainedAnatomicalMapping()
     {
         string processHand = ReadProcessHandSource();
+        string project = ReadProjectDestinationSource();
 
-        Assert.Contains("Quaternion sourceRelation = _sourceRelations[fingerIndex];", processHand, StringComparison.Ordinal);
-        Assert.Contains("FingerAnatomicalMath.TryMapProximalDestination(", processHand, StringComparison.Ordinal);
-        Assert.Contains("FingerAnatomicalMath.TryMapHingeDestination(", processHand, StringComparison.Ordinal);
-        Assert.Contains("_localProximalFrames[calibrationIndex]", processHand, StringComparison.Ordinal);
-        Assert.Contains("_localHingeAxes[calibrationIndex]", processHand, StringComparison.Ordinal);
-        Assert.Contains("_effectiveDestinationNeutrals[calibrationIndex]", processHand, StringComparison.Ordinal);
-        Assert.DoesNotContain("calibration.DestinationNeutral", processHand, StringComparison.Ordinal);
+        Assert.Contains("_projection.TryProject(side, _jointSamples, _projectedPoses)", processHand, StringComparison.Ordinal);
+        Assert.Contains("FingerAnatomicalMath.TryMapProximalDestination(", project, StringComparison.Ordinal);
+        Assert.Contains("FingerAnatomicalMath.TryMapHingeDestination(", project, StringComparison.Ordinal);
+        Assert.Contains("_localProximalFrames[calibrationIndex]", project, StringComparison.Ordinal);
+        Assert.Contains("_localHingeAxes[calibrationIndex]", project, StringComparison.Ordinal);
+        Assert.Contains("_effectiveDestinationNeutrals[calibrationIndex]", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("calibration.DestinationNeutral", project, StringComparison.Ordinal);
     }
 
     /// <summary>Guards the production contract.</summary>
@@ -29,8 +30,10 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
         string modifier = File.ReadAllText(ResolveSourcePath());
         string retargetingMath = File.ReadAllText(ResolveSourcePath("FingerRetargetingMath.cs"));
         string anatomicalMath = File.ReadAllText(ResolveSourcePath("FingerAnatomicalMath.cs"));
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
 
         Assert.DoesNotContain("BasisCorrespondence", processHand, StringComparison.Ordinal);
+        Assert.DoesNotContain("BasisCorrespondence", projection, StringComparison.Ordinal);
         Assert.DoesNotContain("RetargetNonThumbRotation", modifier, StringComparison.Ordinal);
         Assert.DoesNotContain("RetargetNonThumbRotation", retargetingMath, StringComparison.Ordinal);
         Assert.DoesNotContain("basisCorrespondence", retargetingMath, StringComparison.Ordinal);
@@ -38,35 +41,39 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
         Assert.DoesNotContain("BasisCorrespondence", anatomicalMath, StringComparison.Ordinal);
     }
 
-    /// <summary>Guards the production contract.</summary>
+    /// <summary>Guards the production contract: thumbs map through the constrained authored model, never directly.</summary>
     [Fact]
     public void ProcessHandMapsThumbsThroughConstrainedModelWithoutDirectWrites()
     {
         string processHand = ReadProcessHandSource();
+        string project = ReadProjectDestinationSource();
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
 
-        Assert.Contains("bool mapped = destination.Joint == XRHandJoint.ThumbMetacarpal", processHand, StringComparison.Ordinal);
-        Assert.Contains("FingerAnatomicalMath.TryMapThumbMetacarpalSwing(", processHand, StringComparison.Ordinal);
-        Assert.Contains("_thumbCorrespondenceFrames[(int)side]", processHand, StringComparison.Ordinal);
-        Assert.Contains("_resolvedMetacarpalCalibration[(int)side]", processHand, StringComparison.Ordinal);
-        Assert.Contains("destination.Joint is not (XRHandJoint.ThumbMetacarpal or XRHandJoint.ThumbProximal)", processHand, StringComparison.Ordinal);
+        Assert.Contains("_projection.TryProject(side, _jointSamples, _projectedPoses)", processHand, StringComparison.Ordinal);
+        Assert.Contains("destination.Joint == XRHandJoint.ThumbMetacarpal", project, StringComparison.Ordinal);
+        Assert.Contains("FingerAnatomicalMath.TryMapThumbMetacarpalSwing(", project, StringComparison.Ordinal);
+        Assert.Contains("_thumbCorrespondenceFrames[(int)side]", project, StringComparison.Ordinal);
+        Assert.Contains("_metacarpalCalibration[(int)side]", project, StringComparison.Ordinal);
+        Assert.Contains("destination.Joint is not (XRHandJoint.ThumbMetacarpal or XRHandJoint.ThumbProximal)", projection, StringComparison.Ordinal);
         Assert.Contains("skeleton.SetBonePoseRotation(_boneIndices[cacheIndex], rotation);", processHand, StringComparison.Ordinal);
-        Assert.DoesNotContain("rotation = sourceRelation;", processHand, StringComparison.Ordinal);
+        Assert.DoesNotContain("rotation = sourceRelation;", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetBonePose", projection, StringComparison.Ordinal);
     }
 
-    /// <summary>Guards the production contract.</summary>
+    /// <summary>
+    /// Guards the retained sample buffer in the modifier and the single parent-relative derivation inside the seam.
+    /// </summary>
     [Fact]
-    public void ProductionRetainsOneSourceRelationPerDestination()
+    public void ProductionRetainsOneSourceRelationDerivationPerDestination()
     {
         string modifier = File.ReadAllText(ResolveSourcePath());
-        string processHand = ReadProcessHandSource();
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
 
         Assert.Contains("private readonly XRHandJointSourceSample[] _jointSamples = new XRHandJointSourceSample[TrackedJointCount];", modifier, StringComparison.Ordinal);
-        Assert.Contains("private readonly Quaternion[] _sourceRelations = new Quaternion[FingerBonesPerSide];", modifier, StringComparison.Ordinal);
-        Assert.Contains("private readonly bool[] _sourceRelationValid = new bool[FingerBonesPerSide];", modifier, StringComparison.Ordinal);
         Assert.DoesNotContain("Transform3D[] _jointTransforms", modifier, StringComparison.Ordinal);
         Assert.DoesNotContain("bool[] _jointValid", modifier, StringComparison.Ordinal);
-        Assert.Contains("RetainSourceRelations(side);", processHand, StringComparison.Ordinal);
-        _ = Assert.Single(Regex.Matches(modifier, "FingerRetargetingMath\\.DeriveParentRelativeRotation\\("));
+        Assert.DoesNotContain("SetBonePose", projection, StringComparison.Ordinal);
+        _ = Assert.Single(Regex.Matches(projection, "FingerRetargetingMath\\.DeriveParentRelativeRotation\\("));
     }
 
     /// <summary>Guards direct acceptance, both thumb-wrist exceptions, no parent recursion, one provider fetch.</summary>
@@ -74,11 +81,15 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
     public void SampleAcceptanceUsesDestinationOnlyWithExplicitThumbWristExceptions()
     {
         string modifier = File.ReadAllText(ResolveSourcePath());
-        string acceptance = ExtractRegion(modifier, "private bool IsSampleAccepted(", "private static bool IsNonThumbProximal(");
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
+        string acceptance = ExtractRegion(
+            projection,
+            "private static bool IsSampleAccepted(ReadOnlySpan<XRHandJointSourceSample> jointSamples",
+            "private OpticalFingerProjectedPose ProjectDestination(");
 
-        Assert.Contains("_jointSamples[(int)destination.Joint].ProductionAccepted", acceptance, StringComparison.Ordinal);
+        Assert.Contains("jointSamples[(int)destination.Joint].ProductionAccepted", acceptance, StringComparison.Ordinal);
         Assert.Contains("XRHandJoint.ThumbMetacarpal or XRHandJoint.ThumbProximal", acceptance, StringComparison.Ordinal);
-        Assert.Contains("_jointSamples[(int)XRHandJoint.Wrist].ProductionAccepted", acceptance, StringComparison.Ordinal);
+        Assert.Contains("jointSamples[(int)XRHandJoint.Wrist].ProductionAccepted", acceptance, StringComparison.Ordinal);
         Assert.DoesNotContain("destination.ParentJoint", acceptance, StringComparison.Ordinal);
         Assert.DoesNotContain("ParentJoint.ProductionAccepted", modifier, StringComparison.Ordinal);
         _ = Assert.Single(Regex.Matches(modifier, "jointProvider\\.TryGetJoint\\("));
@@ -91,6 +102,7 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
         string interfaceSource = File.ReadAllText(ResolveSourcePath("IXRHandJointProvider.cs"));
         string openXR = File.ReadAllText(ResolveOpenXRSourcePath());
         string mock = File.ReadAllText(ResolveMockXRSourcePath());
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
 
         Assert.Contains("bool PositionValid,", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("bool PositionTracked,", interfaceSource, StringComparison.Ordinal);
@@ -98,6 +110,7 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
         Assert.DoesNotContain("PositionValid", ExtractRegion(openXR, "private static XRHandJointSourceRejection ClassifyJointSample(", "private static bool IsJointActivelyTracked("), StringComparison.Ordinal);
         Assert.DoesNotContain("PositionTracked", ExtractRegion(mock, "private XRHandJointSourceRejection ClassifyJointSample(", "private static bool IsOrientationUsable("), StringComparison.Ordinal);
         Assert.DoesNotContain("PositionValid", ReadProcessHandSource(), StringComparison.Ordinal);
+        Assert.DoesNotContain("PositionValid", projection, StringComparison.Ordinal);
     }
 
     /// <summary>Guards the production contract.</summary>
@@ -118,10 +131,14 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
     public void ProcessHandDoesNotReintroduceTemporalDeltaOrFrameMapSchemes()
     {
         string processHand = ReadProcessHandSource();
+        string project = ReadProjectDestinationSource();
 
         Assert.DoesNotContain("FrameMap", processHand, StringComparison.Ordinal);
         Assert.DoesNotContain("WorldDelta", processHand, StringComparison.Ordinal);
         Assert.DoesNotContain("EntryCorrespondence", processHand, StringComparison.Ordinal);
+        Assert.DoesNotContain("FrameMap", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorldDelta", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("EntryCorrespondence", project, StringComparison.Ordinal);
     }
 
     /// <summary>Guards the production contract.</summary>
@@ -160,9 +177,20 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
         string anatomicalMath = File.ReadAllText(ResolveSourcePath("FingerAnatomicalMath.cs"));
         string referenceSampler = File.ReadAllText(ResolveSourcePath("AuthoredThumbReferenceSampler.cs"));
         string jointProvider = File.ReadAllText(ResolveSourcePath("IXRHandJointProvider.cs"));
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
+        string handPoseSampler = File.ReadAllText(ResolveSourcePath("AuthoredHandPoseReferenceSampler.cs"));
         string openXR = File.ReadAllText(ResolveOpenXRSourcePath());
 
-        foreach (string source in new[] { modifier, anatomicalMath, referenceSampler, jointProvider, openXR })
+        foreach (string source in new[]
+                 {
+                     modifier,
+                     anatomicalMath,
+                     referenceSampler,
+                     jointProvider,
+                     projection,
+                     handPoseSampler,
+                     openXR,
+                 })
         {
             Assert.DoesNotContain("JSONL", source, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("runtime fitting", source, StringComparison.OrdinalIgnoreCase);
@@ -173,18 +201,21 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
         Assert.DoesNotContain("source observation", jointProvider, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Guards the production contract.</summary>
+    /// <summary>Guards the production contract: binding stages into the shared projection seam.</summary>
     [Fact]
     public void RestNeutralBindingUsesOnlyDestinationGlobalRestGeometryAndRotationCache()
     {
         string modifier = File.ReadAllText(ResolveSourcePath());
         string helper = File.ReadAllText(ResolveSourcePath("FingerRestNeutralMath.cs"));
+        string projection = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
 
         Assert.Contains("TryDeriveRestNeutrals(skeleton", modifier, StringComparison.Ordinal);
         Assert.Contains("FingerAnatomicalMath.TryDeriveBilateralBinding(", modifier, StringComparison.Ordinal);
-        Assert.Contains("_effectiveDestinationNeutrals", modifier, StringComparison.Ordinal);
+        Assert.Contains("_projection.TryStageBinding(", modifier, StringComparison.Ordinal);
+        Assert.Contains("_projection.ClearBinding();", modifier, StringComparison.Ordinal);
         Assert.DoesNotContain("Animation", helper, StringComparison.Ordinal);
         Assert.DoesNotContain("GetBonePose", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetBonePose", projection, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBonePosePosition", modifier, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBonePoseScale", modifier, StringComparison.Ordinal);
     }
@@ -202,6 +233,15 @@ public sealed class OpticalFingerTrackingModifierSourceGuardTests
     {
         string source = File.ReadAllText(ResolveSourcePath());
         return ExtractRegion(source, "private void ProcessHand(", "private void FetchTrackedJoints(");
+    }
+
+    private static string ReadProjectDestinationSource()
+    {
+        string source = File.ReadAllText(ResolveSourcePath("OpticalFingerProjection.cs"));
+        return ExtractRegion(
+            source,
+            "private OpticalFingerProjectedPose ProjectDestination(",
+            "private static bool IsSwingDestination(");
     }
 
     private static string ResolveSourcePath()

@@ -23,6 +23,10 @@ Provide a reusable grabbable interface that:
 - Evaluates reach and angle eligibility before commitment.
 - Delegates to owned grab-point components for execution.
 - Handles grab attempts deterministically based on object type and state.
+- Supports both grab input modes — controller and optical — through one
+  generic candidate contract, with the candidate's `Animation` serving as the
+  mandatory grip reference for optical recognition as well as the committed
+  visual pose.
 
 ## User Requirements
 
@@ -32,6 +36,11 @@ Provide a reusable grabbable interface that:
 3. The system rejects requests gracefully when conditions are no longer met.
 4. Characters can discover multiple grab options per object and select
    deterministically.
+5. Every shipped grab point works in both input modes — controller grab and
+   optical grab — producing the same generic candidate; no shipped content is
+   controller-only.
+6. An item already held by another hand is unavailable for a new grab, so a
+   nearby available item can still be selected.
 
 ## Technical Requirements
 
@@ -52,7 +61,10 @@ Provide a reusable grabbable interface that:
         accepted acquisition reference's selected point. Used for candidate ranking and
         filtering, not `HandTarget.Origin`. Must be produced by the grab point implementation
         based on the accepted acquisition reference and its selected closest point.
-      - Animation resource (e.g., grab animation clip reference).
+      - Animation resource (e.g., grab animation clip reference). It is both the
+        committed hand-pose visual and the mandatory generic grip reference from
+        which the optical power-grip profile derives automatically (see
+        Requirement 14).
       - Query hand side and hand transform used for execution-time freshness validation.
       - Query-time grab-point transform used to reject moved/stale candidates before commitment.
 4. `IGrabbable` exposes
@@ -90,6 +102,36 @@ Provide a reusable grabbable interface that:
     - `Movable` indicates the object can be picked up and will follow the hand.
     - `Immovable` indicates the object is fixed in place; the hand must remain
       constrained to the grab point throughout the hold.
+14. The candidate's `Animation` is the mandatory generic grip reference for
+    optical-mode recognition as well as the committed visual pose: the optical
+    power-grip gesture profile derives automatically from that same animation
+    (derivation and recognition contracts in XR-002 and CTRL-002). This
+    derivation is not implemented inside concrete grab-point components.
+15. All `IGrabPoint` implementations automatically support both input modes by
+    producing the same generic `GrabPointCandidate` from the supplied hand
+    transform; the supplied hand transform is the active hand-pose source's
+    hand pose (controller or optical). Geometry eligibility, ranking, and
+    freshness validation remain input-source-independent.
+16. Content validation fails closed when a candidate's `Animation` cannot
+    supply the required side-specific grip reference (missing or malformed
+    tracks, wrong track types, wrong key counts or times, invalid quaternions):
+    the shared selection boundary rejects the grab point as unavailable. Both
+    controller discovery and optical candidate observation therefore classify
+    it as `NoCandidate`; `ProfileUnavailable` is reserved for profile/strategy
+    failure after a validated reference exists. Shipped content must never
+    silently fall back to controller-only behaviour.
+17. A gesture-profile extensibility seam (strategy/profile selection keyed off
+    the candidate) must allow future precision-grip profiles to be added
+    without structural change; only the animation-derived power-grip profile is
+    required and implemented in this increment.
+18. Occupancy is part of candidate validity: a holder already held by another
+    hand is unavailable to a new candidate query. The current owner may retain
+    its own held operations and same-source pending refresh. Selection applies
+    this availability rule as defined by INTR-002.
+19. `Grab(candidate)` remains the atomic commit-time ownership guard. It must
+    reject a candidate that became occupied after query without granting double
+    ownership; availability filtering is not a reservation and does not add
+    cooperative two-hand grabbing.
 
 ## In Scope
 
@@ -100,6 +142,8 @@ Provide a reusable grabbable interface that:
 - Internal validation in execution phase.
 - Configurable thresholds.
 - Deterministic resolution from multiple grab components.
+- The animation-derived generic grip reference contract for optical
+  recognition, including fail-closed content validation.
 
 ## Concrete Implementations
 
@@ -133,6 +177,9 @@ on showing what matters for authoring each concrete type.
 - Inventory integration.
 - Grab execution behaviour differences between movable and immobile grabbables
   (covered by INTR-002).
+- Precision/pinch grip profiles, animations, and assets beyond the mandatory
+  strategy seam (future work; no suitable asset exists).
+- Manual gesture-profile authoring or per-grab-point pose/threshold overrides.
 
 Note: Grab execution (hand discovery, candidate selection, parenting, IK integration,
 hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-hand-grab-execution/index.md).
@@ -173,6 +220,26 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 |    |                   | is in range but `HandTarget` is offset must still select |
 |    |                   | and rank correctly using acquisition distance, not |
 |    |                   | `HandTarget.Origin`. |
+| 15 | User              | Every shipped grab point works in both controller and |
+|    |                   | optical modes; no shipped content is controller-only. |
+| 16 | Technical         | The candidate `Animation` is the mandatory generic grip |
+|    |                   | reference for optical recognition; the power-grip profile |
+|    |                   | derives automatically from it outside concrete grab-point |
+|    |                   | components. |
+| 17 | Technical         | `IGrabPoint` implementations produce the same generic |
+|    |                   | candidate from the supplied hand transform for both input |
+|    |                   | modes; eligibility, ranking, and freshness are |
+|    |                   | input-source-independent. |
+| 18 | Technical         | Content validation fails closed when the animation cannot |
+|    |                   | supply the required side-specific grip reference; there |
+|    |                   | is no silent controller-only fallback for shipped content. |
+| 19 | Technical         | The gesture-profile seam accepts a future precision-grip |
+|    |                   | strategy without structural change; only the power-grip |
+|    |                   | profile is required now. |
+| 20 | User              | A held nearby item does not hide a farther available item from acquisition. |
+| 21 | Technical         | Candidate validity excludes an item held by another hand, while `Grab` retains |
+|    |                   | atomic commit-time ownership rejection for a query-to-commit race; no reservation |
+|    |                   | or two-hand behaviour is introduced. |
 
 ## References
 
@@ -188,3 +255,5 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 - [INTR-001-A: Spherical Grab Point](spherical-grab-point.md)
 - [INTR-001-B: Cylindrical Grab Point](cylindrical-grab-point.md)
 - [INTR-003: Hands](../003-hands/index.md)
+- [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
+- [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md)

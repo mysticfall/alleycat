@@ -9,9 +9,14 @@ title: Optical Hand Tracking
 
 Define optional optical (controller-free) hand tracking for the player avatar, delivered as a global bilateral
 hand-pose mode on top of standard Godot 4.7 OpenXR hand-tracker APIs. Covers the optical wrist feeding the existing
-VRIK hand-target pipeline and a player-only finger retargeting modifier that maps finger motion through constrained
-anatomical models: the hardware-accepted signed hinge and roll-free swing mapping for non-thumb chains, and an
-authored-animation reference model for thumb axes. Authored hand poses retain mode-conditional authority.
+VRIK hand-target pipeline, a player-only finger retargeting modifier that maps finger motion through constrained
+anatomical models — the hardware-accepted signed hinge and roll-free swing mapping for non-thumb chains, and an
+authored-animation reference model for thumb axes — and candidate-aware optical grab input: while the committed mode
+is `Optical`, the raw optical joints drive grab-intent recognition and hidden release detection against the eligible
+grab candidate's animation-derived power-grip reference (input routing in
+[CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md); grab lifecycle in
+[INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)). Finger-pose presentation
+authority is mode-conditional per hand, with the committed candidate animation owning a grabbed hand while held.
 
 ## Requirement
 
@@ -21,19 +26,31 @@ retargets tracked finger rotations onto exactly the 30 canonical finger bones th
 `SkeletonModifier3D`, transferring only motion the avatar can represent: signed hinge flexion at the non-thumb
 intermediate and distal joints, a roll-free flexion/spread directional swing at the non-thumb proximals, and a thumb
 model whose independent destination axes and roll-free metacarpal frame derive from static Blender-authored neutral
-and soft-fist references. Optical tracking overrides authored finger poses only while the committed mode is `Optical`;
-controller calibration anchors, controller input surfaces, and all existing hand gameplay semantics remain unchanged.
-The global mode and per-side sources must be exposed through the runtime-agnostic boundary defined in XR-001 with
-deterministic mock support.
+and soft-fist references. Finger-pose presentation authority is per-hand and mode-conditional: free optical hands
+present optical tracking, optical-originated pending hands visibly transition to their candidate's authored reference
+pose, and committed hands retain the candidate's fixed authored AnimationTree pose. Raw optical joints continue to
+be sampled invisibly during pending and held states solely to recognise opening, loss, and release. Raw optical joints
+also drive candidate-aware grab-intent recognition through the shared calibrated anatomical projection. Raw OpenXR
+rotations are never compared directly with destination animation keys, and the rendered skeleton is never read for
+recognition.
+Controller calibration anchors and controller input surfaces remain unchanged; controller grab edges are honoured in
+every committed mode while optical grab edges are recognised only in `Optical` mode (routing contract in CTRL-002),
+and unrelated controller consumers (locomotion, menu, transcription) are unaffected in both modes. The global mode and
+per-side sources must be exposed through the runtime-agnostic boundary defined in XR-001 with deterministic mock
+support.
 
 ## Goal
 
-Let players present their real hands — including individual fingers — without holding controllers, while preserving
-the existing ownership boundaries: VRIK exclusively owns wrist/hand/arm solving, INTR-003 owns authored finger poses
-outside optical mode, and controller consumers are unaffected. Tracking must degrade safely (freeze affected poses and
-retain the committed mode) rather than flip-flopping between sources. Finger retargeting deliberately discards
-longitudinal roll and off-hinge tracker components so motion the avatar cannot represent never accumulates into
-visible twist or splay. Stage 1 also discards the thumb metacarpal's axial opposition roll.
+Let players present their real hands — including individual fingers — without holding controllers, and grab nearby
+eligible objects simply by closing their real hand, releasing by opening it, while preserving the existing ownership
+boundaries: VRIK exclusively owns wrist/hand/arm solving, INTR-003 owns authored finger poses outside optical mode
+and on hands without a committed grab, and controller consumers other than grab input are unaffected. The transition
+between free tracked fingers and the fixed authored grab animation must be seamless. Tracking must degrade safely
+(freeze affected poses and retain the committed mode) rather than flip-flopping between sources; tracking loss while
+a grab is pending cancels that grab, while loss while held preserves the held object and pauses release recognition.
+Finger retargeting deliberately discards longitudinal roll and off-hinge tracker components so motion the avatar
+cannot represent never accumulates into visible twist or splay. Stage 1 also discards the thumb metacarpal's axial
+opposition roll.
 
 ## User Requirements
 
@@ -41,17 +58,23 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
    hands and fingers follow their real hands instead of the controllers.
 2. The committed mode switches only when both hands agree on the same non-ambiguous source, so hands do not jump
    between sources due to momentary tracking noise or disagreement.
-3. While optical mode is active, losing tracking for one hand freezes that hand at its last valid pose; the other hand
-   continues working, and held-object behaviour is unchanged.
+3. While optical mode is active, losing tracking for one hand freezes that hand at its last valid pose while the
+   other hand continues working. A grab pending on the lost hand is cancelled; an object held by the lost hand is
+   preserved with its fixed grab pose, and release recognition pauses until tracking recovers.
 4. When both hands later unambiguously report controller input, hand control returns to controllers.
-5. Outside optical mode, authored hand-pose animations (including grab poses) behave exactly as before; optical
-   tracking never mutates authored animations or AnimationTree state.
-6. Hand gameplay behaviour — collision, obstruction handling, grabbing, and holding — is identical regardless of the
-   active mode; optical mode adds no new interaction semantics.
+5. Authored hand-pose animations (including grab poses) own finger presentation outside optical mode and, within
+   optical mode, on any hand with a committed grab. Optical tracking and reference sampling never mutate authored
+   animation resources; only the designated hand-pose controller may update its designated AnimationTree slot and
+   blend parameters to apply an authored pose.
+6. Grabbing works in both modes over the same shared mechanics — approach, commit, parenting, collision,
+   obstruction handling, holding, and throwing are unchanged: via the grab button in every committed mode, and
+   in `Optical` mode additionally by closing the real hand near an eligible grab point and releasing by opening
+   it.
 7. Optical hand tracking enables automatically when the runtime capability/mode is available; no player-facing
    setting or UI is required.
-8. Controller-driven gameplay (for example locomotion, grab buttons, and transcription input) is unaffected by optical
-   hand presentation.
+8. Controller-driven gameplay other than grabbing (for example locomotion, menus, and transcription input) is
+   unaffected by the active mode; controller grab buttons work in every committed mode and optical grab edges
+   are recognised only in `Optical` mode.
 9. When the tracked non-thumb fingers are straight and together, the avatar avoids an exaggerated directional fan while
    retaining the accepted neutral alignment and slight natural bend authored into the rig.
 10. Both hands repeatedly curl into and open from a fist without flexion-dependent cumulative lateral phalange twist or
@@ -64,6 +87,26 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
     Stage 1 maps opposition palmward but deliberately discards thumb-metacarpal axial opposition roll. A fist may
     therefore retain an open thumb web/V; this is an accepted Stage 1 limitation. Neutral, spread, and non-thumb
     finger behaviour remain unchanged.
+14. In optical mode, closing the real hand near an eligible grab point starts the same grab the grab button
+     starts; opening the real hand cancels a pending approach or releases a held object.
+15. Over-clenching or modest individual-finger variation while held does not release the grab; only a stable
+    aggregate opening of the hand does.
+16. During an optical-originated pending grab, the grabbing hand visibly transitions to that candidate's authored
+     reference pose while its raw joints continue invisibly to recognise opening and tracking loss. Opening, loss, or
+     an explicit mode switch cancels the approach. When raw optical tracking is unavailable as a loss cancellation
+     begins, the visual blend freezes at its current assisted interpolation, resumes only when valid raw source samples
+     return, and then targets current valid projected tracking. Optical writes relinquish only when the intended
+     authored pose is ready for the same reference instance and handoff generation; ordinary release blends back to
+     current valid live tracking. The opposite hand stays live optical throughout.
+17. Explicit committed mode switches are exceptional events: a pending optical grab may be cancelled and a held
+    item released; continuity across an explicit mode switch is not required.
+18. Game-menu pause suppresses optical grab and release edges just as it suppresses controller grab input.
+19. Every shipped grab point works in both modes — controller button and optical closure; no shipped content is
+    controller-only.
+20. A pending optical grab safely cancels if recognition dependencies are lost. A held item remains held, but recovery
+    requires fresh recognition before it can release from an open gesture.
+21. The intended authored pose remains visible through replacement and regrab handoffs; unrelated same-side cleanup
+    cannot make the player's hand flicker or lose its current authority.
 
 ## Technical Requirements
 
@@ -99,8 +142,9 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 
 7. In optical mode, the selected calibrated wrist enters the existing VRIK hand-target pipeline only by replacing the
    fallback source intent at the `XRHandPoseTargetProvider` seam. It then flows through the existing target
-   contributors, physical actuation, collision/obstruction handling, grab override, and VRIK unchanged. No new
-   interaction semantics are introduced.
+   contributors, physical actuation, collision/obstruction handling, grab override, and VRIK unchanged. Grab-intent
+   recognition must not be added to this pipeline; optical grab input is recognised in the mode-aware input layer
+   defined by [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md).
 
 ### Calibration
 
@@ -487,10 +531,21 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 
 ### Mode-Conditional Authority
 
-30. While optical mode is active, optical tracking fully overrides authored INTR-003 finger poses.
-31. Outside optical mode, the modifier performs no writes, so authored AnimationTree hand poses remain authoritative.
-32. Authored animations and AnimationTree state must never be mutated. A clear arbitration seam for future INTR-003
-    integration must be preserved.
+30. Finger-pose presentation authority is per-hand, hand-instance, and publication-generation conditional. In
+     `Optical` mode, a hand with no current optical-originated pending or committed publication presents live optical
+     tracking. An optical-originated pending grab instead transitions visibly to its candidate's authored reference.
+     Raw optical joints remain the sole source for candidate-specific opening and loss recognition; assisted
+     presentation is never read for recognition. Controller-originated pending grabs never receive this assistance.
+31. The optical publisher relinquishes its writes only when the legitimate hand-pose owner reports, for the same hand
+     instance and publication generation, the same instance-exact authored reference at its intended effective weight
+     and evaluated pose state. This applies to active-pose replacement, regrab, and default or non-default transitions.
+     Once ready, the candidate's authored pose owns that hand and the optical modifier performs zero finger-bone writes;
+     raw optical joints continue invisibly for release recognition.
+32. A clear, release, replacement, teardown, or source exit can revoke only the publication it created. Stale or
+     unrelated same-side cleanup cannot revoke another publisher's authority. Outside optical mode, the modifier
+     performs no writes, so authored hand poses remain authoritative. The modifier and reference sampler never mutate
+     authored `Animation` resources; `HandPoseController` may update only its designated AnimationTree hand-pose slot
+     and blend parameters to apply the selected authored pose.
 
 ### Validity And Freeze Semantics
 
@@ -525,10 +580,13 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 40. The global hand-pose mode and per-side hand-pose sources must be exposed through the runtime-agnostic boundary
     (`IXRRuntime`/`XRManager` per XR-001).
 41. The mock runtime must provide deterministic hooks for committed-mode transitions and per-side sample injection
-    (valid/invalid joints, finite/non-finite orientations, sample loss) so all mode and freeze behaviour is testable
-    without hardware.
-42. Controller input surfaces (`IXRHandController`) are unchanged; controller consumers (PlayerController,
-    Transcriber) are unaffected.
+    (valid/invalid joints, finite/non-finite orientations, sample loss, and recovery) so all mode, freeze, and
+     grab-loss behaviour is testable without hardware. The committed mode-change notification invokes the
+     provenance-scoped source-exit policy in Requirement 54; it cannot create a per-hand mixed mode or revoke an
+     unrelated publisher.
+42. Controller input surfaces (`IXRHandController`) are unchanged. Controller consumers other than grab input —
+    locomotion via `PlayerController` (CTRL-001), the game menu, and the Transcriber — are unaffected in both modes;
+    only grab edges are gated by the committed mode (Requirement 46).
 
 ### Resource Profile
 
@@ -581,8 +639,63 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
     compatibility metadata (Requirement 44); every hinge and non-metacarpal swing gain is exactly `1`.
     Thumb metacarpal effective gain follows Requirement 28's response envelope between `1` and per-side `K_meta`
     (Left `2.00`, Right `2.25`). The profile pins `Q0` (Left `33.17°`, Right `22.34°`) and common thresholds
-    `h0 = 0.400`, `h1 = 0.625`, `b0 = 0.050`, and `b1 = 0.150`. No scalar cap, response clamp, runtime fitting, or
-    promotion path to non-identity `K_j` is permitted.
+     `h0 = 0.400`, `h1 = 0.625`, `b0 = 0.050`, and `b1 = 0.150`. No scalar cap, response clamp, runtime fitting, or
+     promotion path to non-identity `K_j` is permitted.
+
+### Optical Grab Input And Release Recognition
+
+46. Optical grab input is recognised only while the committed global hand-pose mode is `Optical`; physical
+    controller grab edges are honoured in every committed mode with `Controller` provenance (routing contract in
+    [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md)). This specification defines
+    the observation and authority contracts the recogniser consumes; recognition itself lives in the input layer.
+47. Recognition is candidate-aware: an eligible nearby grab-point candidate must be identified through the existing
+    generic discovery/selection path (INTR-001/INTR-002) before optical grab intent is recognised. There is no
+    generic "fist anywhere" grab. Stability accumulates only while the same candidate stays selected; a candidate
+    change resets stability accumulation without locking a speculative candidate.
+48. The gesture profile is an animation-derived weighted aggregate power grip, derived automatically from the
+    candidate's mandatory `Animation` (INTR-001); no manual pose or threshold overrides exist in this increment.
+    The default entry threshold is `0.75`, the default release threshold is `0.55`, and the default stability window
+    is `0.10 s`. These values remain implementation-tunable. Thresholds correspond to that animation's articulation,
+    not a universal generic fist. Recognition distinguishes directional opening from mere pose difference so
+    over-clenching never causes release; modest individual-finger variation is tolerated, and a single unrelated
+    finger extending must not necessarily release a power grip.
+49. Recognition uses the current candidate's raw optical source joints and compares their articulation in
+    parent-local/anatomical (destination-local) space through the same shared calibrated anatomical projection used
+    for visual retargeting (Requirements 20–29). It is invariant to wrist position, wrist rotation, world transform,
+    approach direction, and dynamic target orientation. Raw OpenXR source rotations must never be compared directly
+     with destination animation keys — the frames differ — and neither rendered nor assisted presentation may be read
+     for recognition, because presentation is deliberately authored during pending and held states.
+     Recognition, pending assistance, and AnimationTree playback consume the same validated, instance-exact candidate
+     `Animation` reference. Valid pathless references are supported; names, paths, and side must not resolve or
+     substitute that identity.
+50. Recognition must not branch on concrete grab-point classes (spherical, cylindrical, or future types); every
+     `IGrabPoint` remains mode-agnostic and geometry-only (INTR-001). A candidate-keyed strategy resolver must be used
+     by production recognition and accept a stub future precision profile without structural change. Precision/pinch
+     recognition itself, with related animations, assets, and tests, remains deferred.
+51. Optical grab lifecycle (normative state table in
+     [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)): a stable grab-threshold
+     crossing calls the existing `IHand.Grab()` and starts per-hand pending contact assistance towards the candidate's
+     authored reference pose. Raw joints invisibly detect stable aggregate opening and tracking loss. Either, or an
+     explicit committed mode switch, cancels the pending grab through the existing abandonment path. If raw optical
+     tracking is unavailable when loss cancellation begins, the visual blend freezes at its current assisted
+     interpolation; it resumes only after valid raw source samples return, then targets current valid projected
+     tracking. On commit, Requirement 31's fixed AnimationTree authority applies; while held, stable aggregate opening
+     releases through the existing `Release()` restoration. On recognition dependency loss, Pending cancels while Held
+     preserves the held object and fixed animation with no synthetic release. Both states invalidate measurements and
+     stability; recovery requires fresh candidate recognition before ordinary stable-open release can occur. Controller
+     pending states receive no assistance.
+52. The gesture-reference sampler reads the candidate animation immutably — strict one-frame, side-specific sampling
+    with no sampler playback, registration, resource mutation, or live-pose reads — generalising the
+    authored-reference sampling contract of Requirement 25.
+53. Game-menu pause suppresses optical grab and release edges consistently with existing controller grab
+    suppression.
+54. Per-hand input provenance distinguishes idle, pending, and held optical-originated grabs so an explicit committed
+    global mode transition applies the source-exit policy without transferring grab or presentation ownership or
+    creating per-hand mixed source modes.
+55. Authored-reference binding and derived-profile caches are valid only for the exact reference instance, bound
+    hand/skeleton identity, publication generation, and relevant configuration. A changed binding or reference
+    invalidates the cache and fails closed until rebuilt.
+
 ## In Scope
 
 - Global bilateral `Controller`/`Optical` hand-pose mode with the commit rule and state table above.
@@ -590,7 +703,14 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 - Optical wrist source intent into the existing VRIK hand-target pipeline, limited to the fallback-source seam.
 - Player-only finger retargeting modifier owning exactly the 30 canonical finger bones, rotation only.
 - Separate authorable per-side optical calibration anchors and the calibrated world-space wrist output contract.
-- Mode-conditional authority over authored INTR-003 finger poses, including freeze and cache semantics.
+- Mode-conditional authority over authored INTR-003 finger poses, including freeze and cache semantics, with the
+  per-hand committed-grab exception.
+- Candidate-aware optical grab-intent recognition and hidden release detection through the shared calibrated
+  anatomical projection, driven by the animation-derived power-grip profile.
+- Instance-exact reference identity across recognition, assistance, and playback; candidate-keyed production strategy
+  resolution; binding/cache identity boundaries; and hand-instance/generation presentation authority.
+- Per-hand loss semantics for optical grabs (pending cancel, held preserve-and-pause) and the explicit mode-switch
+  cancellation/release policy.
 - Automatic enablement on runtime availability.
 - `IXRRuntime`/`XRManager` exposure of the global mode and per-side sources with deterministic mock hooks.
 - Project-owned, versioned neutral-normalisation profile data, validation, and safe per-destination fallback.
@@ -612,8 +732,12 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 - Meta hand meshes.
 - Runtime-generated hand meshes.
 - Full-body tracking.
-- Gesture or grab input mapping.
-- Pose recognition.
+- Precision/pinch grip recognition with related profiles, animations, assets, and tests. No suitable asset exists;
+  the required candidate-keyed strategy resolver remains in scope, but no precision feature is required.
+- Manual gesture-profile authoring or per-grab-point pose/threshold overrides.
+- New grab animation content; every profile derives from the grab point's existing mandatory `Animation`.
+- Multi-hand grabbing (two hands on one object). A "two-finger grip" in this feature family means digits of one
+  hand.
 - Tracked-finger collision.
 - Smoothing requirements.
 - Additional gain laws, scalar angle caps, or response clamps beyond Requirement 28's mandatory metacarpal envelope.
@@ -649,11 +773,16 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 |   |                   | the other hand continues. |
 | 5 | User | When both hands later unambiguously report controller input, hand control |
 |   |                   | returns to controllers. |
-| 6 | User | Outside optical mode, authored hand-pose animations behave exactly as |
-|   |                   | before, with no authored animation or AnimationTree state mutated. |
-| 7 | User | Grabbing, holding, collision, and obstruction behaviour is identical in |
-|   |                   | both modes. |
-| 8 | User | Controller-driven gameplay is unaffected while optical mode is active. |
+| 6 | User | Authored hand-pose animations own finger presentation outside optical mode and |
+|   |                   | on committed-grab hands within it. Optical tracking never mutates authored |
+|   |                   | animation resources; only the designated hand-pose slot/parameters may change. |
+| 7 | User | Grabbing works in both modes over identical mechanics (approach, commit, |
+|   |                   | parenting, collision, obstruction, throwing); closing the real hand near |
+|   |                   | an eligible grab point grabs in optical mode just as the grab button |
+|   |                   | does in either mode. |
+| 8 | User | Controller-driven gameplay other than grab edges is unaffected in both |
+|   |                   | modes; controller grab edges work in optical mode and optical grab edges |
+|   |                   | are inactive in controller mode. |
 | 9 | Technical | Implementation uses only `XRServer`, `XRHandTracker`, and |
 |   |                   | `/user/hand_tracker/left\|right`; no excluded dependency or API is |
 |   |                   | introduced. |
@@ -695,8 +824,9 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 |   |                   | base and NPC templates do not include it. |
 | 22 | Technical | Mock runtime hooks deterministically drive committed-mode transitions |
 |   |                   | and per-side sample validity for tests without hardware. |
-| 23 | Technical | `IXRHandController` surfaces and controller consumers (PlayerController, |
-|   |                   | Transcriber) are unchanged. |
+| 23 | Technical | `IXRHandController` surfaces are unchanged; non-grab controller consumers |
+|    |                   | (PlayerController, game menu, Transcriber) are unaffected in both modes, |
+|    |                   | with optical grab recognition the only grab input gated by the mode. |
 | 24 | User | On both hands, tracked straight and together fingers avoid exaggerated |
 |   |                   | directional fan while retaining the accepted slight rig-authored natural |
 |   |                   | bend. Deliberate tracked spread remains visible and signed. |
@@ -799,6 +929,69 @@ visible twist or splay. Stage 1 also discards the thumb metacarpal's axial oppos
 | A19 | Technical | On a synthetic rig whose Reset thumb keys differ from its imported rest rotations, |
 |     |                   | `Delta = identity` reproduces the exact Reset keys, not the imported rest, for all |
 |     |                   | six thumb joints on both hands (Requirement 29). |
+
+### Optical Grab Integration Acceptance
+
+| ID | Requirement Layer | Criterion |
+|----|-------------------|-----------|
+| OG1 | User | In optical mode, closing the real hand near an eligible grab point starts the |
+|     |                   | existing two-phase grab; opening before commit cancels the approach. |
+| OG2 | User | Stable aggregate opening while held releases; over-clenching and modest |
+|     |                   | single-finger variation do not. |
+| OG3 | User | Presentation is seamless: an optical pending hand visibly transitions to |
+|     |                   | its candidate reference pose, then retains the fixed authored pose when ready. |
+|     |                   | Raw opening or mode switch cancels pending assistance and blends to current valid |
+|     |                   | tracked pose. On loss, cancellation freezes the current assisted interpolation until |
+|     |                   | valid raw samples return, then targets current valid projected tracking; ordinary |
+|     |                   | release blends to current valid tracked pose. The opposite hand stays live. |
+| OG4 | User | Temporary tracking loss while held preserves the item and its fixed pose |
+|     |                   | with no synthetic release; after recovery, a stable open releases. |
+| OG5 | User | Explicit committed mode switches may cancel pending and release held |
+|     |                   | optical grabs; grab ownership is never transferred to the newly active |
+|     |                   | source. |
+| OG6 | User | Game-menu pause suppresses optical grab and release edges consistently |
+|     |                   | with controller grab suppression. |
+| OG7 | Technical | Recognition is candidate-aware: with no eligible candidate there is no grab |
+|     |                   | recognition regardless of closure, and a candidate change resets stability |
+|     |                   | without a speculative lock. |
+| OG8 | Technical | Recognition consumes the shared calibrated anatomical projection; |
+|     |                   | deterministic tests verify invariance to wrist position and rotation, |
+|     |                   | world transform, approach direction, and dynamic target orientation, and |
+|     |                   | that raw OpenXR rotations are never compared directly with destination |
+|     |                   | animation keys and the rendered skeleton is never read. |
+| OG9 | Technical | Grab and release thresholds derive from the candidate animation's |
+|     |                   | articulation. Tests verify defaults of `0.75` entry, `0.55` release, and |
+|     |                   | `0.10 s` stability, while confirming they remain tunable; directional-opening |
+|     |                   | discrimination is verified, with over-closure clamped as still closed. |
+| OG10 | Technical | Recognition has no concrete grab-point class branches: spherical and |
+|      |                   | cylindrical candidates recognise identically through the candidate-keyed |
+|      |                   | production resolver, which accepts a stub future precision profile. |
+| OG11 | Technical | While held, raw optical sampling continues invisibly and drives release; |
+|      |                   | the modifier performs no finger-bone writes on the committed hand. |
+| OG12 | Technical | Mock committed-mode transitions deterministically cancel or release |
+|      |                   | optical-originated grabs per the tracked per-hand provenance. |
+| OG13 | Technical | Optical pending assistance is limited to optical-originated pending hands. |
+|      |                   | It uses the selected candidate's raw source joints for opening/loss recognition, |
+|      |                   | never rendered or assisted presentation; controller pending states never assist. |
+| OG14 | Technical | Tests cover loss cancellation both mid-partial assistance and after pending |
+|      |                   | assistance has completed. In each case, the visual blend freezes at its current |
+|      |                   | assisted interpolation, resumes only on valid raw source samples, and then |
+|      |                   | targets current valid projected tracking. |
+| OG15 | User | Dependency loss cancels a pending optical grab, preserves a held item, and |
+|      |                   | requires fresh recognition after recovery before an open gesture releases it. |
+| OG16 | User | Regrab and replacement handoffs retain the intended pose without unrelated |
+|      |                   | same-side cleanup changing the player's presentation. |
+| OG17 | Technical | Recognition, assistance, and playback use one validated instance-exact |
+|      |                   | candidate reference. Pathless valid references work; names, paths, and side do |
+|      |                   | not collide or substitute identity. |
+| OG18 | Technical | Binding and derived-profile caches invalidate on reference, binding, generation, |
+|      |                   | or relevant configuration change and fail closed until rebuilt. |
+| OG19 | Technical | The candidate-keyed production strategy resolver handles generic candidates and |
+|      |                   | accepts a stub future precision strategy without requiring precision recognition. |
+| OG20 | Technical | Optical writes cease only after the actual pose owner reports same-reference,
+|      |                   | intended-weight, evaluated readiness for its hand instance/generation. Tests cover |
+|      |                   | active replacement, regrab, default/non-default transitions, and stale cleanup. |
+
 ### Accepted Behaviour And Automated Evidence
 
 | ID | Requirement Layer | Criterion |

@@ -31,6 +31,9 @@ Provide a grab point that:
 - Exposes an authored `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
   so items sit naturally in the hand without spherical rotation offsets changing the hand target rotation.
 - Supports physical RigidBody3D objects with physics suspended while held.
+- Supplies the mandatory `GrabAnimation` that serves as the generic grip
+  reference for optical-mode recognition as well as the committed grab pose;
+  optical recognition itself is not implemented in this component.
 
 ## User Requirements
 
@@ -50,6 +53,10 @@ Provide a grab point that:
 5. Authors can select a `SphericalGrabPoint` node in the Godot editor and see
    visual cues for the centre or origin, reach sphere, palm-facing direction
    cue, and authored hand offset or frame to tune the grab point more easily.
+6. The same grab point yields identical candidate semantics for controller and
+   optical input: the supplied hand transform is the active hand-pose source's
+   hand pose, and `GrabAnimation` is mandatory for both modes because it is
+   the optical grip reference as well as the committed pose.
 
 ## Technical Requirements
 
@@ -76,7 +83,9 @@ Provide a grab point that:
    - `PalmLocalDirection` — hand-local palm axis (exported, tunable, defaults
      to local negative Y).
    - `PalmFacingMinimumDot` — minimum palm-to-centre dot product for validity.
-   - `GrabAnimation` — animation clip for a valid candidate.
+   - `GrabAnimation` — animation clip for a valid candidate; also the
+     mandatory generic grip reference for optical-mode recognition (see
+     Requirement 13).
    - `GrabPointPositionOffsetFromHand: Vector3` — authored position offset from
      hand attachment to grab point when held. Defaults to zero. Read by the grab
      execution system.
@@ -120,6 +129,15 @@ Provide a grab point that:
     - An authored hand offset vector or frame derived from
       `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`,
       shown at the marker centre or a representative grab point.
+13. `SphericalGrabPoint` implements no optical gesture recognition. The
+     candidate it returns is identical for controller and optical input — the
+     supplied hand transform is the active source's hand pose — and
+     `GrabAnimation` is consumed by the generic optical recogniser as the
+     mandatory grip reference ([INTR-001](index.md),
+     [CTRL-002](../../ctrl/002-hand-grab-input/index.md),
+     [XR-002](../../xr/002-optical-hand-tracking/index.md)). Content whose
+     animation cannot supply the required side-specific reference fails
+     validation fail-closed (INTR-001 Requirement 16).
 
 ## In Scope
 
@@ -132,12 +150,16 @@ Provide a grab point that:
   authoring for held-item correction.
 - Rejection conditions for invalid configuration or candidate state.
 - Support for physical RigidBody3D objects with physics suspended while held.
+- Supply of the mandatory `GrabAnimation` as the generic optical grip
+  reference (recognition itself lives in the generic recogniser).
 
 ## Out Of Scope
 
 - Grab execution (how the object behaves when held).
 - Release mechanics.
 - Animation blending details.
+- Optical gesture recognition mechanics (generic recogniser per INTR-001 and
+  CTRL-002; this component only supplies the animation reference).
 - Multi-hand grab scenarios.
 - Network replication.
 - Physics state management beyond suspension awareness (handled by INTR-002).
@@ -187,6 +209,12 @@ Provide a grab point that:
 |    |                   | derived from PalmLocalDirection; authored hand offset vector or frame at the |
 |    |                   | marker centre derived from GrabPointPositionOffsetFromHand and |
 |    |                   | GrabPointRotationOffsetFromHand. |
+| 18 | User              | The same spherical grab point yields identical candidate semantics for |
+|    |                   | controller and optical input; `GrabAnimation` is mandatory for both. |
+| 19 | Technical         | The component implements no optical recognition; `GrabAnimation` is |
+|    |                   | consumed by the generic optical recogniser as the mandatory grip |
+|    |                   | reference, and content whose animation cannot supply the side-specific |
+|    |                   | reference fails validation fail-closed. |
 
 ## References
 

@@ -18,13 +18,24 @@ public interface IGrabbable : IComponentHolder
     }
 
     /// <summary>
+    /// Gets whether this holder is currently held by a hand. A held holder is unavailable to new candidate
+    /// queries (INTR-001 TR18), while the current owner retains its own held operations and same-source
+    /// pending refresh; <see cref="Grab" /> stays the atomic commit-time ownership guard (INTR-001 TR19).
+    /// </summary>
+    bool IsGrabbed
+    {
+        get;
+    }
+
+    /// <summary>
     /// Queries owned grab-point components in deterministic holder order and returns the closest eligible candidate.
     /// </summary>
     /// <param name="handSide">The hand side performing the query.</param>
     /// <param name="handTransform">The global transform of the querying hand.</param>
     /// <returns>
     /// The closest eligible grab target and animation for the supplied hand information, or <see langword="null" />
-    /// when distance, angle, ownership, state, or other implementation-specific constraints reject every grab point.
+    /// when the holder is currently held, or when distance, angle, state, or other implementation-specific
+    /// constraints reject every grab point.
     /// </returns>
     GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
         => GetGrabPoint(handSide, handTransform, 0.0f);
@@ -37,10 +48,20 @@ public interface IGrabbable : IComponentHolder
     /// <param name="acquisitionToleranceMetres">Additional reach tolerance in metres.</param>
     /// <returns>
     /// The closest eligible grab target and animation for the supplied hand information, or <see langword="null" />
-    /// when distance, angle, ownership, state, or other implementation-specific constraints reject every grab point.
+    /// when the holder is currently held, or when distance, angle, state, or other implementation-specific
+    /// constraints reject every grab point.
     /// </returns>
     GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform, float acquisitionToleranceMetres)
     {
+        // Occupancy is part of candidate validity (INTR-001 TR18; INTR-002 TR3): a holder held by any hand is
+        // unavailable to a new candidate query and cannot obscure an available candidate. This is eligibility,
+        // not a reservation, so the pending approach of the owner-to-be is untouched until its commit; the
+        // atomic ownership guard for the query-to-commit race stays in Grab (INTR-001 TR19).
+        if (IsGrabbed)
+        {
+            return null;
+        }
+
         GrabPointCandidate? bestCandidate = null;
         float bestAcquisitionDistance = float.PositiveInfinity;
         float tolerance = Mathf.Max(0.0f, acquisitionToleranceMetres);

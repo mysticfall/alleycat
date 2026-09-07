@@ -69,6 +69,20 @@ Provide a reusable hand component system that:
      initial states.
 15. A physical RigidBody3D test ball must remain discoverable and grabbable
     with physics suspended while held and restored on release.
+16. While optical mode is active, an optical-originated pending hand visibly
+       transitions to its candidate's authored reference pose while raw joints
+       remain invisible and detect opening or loss. Stable opening or an explicit
+       mode switch cancels assistance and blends to current valid live tracking.
+        Tracking loss cancels pending assistance;
+        visual interpolation freezes at its current assisted interpolation;
+        it resumes only when valid raw source samples return, then targets current valid projected tracking.
+        A committed
+       hand shows the fixed authored grab pose while the opposite hand keeps
+        following real tracked fingers; ordinary optical release blends back to
+        live tracking with nothing left stuck.
+17. Unrelated characters or stale hand instances cannot change the player's
+    finger-pose presentation. Regrabs and pose replacement retain the intended
+    authored pose until its own handoff is ready.
 
 ## Technical Requirements
 
@@ -151,13 +165,59 @@ Provide a reusable hand component system that:
 18. Hand component exposes `HeldCollisionTarget: CollisionObject3D` property for
     collision proxy attachment; detailed collision proxy implementation is
     specified in INTR-002 (Hand Grab Execution).
+19. Per-hand finger-pose arbitration is published by the concrete hand instance and
+      a distinct publication generation, never by side alone. In `Optical` mode,
+      live optical presentation wins only for a hand with no current optical-originated
+      pending or committed publication. An optical-originated pending hand visibly
+      transitions to its candidate's authored reference while raw joints remain the
+      invisible opening/loss source. On commit, the candidate's authored hand-pose
+      publication wins and the optical modifier performs zero writes to that hand's
+      finger bones. Clearing, release, replacement, or teardown may revoke only its
+      own publisher/generation, so stale or unrelated same-side cleanup is harmless.
+      Controller pending states never publish optical assistance and the opposite hand
+      remains independent.
+20. `HandPoseBehaviour` exposes a narrow current-best-candidate observation seam and
+    per-hand pending/held input-provenance state for the CTRL-002 grab input
+    coordinator, without exposing pose-control APIs through `IHand`: `IHand`'s public
+    surface stays `Side`, `CurrentGrabbed`, `Grab()`, and `Release()`, and pose control
+    remains internal to `HandPoseController`.
+21. Release from optical input performs the same `Release()` restoration as controller
+     release; on ordinary optical release the authored pose blends to the hand's current
+     valid optical pose rather than snapping to a stale capture.
+22. The selected candidate's validated `Animation` is one instance-exact reference
+    identity shared by recognition, pending assistance, and hand-pose playback.
+    Valid pathless resources are supported; resource names, paths, and side alone are
+    not identity keys. Binding and derived-profile caches include this identity, the
+    bound hand/skeleton identity, and the relevant generation/configuration.
+23. The legitimate hand-pose owner publishes readiness for its own reference and
+    generation only when it has the same instance-exact reference at the intended
+    effective weight and evaluated pose state. Optical writes relinquish only after
+    that readiness, including active-pose replacement, regrab, default and non-default
+    transitions. The optical modifier and reference sampler must not mutate authored
+    `Animation` resources; `HandPoseController` may update only its designated
+    AnimationTree hand-pose slot and blend parameters to realise the selected pose.
 
-> **Optical Hand-Pose Override:** while the optical hand-pose mode is active
+> **Optical Hand-Pose Arbitration:** while the optical hand-pose mode is active
 > ([XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)),
-> optical tracking fully overrides the authored finger poses above for presentation, without
-> mutating hand-pose state or AnimationTree state. Authored finger poses immediately regain
-> authority when optical mode exits; outside optical mode this specification remains
-> authoritative unchanged.
+> optical tracking overrides the authored finger poses above for presentation on any
+> hand that is neither committed nor in an optical-originated pending grab. An
+> optical-originated pending hand
+> visibly transitions to its candidate's authored reference pose, while raw optical
+> sampling remains invisible and solely detects opening or loss. Stable opening or an
+> explicit mode switch cancels assistance and blends to current valid live tracking.
+> Tracking loss cancels pending assistance;
+> visual interpolation freezes at its current assisted interpolation;
+> it resumes only when valid raw source samples return, then targets current valid projected tracking.
+> While a grab is committed, the candidate's fixed
+> authored AnimationTree pose owns that hand's finger presentation and the optical
+> modifier performs zero writes to that hand's finger bones (per-hand arbitration seam,
+> Requirement 19). The current publisher's instance-exact reference and generation must
+> report the readiness in Requirement 23 before optical writes relinquish. Controller
+> pending states never receive assistance. The opposite hand stays live optical throughout.
+> The optical override resumes on that hand when the grab releases, blending from the
+> candidate animation to the hand's current valid tracked pose (Requirement 21); authored
+> finger poses regain authority when optical mode exits; outside optical mode this
+> specification remains authoritative unchanged.
 
 ## In Scope
 
@@ -176,6 +236,11 @@ Provide a reusable hand component system that:
 - Release execution with subsystem state restoration including physics.
 - Collision exception handling for held Movable grabbables.
 - `DebugGrabOutput` property for diagnostic notifications.
+- Per-hand finger-pose arbitration between optical presentation and committed grab
+  animations, with the narrow candidate-observation and provenance seam for the
+  CTRL-002 input coordinator.
+- Instance-exact authored-reference identity, publisher hand-instance/generation
+  authority, and readiness-based optical handoff as defined with XR-002.
 
 ## Out Of Scope
 
@@ -251,6 +316,36 @@ Provide a reusable hand component system that:
 | 30 | Technical         | Hand exposes `HeldCollisionTarget: CollisionObject3D` property for |
 |    |                   | collision proxy attachment; collision proxy implementation is |
 |    |                   | covered in INTR-002. |
+| 31 | User              | While optical mode is active, an optical pending hand visibly transitions |
+|    |                   | to its candidate reference pose. Stable opening or an explicit mode switch |
+|    |                   | cancels assistance and blends to current valid live tracking. |
+|    |                   | Tracking loss cancels pending assistance; |
+|    |                   | visual interpolation freezes at its current assisted interpolation; |
+|    |                   | it resumes only when valid raw source samples return, |
+|    |                   | then targets current valid projected tracking. |
+|    |                   | A committed hand shows the fixed authored grab pose; the |
+|    |                   | opposite hand stays live tracked; ordinary optical release blends back. |
+| 32 | Technical         | Per-hand arbitration: live optical presentation wins only for hands with |
+|    |                   | neither a committed nor optical-originated pending grab. Pending assistance |
+|    |                   | uses raw joints only for opening/loss recognition. A committed hand is authored |
+|    |                   | AnimationTree-owned and receives zero optical modifier writes. |
+| 33 | Technical         | Controller-originated pending states never publish optical pending |
+|    |                   | assistance. |
+| 34 | Technical         | The candidate-observation and pending/held provenance seam is exposed |
+|    |                   | through `HandPoseBehaviour` without adding pose APIs to `IHand`. |
+| 35 | Technical         | Optical release performs the same `Release()` restoration and blends |
+|    |                   | the authored pose to the current valid optical pose; the opposite |
+|    |                   | hand remains live. |
+| 36 | User              | An unrelated character or stale same-side hand cleanup cannot disturb the |
+|    |                   | player's current finger-pose presentation. |
+| 37 | Technical         | Recognition, assistance, and playback use one validated instance-exact |
+|    |                   | `Animation` reference. Pathless valid resources work; names, paths, and side |
+|    |                   | do not substitute for identity, including in binding and profile caches. |
+| 38 | Technical         | A publisher is identified by hand instance and generation. Only it can revoke |
+|    |                   | its publication; stale cleanup is safe. |
+| 39 | Technical         | Optical writes stop only after the legitimate hand-pose owner reports the same |
+|    |                   | reference at intended effective weight and evaluated state for its generation, |
+|    |                   | including replacement, regrab, and non-default transitions. |
 
 ## References
 
