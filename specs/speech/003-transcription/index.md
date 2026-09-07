@@ -68,11 +68,12 @@ streaming transcription or per-word drafts.
    `@game/src/Speech/Transcription/Transcriber.cs`.
 2. **TR-2:** Bind manual recording initiation to a configurable XR action; default to the left controller trigger.
 3. **TR-3:** Capture microphone audio through an `AudioEffectCapture` ring buffer. While recording, each process
-   callback drains no more than one bounded batch. Stopping first stops the player, then waits non-blockingly for an
-   observed audio mix boundary before performing exactly one bounded final drain and clearing capture. A bounded
-   fallback must prevent null or dummy audio drivers from stalling finalisation indefinitely. Batch size is a tunable
-   implementation value; neither path may drain an arbitrary backlog or perform work proportional to the full recording
-   during release.
+   callback drains no more than one bounded batch. Stopping first stops the microphone playback synchronously
+   (disconnecting the capture stream immediately), then stops the player, then waits non-blockingly for an observed
+   audio mix boundary before performing exactly one bounded final drain and clearing capture. A bounded fallback must
+   prevent null or dummy audio drivers from stalling finalisation indefinitely. Batch size is a tunable implementation
+   value; neither path may drain an arbitrary backlog or perform work proportional to the full recording during
+   release.
 4. **TR-4:** Define `Transcribe(RecordedAudioData)` as `Task<string>`. `RecordedAudioData` must own immutable managed
    PCM16 data and include its sample rate and channel count. It must reject payload lengths that are not aligned to a
    complete PCM16 frame for the declared channel count. No `AudioStreamWav` or other Godot `Resource` crosses the

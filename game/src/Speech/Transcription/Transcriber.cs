@@ -108,6 +108,9 @@ public abstract partial class Transcriber : Node
         set;
     }
 
+    /// <summary>Exposes the microphone player so runtime tests can assert microphone monitoring state.</summary>
+    internal AudioStreamPlayer? GetMicrophonePlayerForTesting() => _microphonePlayer;
+
     /// <summary>
     /// Emitted when a transcription request completes successfully.
     /// </summary>
@@ -709,6 +712,7 @@ public abstract partial class Transcriber : Node
     private void StopMicrophonePlayer(bool measureStage)
     {
         var stageStopwatch = Stopwatch.StartNew();
+        StopMicrophonePlayback();
         _microphonePlayer?.Stop();
         if (measureStage)
         {
@@ -717,6 +721,23 @@ public abstract partial class Transcriber : Node
                 "STT microphone player stopped in",
                 stageStopwatch);
         }
+    }
+
+    /// <summary>
+    /// Stops the active microphone playback directly, mirroring the start path in reverse. The player's own stop only
+    /// queues an engine-side fade-out, so the capture stream would stay open until the playback's deferred destruction
+    /// — which never runs when the process tears down straight after the transcriber leaves the tree. Stopping the
+    /// playback disconnects the microphone immediately and is a no-op when monitoring is already stopped.
+    /// </summary>
+    private void StopMicrophonePlayback()
+    {
+        AudioStreamPlayer? microphonePlayer = _microphonePlayer;
+        if (microphonePlayer is null || !microphonePlayer.HasStreamPlayback())
+        {
+            return;
+        }
+
+        microphonePlayer.GetStreamPlayback()?.Stop();
     }
 
     private void CompleteRecordingLifecycle(bool wasRecording, Stopwatch? recordingStopwatch)

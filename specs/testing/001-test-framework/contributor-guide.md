@@ -72,6 +72,23 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
 
 `--headless` overrides every test's `Headless` attribute and routes all selected tests to the headless session.
 
+## Timing Hygiene For Physics-Driven Waits
+
+VRIK/`CharacterIK` solving, `SkeletonModifier3D` solvers, `NavigationServer3D` map activation and region upload
+syncs, and Jolt hand-collision proxies advance on physics ticks, not process frames. When a test waits for such a
+system to settle or sync, wait on physics frames via `TestUtils.WaitForPhysicsFramesAsync` or a physics-frame poll
+loop, never a fixed process-frame count. `VrikSettlePhysicsFrames` in the optical finger-tracking photobooth tests
+and `NPCNavigationIntegrationTests.WaitForNavigationLaneSyncAsync` are the precedents.
+
+- The project config disables vsync (`window/vsync/vsync_mode=0`), so a warm windowed session renders uncapped and a
+  fixed process-frame wait spans an environment-dependent number of physics ticks. Two failure classes in suite
+  history came from this mismatch: SplashScreen frame-pacing sensitivity under Xvfb software rendering (see
+  [Choosing an Execution Mode](#choosing-an-execution-mode)), and VRIK-settle plus NavigationServer-sync races on a
+  real uncapped-FPS display.
+- For deterministic solver sampling, step the solver manually instead of sampling across real frames: set the
+  skeleton's `ModifierCallbackModeProcess` to `Skeleton3D.ModifierCallbackModeProcessEnum.Manual` and drive explicit
+  `Skeleton3D.Advance` steps, as the HeadHips and NeckSpine IK integration tests do.
+
 ## Reading Results
 
 The host publishes an individual Microsoft Testing Platform InProgress and terminal result for every selected test UID.

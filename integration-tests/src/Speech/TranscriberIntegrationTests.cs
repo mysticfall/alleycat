@@ -2657,6 +2657,53 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Verifies a monitoring transcriber that leaves the scene tree stops the microphone playback synchronously — the
+    /// player's own stop only queues an engine-side fade-out, which would keep the microphone capture stream open
+    /// until process exit — and that re-entering the tree resumes automatic monitoring. Requires a working audio
+    /// capture device because the liveness oracle is the microphone playback itself.
+    /// </summary>
+    [Fact]
+    public async Task ExitTree_WhileMonitoring_StopsMicrophonePlaybackAndResumesOnReentry()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
+        FakeTranscriber transcriber = new()
+        {
+            Name = "Transcriber",
+            AudioCaptureForTesting = new FakeAudioFrameCapture(framesAvailableAfterClear: 0),
+            VoiceActivityDetectorForTesting = new AmplitudeFakeVoiceActivityDetector(0.5f),
+            InputMode = VoiceInputMode.ButtonAndAutomatic,
+        };
+        RuntimeSpeechFixture fixture = await CreateRuntimeSpeechFixtureAsync(sceneTree, transcriber);
+
+        try
+        {
+            AudioStreamPlayer? microphonePlayer = transcriber.GetMicrophonePlayerForTesting();
+            Assert.NotNull(microphonePlayer);
+            await WaitUntilAsync(sceneTree, () => microphonePlayer.Playing, maxFrames: 60);
+            AudioStreamPlayback playback = microphonePlayer.GetStreamPlayback();
+            Assert.True(playback.IsPlaying(), "Microphone capture must be active while the transcriber monitors.");
+
+            fixture.Global.RemoveChild(transcriber);
+
+            Assert.False(microphonePlayer.Playing);
+            Assert.False(microphonePlayer.HasStreamPlayback());
+            Assert.False(playback.IsPlaying(), "Tree exit must stop the microphone playback synchronously.");
+
+            fixture.Global.AddChild(transcriber);
+            AudioStreamPlayer? resumedPlayer = transcriber.GetMicrophonePlayerForTesting();
+            Assert.NotNull(resumedPlayer);
+            await WaitUntilAsync(sceneTree, () => resumedPlayer.Playing, maxFrames: 60);
+            Assert.True(resumedPlayer.GetStreamPlayback().IsPlaying());
+        }
+        finally
+        {
+            await DestroyRuntimeSpeechFixtureAsync(sceneTree, fixture);
+            await existingGlobalScope.DisposeAsync();
+        }
+    }
+
     private static async Task InvokeTranscriptionAsync(Transcriber transcriber)
         => await InvokeTranscriptionTask(transcriber);
 

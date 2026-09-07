@@ -158,6 +158,112 @@ public sealed class TestSelectionOptionsTests
     }
 
     /// <summary>
+    /// Ensures a comma-separated <c>--test-class</c> value selects every listed class.
+    /// </summary>
+    [Fact]
+    public void Parse_AcceptsCommaSeparatedClassList_AndMatchesAllListedClasses()
+    {
+        string classSelector = $"{typeof(SelectorFixtureA).FullName!},{typeof(SelectorFixtureB).FullName!}";
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestClassOptionName] = [classSelector],
+        });
+
+        GodotCliTestSelector selector = GodotTestCommandLineOptions.Parse(commandLineOptions);
+
+        MethodInfo fixtureAMethod = typeof(SelectorFixtureA).GetMethod(nameof(SelectorFixtureA.TargetMethod))!;
+        MethodInfo fixtureBMethod = typeof(SelectorFixtureB).GetMethod(nameof(SelectorFixtureB.TargetMethod))!;
+        MethodInfo externalMethod = typeof(UidFixtureB).GetMethod(nameof(UidFixtureB.Target))!;
+
+        Assert.True(selector.Matches(fixtureAMethod));
+        Assert.True(selector.Matches(fixtureBMethod));
+        Assert.False(selector.Matches(externalMethod));
+    }
+
+    /// <summary>
+    /// Ensures a comma-separated <c>--test-method</c> value selects every listed method.
+    /// </summary>
+    [Fact]
+    public void Parse_AcceptsCommaSeparatedMethodList_AndMatchesAllListedMethods()
+    {
+        string methodSelector =
+            $"{typeof(SelectorFixtureA).FullName!}.{nameof(SelectorFixtureA.TargetMethod)}," +
+            $"{typeof(SelectorFixtureB).FullName!}.{nameof(SelectorFixtureB.TargetMethod)}";
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestMethodOptionName] = [methodSelector],
+        });
+
+        GodotCliTestSelector selector = GodotTestCommandLineOptions.Parse(commandLineOptions);
+
+        MethodInfo fixtureAMethod = typeof(SelectorFixtureA).GetMethod(nameof(SelectorFixtureA.TargetMethod))!;
+        MethodInfo fixtureBMethod = typeof(SelectorFixtureB).GetMethod(nameof(SelectorFixtureB.TargetMethod))!;
+        MethodInfo fixtureAOtherMethod = typeof(SelectorFixtureA).GetMethod(nameof(SelectorFixtureA.OtherMethod))!;
+
+        Assert.True(selector.Matches(fixtureAMethod));
+        Assert.True(selector.Matches(fixtureBMethod));
+        Assert.False(selector.Matches(fixtureAOtherMethod));
+    }
+
+    /// <summary>
+    /// Ensures validation rejects a comma-separated method list containing a malformed entry.
+    /// </summary>
+    [Fact]
+    public async Task ValidateCommandLineOptionsAsync_RejectsMalformedEntryInCommaSeparatedMethodList()
+    {
+        var provider = new GodotTestCommandLineOptionsProvider();
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestMethodOptionName] =
+            [$"{typeof(SelectorFixtureA).FullName!}.{nameof(SelectorFixtureA.TargetMethod)},NotAMethodSelector"],
+        });
+
+        ValidationResult validation = await provider.ValidateCommandLineOptionsAsync(commandLineOptions);
+
+        Assert.False(validation.IsValid);
+        Assert.Contains("<Fully.Qualified.TypeName>.<MethodName>", validation.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Ensures validation rejects a comma-separated class list whose entries are all empty.
+    /// </summary>
+    [Fact]
+    public async Task ValidateCommandLineOptionsAsync_RejectsAllEmptyClassList()
+    {
+        var provider = new GodotTestCommandLineOptionsProvider();
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestClassOptionName] = [","],
+        });
+
+        ValidationResult validation = await provider.ValidateCommandLineOptionsAsync(commandLineOptions);
+
+        Assert.False(validation.IsValid);
+        Assert.Contains("at least one fully qualified class name", validation.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Ensures class list entries are trimmed and empty entries are ignored.
+    /// </summary>
+    [Fact]
+    public void Parse_TrimsCommaSeparatedClassEntries_AndIgnoresEmptyEntries()
+    {
+        string classSelector = $" {typeof(SelectorFixtureA).FullName!} ,,{typeof(SelectorFixtureB).FullName!}";
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestClassOptionName] = [classSelector],
+        });
+
+        GodotCliTestSelector selector = GodotTestCommandLineOptions.Parse(commandLineOptions);
+
+        MethodInfo fixtureAMethod = typeof(SelectorFixtureA).GetMethod(nameof(SelectorFixtureA.TargetMethod))!;
+        MethodInfo fixtureBMethod = typeof(SelectorFixtureB).GetMethod(nameof(SelectorFixtureB.TargetMethod))!;
+
+        Assert.True(selector.Matches(fixtureAMethod));
+        Assert.True(selector.Matches(fixtureBMethod));
+    }
+
+    /// <summary>
     /// Ensures deterministic UID generation remains stable and unique for distinct inputs.
     /// </summary>
     [Fact]
