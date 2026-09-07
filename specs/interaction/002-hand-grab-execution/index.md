@@ -227,8 +227,18 @@ Provide a grab execution system that:
 
     **Movable grabbables** (e.g. ball, prop):
     - On commit, hand parents the object to the hand bone (BoneAttachment3D).
-    - After parenting, clear the hand grab target provider override so normal tracking from
-      the globally selected XR hand-pose source resumes.
+    - After parenting, the hand grab target provider override ends at commit — the override
+      state itself clears, with no held-state latch on the source — and normal tracking
+      from the globally selected XR hand-pose source resumes via a bounded commit handoff:
+      - A bounded held-carry anchor (`HeldCarryAnchorSeconds`, default 0.35 s, simulation
+        clock) holds the last commanded approach transform while the authored grip takes
+        over, preserving commit-boundary continuity.
+      - A bounded residual-decay return then transitions to true default-source tracking:
+        it carries the source's world-frame rigid motion, decays only the source-relative
+        residual, and completes into exact default passthrough with no steady-state lag.
+      - An instant literal clear to default tracking is non-conforming: it reintroduces a
+        multi-centimetre commit-boundary snap that violates this specification's continuity
+        acceptance criteria.
     - The hand becomes mobile; the parented object follows the hand bone.
     - The hand pose from the grab point's animation is maintained.
 
@@ -719,6 +729,14 @@ Provide a grab execution system that:
 |    |                   | MovingCandidate abandonment surfaces through the optical coordinator's neutral |
 |    |                   | evaluation trace; the 8 mm/5°/two-process-frame commit gate, item offsets, |
 |    |                   | calibration, and recognition thresholds are unchanged. |
+| 69 | Technical         | A `Movable` commit ends the hand grab target provider override at the commit |
+|    |                   | boundary — no held-state latch — and default-source tracking resumes via the |
+|    |                   | bounded held-carry anchor (`HeldCarryAnchorSeconds`, default 0.35 s, simulation |
+|    |                   | clock) and residual-decay return: world-frame source motion is carried, only the |
+|    |                   | source-relative residual decays, and the return completes into exact passthrough |
+|    |                   | with no steady-state lag. Commit-boundary discontinuity stays within at most |
+|    |                   | 10 mm; an instant literal clear that reintroduces a multi-centimetre snap is |
+|    |                   | non-conforming. |
 
 ## References
 
