@@ -11,7 +11,8 @@ internal sealed partial class UnwatchTool : AgentTool
     {
         _registry = registry;
         ToolName = "unwatch";
-        ToolDescription = "Remove one active watch by its opaque watch ID.";
+        ToolDescription = "Remove one registered watch by its opaque watch ID — the ID returned when the watch was "
+            + "armed or listed in your current scene. An unknown ID removes nothing.";
     }
 
     /// <inheritdoc />

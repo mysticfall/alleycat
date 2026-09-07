@@ -20,8 +20,9 @@ public partial class HistoryTool : AgentTool
     public HistoryTool()
     {
         ToolName = "history";
-        ToolDescription = "Read your own memory of past events, in the order they happened, including minor events "
-            + "that wait results do not surface. Reading changes nothing.";
+        ToolDescription = "Recall your recorded memory of past events, in the order they happened, optionally "
+            + "limited to the most recent events. Reading changes nothing. Only recorded events appear here — this "
+            + "is not a way to recover perception that was never recorded.";
     }
 
     /// <inheritdoc />

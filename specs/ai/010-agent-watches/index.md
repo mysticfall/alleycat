@@ -13,8 +13,8 @@ state transitions, and the ordinary Mind observations emitted for meaningful tra
 ## Goal
 
 Let an NPC ask Mind to notice a future condition without polling through provider requests, while keeping watch
-lifetime,
-identity, and transition semantics explicit.
+lifetime, identity, and transition semantics explicit. Model-facing watch guidance must describe this contract
+accurately so the NPC neither re-arms needlessly nor mistakes a registration for current condition truth.
 
 ## User Requirements
 
@@ -28,6 +28,11 @@ identity, and transition semantics explicit.
 4. Entering and leaving the watched proximity are memorable typed transitions; remaining in the same state and
    unavailable evidence are quiet.
 5. A user can have at most 32 active watches per Mind, and removed IDs are never reused during that Mind lifetime.
+6. An NPC's model-facing watch guidance presents arming accurately: registration is immediate and returns a watch ID
+   with currently available evidence, monitoring persists without re-arming, and listed watches are registrations to
+   manage rather than assertions of current condition truth.
+7. Watch guidance states that transitions arrive as ordinary remembered events, that watch evidence is limited by
+   current perception, and that explicit removal uses the returned or listed watch ID.
 
 ## Technical Requirements
 
@@ -75,6 +80,18 @@ identity, and transition semantics explicit.
     condition-specific evidence. An empty list contributes no active-watch section or fallback. This status is
     independent of event creation and does not create an observation.
 
+### Model-Facing Watch Guidance
+
+14. Watch-tool descriptions must accurately describe the lifecycle: arming is non-blocking registration that returns
+    the allocated watch ID plus currently available evidence and creates no activation event (TR-7); monitoring
+    persists until explicit removal or a condition-defined terminal rule (TR-4); listed active watches are
+    registrations, not condition truth (TR-13); and removal takes the opaque ID returned at arming or listed in
+    current-scene status (TR-5). Descriptions must not promise an activation event or suggest that re-arming is
+    needed to keep monitoring.
+15. Watch-tool descriptions must state that transitions arrive as ordinary remembered events through the per-request
+    event timeline (TR-10, TR-11), never as wait-result text (AI-002 TR-8/TR-10), and that available evidence is
+    limited by current perception (TR-8 for proximity). Shared-instruction watch concepts follow AI-003 TR-16.
+
 ## In Scope
 
 - One direct-child WatchRegistry per authored Mind, with registry-owned typed condition Resources and one function per
@@ -84,6 +101,7 @@ identity, and transition semantics explicit.
 - `watch_proximity`, its condition-owned evidence filtering, transition table, dedicated observation, and generic
   active-watch process-list status.
 - Source-neutral Mind ingestion and normal scheduling of condition-owned ordinary observations.
+- Model-facing watch guidance covering registration, persistence, evidence limits, transition delivery, and removal.
 - Extensibility for future typed condition Resources without a watch-engine concrete-type catalogue.
 
 ## Out Of Scope
@@ -109,6 +127,9 @@ identity, and transition semantics explicit.
 5. Acceptance shows each active-watch process-list entry exposes only its `WatchId`, condition ID, and subject ID;
    it exposes neither state nor condition-specific evidence, and an empty list adds no active-watch section or
    fallback.
+6. Acceptance shows watch guidance presents arming as immediate registration with current evidence, persistence
+   without re-arming, listed watches as registrations rather than condition truth, transitions as ordinary remembered
+   events, and removal by the returned or listed watch ID.
 
 ### Technical Requirements
 
@@ -132,6 +153,9 @@ identity, and transition semantics explicit.
 9. Tests verify active-watch status renders a generic process-list entry with only `WatchId`, condition ID, and
    subject ID, independently of transition-observation creation; it renders no state or condition-specific evidence,
    and an empty list contributes no active-watch section or fallback.
+10. Tests verify watch-tool descriptions match the lifecycle contracts: non-blocking arming with current evidence and
+    no activation-event promise, persistent monitoring without re-arming, perception-limited evidence, transition
+    delivery through ordinary event history, and removal by opaque watch ID.
 
 ## References
 

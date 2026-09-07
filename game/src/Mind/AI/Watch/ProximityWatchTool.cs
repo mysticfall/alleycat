@@ -18,7 +18,13 @@ public sealed partial class ProximityWatchTool : WatchConditionTool
     public ProximityWatchTool()
     {
         ToolName = "watch_proximity";
-        ToolDescription = "Watch one exact character and report when they enter or leave the chosen inclusive distance.";
+        ToolDescription = "Register persistent proximity monitoring for one exact character, identified by their "
+            + "full ID (char:…); maximum_distance is the inclusive distance limit in metres. Arming takes effect "
+            + "immediately: it returns an opaque watch ID and the distance evidence currently available — this is "
+            + "not an activation event and does not itself mean the character is inside or outside the limit. The "
+            + "watch keeps monitoring until you remove it with unwatch; never re-arm to keep it active. Its "
+            + "evidence is limited by what you currently perceive, and transitions — entering or leaving the "
+            + "distance — reach you as ordinary events in your event history.";
     }
 
     /// <inheritdoc />

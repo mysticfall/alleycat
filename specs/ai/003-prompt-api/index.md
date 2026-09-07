@@ -7,13 +7,14 @@ title: Prompt API
 
 ## Requirement
 
-Provide authorable static-instruction and current-scene-status contracts plus canonical, type-owned event rendering for
-each AgenticMind session.
+Provide authorable static-instruction and current-scene-status contracts, the shared context-interpretation guidance
+that static instruction must carry, and canonical, type-owned event rendering for each AgenticMind session.
 
 ## Goal
 
 Keep static guidance stable while presenting fresh typed scene state and causally watermarked event history on every
-logical provider request.
+logical provider request. The shared guidance must be sufficient for the model to interpret that context and to act on
+information it has already been supplied.
 
 ## User Requirements
 
@@ -23,6 +24,12 @@ logical provider request.
 3. Event history uses the canonical text owned by each observation type. Unknown types receive safe fallback text that
    discloses only their `TypeKey`.
 4. An NPC's prompt does not expose raw voice provenance or scheduling-only data as observation text.
+5. The shared instruction gives each NPC character-neutral guidance sufficient to interpret its supplied context —
+   established versus newly presented event history and the fresh current-scene status — without any tool call.
+6. Shared guidance distinguishes acting on an available reply from waiting for a future one: an NPC is never told that
+   waiting is necessary to receive context, while silence and waiting remain legitimate in-character choices.
+7. Shared watch guidance refers to available watch tools rather than a fixed tool set and presents listed watches as
+   monitoring registrations, not assertions that a condition is currently true.
 
 ## Technical Requirements
 
@@ -57,8 +64,30 @@ logical provider request.
     per-request timeline message, or `history`'s selected persistent-timeline snapshot for on-demand recall. Prompt
     stacks must not accept observations as general render-context values.
 11. `history` is a read-only query of the persistent event timeline. Calling it must neither ingest nor enqueue an
-    observation, nor advance any request-context or timeline watermark. Automatic event text reaches the model only
-    through AI-002's canonical per-request timeline message; `history` is the intentional explicit-recall exception.
+     observation, nor advance any request-context or timeline watermark. Automatic event text reaches the model only
+     through AI-002's canonical per-request timeline message; `history` is the intentional explicit-recall exception.
+
+### Shared Context Interpretation Guidance
+
+12. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
+     instruction — must carry character-neutral guidance covering four concepts: event-history interpretation,
+     current-scene interpretation, action selection, and available watch tools. The concepts are mandatory delivery
+     content; exact prose wording stays tunable. The guidance must not contradict AI-002's automatic per-request
+     delivery or payload-free wait semantics.
+13. Event-history guidance must match AI-002's timeline-message contract: established entries are prior context, the
+     new-history tail marks entries presented since the NPC's previous valid response, and neither label alone means a
+     conversational contribution has been answered or resolved.
+14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
+     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
+     absence, and historical events do not establish current positions.
+15. Action-selection guidance must direct the NPC to consider relevant available history — including an available
+     reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
+     remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
+     freedom to act, speak, or stay silent according to character and scenario.
+16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
+     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
+     arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
+     removal handle (AI-010 TR-5).
 
 ## In Scope
 
@@ -66,11 +95,15 @@ logical provider request.
 - Typed, immutable direct-child scene-status projection and strict section wiring.
 - Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
 - Session-fixed scenario context and fresh request-scene snapshot separation.
+- Character-neutral shared context-interpretation guidance (event history, current scene, action selection, watches)
+  required in the authored static instruction.
 
 ## Out Of Scope
 
 - Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
-- Prompt-editor preview tooling and final authored prose tuning.
+- Prompt-editor preview tooling and exact final authored wording. This exclusion covers prose styling only: the
+  guidance concepts required under Shared Context Interpretation Guidance are core delivery content and cannot be
+  deferred by this section.
 - Custom event-text templates and content-pack overrides. This deferral does not prohibit a future customisation layer.
 
 ## Acceptance Criteria
@@ -82,6 +115,11 @@ logical provider request.
 2. Acceptance shows event wording is supplied by each observation type, and an unknown future observation type has
    safe fallback wording that exposes no payload fields.
 3. Acceptance shows speech text remains actor-relative without exposing raw voice provenance or continuation metadata.
+4. Acceptance shows the shared instruction explains established versus newly presented history, the fresh
+   evidence-limited current-scene status, and watch registration, and never states that waiting is necessary to receive
+   supplied context.
+5. Acceptance shows action-selection guidance distinguishes engaging with an available reply from waiting for a future
+   one while keeping silence and waiting legitimate in-character choices.
 
 ### Technical Requirements
 
@@ -103,6 +141,12 @@ logical provider request.
 7. Tests verify `history` reads its selected persistent-timeline snapshot without ingesting or enqueuing an observation
    or advancing a request-context or timeline watermark. They also verify automatic event text reaches the model only
    through AI-002's canonical per-request timeline message, with `history` as the explicit-recall exception.
+8. Tests verify the authored shared instruction contains guidance covering each required concept — history
+   interpretation, current-scene evidence limits and timestamps, action selection, and watch registration — and stays
+   consistent with AI-002's automatic per-request delivery and payload-free wait semantics.
+9. Tests verify shared watch guidance is composition-neutral, referring to available watch tools and presenting listed
+   watches as registrations rather than condition truth, and that it routes watch transitions through ordinary event
+   history.
 
 ## References
 

@@ -13,8 +13,8 @@ fresh, and confirmed only by locally valid accepted provider responses.
 ## Goal
 
 Let an NPC reason continuously without treating provider protocol as memory, leaking observation text through
-scheduling,
-or confirming scene context that the provider did not validly accept.
+scheduling, or confirming scene context that the provider did not validly accept, and with model-facing tool guidance
+that describes these contracts accurately.
 
 ## User Requirements
 
@@ -24,12 +24,14 @@ or confirming scene context that the provider did not validly accept.
    `wait` is not an observation-text delivery channel.
 4. The NPC can explicitly recall its read-only event timeline through the `history` tool. This on-demand result may
    render past event text but is not automatic event delivery.
-5. A fresh event gets priority over importance pressure, an attended speaker completion, and timeout. Routine pressure
-   does
-   not interrupt active reasoning.
-6. A continued utterance cannot cause a response to incomplete text: its context is presented, then awaits confirmation
+5. The NPC's model-facing session-tool guidance matches runtime behaviour: fresh context arrives with every logical
+   request without waiting, `wait` yields for future developments and reports only its wake reason and timing, and
+   `history` is on-demand read-only recall of the persistent event timeline.
+6. A fresh event gets priority over importance pressure, an attended speaker completion, and timeout. Routine pressure
+   does not interrupt active reasoning.
+7. A continued utterance cannot cause a response to incomplete text: its context is presented, then awaits confirmation
    before settling.
-7. Failed, cancelled, stale, or invalid provider work does not make an NPC forget or falsely confirm scene context.
+8. Failed, cancelled, stale, or invalid provider work does not make an NPC forget or falsely confirm scene context.
 
 ## Technical Requirements
 
@@ -82,8 +84,19 @@ or confirming scene context that the provider did not validly accept.
      does not enqueue observations. Tool validation and typed tool binding occur only at AgenticMind composition; the
      common runtime has no feature service bag.
 14. Speech admitted to its voice pipeline remains committed at playback hand-off and uses Mind's node-lifetime
-    exact-once
-    commit identity. Node exit remains terminal and creates no replacement request or synthetic confirmation.
+     exact-once
+     commit identity. Node exit remains terminal and creates no replacement request or synthetic confirmation.
+
+### Model-Facing Tool Guidance
+
+15. Model-facing session-tool descriptions must accurately distinguish each tool from automatic per-request context
+     delivery (TR-2, TR-3, and TR-6): no description may state that waiting is required for new context to arrive or
+     imply that `wait` results contain event or observation text (TR-8, TR-10).
+16. `wait` must be described as intentionally yielding until future developments or remaining silent, with a result
+     limited to wake reason, elapsed game time, and current game time. `history` must be described as read-only
+     on-demand recall of the persistent event timeline, including its event-selection behaviour, and not as recovery
+     of unrecorded perception. Watch-tool descriptions follow AI-010's model-facing watch guidance;
+     shared-instruction guidance follows AI-003's Shared Context Interpretation Guidance (TR-12–TR-16).
 
 ## In Scope
 
@@ -91,6 +104,7 @@ or confirming scene context that the provider did not validly accept.
 - Causal event-timeline watermarks, fresh per-request scene status, and atomic response confirmation.
 - Canonical observation-owned text for request history and on-demand `history` results.
 - Payload-free scheduling and wait semantics.
+- Accurate model-facing session-tool descriptions for automatic delivery, `wait`, and `history`.
 - Continuation admission and confirmation settlement.
 - Composition-time binding of watch tools with AI-010.
 
@@ -112,6 +126,9 @@ or confirming scene context that the provider did not validly accept.
    not interrupt an active request.
 3. Acceptance shows incomplete continuation context is never falsely settled by a failed, blank, abandoned, or invalid
    provider interaction.
+4. Acceptance shows each session-tool description accurately distinguishes automatic per-request delivery, deliberate
+   waiting, and explicit recall, and none claims that waiting is required for new context or that wait results carry
+   observation text.
 
 ### Technical Requirements
 
@@ -127,6 +144,9 @@ or confirming scene context that the provider did not validly accept.
 6. Tests verify the `S` admission and `PresentedAwaitingConfirmation` stages, including release on every non-confirming
    outcome.
 7. Tests verify watch-tool validation and typed binding occur only at AgenticMind composition.
+8. Tests verify the `wait` description presents yielding semantics and the `history` description presents read-only
+   timeline recall, with no description text contradicting the payload-free wait contract or automatic per-request
+   delivery.
 
 ## References
 

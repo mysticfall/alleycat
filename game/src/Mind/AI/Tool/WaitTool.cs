@@ -19,10 +19,11 @@ public partial class WaitTool : AgentTool
     public WaitTool()
     {
         ToolName = "wait";
-        ToolDescription = "Watch the scene for what happens next. This is how you receive updates about important "
-            + "scene events — without waiting, nothing new reaches you. Waiting is observation, not idling: after "
-            + "asking another character a question, wait a reasonable duration for their answer before assuming "
-            + "refusal. Returns why the wait ended, how long you waited, and the current game time.";
+        ToolDescription = "Deliberately yield until future developments make responding worthwhile. Fresh context — "
+            + "event history and the current scene — arrives with every request, so waiting is never needed to "
+            + "receive information. Wait when giving something time to develop, for example awaiting a reply that "
+            + "has not been given yet; an answer already visible in your context needs no wait. Returns only why "
+            + "the wait ended, how long you waited, and the current game time — never what was observed.";
     }
 
     /// <inheritdoc />
