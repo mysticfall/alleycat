@@ -10,7 +10,6 @@ namespace AlleyCat.IntegrationTests.IK;
 public sealed class HeadHipsIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/ik/head_hips_ik_test.tscn";
-    private const string ReusableIkScenePath = "res://assets/characters/templates/ik/neck_spine_ccdik.tscn";
     private const string MarkersRootPath = "Markers";
     private const string HeadTargetPath = "Markers/HeadTarget";
     private const string TargetPosesPath = "Markers/TargetPoses";
@@ -70,7 +69,7 @@ public sealed class HeadHipsIKIntegrationTests
         Skeleton3D skeleton = FindFirstSkeleton(verificationSceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in the verification scene.");
 
-        Node ikNode = BindOrCreateIkNode(skeleton, headTarget);
+        Node ikNode = BindLocalIkNode(skeleton, headTarget);
         NodePath expectedTargetPath = ikNode.GetPathTo(headTarget);
 
         Assert.False(expectedTargetPath.IsEmpty, "Expected a non-empty CCDIK target path to HeadTarget.");
@@ -481,15 +480,11 @@ public sealed class HeadHipsIKIntegrationTests
         return null;
     }
 
-    private static Node BindOrCreateIkNode(Skeleton3D skeleton, Node3D headTarget)
+    private static Node BindLocalIkNode(Skeleton3D skeleton, Node3D headTarget)
     {
-        Node? ikNode = skeleton.GetNodeOrNull(IkNodeName);
-
-        if (ikNode is null)
-        {
-            ikNode = LoadPackedScene(ReusableIkScenePath).Instantiate();
-            skeleton.AddChild(ikNode);
-        }
+        Node ikNode = skeleton.GetNodeOrNull(IkNodeName)
+            ?? throw new Xunit.Sdk.XunitException("Expected the subject skeleton to author a local NeckSpineIK node.");
+        Assert.True(ikNode.IsClass("CCDIK3D"), "Expected the local NeckSpineIK node to be a CCDIK3D.");
 
         NodePath targetPath = ikNode.GetPathTo(headTarget);
         ikNode.Set("settings/0/target_node", targetPath);

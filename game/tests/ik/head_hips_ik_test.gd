@@ -1,7 +1,6 @@
 extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/ik/head_hips_ik_test.tscn"
-const IK_SCENE_PATH := "res://assets/characters/templates/ik/neck_spine_ccdik.tscn"
 
 const OUTPUT_ROOT := "IK-001/head_hips_ik"
 
@@ -124,19 +123,13 @@ func _resolve_pose_markers(target_poses: Node3D) -> Dictionary:
 
 
 func _bind_ik_target(skeleton: Skeleton3D, head_target: Node3D) -> bool:
-	var ik_node: CCDIK3D = skeleton.get_node_or_null(^"NeckSpineCCDIK3D") as CCDIK3D
+	var ik_node: CCDIK3D = skeleton.get_node_or_null(^"NeckSpineIK") as CCDIK3D
 	if ik_node == null:
-		var ik_scene: PackedScene = SceneUtils.load_scene(IK_SCENE_PATH)
-		if ik_scene == null:
-			SceneUtils.fatal_error_and_quit("IK-001 runner: failed to load IK scene: %s" % IK_SCENE_PATH)
-			return false
+		SceneUtils.fatal_error_and_quit("IK-001 runner: subject skeleton must author a local NeckSpineIK CCDIK3D node")
+		return false
 
-		ik_node = ik_scene.instantiate() as CCDIK3D
-		if ik_node == null:
-			SceneUtils.fatal_error_and_quit("IK-001 runner: IK root must be CCDIK3D in scene: %s" % IK_SCENE_PATH)
-			return false
-
-		skeleton.add_child(ik_node)
+	if not _validate_local_ik_configuration(skeleton, ik_node):
+		return false
 
 	var target_path: NodePath = ik_node.get_path_to(head_target)
 	if target_path.is_empty():
@@ -144,6 +137,38 @@ func _bind_ik_target(skeleton: Skeleton3D, head_target: Node3D) -> bool:
 		return false
 
 	ik_node.set("settings/0/target_node", target_path)
+
+	return true
+
+
+func _validate_local_ik_configuration(skeleton: Skeleton3D, ik_node: CCDIK3D) -> bool:
+	var root_bone_index: int = skeleton.find_bone("Spine")
+	var head_bone_index: int = skeleton.find_bone("Head")
+	if root_bone_index < 0 or head_bone_index < 0:
+		SceneUtils.fatal_error_and_quit("IK-001 runner: subject skeleton must resolve canonical Spine and Head bones")
+		return false
+
+	if ik_node.get("settings/0/root_bone") != root_bone_index or ik_node.get("settings/0/end_bone") != head_bone_index:
+		SceneUtils.fatal_error_and_quit("IK-001 runner: NeckSpineIK chain must resolve from Spine to the template Head bone")
+		return false
+
+	if ik_node.get("settings/0/joint_count") != 5:
+		SceneUtils.fatal_error_and_quit("IK-001 runner: NeckSpineIK must configure exactly five joints")
+		return false
+
+	var expected_rotation_axes := [0, 0, 3, 3, 0]
+	for joint_index: int in expected_rotation_axes.size():
+		if ik_node.get("settings/0/joints/%d/rotation_axis" % joint_index) != expected_rotation_axes[joint_index]:
+			SceneUtils.fatal_error_and_quit("IK-001 runner: NeckSpineIK joint %d has an unexpected rotation axis" % joint_index)
+			return false
+
+		var limitation: Variant = ik_node.get("settings/0/joints/%d/limitation" % joint_index)
+		if joint_index < 4 and limitation == null:
+			SceneUtils.fatal_error_and_quit("IK-001 runner: NeckSpineIK constrained joint %d has no limitation" % joint_index)
+			return false
+		if joint_index == 4 and limitation != null:
+			SceneUtils.fatal_error_and_quit("IK-001 runner: NeckSpineIK final joint must remain deliberately unrestricted")
+			return false
 
 	return true
 

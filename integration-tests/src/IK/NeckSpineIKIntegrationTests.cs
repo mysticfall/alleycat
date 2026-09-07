@@ -5,169 +5,24 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
-/// Non-visual integration coverage for IK-001 neck-spine CCDIK behaviour.
+/// Non-visual integration coverage for IK-001 neck-spine CCDIK authoring.
 /// </summary>
 public sealed class NeckSpineIKIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/ik/neck_spine_ccdik_test.tscn";
-    private const string ReusableIkScenePath = "res://assets/characters/templates/ik/neck_spine_ccdik.tscn";
-    private const string MarkersRootPath = "Markers";
-    private const string HeadTargetPath = "Markers/HeadTarget";
-    private const string TargetPosesPath = "Markers/TargetPoses";
+    private const string ReferenceFemaleBaseScenePath =
+        "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string ReferenceMaleBaseScenePath =
+        "res://assets/characters/templates/reference_male/reference_male_base.tscn";
     private const string IkNodeName = "NeckSpineIK";
-    private static readonly string[] _headBoneNameCandidates = ["Head"];
-    private static readonly string[] _neckBoneNameCandidates = ["Neck"];
-    private static readonly string[] _spineBoneNameCandidates = ["Spine3", "Spine2", "Spine1", "Spine"];
-    private const float MaximumDistanceRegression = 0.01f;
-    private const float MaximumResidualDistance = 1.5f;
-    private const float MinimumDistanceImprovement = 0.001f;
-    private const float MinimumDirectionalAlignment = 0.0f;
-    private const float MinimumExpectedMovement = 0.0001f;
-    private const float MinimumStoopForwardConstrainedMovement = 0.001f;
-    private const float MinimumStoopForwardAbsoluteDirectionalAlignment = 0.6f;
-    private const float MinimumStoopForwardDirectionalAlignmentFloor = -0.75f;
-    private const int PoseSettlementFrameCount = 4;
-    private const string StoopForwardPoseName = "TargetStoopForward";
-
-    private static readonly string[] _requiredPoseMarkerNames =
-    [
-        "TargetForward",
-        "TargetLeft",
-        "TargetRight",
-        "TargetStoopForward",
-        "TargetLeanBack",
-    ];
-
-    private static readonly string[][] _poseOrderVariants =
-    [
-        _requiredPoseMarkerNames,
-        [.. _requiredPoseMarkerNames.Reverse()],
-    ];
 
     /// <summary>
-    /// Loads the IK-001 verification scene and validates required marker, CCDIK binding, and deterministic neck motion.
+    /// The supported base templates author independently resolved, constrained local neck-spine chains.
     /// </summary>
     [Fact]
-    public async Task NeckSpineCcdik_VerificationScene_BindsTargetAndTracksRequiredPoses()
+    public async Task ReferenceBaseTemplates_AuthorLocallyResolvedNeckSpineIK()
     {
-        SceneTree sceneTree = GetSceneTree();
-        await WaitForFramesAsync(sceneTree, 2);
-
-        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
-        Assert.Equal(Error.Ok, changeSceneError);
-
-        await WaitForFramesAsync(sceneTree, 2);
-
-        Node verificationSceneRoot = sceneTree.CurrentScene
-            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
-
-        Assert.NotNull(verificationSceneRoot.GetNodeOrNull(MarkersRootPath));
-
-        Node3D headTarget = Assert.IsType<Node3D>(verificationSceneRoot.GetNodeOrNull(HeadTargetPath));
-        Node3D targetPoses = Assert.IsType<Node3D>(verificationSceneRoot.GetNodeOrNull(TargetPosesPath));
-
-        Dictionary<string, Node3D> poseMarkers = ResolveRequiredPoseMarkers(targetPoses);
-        Skeleton3D skeleton = FindFirstSkeleton(verificationSceneRoot)
-            ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in the verification scene.");
-
-        Node ikNode = BindOrCreateIkNode(skeleton, headTarget);
-        NodePath expectedTargetPath = ikNode.GetPathTo(headTarget);
-
-        Assert.False(expectedTargetPath.IsEmpty, "Expected a non-empty CCDIK target path to HeadTarget.");
-
-        var configuredTargetPath = (NodePath)ikNode.Get("settings/0/target_node");
-        Assert.Equal(expectedTargetPath, configuredTargetPath);
-
-        IReadOnlyList<int> trackedBoneIndices = ResolveTrackedBoneIndices(skeleton, ikNode);
-
-        foreach (IReadOnlyList<string> poseOrder in _poseOrderVariants)
-        {
-            await ValidatePoseOrderAsync(
-                sceneTree,
-                skeleton,
-                headTarget,
-                poseMarkers,
-                poseOrder,
-                trackedBoneIndices);
-        }
-    }
-
-    private static async Task ValidatePoseOrderAsync(
-        SceneTree sceneTree,
-        Skeleton3D skeleton,
-        Node3D headTarget,
-        IReadOnlyDictionary<string, Node3D> poseMarkers,
-        IReadOnlyList<string> poseOrder,
-        IReadOnlyList<int> trackedBoneIndices)
-    {
-        await SetHeadTargetToMarkerAsync(sceneTree, headTarget, poseMarkers["TargetForward"]);
-        Vector3 neutralMarkerPosition = poseMarkers["TargetForward"].GlobalPosition;
-        Dictionary<int, Vector3> neutralBonePositions = await CaptureTrackedBoneWorldPositionsAsync(
-            sceneTree,
-            skeleton,
-            trackedBoneIndices);
-        float neutralResidualDistance = ResolveClosestDistanceToTarget(neutralBonePositions, neutralMarkerPosition);
-        Assert.InRange(neutralResidualDistance, 0.0f, MaximumResidualDistance);
-
-        foreach (string markerName in poseOrder)
-        {
-            Node3D markerNode = poseMarkers[markerName];
-            await SetHeadTargetToMarkerAsync(sceneTree, headTarget, markerNode);
-
-            Vector3 markerPosition = markerNode.GlobalPosition;
-            Dictionary<int, Vector3> posedBonePositions = await CaptureTrackedBoneWorldPositionsAsync(
-                sceneTree,
-                skeleton,
-                trackedBoneIndices);
-
-            float baselineDistance = ResolveClosestDistanceToTarget(neutralBonePositions, markerPosition);
-            float posedDistance = ResolveClosestDistanceToTarget(posedBonePositions, markerPosition);
-            Assert.True(
-                posedDistance <= baselineDistance + MaximumDistanceRegression,
-                $"Pose '{markerName}' should not regress tracked-bone-to-target distance beyond tolerance. " +
-                $"Baseline={baselineDistance:F4}, Posed={posedDistance:F4}.");
-            Assert.InRange(posedDistance, 0.0f, MaximumResidualDistance);
-
-            if (markerName == "TargetForward")
-            {
-                continue;
-            }
-
-            AssertNonForwardPosePositiveSignal(
-                markerName,
-                baselineDistance,
-                posedDistance,
-                neutralMarkerPosition,
-                markerPosition,
-                neutralBonePositions,
-                posedBonePositions,
-                trackedBoneIndices);
-        }
-    }
-
-    private static IReadOnlyList<int> ResolveTrackedBoneIndices(Skeleton3D skeleton, Node ikNode)
-    {
-        var trackedIndices = new List<int>(capacity: 3);
-
-        foreach (int chainBoneIndex in ResolveIkChainBoneIndices(skeleton, ikNode))
-        {
-            AddIfFound(trackedIndices, chainBoneIndex);
-        }
-
-        AddIfFound(trackedIndices, TryFindBoneIndexFromCandidates(skeleton, _headBoneNameCandidates));
-        AddIfFound(trackedIndices, TryFindBoneIndexFromCandidates(skeleton, _neckBoneNameCandidates));
-        AddIfFound(trackedIndices, TryFindBoneIndexFromCandidates(skeleton, _spineBoneNameCandidates));
-
-        if (trackedIndices.Count > 0)
-        {
-            return trackedIndices;
-        }
-
-        int fallbackIndex = FindBoneIndexFromCandidates(
-            skeleton,
-            [.. _headBoneNameCandidates, .. _neckBoneNameCandidates, .. _spineBoneNameCandidates]);
-        trackedIndices.Add(fallbackIndex);
-        return trackedIndices;
+        await AssertLocalNeckSpineIKConfigurationAsync(ReferenceFemaleBaseScenePath, "Female/GeneralSkeleton");
+        await AssertLocalNeckSpineIKConfigurationAsync(ReferenceMaleBaseScenePath, "Male/GeneralSkeleton");
     }
 
     private static IReadOnlyList<int> ResolveIkChainBoneIndices(Skeleton3D skeleton, Node ikNode)
@@ -216,345 +71,63 @@ public sealed class NeckSpineIKIntegrationTests
             : skeleton.FindBone(configuredName);
     }
 
-    private static void AddIfFound(ICollection<int> values, int value)
+    private static async Task AssertLocalNeckSpineIKConfigurationAsync(string scenePath, NodePath skeletonPath)
     {
-        if (value < 0 || values.Contains(value))
+        SceneTree sceneTree = GetSceneTree();
+        Node templateRoot = LoadPackedScene(scenePath).Instantiate();
+        sceneTree.Root.AddChild(templateRoot);
+
+        try
         {
-            return;
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Skeleton3D skeleton = Assert.IsType<Skeleton3D>(templateRoot.GetNodeOrNull(skeletonPath), exactMatch: false);
+            Node ikNode = skeleton.GetNodeOrNull(IkNodeName)
+                ?? throw new Xunit.Sdk.XunitException($"Expected '{scenePath}' to author a local NeckSpineIK node.");
+            Assert.True(ikNode.IsClass("CCDIK3D"), $"Expected '{scenePath}' NeckSpineIK node to be a CCDIK3D.");
+            var targetPath = (NodePath)ikNode.Get("settings/0/target_node");
+
+            Assert.False(targetPath.IsEmpty, $"Expected '{scenePath}' to author a local NeckSpineIK target binding.");
+            Node3D configuredTarget = Assert.IsType<Node3D>(ikNode.GetNodeOrNull(targetPath), exactMatch: false);
+            Assert.Equal("HeadSolve", configuredTarget.Name.ToString());
+            Assert.Equal(1, (int)ikNode.Get("setting_count"));
+            Assert.Equal("Spine", ((StringName)ikNode.Get("settings/0/root_bone_name")).ToString());
+            Assert.Equal(skeleton.FindBone("Spine"), (int)ikNode.Get("settings/0/root_bone"));
+            Assert.Equal("Head", ((StringName)ikNode.Get("settings/0/end_bone_name")).ToString());
+            Assert.Equal(skeleton.FindBone("Head"), (int)ikNode.Get("settings/0/end_bone"));
+            Assert.Equal(5, (int)ikNode.Get("settings/0/joint_count"));
+
+            IReadOnlyList<int> chainBoneIndices = ResolveIkChainBoneIndices(skeleton, ikNode);
+            Assert.Equal(5, chainBoneIndices.Count);
+            Assert.Equal(skeleton.FindBone("Head"), chainBoneIndices[0]);
+            Assert.Equal(skeleton.FindBone("Spine"), chainBoneIndices[^1]);
+
+            AssertJointConstraints(ikNode);
         }
-
-        values.Add(value);
-    }
-
-    private static Dictionary<int, Vector3> CaptureTrackedBoneWorldPositions(
-        Skeleton3D skeleton,
-        IReadOnlyList<int> trackedBoneIndices)
-    {
-        var positions = new Dictionary<int, Vector3>(trackedBoneIndices.Count);
-        foreach (int trackedBoneIndex in trackedBoneIndices)
+        finally
         {
-            positions[trackedBoneIndex] = ResolveTrackedBoneWorldPosition(skeleton, trackedBoneIndex);
+            templateRoot.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
         }
-
-        return positions;
     }
 
-    private static async Task<Dictionary<int, Vector3>> CaptureTrackedBoneWorldPositionsAsync(
-        SceneTree sceneTree,
-        Skeleton3D skeleton,
-        IReadOnlyList<int> trackedBoneIndices)
+    private static void AssertJointConstraints(Node ikNode)
     {
-        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
-        return CaptureTrackedBoneWorldPositions(skeleton, trackedBoneIndices);
-    }
+        ReadOnlySpan<int> expectedRotationAxes = [0, 0, 3, 3, 0];
 
-    private static float ResolveClosestDistanceToTarget(IReadOnlyDictionary<int, Vector3> trackedBonePositions, Vector3 target)
-    {
-        float closestDistance = float.MaxValue;
-        foreach (KeyValuePair<int, Vector3> trackedBonePosition in trackedBonePositions)
+        for (int jointIndex = 0; jointIndex < expectedRotationAxes.Length; jointIndex++)
         {
-            float currentDistance = trackedBonePosition.Value.DistanceTo(target);
-            if (currentDistance < closestDistance)
+            Assert.Equal(expectedRotationAxes[jointIndex], (int)ikNode.Get($"settings/0/joints/{jointIndex}/rotation_axis"));
+
+            GodotObject? limitation = ikNode.Get($"settings/0/joints/{jointIndex}/limitation").AsGodotObject();
+            if (jointIndex < 4)
             {
-                closestDistance = currentDistance;
+                Assert.NotNull(limitation);
+            }
+            else
+            {
+                Assert.Null(limitation);
             }
         }
-
-        return closestDistance;
-    }
-
-    private static void AssertNonForwardPosePositiveSignal(
-        string markerName,
-        float baselineDistance,
-        float posedDistance,
-        Vector3 neutralMarkerPosition,
-        Vector3 posedMarkerPosition,
-        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
-        IReadOnlyDictionary<int, Vector3> posedBonePositions,
-        IReadOnlyList<int> trackedBoneIndices)
-    {
-        bool improvedDistance = posedDistance < baselineDistance - MinimumDistanceImprovement;
-
-        bool movedInExpectedDirection = HasDirectionalMovementTowardsMarker(
-            neutralMarkerPosition,
-            posedMarkerPosition,
-            neutralBonePositions,
-            posedBonePositions,
-            trackedBoneIndices,
-            out float largestMovementMagnitude,
-            out float largestDirectionalAlignment);
-
-        if (string.Equals(markerName, StoopForwardPoseName, StringComparison.Ordinal))
-        {
-            bool hasConstrainedStoopMovement = HasStoopForwardConstrainedMovement(
-                neutralMarkerPosition,
-                posedMarkerPosition,
-                neutralBonePositions,
-                posedBonePositions,
-                trackedBoneIndices,
-                out float stoopLargestMovementMagnitude,
-                out float stoopLargestDirectionalAlignment);
-
-            Assert.True(
-                improvedDistance || hasConstrainedStoopMovement,
-                $"Pose '{markerName}' must retain a measurable constrained response by either reducing closest tracked-bone distance " +
-                $"by more than {MinimumDistanceImprovement:F4} (baseline {baselineDistance:F4} -> posed {posedDistance:F4}) " +
-                $"or moving at least one tracked bone with magnitude >= {MinimumStoopForwardConstrainedMovement:F4}, " +
-                $"absolute alignment >= {MinimumStoopForwardAbsoluteDirectionalAlignment:F2}, " +
-                $"and alignment >= {MinimumStoopForwardDirectionalAlignmentFloor:F2}. " +
-                $"Observed max movement={stoopLargestMovementMagnitude:F6}, max alignment={stoopLargestDirectionalAlignment:F6}.");
-            return;
-        }
-
-        Assert.True(
-            improvedDistance || movedInExpectedDirection,
-            $"Pose '{markerName}' must provide a positive non-forward signal by either reducing closest tracked-bone distance " +
-            $"by more than {MinimumDistanceImprovement:F4} (baseline {baselineDistance:F4} -> posed {posedDistance:F4}) " +
-            $"or moving at least one tracked bone with magnitude >= {MinimumExpectedMovement:F4} and alignment >= {MinimumDirectionalAlignment:F2}. " +
-            $"Observed max movement={largestMovementMagnitude:F6}, max alignment={largestDirectionalAlignment:F6}.");
-    }
-
-    private static bool HasDirectionalMovementTowardsMarker(
-        Vector3 neutralMarkerPosition,
-        Vector3 posedMarkerPosition,
-        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
-        IReadOnlyDictionary<int, Vector3> posedBonePositions,
-        IReadOnlyList<int> trackedBoneIndices,
-        out float largestMovementMagnitude,
-        out float largestDirectionalAlignment)
-    {
-        return HasDirectionalMovementTowardsMarker(
-            neutralMarkerPosition,
-            posedMarkerPosition,
-            neutralBonePositions,
-            posedBonePositions,
-            trackedBoneIndices,
-            MinimumExpectedMovement,
-            MinimumDirectionalAlignment,
-            out largestMovementMagnitude,
-            out largestDirectionalAlignment);
-    }
-
-    private static bool HasDirectionalMovementTowardsMarker(
-        Vector3 neutralMarkerPosition,
-        Vector3 posedMarkerPosition,
-        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
-        IReadOnlyDictionary<int, Vector3> posedBonePositions,
-        IReadOnlyList<int> trackedBoneIndices,
-        float minimumMovementMagnitude,
-        float minimumDirectionalAlignment,
-        out float largestMovementMagnitude,
-        out float largestDirectionalAlignment)
-    {
-        Vector3 markerDelta = posedMarkerPosition - neutralMarkerPosition;
-        largestMovementMagnitude = 0.0f;
-        largestDirectionalAlignment = float.NegativeInfinity;
-
-        if (markerDelta.LengthSquared() <= Mathf.Epsilon)
-        {
-            return false;
-        }
-
-        Vector3 expectedDirection = markerDelta.Normalized();
-
-        foreach (int trackedBoneIndex in trackedBoneIndices)
-        {
-            Vector3 neutralBonePosition = neutralBonePositions[trackedBoneIndex];
-            Vector3 posedBonePosition = posedBonePositions[trackedBoneIndex];
-            Vector3 trackedBoneDelta = posedBonePosition - neutralBonePosition;
-
-            float movementMagnitude = trackedBoneDelta.Length();
-            if (movementMagnitude > largestMovementMagnitude)
-            {
-                largestMovementMagnitude = movementMagnitude;
-            }
-
-            if (movementMagnitude < minimumMovementMagnitude)
-            {
-                continue;
-            }
-
-            float directionalAlignment = trackedBoneDelta.Normalized().Dot(expectedDirection);
-            if (directionalAlignment > largestDirectionalAlignment)
-            {
-                largestDirectionalAlignment = directionalAlignment;
-            }
-
-            if (directionalAlignment >= minimumDirectionalAlignment)
-            {
-                return true;
-            }
-        }
-
-        if (float.IsNegativeInfinity(largestDirectionalAlignment))
-        {
-            largestDirectionalAlignment = 0.0f;
-        }
-
-        return false;
-    }
-
-    private static bool HasStoopForwardConstrainedMovement(
-        Vector3 neutralMarkerPosition,
-        Vector3 posedMarkerPosition,
-        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
-        IReadOnlyDictionary<int, Vector3> posedBonePositions,
-        IReadOnlyList<int> trackedBoneIndices,
-        out float largestMovementMagnitude,
-        out float strongestDirectionalAlignment)
-    {
-        Vector3 markerDelta = posedMarkerPosition - neutralMarkerPosition;
-        largestMovementMagnitude = 0.0f;
-        strongestDirectionalAlignment = 0.0f;
-
-        if (markerDelta.LengthSquared() <= Mathf.Epsilon)
-        {
-            return false;
-        }
-
-        Vector3 expectedDirection = markerDelta.Normalized();
-        float strongestAbsoluteAlignment = 0.0f;
-
-        foreach (int trackedBoneIndex in trackedBoneIndices)
-        {
-            Vector3 neutralBonePosition = neutralBonePositions[trackedBoneIndex];
-            Vector3 posedBonePosition = posedBonePositions[trackedBoneIndex];
-            Vector3 trackedBoneDelta = posedBonePosition - neutralBonePosition;
-
-            float movementMagnitude = trackedBoneDelta.Length();
-            if (movementMagnitude > largestMovementMagnitude)
-            {
-                largestMovementMagnitude = movementMagnitude;
-            }
-
-            if (movementMagnitude < MinimumStoopForwardConstrainedMovement)
-            {
-                continue;
-            }
-
-            float directionalAlignment = trackedBoneDelta.Normalized().Dot(expectedDirection);
-            float absoluteDirectionalAlignment = Mathf.Abs(directionalAlignment);
-            if (absoluteDirectionalAlignment > strongestAbsoluteAlignment)
-            {
-                strongestAbsoluteAlignment = absoluteDirectionalAlignment;
-                strongestDirectionalAlignment = directionalAlignment;
-            }
-
-            if (absoluteDirectionalAlignment >= MinimumStoopForwardAbsoluteDirectionalAlignment &&
-                directionalAlignment >= MinimumStoopForwardDirectionalAlignmentFloor)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static Dictionary<string, Node3D> ResolveRequiredPoseMarkers(Node3D targetPoses)
-    {
-        var markerMap = new Dictionary<string, Node3D>(_requiredPoseMarkerNames.Length, StringComparer.Ordinal);
-        foreach (string markerName in _requiredPoseMarkerNames)
-        {
-            Node3D marker = Assert.IsType<Node3D>(targetPoses.GetNodeOrNull(markerName));
-            markerMap[markerName] = marker;
-        }
-
-        return markerMap;
-    }
-
-    private static Skeleton3D? FindFirstSkeleton(Node rootNode)
-    {
-        if (rootNode is Skeleton3D skeleton)
-        {
-            return skeleton;
-        }
-
-        foreach (Node child in rootNode.GetChildren())
-        {
-            Skeleton3D? childSkeleton = FindFirstSkeleton(child);
-            if (childSkeleton is not null)
-            {
-                return childSkeleton;
-            }
-        }
-
-        return null;
-    }
-
-    private static Node BindOrCreateIkNode(Skeleton3D skeleton, Node3D headTarget)
-    {
-        Node? ikNode = skeleton.GetNodeOrNull(IkNodeName);
-
-        if (ikNode is null)
-        {
-            ikNode = LoadPackedScene(ReusableIkScenePath).Instantiate();
-            skeleton.AddChild(ikNode);
-        }
-
-        NodePath targetPath = ikNode.GetPathTo(headTarget);
-        ikNode.Set("settings/0/target_node", targetPath);
-        SetBooleanPropertyIfAvailable(ikNode, "active", true);
-        SetBooleanPropertyIfAvailable(ikNode, "enabled", true);
-
-        return ikNode;
-    }
-
-    private static void SetBooleanPropertyIfAvailable(Node node, StringName propertyName, bool value)
-    {
-        foreach (Godot.Collections.Dictionary property in node.GetPropertyList())
-        {
-            if ((StringName)property["name"] != propertyName)
-            {
-                continue;
-            }
-
-            node.Set(propertyName, value);
-            return;
-        }
-    }
-
-    private static int FindBoneIndexFromCandidates(Skeleton3D skeleton, IReadOnlyList<string> candidates)
-    {
-        int index = TryFindBoneIndexFromCandidates(skeleton, candidates);
-        return index >= 0
-            ? index
-            : throw new Xunit.Sdk.XunitException(
-                $"Expected at least one tracking bone from candidates: {string.Join(", ", candidates)}.");
-    }
-
-    private static int TryFindBoneIndexFromCandidates(Skeleton3D skeleton, IReadOnlyList<string> candidates)
-    {
-        foreach (string candidate in candidates)
-        {
-            int exactIndex = skeleton.FindBone(candidate);
-            if (exactIndex >= 0)
-            {
-                return exactIndex;
-            }
-        }
-
-        foreach (string candidate in candidates)
-        {
-            for (int boneIndex = 0; boneIndex < skeleton.GetBoneCount(); boneIndex++)
-            {
-                string boneName = skeleton.GetBoneName(boneIndex);
-                if (boneName.Contains(candidate, StringComparison.OrdinalIgnoreCase))
-                {
-                    return boneIndex;
-                }
-            }
-        }
-
-        return -1;
-    }
-
-    private static Vector3 ResolveTrackedBoneWorldPosition(Skeleton3D skeleton, int boneIndex)
-        => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex).Origin;
-
-    private static async Task SetHeadTargetToMarkerAsync(SceneTree sceneTree, Node3D headTarget, Node3D marker)
-    {
-        headTarget.GlobalTransform = marker.GlobalTransform;
-        // Match the verification runner's settling contract so constrained CCDIK reaches the target from either pose order.
-        await WaitForFramesAsync(sceneTree, PoseSettlementFrameCount);
     }
 }

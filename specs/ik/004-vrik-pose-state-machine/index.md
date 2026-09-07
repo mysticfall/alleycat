@@ -97,7 +97,7 @@ permission outputs that gate player movement in non-standing poses.
 ## References
 
 - [VRIK System](../index.md)
-- [IK-001: Reusable Neck-Spine CCDIK Setup](../001-neck-spine-ik/index.md)
+- [IK-001: Neck-Spine CCDIK Configuration](../001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](../002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](../003-leg-feet-ik/index.md)
 - [Pose State Machine Contract](pose-state-machine-contract.md)

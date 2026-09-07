@@ -184,7 +184,7 @@ IK-001 solver, and without affecting the player's XR-owned head path.
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
-- [IK-001: Reusable Neck-Spine CCDIK Setup](../../ik/001-neck-spine-ik/index.md)
+- [IK-001: Neck-Spine CCDIK Configuration](../../ik/001-neck-spine-ik/index.md)
 - [IK Implementation Notes — IKTargetIntentProvider Contract](../../ik/implementation-notes.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
