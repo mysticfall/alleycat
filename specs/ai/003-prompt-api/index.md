@@ -30,6 +30,8 @@ information it has already been supplied.
    waiting is necessary to receive context, while silence and waiting remain legitimate in-character choices.
 7. Shared watch guidance refers to available watch tools rather than a fixed tool set and presents listed watches as
    monitoring registrations, not assertions that a condition is currently true.
+8. An NPC always sees the current game time in its current scene status — including when no character is attended — on
+   the same clock as its event-history timestamps.
 
 ## Technical Requirements
 
@@ -46,49 +48,58 @@ information it has already been supplied.
    otherwise invalid root rather than silently rendering unrelated data.
 5. Initial current-scene projections include attended characters and active watches. Future projectors must use the same
    typed, immutable, stable-ID contract.
-6. Static instruction rendering uses the session-fixed render context, including `ScenarioContext` and scenario. Fresh
+6. `CurrentSceneStatus` renders the request snapshot's current game time unconditionally, including when the attended
+   list is empty. The rendered time uses the game clock's invariant one-decimal (`F1`) form — the same clock that
+   event-timestamp suffixes use (TR-9) — while rendered events keep their original observation times. The capture is
+   frozen with its request: exact transport retries keep it, and a rematerialised request captures afresh.
+7. Static instruction rendering uses the session-fixed render context, including `ScenarioContext` and scenario. Fresh
    current-scene snapshots must not mutate, replace, or re-resolve either session-fixed value.
 
 ### Event Timeline Rendering
 
-7. Event-history rendering is separate from both prompt stacks. It projects the selected persistent event timeline,
+8. Event-history rendering is separate from both prompt stacks. It projects the selected persistent event timeline,
    invokes each observation's canonical renderer with owner context, and joins entries with exactly one newline for
    AI-002's per-request timeline message.
-8. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
+9. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
    `TypeKey`-only base fallback, and shared timestamp suffix. No `event_history.md` asset, event-history parser,
    fragment catalogue, `EventHistoryPath`, or authored `TypeKey` dispatch exists.
-9. Speech rendering remains actor-relative and must not render raw `VoiceId` or continuation transport metadata.
-   `ContinuationProjection` remains responsible only for speech-segment grouping, ordering, correlation, and
-   latest-event placement; projected speech uses the same observation-owned rendering contract.
-10. Event rendering receives only the event records selected by its caller: AI-002's watermark rules for the canonical
-     per-request timeline message. Prompt stacks must not accept observations as general render-context values.
+10. Speech rendering remains actor-relative and must not render raw `VoiceId` or continuation transport metadata.
+    `ContinuationProjection` remains responsible only for speech-segment grouping, ordering, correlation, and
+    latest-event placement; projected speech uses the same observation-owned rendering contract.
+11. Event rendering receives only the event records selected by its caller: AI-002's watermark rules for the canonical
+    per-request timeline message. Prompt stacks must not accept observations as general render-context values.
 
 ### Shared Context Interpretation Guidance
 
-11. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
-     instruction — must carry character-neutral guidance covering four concepts: event-history interpretation,
-     current-scene interpretation, action selection, and available watch tools. The concepts are mandatory delivery
-     content; exact prose wording stays tunable. The guidance must not contradict AI-002's automatic per-request
-     delivery or payload-free wait semantics.
-12. Event-history guidance must match AI-002's timeline-message contract: established entries are prior context, the
-     new-history tail marks entries presented since the NPC's previous valid response, and neither label alone means a
-     conversational contribution has been answered or resolved.
-13. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
-     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
-     absence, and historical events do not establish current positions.
-14. Action-selection guidance must direct the NPC to consider relevant available history — including an available
-     reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
-     remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
-     freedom to act, speak, or stay silent according to character and scenario.
-15. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
-     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
-     arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
-     removal handle (AI-010 TR-5).
+12. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
+    instruction — must carry character-neutral guidance covering four concepts: event-history interpretation,
+    current-scene interpretation, action selection, and available watch tools. The concepts are mandatory delivery
+    content; exact prose wording stays tunable. The guidance must not contradict AI-002's automatic per-request
+    delivery, payload-free wait semantics, or tool-exchange disposal (AI-002 TR-17–TR-22).
+13. Event-history guidance must match AI-002's timeline-message contract: established entries are prior context, the
+    new-history tail marks entries presented since the NPC's previous valid response, and neither label alone means a
+    conversational contribution has been answered or resolved.
+14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
+    exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
+    absence, and historical events do not establish current positions. It must explain the common game clock — the
+    status's current time and every event timestamp read the same clock — and snapshot semantics: the status describes
+    the moment its request was captured, not a live view.
+15. Action-selection guidance must direct the NPC to consider relevant available history — including an available
+    reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
+    remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
+    freedom to act, speak, or stay silent according to character and scenario. It must frame completed actions
+    honestly: speaking and waiting take effect in the world and appear through remembered events and fresh scene
+    status, never through retained tool messages (AI-002 TR-22).
+16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
+    describe them as persistent monitoring registration rather than condition truth, state that watch transitions
+    arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
+    removal handle (AI-010 TR-5).
 
 ## In Scope
 
 - Two exported prompt stacks: static `SystemInstruction` and fresh `CurrentSceneStatus`.
 - Typed, immutable direct-child scene-status projection and strict section wiring.
+- Unconditional current game-time rendering in `CurrentSceneStatus`, on the game clock shared with event timestamps.
 - Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
 - Session-fixed scenario context and fresh request-scene snapshot separation.
 - Character-neutral shared context-interpretation guidance (event history, current scene, action selection, watches)
@@ -116,6 +127,10 @@ information it has already been supplied.
    supplied context.
 5. Acceptance shows action-selection guidance distinguishes engaging with an available reply from waiting for a future
    one while keeping silence and waiting legitimate in-character choices.
+6. Acceptance shows the current scene status always presents the current game time — including with an empty attended
+   list — on the same clock as event timestamps, while event entries keep their original observation times.
+7. Acceptance shows the shared instruction explains the common game clock, snapshot semantics, and that completed
+   actions appear through event history and current scene status rather than retained tool messages.
 
 ### Technical Requirements
 
@@ -136,10 +151,16 @@ information it has already been supplied.
    while projected speech uses canonical observation-owned text.
 7. Tests verify the authored shared instruction contains guidance covering each required concept — history
    interpretation, current-scene evidence limits and timestamps, action selection, and watch registration — and stays
-   consistent with AI-002's automatic per-request delivery and payload-free wait semantics.
+   consistent with AI-002's automatic per-request delivery, payload-free wait semantics, and tool-exchange disposal.
 8. Tests verify shared watch guidance is composition-neutral, referring to available watch tools and presenting listed
    watches as registrations rather than condition truth, and that it routes watch transitions through ordinary event
    history.
+9. Tests verify the scene status renders its snapshot's current game time unconditionally — including with an empty
+   attended list — in the invariant one-decimal form on the same clock as event-timestamp suffixes, and that rendered
+   events keep their original observation times.
+10. Tests verify the current-time capture is frozen with its request — exact transport retries keep it while recovery
+    and replacement recapture — and that the authored shared guidance carries the common-clock, snapshot, and
+    completed-actions-through-context framing.
 
 ## References
 

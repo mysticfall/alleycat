@@ -107,6 +107,9 @@ public sealed class CurrentSceneStatusIntegrationTests
             Assert.DoesNotContain("</Active Watches>", empty, StringComparison.Ordinal);
             Assert.DoesNotContain("Active Watches", empty, StringComparison.Ordinal);
             Assert.DoesNotContain("No active watches", empty, StringComparison.OrdinalIgnoreCase);
+            // The current game time is stated unconditionally, including with an empty attended-character list.
+            Assert.Contains("Current game time: 1.0s", empty, StringComparison.Ordinal);
+            Assert.Contains("No characters are currently attended.", empty, StringComparison.Ordinal);
 
             _ = watchRegistry.BindSessionAndCreateTools(
                 new ScenarioContext(owner, scene),
@@ -116,6 +119,7 @@ public sealed class CurrentSceneStatusIntegrationTests
 
             string populated = await compiled.RenderAsync(CreateStatusContext(owner, scene, timestamp: 2d));
 
+            Assert.Contains("Current game time: 2.0s", populated, StringComparison.Ordinal);
             Assert.Contains("<Active Watches>", populated, StringComparison.Ordinal);
             Assert.Contains("- WatchId: w1, ConditionId: proximity, SubjectId: char:subject", populated, StringComparison.Ordinal);
             Assert.DoesNotContain("Unknown", populated, StringComparison.Ordinal);
@@ -125,6 +129,79 @@ public sealed class CurrentSceneStatusIntegrationTests
         finally
         {
             watchRegistry.EndSession();
+            mind.Free();
+        }
+    }
+
+    /// <summary>
+    /// The authored current-scene stack states the snapshot's current game time — invariant <c>F1</c> with a
+    /// seconds suffix — while attended-character evidence keeps its original observation times, never rewritten to
+    /// the snapshot time.
+    /// </summary>
+    [Fact]
+    public async Task CompiledCurrentSceneStatus_StatesSnapshotGameTimeWithoutRewritingEvidenceTimestamps()
+    {
+        FakeCharacter owner = new("owner");
+        FakeCharacter attended = new("attended");
+        TestAgenticMind mind = new(owner);
+        WatchRegistry watchRegistry = new();
+        mind.AddChild(new AttendedCharacterSceneStatusProjector
+        {
+            ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
+        });
+        mind.AddChild(watchRegistry);
+        mind.AddChild(new WatchSceneStatusProjector
+        {
+            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
+            Registry = watchRegistry,
+        });
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())
+            .BuildServiceProvider();
+        PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(CurrentScenePromptPath), exactMatch: false);
+        FakeScene scene = new([owner, attended]);
+        PromptSectionBuildContext promptContext = new(services, scene, owner);
+
+        try
+        {
+            var projectors = SceneStatusProjectorRegistry.Discover(mind);
+            CompiledSceneStatusPrompt compiled = await stack.CompileSceneStatusAsync(promptContext, projectors);
+            SceneStatusBuildContext statusContext = new(
+                owner,
+                scene,
+                new AttentionSnapshot(50d, new Dictionary<string, float>(StringComparer.Ordinal)
+                {
+                    [attended.FullId] = 0.5f,
+                }),
+                [
+                    Entry(
+                        sequenceID: 1,
+                        observedAt: 42d,
+                        new ObservedRelativePosition(
+                            attended.FullId,
+                            1.5f,
+                            RelativeDirection.Front,
+                            RelativeDirection.Right),
+                        isRetained: true),
+                    Entry(
+                        sequenceID: 2,
+                        observedAt: 43d,
+                        new ObservedVisualDescription(attended.FullId, "A yellow coat."),
+                        isRetained: true),
+                ],
+                [],
+                timestamp: 50d);
+
+            string rendered = await compiled.RenderAsync(statusContext);
+
+            Assert.Contains("Current game time: 50.0s", rendered, StringComparison.Ordinal);
+            Assert.Contains("char:attended", rendered, StringComparison.Ordinal);
+            Assert.Contains("observed at 42", rendered, StringComparison.Ordinal);
+            Assert.Contains("described at 43", rendered, StringComparison.Ordinal);
+            Assert.Contains("A yellow coat.", rendered, StringComparison.Ordinal);
+        }
+        finally
+        {
             mind.Free();
         }
     }

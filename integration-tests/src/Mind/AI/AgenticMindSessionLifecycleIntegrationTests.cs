@@ -6,6 +6,7 @@ using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
@@ -783,9 +784,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// An attended onset that wins before speak admission refuses it with zero side effects: no TTS request, no
-    /// queue item, no hearing event, and no self-observation exist, the assistant call ID receives the
-    /// non-throwing not-delivered result, and the replacement request waits behind the cue's hold until the
-    /// player's completed speech settles it (AI-002 TR-25/27/56; SPCH-005 TR-37).
+    /// queue item, no hearing event, and no self-observation exist, and the refused batch — whose assistant call
+    /// received the non-throwing not-delivered result before settlement — is disposed whole, leaving no protocol
+    /// trace in the replacement request, which waits behind the cue's hold until the player's completed speech
+    /// settles it (AI-002 TR-17/22; SPCH-005 TR-37).
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_CueFirst_RefusesAdmissionWithZeroSideEffects()
@@ -856,12 +858,17 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             Assert.Equal(0, speechGenerator.GenerateCallCount);
             Assert.Equal(0, ownerAiVoice.HandOffCount);
-            FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(clientProvider.Requests[1].Single(message => message.Role == ChatRole.Tool).Contents));
-            Assert.Equal("speak-call", speakResult.CallId);
+            // The refused speak batch settled and was disposed: the replacement request carries no protocol trace
+            // of it — no assistant call and no not-delivered tool result — and the refused speech left no timeline
+            // entry (AI-002 TR-17/22).
+            IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             Assert.Equal(
-                "Your speech was cut short by another event before it could be spoken.",
-                speakResult.Result?.ToString());
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                replacement.Select(static message => message.Role));
+            Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
+            Assert.DoesNotContain(
+                mind.GetTimelineForTest(),
+                observation => observation is ObservedSpeech speech && speech.ActorId == owner.FullId);
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
@@ -879,8 +886,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A submission admitted before the attended onset is protected for its whole pipeline life: the cue's hold
     /// never cancels the in-flight TTS, playback hand-off commits exactly one self-observation, and the next model
-    /// request stays blocked until the player's completed speech settles the hold (AI-002 TR-25/26/56; SPCH-005
-    /// TR-25/37).
+    /// request stays blocked until the player's completed speech settles the hold (SPCH-005 TR-25/37). The settled
+    /// speak exchange is disposed — the committed speech reaches the model exactly once as its own timeline event
+    /// (AI-002 TR-22).
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_AdmissionFirst_ProtectedSpeakSettlesNaturallyAndHoldsNextRequest()
@@ -953,13 +961,19 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
-            FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(clientProvider.Requests[1].Single(message => message.Role == ChatRole.Tool).Contents));
-            Assert.Equal("Spoken through the configured voice.", speakResult.Result?.ToString());
+            // The settled speak exchange was disposed: no assistant call and no spoken tool result survive in the
+            // replacement, and the committed speech appears exactly once as the mind's own timeline event
+            // (AI-002 TR-22).
+            IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                replacement.Select(static message => message.Role));
+            Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
+            Assert.Equal(1, CountOccurrences(joined.Text, "I said: Greetings"));
             _ = Assert.Single(percepts, percept => percept.Content == "player words");
         }
         finally
@@ -973,9 +987,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// An unrelated speaker's completed speech — fresh content carrying none of the protected speak's speech keys
-    /// — withdraws the admitted submission before playback hand-off: no self-observation exists, the speak returns
-    /// its not-delivered result, and the cueing player's own completion still settles the surviving hold (AI-002
-    /// TR-26/40).
+    /// — withdraws the admitted submission before playback hand-off: no self-observation exists, and the disposed
+    /// stale speak batch leaves no protocol trace in the replacement, while the cueing player's own completion
+    /// still settles the surviving hold.
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_UnrelatedCompletedSpeech_CancelsTheProtectedAdmittedSpeak()
@@ -1050,11 +1064,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
-            FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(clientProvider.Requests[1].Single(message => message.Role == ChatRole.Tool).Contents));
+            // The withdrawn speak batch settled with its not-delivered result and was disposed whole: the
+            // replacement carries no assistant call and no tool result (AI-002 TR-17/22).
+            IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             Assert.Equal(
-                "Your speech was cut short by another event before it could be spoken.",
-                speakResult.Result?.ToString());
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                replacement.Select(static message => message.Role));
+            Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
@@ -1072,10 +1088,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// A voice without the admission capability is never refused at a cue and is not arbitration-protected
-    /// (SPCH-005 TR-38, AI-002 TR-63/AC-34): the ordinary cancellable submission starts even though an attended
-    /// onset cue is pending, the cue's invalidation then withdraws the pre-hand-off submission silently — no
-    /// hearing event, no self-observation — and the assistant call ID receives the non-throwing not-delivered
-    /// result once the cueing speech settles.
+    /// (SPCH-005 TR-38): the ordinary cancellable submission starts even though an attended onset cue is pending,
+    /// the cue's invalidation then withdraws the pre-hand-off submission silently — no hearing event, no
+    /// self-observation — and the settled speak batch is disposed whole, so the replacement request carries no
+    /// protocol trace of the withdrawn call once the cueing speech settles (AI-002 TR-17/22).
     /// </summary>
     [Fact]
     public async Task OrdinaryVoiceFallback_CueAfterSubmission_StartsAnywayThenWithdrawsPreHandOffSilently()
@@ -1129,11 +1145,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
-            FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(clientProvider.Requests[1].Single(message => message.Role == ChatRole.Tool).Contents));
+            // The withdrawn speak batch settled with its not-delivered result and was disposed whole: the
+            // replacement carries no assistant call and no tool result (AI-002 TR-17/22).
+            IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             Assert.Equal(
-                "Your speech was cut short by another event before it could be spoken.",
-                speakResult.Result?.ToString());
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                replacement.Select(static message => message.Role));
+            Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
@@ -1149,9 +1167,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// A voice without the admission capability keeps its post-hand-off speech committed (SPCH-005 TR-38, AI-002
-    /// TR-63/AC-34): a cue arriving after playback hand-off neither cuts the audible speech nor retracts its
-    /// exactly-once self-observation, and the call retains its natural spoken result in the replacement replay.
+    /// A voice without the admission capability keeps its post-hand-off speech committed (SPCH-005 TR-38): a cue
+    /// arriving after playback hand-off neither cuts the audible speech nor retracts its exactly-once
+    /// self-observation, and the settled speak exchange is disposed — the committed speech reaches the model
+    /// exactly once as its own timeline event instead of a retained tool result (AI-002 TR-22).
     /// </summary>
     [Fact]
     public async Task OrdinaryVoiceFallback_CueAfterHandOff_KeepsCommittedSpeechAndSelfObservation()
@@ -1208,10 +1227,16 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                     && message.Text.Contains("player words", StringComparison.Ordinal))));
 
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[^1];
-            FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(replacement.Single(message => message.Role == ChatRole.Tool).Contents));
-            Assert.Equal("Spoken through the configured voice.", speakResult.Result?.ToString());
+            // The settled speak exchange was disposed: no assistant call and no spoken tool result survive in the
+            // replacement, while the committed speech appears exactly once as the mind's own timeline event
+            // (AI-002 TR-22).
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                replacement.Select(static message => message.Role));
+            Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             Assert.True(ownerVoice.IsSpeaking, "The committed audible speech stays uncut after the cue settles.");
+            ChatMessage eventTimeline = GetEventTimelineMessage(replacement);
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: Committed"));
             ObservedSpeech retained = Assert.IsType<ObservedSpeech>(
                 Assert.Single(
                     mind.GetTimelineForTest(),
@@ -1432,9 +1457,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// A resume cancels a still-active wait with the canonical result. Its later grouped completion is delivered
-    /// exactly once as projected text, while an already accepted wait result remains immutable when it is later
-    /// rendered in a later request (AI-002 TR-40/41/58).
+    /// A resume cancels a still-active wait with the canonical result, and that settled wait batch is disposed
+    /// whole: its later grouped completion is delivered exactly once as projected timeline text with no protocol
+    /// trace of the disposed exchange, and a naturally-settled later wait is likewise disposed rather than
+    /// retained as accepted history (AI-002 TR-17/22).
     /// </summary>
     [Fact]
     public async Task GroupedContinuation_ActiveAndAcceptedWaitsPreserveCanonicalOwnershipAndReconciliation()
@@ -1475,16 +1501,22 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
             IReadOnlyList<ChatMessage> afterCancelledWait = clientProvider.Requests[1];
-            FunctionResultContent cancelled = Assert.IsType<FunctionResultContent>(Assert.Single(afterCancelledWait[4].Contents));
-            Assert.Equal("The action was cancelled before it completed.", cancelled.Result?.ToString());
+            // The cancelled wait batch settled with canonical cancellation results and was disposed whole: the
+            // replacement carries no assistant call and no tool result, and the window is delivered only through
+            // the canonical event timeline (AI-002 TR-17/22).
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                afterCancelledWait.Select(static message => message.Role));
+            Assert.Empty(afterCancelledWait.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage delivery = Assert.Single(
                 afterCancelledWait,
                 message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("wait prefix … wait continuation", delivery.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(delivery.Text, "wait prefix … wait continuation"));
 
-            // The second wait consumes a prefix naturally. Its tool result is accepted history before the resumed
-            // segment arrives, so the later projected utterance must be a new event-timeline entry, not a rewrite.
+            // The second wait consumes a prefix naturally. Its settled batch is disposed before the resumed
+            // segment arrives, so the later projected utterance must be a new event-timeline entry, never a
+            // retained wait result or a rewrite.
             await WaitUntilAsync(sceneTree, () => mind.HasActiveObservationWait);
             source.PublishCompletedSpeech("accepted wait prefix", new SpeechSegmentMetadata("accepted-wait", 0));
             await mind.DrainPerceptionsForTestAsync();
@@ -1495,13 +1527,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 4);
 
             IReadOnlyList<ChatMessage> continuedRequest = clientProvider.Requests[3];
-            IReadOnlyList<FunctionResultContent> waitResults = [.. continuedRequest
-                .SelectMany(static message => message.Contents)
-                .OfType<FunctionResultContent>()];
-            Assert.NotEmpty(waitResults);
-            Assert.All(
-                waitResults,
-                result => Assert.DoesNotContain("accepted wait prefix", result.Result?.ToString(), StringComparison.Ordinal));
+            // No wait result — natural or cancelled — survives disposal into the later request.
+            Assert.Empty(continuedRequest.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage eventTimeline = GetEventTimelineMessage(continuedRequest);
             Assert.Contains("accepted wait prefix … accepted wait continuation", eventTimeline.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(eventTimeline.Text, "accepted wait prefix … accepted wait continuation"));
@@ -1512,6 +1539,148 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             clientProvider.Free();
             player.Free();
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Consecutively completed speak batches keep later request contexts lean end-to-end: every settled exchange is
+    /// disposed, committed speech reaches the model exactly once as its own timeline event, and the later request
+    /// carries only the canonical context prefix and the bootstrap input (AI-002 TR-17/21/22).
+    /// </summary>
+    [Fact]
+    public async Task CompletedSpeakBatches_DoNotAccumulateInLaterRequests()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        TaskCompletionSource fourthRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(
+            new FunctionCallContent("speak-1", "speak", new Dictionary<string, object?> { ["speech"] = "One." }));
+        clientProvider.EnqueueCallBatch(
+            new FunctionCallContent("speak-2", "speak", new Dictionary<string, object?> { ["speech"] = "Two." }));
+        clientProvider.EnqueueCallBatch(
+            new FunctionCallContent("speak-3", "speak", new Dictionary<string, object?> { ["speech"] = "Three." }));
+        clientProvider.EnqueueHold(fourthRequestStarted);
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            await fourthRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // All committed self speech settles on the timeline before the assertion request is triggered, so its
+            // captured context is deterministic.
+            await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest()
+                .OfType<ObservedSpeech>()
+                .Count(speech => speech.ActorId == owner.FullId) == 3);
+            source.PublishCompletedSpeech("outer words", new SpeechSegmentMetadata("outer-group", 0));
+            await mind.DrainPerceptionsForTestAsync();
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 5);
+
+            IReadOnlyList<ChatMessage> latest = clientProvider.Requests[4];
+            // Three settled speak batches left no protocol trace: the replacement carries only the canonical
+            // context prefix and the bootstrap input (AI-002 TR-21/22).
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                latest.Select(static message => message.Role));
+            Assert.Empty(latest.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
+            Assert.Equal(AgenticMind.SessionBootstrapInput, latest[2].Text);
+            ChatMessage eventTimeline = GetEventTimelineMessage(latest);
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: One."));
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: Two."));
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: Three."));
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "Heard char:speaker say: outer words"));
+        }
+        finally
+        {
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Non-opted tool exchanges stay retained: watch arming and unwatch settle as ordinary retained exchanges whose
+    /// assistant calls and tool results replay in later requests, and neither arming nor removal fabricates timeline
+    /// observations (AI-002 TR-20; AI-010).
+    /// </summary>
+    [Fact]
+    public async Task WatchToolExchanges_AreRetainedInLaterRequestsWithoutFabricatedObservations()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        WatchRegistry watchRegistry = new()
+        {
+            Conditions = [new ProximityWatchTool()],
+        };
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(new FunctionCallContent(
+            "arm-call",
+            "watch_proximity",
+            new Dictionary<string, object?> { ["subject_id"] = player.FullId, ["maximum_distance"] = 2f }));
+        clientProvider.EnqueueCallBatch(new FunctionCallContent(
+            "unwatch-call",
+            "unwatch",
+            new Dictionary<string, object?> { ["watch_id"] = "w1" }));
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+            ObservationImportanceThreshold = 1f,
+        };
+        mind.AddChild(watchRegistry);
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+            IReadOnlyList<ChatMessage> afterArm = clientProvider.Requests[1];
+            // The settled arming exchange is retained whole (AI-002 TR-20): its assistant call and opaque-ID tool
+            // result replay in the next request.
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+                afterArm.Select(static message => message.Role));
+            FunctionResultContent armResult = Assert.IsType<FunctionResultContent>(
+                Assert.Single(afterArm[4].Contents.OfType<FunctionResultContent>()));
+            Assert.Equal("arm-call", armResult.CallId);
+            Assert.Contains("w1", armResult.Result?.ToString(), StringComparison.Ordinal);
+
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 3);
+            IReadOnlyList<ChatMessage> afterRemoval = clientProvider.Requests[2];
+            // Both settled watch exchanges stay retained, and neither arming nor removal invented an event.
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool],
+                afterRemoval.Select(static message => message.Role));
+            FunctionResultContent removalResult = Assert.IsType<FunctionResultContent>(
+                Assert.Single(afterRemoval[6].Contents.OfType<FunctionResultContent>()));
+            Assert.Equal("unwatch-call", removalResult.CallId);
+            Assert.Contains("Removed watch w1.", removalResult.Result?.ToString(), StringComparison.Ordinal);
+            Assert.Empty(mind.GetTimelineForTest());
+            Assert.Empty(watchRegistry.GetActiveWatchSnapshot());
+        }
+        finally
+        {
+            watchRegistry.EndSession();
+            mind.Free();
+            clientProvider.Free();
+            player.Free();
         }
     }
 

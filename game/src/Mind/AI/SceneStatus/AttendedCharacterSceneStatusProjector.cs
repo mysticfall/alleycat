@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Mind.Observation;
@@ -95,6 +96,12 @@ public sealed record AttendedCharactersSceneStatus(
             ValidateTimestamp(timestamp))
     {
     }
+
+    /// <summary>
+    /// Snapshot game time in invariant <c>F1</c> formatting with a seconds suffix — for example <c>125.0s</c> —
+    /// consistent with the event-time suffix, for model-facing rendering of the current game time.
+    /// </summary>
+    public string CurrentGameTime => Timestamp.ToString("F1", CultureInfo.InvariantCulture) + "s";
 
     private static double ValidateTimestamp(double timestamp)
         => double.IsFinite(timestamp) && timestamp >= 0d

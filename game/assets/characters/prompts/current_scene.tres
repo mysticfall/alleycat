@@ -7,7 +7,8 @@
 script = ExtResource("1_projection")
 ProjectorID = "attended-characters"
 RootTypeName = "AlleyCat.Mind.AI.SceneStatus.AttendedCharactersSceneStatus"
-TemplateSource = "{% if AttendedCharacters.size > 0 %}
+TemplateSource = "Current game time: {{ CurrentGameTime }}
+{% if AttendedCharacters.size > 0 %}
 Current attended characters:
 {% for attended in AttendedCharacters %}- {{ attended.FullId }}{% if attended.RelativePosition != nil %} is {{ attended.RelativePosition.Distance }} m away (observed at {{ attended.RelativePositionObservedAt }} s){% endif %}{% if attended.VisualDescription != nil %}: {{ attended.VisualDescription }} (described at {{ attended.VisualDescriptionObservedAt }} s){% endif %}
 {% endfor %}{% else %}

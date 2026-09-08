@@ -4,7 +4,7 @@ namespace AlleyCat.Mind.AI;
 
 /// <summary>
 /// Per-function session phase policy registered at the composition boundary when session tools are composed and
-/// consulted by the session runner when a tool phase begins (AI-002 TR-62). The runner understands only this
+/// consulted by the session runner when a tool phase begins. The runner understands only this
 /// generic descriptor — never a concrete production tool, function name, or tool type: whether a function executes
 /// under admission arbitration is decided entirely by the composition-time policy bound to it.
 /// </summary>
@@ -12,13 +12,13 @@ namespace AlleyCat.Mind.AI;
 /// Whether the function's invocation executes under admission arbitration: its phase registers as
 /// pending-admission before invocation, the submission's voice-pipeline admission transaction commits through the
 /// runner's admission arbitration, and a matching attended cue linearising after admission protects the phase
-/// instead of cancelling it (AI-002 TR-25/26, TR-56).
+/// instead of cancelling it, keeping admitted speech committed at playback hand-off (AI-002 TR-14).
 /// </param>
 internal sealed record AgentSessionPhasePolicy(bool AdmissionArbitrated)
 {
     /// <summary>
     /// Policy for admission-arbitrated invocations — today the composition boundary binds this to the speech tool's
-    /// submission (AI-002 TR-25).
+    /// submission.
     /// </summary>
     public static AgentSessionPhasePolicy AdmissionArbitration { get; } = new(AdmissionArbitrated: true);
 
@@ -31,11 +31,22 @@ internal sealed record AgentSessionPhasePolicy(bool AdmissionArbitrated)
 }
 
 /// <summary>
-/// Composed function carrying its composition-registered session phase policy (AI-002 TR-62): the session runner
+/// Base of the game's composition-bound function wrappers: exposes the wrapped composed function so the session
+/// runner can inspect composition-registered policies — phase policy, exchange disposal — through arbitrary wrapper
+/// layers without coupling to any concrete production tool.
+/// </summary>
+internal abstract class ComposedAIFunction(AIFunction function) : DelegatingAIFunction(function)
+{
+    /// <summary>The wrapped composed function.</summary>
+    internal AIFunction ComposedFunction => InnerFunction;
+}
+
+/// <summary>
+/// Composed function carrying its composition-registered session phase policy: the session runner
 /// pattern-matches this carrier — and nothing about the wrapped function's identity — when a tool phase begins.
 /// </summary>
 internal sealed class PhasePolicyBoundFunction(AIFunction function, AgentSessionPhasePolicy policy)
-    : DelegatingAIFunction(function)
+    : ComposedAIFunction(function)
 {
     public AgentSessionPhasePolicy Policy { get; } = policy;
 }

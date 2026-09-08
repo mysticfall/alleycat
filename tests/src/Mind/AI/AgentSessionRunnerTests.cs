@@ -308,6 +308,192 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
+    /// Consecutive disposal-opted speak and wait batches never accumulate: every later request replays only the
+    /// request-context prefix and the bootstrap input, which disposal never removes (AI-002 TR-17/21).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithDisposalOptedBatches_NeverAccumulatesAndPreservesBootstrapInput()
+    {
+        const string waitToolName = "wait";
+        using CancellationTokenSource lifetime = new();
+        List<string> speech = [];
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-1", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "One" })),
+            Respond(CreateCall("wait-1", waitToolName)),
+            Respond(CreateCall("speak-2", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Two" })),
+            Respond(CreateCall("wait-2", waitToolName)),
+            Respond(CreateCall("speak-3", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Three" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [
+                CreateSpeakFunction(speech.Add, disposeExchange: true),
+                CreateInstantFunction(waitToolName, disposeExchange: true),
+            ],
+            [new ChatMessage(ChatRole.User, "Bootstrap")]);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["One", "Two", "Three"], speech);
+        Assert.Equal(6, client.Requests.Count);
+        for (int index = 1; index < client.Requests.Count; index++)
+        {
+            // Every settled exchange was disposed whole: no assistant call, no tool result, and the bootstrap input
+            // stays the only transcript tail (AI-002 TR-21/22).
+            ChatMessage bootstrap = Assert.Single(client.Requests[index]);
+            Assert.Equal(ChatRole.User, bootstrap.Role);
+            Assert.Equal("Bootstrap", Text(bootstrap));
+        }
+    }
+
+    /// <summary>
+    /// A batch mixing a disposal-opted call with a non-opted call is retained whole: the assistant batch and every
+    /// tool result — including the opted sibling's — stay in the next request, with no partial removal and no
+    /// orphaned call or result (AI-002 TR-19/20).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithMixedOptedAndRetainedBatch_RetainsTheWholeExchange()
+    {
+        const string watchToolName = "watch_like";
+        using CancellationTokenSource lifetime = new();
+        List<string> speech = [];
+        ChatMessage mixedBatch = new(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Kept" }),
+                new FunctionCallContent("watch-call", watchToolName, new Dictionary<string, object?>()),
+            ]);
+        ScriptedSessionClient client = new(
+            Respond(mixedBatch),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [
+                CreateSpeakFunction(speech.Add, disposeExchange: true),
+                CreateInstantFunction(watchToolName, disposeExchange: false),
+            ],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            allowMultipleToolCalls: true);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["Kept"], speech);
+        Assert.Equal(2, client.Requests.Count);
+        IReadOnlyList<ChatMessage> replay = client.Requests[1];
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+            replay.Select(message => message.Role));
+        Assert.Same(mixedBatch, replay[1]);
+        FunctionResultContent[] results = [.. replay[2].Contents.OfType<FunctionResultContent>()];
+        Assert.Equal(["speak-call", "watch-call"], results.Select(result => result.CallId));
+        Assert.Equal("Spoken.", results[0].Result?.ToString());
+    }
+
+    /// <summary>
+    /// Session-wide call-ID validation is independent of transcript retention: a call ID consumed by a disposed
+    /// exchange is still rejected as a duplicate, with the invalid replay leaving no tool effect (AI-002 TR-21).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithCallIDReplayedFromDisposedBatch_RejectsItAsDuplicate()
+    {
+        using CancellationTokenSource lifetime = new();
+        List<string> speech = [];
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("dup", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "First" })),
+            Respond(CreateCall("dup", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Replay" })),
+            Respond(CreateCall("fresh", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Fresh" })),
+            EndQuietly(lifetime));
+        var context = new RecordingContextSource();
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(speech.Add, disposeExchange: true)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        // The replayed duplicate never executed; only the first and the fresh follow-up did.
+        Assert.Equal(["First", "Fresh"], speech);
+        Assert.Equal(4, client.Requests.Count);
+        Assert.Equal([0, 2], context.Confirmed);
+        Assert.Equal([1, 3], context.Discarded);
+        // The disposed first exchange and the rejected replay leave the later requests protocol-clean.
+        Assert.Equal(
+            [ChatRole.User, ChatRole.User, ChatRole.User],
+            client.Requests[3].Select(static message => message.Role));
+    }
+
+    /// <summary>
+    /// Exact transport retries keep reusing the frozen request byte-identically even when the eventual response's
+    /// batch is disposal-opted: disposal happens only after the exchange settles (AI-002 TR-18).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithDisposalOptedTool_TransportRetryReusesFrozenRequestAndDisposesAfterSettlement()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            FailStep(new HttpRequestException("reset")),
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { }, disposeExchange: true)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            retryDelays: [TimeSpan.Zero],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(2, context.MaterialisationCount);
+        Assert.Equal(client.Requests[0].Select(Text), client.Requests[1].Select(Text));
+        Assert.Equal([0], context.Confirmed);
+        Assert.Equal([1], context.Discarded);
+        // After the retried response's exchange settled, it was disposed from the next request.
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Equal(
+            [ChatRole.User, ChatRole.User, ChatRole.User],
+            client.Requests[2].Select(static message => message.Role));
+    }
+
+    /// <summary>
+    /// A fresh-turn invalidation during an opted tool call still skips the batch canonically, and the disposed stale
+    /// exchange leaves no protocol trace — no assistant call, no canonical cancellation result — in the replacement
+    /// request (AI-002 TR-17/22).
+    /// </summary>
+    [Fact]
+    public async Task InvalidateForFreshTurn_DuringDisposalOptedToolCall_LeavesNoProtocolTraceInTheReplacement()
+    {
+        using CancellationTokenSource lifetime = new();
+        TaskCompletionSource toolStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        AIFunction holding = BindExchangeDisposal(
+            AIFunctionFactory.Create(
+                async (string speech, CancellationToken cancellationToken) =>
+                {
+                    _ = toolStarted.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    return "unreachable";
+                },
+                SpeakToolName,
+                "Speak aloud."),
+            disposeExchange: true);
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Stale" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [holding], []);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await toolStarted.Task;
+        runner.InvalidateForFreshTurn();
+        await runTask;
+
+        Assert.Equal(2, client.Requests.Count);
+        // The replacement request carries no protocol trace of the disposed stale exchange — not even the canonical
+        // cancellation results composed for its skipped call.
+        Assert.Empty(client.Requests[1]);
+    }
+
+    /// <summary>
     /// A valid multi-call batch executes serially in provider order regardless of the provider preference, which
     /// must never make a valid batch fail local validation (AI-002 TR-13).
     /// </summary>
@@ -2071,18 +2257,29 @@ public sealed class AgentSessionRunnerTests
     private static SpeechContinuationKey Continuation(string source, string turn, long revision)
         => new(source, turn, checked((int)revision));
 
-    private static AIFunction CreateSpeakFunction(Action<string> action)
-        // Composition registers the speak function's admission-arbitration policy (AI-002 TR-62), mirroring the
-        // AgenticMind wiring so the name alone never decides phase registration.
-        => AgentSessionPhasePolicy.AdmissionArbitration.Bind(
-            AIFunctionFactory.Create(
-                (string speech) =>
-                {
-                    action(speech);
-                    return "Spoken.";
-                },
-                SpeakToolName,
-                "Speak aloud."));
+    private static AIFunction CreateSpeakFunction(Action<string> action, bool disposeExchange = false)
+        // Composition registers the speak function's admission-arbitration policy, mirroring the AgenticMind wiring
+        // so the name alone never decides phase registration. Disposal opting is likewise a composition-registered
+        // policy rather than a name property.
+        => BindExchangeDisposal(
+            AgentSessionPhasePolicy.AdmissionArbitration.Bind(
+                AIFunctionFactory.Create(
+                    (string speech) =>
+                    {
+                        action(speech);
+                        return "Spoken.";
+                    },
+                    SpeakToolName,
+                    "Speak aloud.")),
+            disposeExchange);
+
+    private static AIFunction CreateInstantFunction(string name, bool disposeExchange = false)
+        => BindExchangeDisposal(
+            AIFunctionFactory.Create(() => $"{name} result.", name, $"{name} description."),
+            disposeExchange);
+
+    private static AIFunction BindExchangeDisposal(AIFunction function, bool disposeExchange)
+        => disposeExchange ? ToolExchangeDisposalPolicy.Dispose.Bind(function) : function;
 
     private static string ThrowingSpeak(string speech)
         => throw new InvalidOperationException($"Sensitive tool detail: {speech}");

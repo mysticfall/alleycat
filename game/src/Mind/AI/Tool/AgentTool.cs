@@ -13,7 +13,7 @@ namespace AlleyCat.Mind.AI.Tool;
 /// <param name="Mind">Mind boundary owning the session's timeline, waits, and attended-speaker cues.</param>
 /// <param name="Clock">Game clock backing every time-sensitive tool result, or null when unavailable.</param>
 /// <remarks>
-/// The common session exposes no feature services (AI-002 TR-19/23): speech-admission arbitration binds typed to
+/// The common session exposes no feature services (AI-002 TR-13): speech-admission arbitration binds typed to
 /// its concrete tool at the AgenticMind composition boundary, never through this shared binding.
 /// </remarks>
 internal sealed record AgentToolSession(
@@ -39,6 +39,19 @@ public abstract partial class AgentTool : Resource
     /// </summary>
     [Export(PropertyHint.MultilineText)]
     public string ToolDescription { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether the session runner disposes this tool's completed exchanges (AI-002 TR-17/20): once a batch whose
+    /// every call targets a disposal-opted tool settles, the accepted assistant messages and the tool-result message
+    /// are removed from the replayed transcript, so the settled exchange is never model-visible in a later request.
+    /// The conservative default retains completed exchanges — `speak` and `wait` opt in, while watch tools and
+    /// authored extras stay retained. Tool name and description metadata are unaffected by this flag.
+    /// </summary>
+    [Export]
+    public bool DisposesExchangeOnCompletion
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Session binding available to derived tools between
@@ -93,7 +106,10 @@ public abstract partial class AgentTool : Resource
 
         string? name = string.IsNullOrWhiteSpace(ToolName) ? null : ToolName.Trim();
         string? description = string.IsNullOrWhiteSpace(ToolDescription) ? null : ToolDescription.Trim();
-        return CreateFunction(method, context, mind, dispatcher, name, description);
+        AIFunction function = CreateFunction(method, context, mind, dispatcher, name, description);
+        // The authored disposal flag binds the composition-registered exchange-disposal policy here, so every
+        // caller of this tool's function inherits the authored retention semantics.
+        return DisposesExchangeOnCompletion ? ToolExchangeDisposalPolicy.Dispose.Bind(function) : function;
     }
 
     /// <summary>
