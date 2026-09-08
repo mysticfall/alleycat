@@ -22,16 +22,13 @@ that describes these contracts accurately.
 2. New event history since the NPC's previous valid response is clearly distinguished from established history.
 3. The NPC can wait for an appropriate reason and receives only the reason, elapsed game time, and current game time;
    `wait` is not an observation-text delivery channel.
-4. The NPC can explicitly recall its read-only event timeline through the `history` tool. This on-demand result may
-   render past event text but is not automatic event delivery.
-5. The NPC's model-facing session-tool guidance matches runtime behaviour: fresh context arrives with every logical
-   request without waiting, `wait` yields for future developments and reports only its wake reason and timing, and
-   `history` is on-demand read-only recall of the persistent event timeline.
-6. A fresh event gets priority over importance pressure, an attended speaker completion, and timeout. Routine pressure
+4. The NPC's model-facing session-tool guidance matches runtime behaviour: fresh context arrives with every logical
+   request without waiting, and `wait` yields for future developments and reports only its wake reason and timing.
+5. A fresh event gets priority over importance pressure, an attended speaker completion, and timeout. Routine pressure
    does not interrupt active reasoning.
-7. A continued utterance cannot cause a response to incomplete text: its context is presented, then awaits confirmation
+6. A continued utterance cannot cause a response to incomplete text: its context is presented, then awaits confirmation
    before settling.
-8. Failed, cancelled, stale, or invalid provider work does not make an NPC forget or falsely confirm scene context.
+7. Failed, cancelled, stale, or invalid provider work does not make an NPC forget or falsely confirm scene context.
 
 ## Technical Requirements
 
@@ -67,9 +64,7 @@ that describes these contracts accurately.
 9. Completing or resetting a wait must not clear a timeline cursor. Scheduling pressure outside wait clears only when a
    provider response has been accepted and confirms the corresponding request snapshot.
 10. Automatic delivery is payload-free: injected messages and `wait` results must contain no observation text.
-     Model-visible event text appears automatically only in the per-request event-timeline message rendered by AI-003.
-     The model may separately invoke `history`, a read-only timeline-recall tool whose result renders selected events
-     on demand.
+     Model-visible event text appears only in the per-request event-timeline message rendered by AI-003.
 
 ### Continuation And Failure
 
@@ -79,10 +74,9 @@ that describes these contracts accurately.
 12. Provider responses remain tool-only and are completely validated before any tool effect. Invalid responses have no
     transcript, observation, action, or watermark effect and use bounded recovery; transport retry and recovery remain
     contained.
-13. The tool inventory includes `speak`, `wait`, `history` for read-only on-demand timeline recall, and authorable
-     watch tools from AI-010. Tool delegates send any resulting observations through Mind's atomic queue; `history`
-     does not enqueue observations. Tool validation and typed tool binding occur only at AgenticMind composition; the
-     common runtime has no feature service bag.
+13. The tool inventory includes `speak`, `wait`, and authorable watch tools from AI-010. Tool delegates send any
+     resulting observations through Mind's atomic queue. Tool validation and typed tool binding occur only at
+     AgenticMind composition; the common runtime has no feature service bag.
 14. Speech admitted to its voice pipeline remains committed at playback hand-off and uses Mind's node-lifetime
      exact-once
      commit identity. Node exit remains terminal and creates no replacement request or synthetic confirmation.
@@ -93,18 +87,17 @@ that describes these contracts accurately.
      delivery (TR-2, TR-3, and TR-6): no description may state that waiting is required for new context to arrive or
      imply that `wait` results contain event or observation text (TR-8, TR-10).
 16. `wait` must be described as intentionally yielding until future developments or remaining silent, with a result
-     limited to wake reason, elapsed game time, and current game time. `history` must be described as read-only
-     on-demand recall of the persistent event timeline, including its event-selection behaviour, and not as recovery
-     of unrecorded perception. Watch-tool descriptions follow AI-010's model-facing watch guidance;
-     shared-instruction guidance follows AI-003's Shared Context Interpretation Guidance (TR-12–TR-16).
+     limited to wake reason, elapsed game time, and current game time. Watch-tool descriptions follow AI-010's
+     model-facing watch guidance; shared-instruction guidance follows AI-003's Shared Context Interpretation Guidance
+     (TR-11–TR-15).
 
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, tool-only validation, and contained retry/recovery.
 - Causal event-timeline watermarks, fresh per-request scene status, and atomic response confirmation.
-- Canonical observation-owned text for request history and on-demand `history` results.
+- Canonical observation-owned text for per-request timeline history.
 - Payload-free scheduling and wait semantics.
-- Accurate model-facing session-tool descriptions for automatic delivery, `wait`, and `history`.
+- Accurate model-facing session-tool descriptions for automatic delivery and `wait`.
 - Continuation admission and confirmation settlement.
 - Composition-time binding of watch tools with AI-010.
 
@@ -119,16 +112,15 @@ that describes these contracts accurately.
 
 1. Acceptance shows each NPC request contains established history, a clearly headed new-history tail, and current scene
    status. Selected events use observation-owned canonical text. Automatic delivery supplies no observation text through
-   `wait`, injected, or scheduling messages; a model-invoked `history` call instead returns its intentionally rendered,
-   read-only timeline result on demand.
+   `wait`, injected, or scheduling messages.
 2. Acceptance shows fresh events win over pressure, attended-speaker completion, and timeout, while routine pressure
    does
    not interrupt an active request.
 3. Acceptance shows incomplete continuation context is never falsely settled by a failed, blank, abandoned, or invalid
    provider interaction.
-4. Acceptance shows each session-tool description accurately distinguishes automatic per-request delivery, deliberate
-   waiting, and explicit recall, and none claims that waiting is required for new context or that wait results carry
-   observation text.
+4. Acceptance shows each session-tool description accurately distinguishes automatic per-request delivery from
+   deliberate waiting, and none claims that waiting is required for new context or that wait results carry observation
+   text.
 
 ### Technical Requirements
 
@@ -137,16 +129,13 @@ that describes these contracts accurately.
 2. Tests verify only locally valid accepted responses atomically confirm a snapshot watermark and clear outside-wait
    pressure; all failure, cancellation, stale, and invalid paths leave both unconfirmed.
 3. Tests verify `wait` returns only reason, elapsed time, and current time; wait reset never moves a timeline cursor.
-4. Tests verify no observation text occurs in `wait` results or injected messages, and scheduling signals carry no
-   payload.
-5. Tests verify a model-invoked `history` call renders selected persistent-timeline events in order, without queuing
-   an observation or advancing a request watermark.
-6. Tests verify the `S` admission and `PresentedAwaitingConfirmation` stages, including release on every non-confirming
+4. Tests verify no observation text occurs in `wait` results or injected messages, that model-visible event text
+   appears only in the per-request event-timeline message, and that scheduling signals carry no payload.
+5. Tests verify the `S` admission and `PresentedAwaitingConfirmation` stages, including release on every non-confirming
    outcome.
-7. Tests verify watch-tool validation and typed binding occur only at AgenticMind composition.
-8. Tests verify the `wait` description presents yielding semantics and the `history` description presents read-only
-   timeline recall, with no description text contradicting the payload-free wait contract or automatic per-request
-   delivery.
+6. Tests verify watch-tool validation and typed binding occur only at AgenticMind composition.
+7. Tests verify the `wait` description presents yielding semantics, with no description text contradicting the
+   payload-free wait contract or automatic per-request delivery.
 
 ## References
 

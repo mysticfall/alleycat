@@ -58,7 +58,7 @@ public sealed class ModuleBoundaryDependencyTests
     /// at tool composition (AI-002 TR-62): it must not reference, match, or name any concrete production tool,
     /// function name, or tool type. Matching rule on <c>AgentSessionRunner.cs</c>: ordinal substring for the
     /// tool-namespace import <c>Mind.AI.Tool</c> and the tool type-name roots <c>SpeechTool</c>, <c>WaitTool</c>,
-    /// <c>HistoryTool</c>, <c>AgentTool</c>, and <c>ProductionToolName</c>, plus the case-insensitive
+    /// <c>AgentTool</c>, and <c>ProductionToolName</c>, plus the case-insensitive
     /// word-boundary pattern <c>speak</c> for concrete function-name matching — a comment naming the function
     /// counts as naming it, so reword generically.
     /// </summary>
@@ -75,7 +75,6 @@ public sealed class ModuleBoundaryDependencyTests
             "Mind.AI.Tool",
             "SpeechTool",
             "WaitTool",
-            "HistoryTool",
             "AgentTool",
             "ProductionToolName");
 

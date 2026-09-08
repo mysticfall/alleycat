@@ -50,7 +50,7 @@ per-request scene context.
     - dedicated typed proximity-transition observations: `NeverExpire`, event-eligible.
    - visual presence: attention-only; it creates no retained observation initially.
 6. Mind independently appends every event-eligible accepted entry to a persistent event timeline. Active-log expiry or
-   supersession never removes timeline entries. AI-002's `history` tool reads this timeline.
+   supersession never removes timeline entries. AI-002's per-request event-timeline message renders this timeline.
 7. Every accepted entry evaluates importance, freshness, and any other scheduler metadata exactly once. Scheduling
    carries
    only that metadata; it must not carry or render observation payload text.
@@ -112,7 +112,7 @@ per-request scene context.
    undeclared runtime types.
 3. Tests verify policy-owned match, suppression, supersession, and expiry behaviour without a Mind concrete-type
    catalogue.
-4. Tests verify event-timeline persistence across active-log expiry and that `history` reads it.
+4. Tests verify event-timeline persistence across active-log expiry.
 5. Tests verify removal notifications reach projectors without creating an observation, timeline record, pressure, or
    text.
 6. Tests verify the generic speech commit-identity gate rejects duplicates before all acceptance effects and survives

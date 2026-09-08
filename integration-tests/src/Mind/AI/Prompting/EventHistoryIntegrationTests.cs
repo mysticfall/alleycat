@@ -15,15 +15,14 @@ public sealed class EventHistoryIntegrationTests
 {
     /// <summary>
     /// Tool descriptions remain the sole source of tool-specific mechanics and etiquette, and state the corrected
-    /// context-delivery contract: automatic per-request delivery, payload-free wait results, read-only recorded
-    /// recall, and watch registration semantics (AI-002 TR-15/16; AI-010 TR-14/15).
+    /// context-delivery contract: automatic per-request delivery, payload-free wait results, and watch registration
+    /// semantics (AI-002 TR-15/16; AI-010 TR-14/15).
     /// </summary>
     [Fact]
     public void ProductionToolDescriptions_CarryPerToolMechanicsAndEtiquette()
     {
         using WaitTool waitTool = new();
         using SpeechTool speechTool = new();
-        using HistoryTool historyTool = new();
         using ProximityWatchTool proximityWatchTool = new();
         UnwatchTool unwatchTool = new(registry: null);
 
@@ -36,11 +35,6 @@ public sealed class EventHistoryIntegrationTests
         Assert.Contains("never what was observed", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("nothing new reaches you", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("wait a reasonable duration", waitTool.ToolDescription, StringComparison.Ordinal);
-
-        // history: read-only recall of recorded events, never framed against wait-result delivery.
-        Assert.Contains("Reading changes nothing", historyTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("recorded", historyTool.ToolDescription, StringComparison.Ordinal);
-        Assert.DoesNotContain("wait results", historyTool.ToolDescription, StringComparison.Ordinal);
 
         // watch_proximity: immediate registration returning an opaque ID plus current evidence, persistent
         // monitoring without re-arming, and ordinary event-history transitions.
@@ -120,7 +114,7 @@ public sealed class EventHistoryIntegrationTests
         ];
         ObservationHistoryRenderer renderer = CreateRenderer();
 
-        IReadOnlyList<ContinuationProjection.Event> projected = ObservationHistoryRenderer.Project(timeline);
+        IReadOnlyList<ContinuationProjection.Event> projected = ContinuationProjection.Project(timeline);
         string selected = await renderer.RenderAsync([timeline[0]], timeline);
         string rendered = await renderer.RenderAsync(timeline);
 

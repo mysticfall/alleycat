@@ -90,7 +90,7 @@ accurately so the NPC neither re-arms needlessly nor mistakes a registration for
     needed to keep monitoring.
 15. Watch-tool descriptions must state that transitions arrive as ordinary remembered events through the per-request
     event timeline (TR-10, TR-11), never as wait-result text (AI-002 TR-8/TR-10), and that available evidence is
-    limited by current perception (TR-8 for proximity). Shared-instruction watch concepts follow AI-003 TR-16.
+    limited by current perception (TR-8 for proximity). Shared-instruction watch concepts follow AI-003 TR-15.
 
 ## In Scope
 

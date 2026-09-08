@@ -24,7 +24,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
 /// Godot-runtime coverage for the production session tools: <c>speak</c> turn-taking and cut-short boundaries,
-/// <c>wait</c> result composition, and the read-only timeline <c>history</c> tool.
+/// and <c>wait</c> result composition.
 /// </summary>
 [Headless]
 public sealed partial class SessionToolsIntegrationTests
@@ -366,58 +366,6 @@ public sealed partial class SessionToolsIntegrationTests
         Assert.Contains("Wait ended: attended speaker finished.", message, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The history tool answers from the persistent event timeline in timeline order without changing it
-    /// (AI-002 TR-13; AI-003 TR-10/11).
-    /// </summary>
-    [Fact]
-    public async Task History_ReturnsTimelineOrderAndStaysReadOnly()
-    {
-        await using ToolFixture fixture = new();
-        await fixture.ReadyAsync();
-        object? empty = await fixture.InvokeHistoryAsync(null, CancellationToken.None);
-        Assert.Equal("You remember no past events yet.", empty);
-
-        fixture.Mind.ObserveForTest(new TypedObservation("test.alpha", 1f));
-        fixture.Mind.ObserveForTest(new TypedObservation("test.beta", 0.5f));
-        fixture.Mind.ObserveForTest(new TypedObservation("test.gamma", 1f));
-
-        string complete = Assert.IsType<string>(await fixture.InvokeHistoryAsync(null, CancellationToken.None));
-        Assert.Contains("3 past event(s), oldest first:", complete, StringComparison.Ordinal);
-        int alpha = complete.IndexOf("test.alpha", StringComparison.Ordinal);
-        int beta = complete.IndexOf("test.beta", StringComparison.Ordinal);
-        int gamma = complete.IndexOf("test.gamma", StringComparison.Ordinal);
-        Assert.True(alpha >= 0 && beta > alpha && gamma > beta, "The history result must preserve timeline order.");
-
-        string recent = Assert.IsType<string>(await fixture.InvokeHistoryAsync(2, CancellationToken.None));
-        Assert.Contains("2 past event(s), oldest first:", recent, StringComparison.Ordinal);
-        Assert.DoesNotContain("test.alpha", recent, StringComparison.Ordinal);
-        Assert.Contains("test.beta", recent, StringComparison.Ordinal);
-        Assert.Contains("test.gamma", recent, StringComparison.Ordinal);
-
-        Assert.Equal(3, fixture.Mind.GetTimelineForTest().Count);
-    }
-
-    /// <summary>
-    /// Visual scene evidence is current-scene status, not persistent event history (AI-001 TR-5).
-    /// </summary>
-    [Fact]
-    public async Task History_WithTypeOwnedFallback_ExcludesVisualDescription()
-    {
-        await using ToolFixture fixture = new();
-        await fixture.ReadyAsync();
-        fixture.Mind.ObserveForTest(new TypedObservation("test.before", 0.5f));
-        fixture.Mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
-        fixture.Mind.ObserveForTest(new TypedObservation("test.after", 0.5f));
-
-        string message = Assert.IsType<string>(await fixture.InvokeHistoryAsync(null, CancellationToken.None));
-
-        Assert.Contains("test.before", message, StringComparison.Ordinal);
-        Assert.Contains("test.after", message, StringComparison.Ordinal);
-        Assert.DoesNotContain("weathered red coat", message, StringComparison.Ordinal);
-        Assert.Equal(2, fixture.Mind.GetTimelineForTest().Count);
-    }
-
     private sealed record TypedObservation(string Key, float Importance) : AgentObservation
     {
         public override string TypeKey => Key;
@@ -433,10 +381,8 @@ public sealed partial class SessionToolsIntegrationTests
     {
         private readonly SpeechTool _speechTool;
         private readonly WaitTool _waitTool = new();
-        private readonly HistoryTool _historyTool = new();
         private AIFunction? _speakFunction;
         private AIFunction? _waitFunction;
-        private AIFunction? _historyFunction;
         public ToolFixture(
             bool addAiVoice = false,
             FakeGameClock? clock = null,
@@ -531,7 +477,6 @@ public sealed partial class SessionToolsIntegrationTests
             AgentToolSession sessionServices = new(context, Mind, Clock);
             _speakFunction = _speechTool.CreateFunction(context, Mind, dispatcher, sessionServices);
             _waitFunction = _waitTool.CreateFunction(context, Mind, dispatcher, sessionServices);
-            _historyFunction = _historyTool.CreateFunction(context, Mind, dispatcher, sessionServices);
         }
 
         public ValueTask<object?> InvokeSpeakAsync(string speech, CancellationToken cancellationToken)
@@ -558,17 +503,6 @@ public sealed partial class SessionToolsIntegrationTests
             return InvokeAsync(waitFunction, new Dictionary<string, object?>(), cancellationToken);
         }
 
-        public ValueTask<object?> InvokeHistoryAsync(int? count, CancellationToken cancellationToken)
-        {
-            Dictionary<string, object?> arguments = [];
-            if (count is { } value)
-            {
-                arguments["count"] = value;
-            }
-
-            return InvokeAsync(_historyFunction!, arguments, cancellationToken);
-        }
-
         public static async Task WaitForFramesAsync(int frameCount)
         {
             SceneTree sceneTree = TestUtils.GetSceneTree();
@@ -582,7 +516,6 @@ public sealed partial class SessionToolsIntegrationTests
             HandOffVoice?.Free();
             _speechTool.Free();
             _waitTool.Free();
-            _historyTool.Free();
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
         }
 

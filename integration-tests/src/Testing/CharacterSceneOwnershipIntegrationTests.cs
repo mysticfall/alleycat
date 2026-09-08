@@ -289,7 +289,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
         Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
         Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
-        // The production tool inventory (speak, wait, history) is created internally without scene authoring
+        // The production tool inventory (speak, wait) is created internally without scene authoring
         // (AI-002 TR-16): authored tools remain an extension point and are empty in the shared templates.
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));
         Assert.Empty(tools.Cast<object>());

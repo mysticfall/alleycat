@@ -372,7 +372,6 @@ public partial class AgenticMind : MindBase
             AgentSessionPhasePolicy.AdmissionArbitration.Bind(
                 speechTool.CreateFunction(context, this, dispatcher, sessionServices)),
             waitTool.CreateFunction(context, this, dispatcher, sessionServices),
-            new HistoryTool().CreateFunction(context, this, dispatcher, sessionServices),
             new UnwatchTool(watchRegistry).CreateFunction(context, this, dispatcher, sessionServices),
         ];
         if (watchRegistry is not null)

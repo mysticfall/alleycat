@@ -115,12 +115,11 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
 
             // The corrected tool metadata reaches the model on the same request.
             Assert.Equal(
-                ["history", "speak", "unwatch", "wait", "watch_proximity"],
+                ["speak", "unwatch", "wait", "watch_proximity"],
                 [.. freshRequest.Tools.Keys.OrderBy(static name => name, StringComparer.Ordinal)]);
             Assert.Contains("arrives with every request", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.DoesNotContain("nothing new reaches you", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.Contains("never what was observed", freshRequest.Tools["wait"], StringComparison.Ordinal);
-            Assert.DoesNotContain("wait results", freshRequest.Tools["history"], StringComparison.Ordinal);
             Assert.Contains("opaque watch ID", freshRequest.Tools["watch_proximity"], StringComparison.Ordinal);
             Assert.Contains("never re-arm to keep it active", freshRequest.Tools["watch_proximity"], StringComparison.Ordinal);
             Assert.Contains(

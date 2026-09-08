@@ -5,8 +5,8 @@ using AgentObservation = AlleyCat.Mind.Observation.Observation;
 namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
-/// Renders ordered observation records through their type-owned canonical text for on-demand paths such as the
-/// AI-002 <c>wait</c> and timeline history tools.
+/// Renders ordered observation records through their type-owned canonical text for the per-request event-history
+/// message.
 /// </summary>
 internal sealed class ObservationHistoryRenderer(ICharacter character)
 {
@@ -34,18 +34,6 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
         IReadOnlyList<AcceptedObservationEntry> observations,
         IReadOnlyList<AcceptedObservationEntry> timeline)
         => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations));
-
-    /// <summary>Projects a timeline or selected timeline window for model-facing callers that need event counting.</summary>
-    internal static IReadOnlyList<ContinuationProjection.Event> Project(
-        IReadOnlyList<AgentObservation> timeline,
-        IReadOnlyList<AgentObservation>? selected = null)
-        => ContinuationProjection.Project(timeline, selected);
-
-    /// <summary>Projects accepted entries with private speech transport retained at the ingestion boundary.</summary>
-    internal static IReadOnlyList<ContinuationProjection.Event> Project(
-        IReadOnlyList<AcceptedObservationEntry> timeline,
-        IReadOnlyList<AcceptedObservationEntry>? selected = null)
-        => ContinuationProjection.Project(timeline, selected);
 
     /// <summary>Renders pre-projected model events through their type-owned canonical text.</summary>
     internal ValueTask<string> RenderProjectedAsync(IReadOnlyList<ContinuationProjection.Event> events)
