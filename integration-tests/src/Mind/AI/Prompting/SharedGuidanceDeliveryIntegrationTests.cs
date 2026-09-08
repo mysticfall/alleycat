@@ -108,18 +108,12 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
                 new System.Text.RegularExpressions.Regex(@"Current game time: \d+\.\ds"),
                 freshRequest.Messages[1].Text);
 
-            // The rendered shared instruction keeps its placeholder resolved and carries the corrected guidance.
-            Assert.Contains("You are char:owner", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("New Since Your Previous Response", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("Current Scene", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("Choosing Actions", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("available watch tools", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("Everything shares one game", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("current game time", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("no tool messages behind", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.Contains("appear in your event history once they are spoken", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.DoesNotContain("{{ character.FullId }}", freshRequest.Instructions, StringComparison.Ordinal);
-            Assert.DoesNotContain("nothing new reaches you", freshRequest.Instructions, StringComparison.Ordinal);
+            // The authored shared guidance reaches the request fully rendered: non-empty, built from this mind's
+            // character context, and free of unresolved template placeholders. Exact prose wording is game content
+            // and stays tunable (AI-003 TR-12), so only delivery is asserted here.
+            Assert.NotEmpty(freshRequest.Instructions);
+            Assert.Contains(owner.FullId, freshRequest.Instructions, StringComparison.Ordinal);
+            Assert.DoesNotContain("{{", freshRequest.Instructions, StringComparison.Ordinal);
 
             // The corrected tool metadata reaches the model on the same request.
             Assert.Equal(

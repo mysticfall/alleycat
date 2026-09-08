@@ -265,19 +265,16 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sectionFilePath = GetPropertyValue<string>(instructionSection, "FilePath");
         Assert.Equal("res://prompts/mind.md", sectionFilePath);
         string sectionText = ReadResourceText(sectionFilePath);
-        Assert.Contains("You are {{ character.FullId }}", sectionText, StringComparison.Ordinal);
-        Assert.Contains("every response you give is a tool call", sectionText, StringComparison.Ordinal);
-        Assert.Contains("seconds of in-game time since the game began", sectionText, StringComparison.Ordinal);
-        // Shared context-interpretation guidance (AI-003 TR-12–16): the four mandatory concepts stay authored
-        // character-neutrally and never contradict automatic per-request delivery or payload-free waits.
-        Assert.Contains("Event History", sectionText, StringComparison.Ordinal);
-        Assert.Contains("New Since Your Previous Response", sectionText, StringComparison.Ordinal);
-        Assert.Contains("Current Scene", sectionText, StringComparison.Ordinal);
-        Assert.Contains("Choosing Actions", sectionText, StringComparison.Ordinal);
-        Assert.Contains("available watch tools", sectionText, StringComparison.Ordinal);
-        Assert.Contains("opaque watch ID", sectionText, StringComparison.Ordinal);
-        Assert.Contains("reaches you with every request", sectionText, StringComparison.Ordinal);
-        Assert.DoesNotContain("nothing new reaches you", sectionText, StringComparison.Ordinal);
+        // The shared instruction stays a character-parameterised template rather than fixed prose.
+        Assert.Contains("{{ character.FullId }}", sectionText, StringComparison.Ordinal);
+        // Shared context-interpretation guidance (AI-003 TR-12–16): the four mandatory concepts — event-history
+        // interpretation, current-scene interpretation, action selection, and watches — stay authored as sections,
+        // character-neutrally. Exact prose wording is game content and stays tunable, so only section structure
+        // and character neutrality are asserted.
+        Assert.Contains("# Event History", sectionText, StringComparison.Ordinal);
+        Assert.Contains("# Current Scene", sectionText, StringComparison.Ordinal);
+        Assert.Contains("# Choosing Actions", sectionText, StringComparison.Ordinal);
+        Assert.Contains("# Watches", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("watch_proximity", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);

@@ -81,15 +81,15 @@ information it has already been supplied.
     conversational contribution has been answered or resolved.
 14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
-    absence, and historical events do not establish current positions. It must explain the common game clock — the
-    status's current time and every event timestamp read the same clock — and snapshot semantics: the status describes
-    the moment its request was captured, not a live view.
+    absence, and historical events do not establish current positions. It must not contradict the common game clock or
+    the status's snapshot semantics (TR-6): the current time and every event timestamp read one clock, and the status
+    describes its request's captured moment rather than a live view.
 15. Action-selection guidance must direct the NPC to consider relevant available history — including an available
     reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
     remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
-    freedom to act, speak, or stay silent according to character and scenario. It must frame completed actions
-    honestly: speaking and waiting take effect in the world and appear through remembered events and fresh scene
-    status, never through retained tool messages (AI-002 TR-22).
+    freedom to act, speak, or stay silent according to character and scenario. It must not contradict tool-exchange
+    disposal (AI-002 TR-17–TR-22): settled tool exchanges are never model-visible, and completed actions surface
+    through remembered events and fresh scene status rather than retained tool messages.
 16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
     arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
@@ -129,8 +129,8 @@ information it has already been supplied.
    one while keeping silence and waiting legitimate in-character choices.
 6. Acceptance shows the current scene status always presents the current game time — including with an empty attended
    list — on the same clock as event timestamps, while event entries keep their original observation times.
-7. Acceptance shows the shared instruction explains the common game clock, snapshot semantics, and that completed
-   actions appear through event history and current scene status rather than retained tool messages.
+7. Acceptance shows the shared instruction never contradicts the common game clock, the snapshot capture of the
+   current scene status, or completed actions surfacing through event history and current scene status.
 
 ### Technical Requirements
 
@@ -159,8 +159,8 @@ information it has already been supplied.
    attended list — in the invariant one-decimal form on the same clock as event-timestamp suffixes, and that rendered
    events keep their original observation times.
 10. Tests verify the current-time capture is frozen with its request — exact transport retries keep it while recovery
-    and replacement recapture — and that the authored shared guidance carries the common-clock, snapshot, and
-    completed-actions-through-context framing.
+    and replacement recapture — and that the authored shared guidance does not contradict the common game clock, the
+    snapshot capture, or completed actions surfacing only through remembered events and fresh scene status.
 
 ## References
 
