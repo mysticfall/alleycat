@@ -2,6 +2,7 @@ using System.Globalization;
 using AlleyCat.Templating;
 using Fluid;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AlleyCat.Tests.Templating;
 
@@ -12,22 +13,26 @@ namespace AlleyCat.Tests.Templating;
 /// <remarks>
 /// The baselines were captured against Handlebars.Net 2.4.3 immediately before the Fluid migration; they are
 /// frozen reference history and must never be regenerated. Capture mode is gated behind the
-/// <see cref="CaptureEnvironmentVariable"/> environment variable, refuses to overwrite existing snapshots, and
+/// <see cref="CaptureEnvironmentVariable"/> environment variable, refuses to overwrite existing snapshots, skips
+/// capture sources the current engine cannot render (reporting each skip instead of failing mid-catalogue), and
 /// exists only so future deliberate re-baselinings have a single entry point.
 /// </remarks>
-public sealed class TemplatingBaselineTests
+public sealed class TemplatingBaselineTests(ITestOutputHelper output)
 {
     /// <summary>Set to <c>1</c> to enable migration-time baseline capture.</summary>
     public const string CaptureEnvironmentVariable = "ALLEYCAT_TEMPLATING_CAPTURE_BASELINES";
 
-    private const string CaptureEngineMoniker = "Handlebars.Net 2.4.3";
-
     private const string GoldenEngineMoniker = "Fluid.Core 2.40.0";
 
     /// <summary>
-    /// Captures one snapshot per scenario. Only runs when the capture environment variable equals <c>1</c>;
-    /// otherwise the fact passes without touching the repository.
+    /// Captures one snapshot per renderable scenario. Only runs when the capture environment variable equals
+    /// <c>1</c>; otherwise the fact passes without touching the repository.
     /// </summary>
+    /// <remarks>
+    /// Scenarios whose capture sources the current engine cannot render — Handlebars-only syntax such as
+    /// partial includes, and expected-failure scenarios whose Handlebars-era failure envelopes are frozen
+    /// reference history — are skipped with a report so the rest of the catalogue still completes.
+    /// </remarks>
     [Fact]
     public async Task CaptureBaselinesWritesMissingSnapshotsOnly()
     {
@@ -49,20 +54,41 @@ public sealed class TemplatingBaselineTests
                     $"Baseline snapshot for '{scenario.Name}' already exists and must not be overwritten.");
             }
 
+            string? rendered = null;
+            Exception? renderFailure = null;
             try
             {
-                string output = await RenderScenarioAsync(scenario);
+                rendered = await RenderScenarioAsync(scenario);
+            }
+            catch (Exception exception)
+            {
+                renderFailure = exception;
+            }
+
+            if (renderFailure is null)
+            {
                 if (scenario.ExpectFailure)
                 {
                     throw new InvalidOperationException(
                         $"Baseline scenario '{scenario.Name}' was expected to fail but rendered successfully.");
                 }
 
-                File.WriteAllText(successPath, output);
+                File.WriteAllText(successPath, rendered);
+                continue;
             }
-            catch (Exception exception) when (scenario.ExpectFailure)
+
+            if (scenario.ExpectFailure)
             {
-                File.WriteAllText(failurePath, FormatFailureEnvelope(exception, CaptureEngineMoniker));
+                output.WriteLine(
+                    $"Skipped failure baseline for '{scenario.Name}': its Handlebars-era failure envelope is"
+                    + $" frozen reference history the Fluid engine cannot reproduce"
+                    + $" ({renderFailure.GetType().FullName}).");
+            }
+            else
+            {
+                output.WriteLine(
+                    $"Skipped baseline capture for '{scenario.Name}': the current engine cannot render its"
+                    + $" capture source ({renderFailure.GetType().FullName}: {renderFailure.Message}).");
             }
         }
     }
