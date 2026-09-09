@@ -16,14 +16,14 @@ namespace AlleyCat.IntegrationTests.Mind.Perception;
 
 /// <summary>
 /// Runtime contracts for the reusable active-look faculty state: nearest-subject resolution, attach/detach hook
-/// ordering, cue lifetime semantics, and stale-emission protection across look transitions (AI-006 TR-30/32).
+/// ordering, cue lifetime semantics, and stale-emission protection across look transitions (AI-006 TR-5/6).
 /// </summary>
 [Headless]
 public sealed class ActiveLookPerceptionIntegrationTests
 {
     /// <summary>
     /// ActiveSubject resolves the nearest IVisualSubject ancestor, the detach hook fires before replacement state
-    /// publishes, and the attach hook fires after it (AI-006 TR-30).
+    /// publishes, and the attach hook fires after it (AI-006 TR-5/6).
     /// </summary>
     [Fact]
     public async Task ActiveSubject_ResolvesNearestAncestorWithDetachBeforeAndAttachAfterStatePublish()
@@ -79,7 +79,7 @@ public sealed class ActiveLookPerceptionIntegrationTests
 
     /// <summary>
     /// Attach and detach hooks fire on clear and node exit, freed cues retain ActiveCue without resolving a
-    /// subject, and each transition bumps the activation generation (AI-006 TR-30/31).
+    /// subject, and each transition bumps the activation generation (AI-006 TR-5/6).
     /// </summary>
     [Fact]
     public async Task ClearAndNodeExit_FireDetachHooksClearStateAndAdvanceActivationGeneration()
@@ -150,7 +150,7 @@ public sealed class ActiveLookPerceptionIntegrationTests
 
     /// <summary>
     /// A newer look transition completing before an older asynchronous description's emission cancels the stale
-    /// activation so the stale emission never commits through Mind (AI-006 UR-11, TR-32).
+    /// activation so the stale emission never commits through Mind (AI-006 TR-5).
     /// </summary>
     [Fact]
     public async Task NewerTransition_CompletingBeforeOlderDescription_StaleEmissionNeverCommits()

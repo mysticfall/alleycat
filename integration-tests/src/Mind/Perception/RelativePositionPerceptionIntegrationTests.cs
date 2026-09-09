@@ -17,14 +17,14 @@ namespace AlleyCat.IntegrationTests.Mind.Perception;
 /// <summary>
 /// Runtime contracts for relative-position perception of the active look subject: immediate attach-time sampling,
 /// material-change-only emissions, reciprocal ground-plane direction classification, per-subject suppression state,
-/// tunable validation, and durable Mind commits (AI-006 TR-46..TR-52).
+/// tunable validation, and retained-evidence Mind commits (AI-006 TR-6/7).
 /// </summary>
 [Headless]
 public sealed class RelativePositionPerceptionIntegrationTests
 {
     /// <summary>
     /// The attach-time sample emits on the first process frame after a look-target percept without waiting for the
-    /// poll interval, and later frames before the interval emit nothing further (AI-006 TR-46/47).
+    /// poll interval, and later frames before the interval emit nothing further (AI-006 TR-6/7).
     /// </summary>
     [Fact]
     public async Task ImmediateSample_EmitsOnFirstFrameAfterAttach_WithoutWaitingForTheInterval()
@@ -70,7 +70,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// In-tree <see cref="Node"/> providers need only implement <see cref="ISpatial"/>: neither participant needs
-    /// to derive from <see cref="Node3D"/> for the faculty to sample their trait transforms (AI-006 TR-48/51/52;
+    /// to derive from <see cref="Node3D"/> for the faculty to sample their trait transforms (AI-006 TR-7;
     /// VISION-001 TR-44).
     /// </summary>
     [Fact]
@@ -115,7 +115,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
     }
 
     /// <summary>
-    /// An otherwise valid node-backed observer cannot be sampled once it leaves the tree (AI-006 TR-48).
+    /// An otherwise valid node-backed observer cannot be sampled once it leaves the tree (AI-006 TR-6).
     /// </summary>
     [Fact]
     public async Task NodeBackedSpatialProvider_OutOfTree_ProducesNoObservation()
@@ -156,7 +156,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
     }
 
     /// <summary>
-    /// A disposed Godot spatial provider is rejected before its transform can be dereferenced (AI-006 TR-48).
+    /// A disposed Godot spatial provider is rejected before its transform can be dereferenced (AI-006 TR-6).
     /// </summary>
     [Fact]
     public async Task NodeBackedSpatialProvider_Disposed_ProducesNoObservation()
@@ -198,7 +198,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Periodic re-examination suppresses sub-threshold distance drift relative to the last emitted snapshot while
-    /// emitting exactly once when the drift reaches <c>MinimumDistanceChange</c> (AI-006 TR-46/49).
+    /// emitting exactly once when the drift reaches <c>MinimumDistanceChange</c> (AI-006 TR-6/7).
     /// </summary>
     [Fact]
     public async Task Polling_SubThresholdDriftDoesNotEmit_AndThresholdCrossingEmitsOnce()
@@ -256,7 +256,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Subject motion crossing the front-to-left boundary emits both reciprocal direction changes even when the
-    /// distance drift is immaterial (AI-006 TR-49/51).
+    /// distance drift is immaterial (AI-006 TR-6/7).
     /// </summary>
     [Fact]
     public async Task DirectionChange_SubjectCrossingFromFrontToLeft_EmitsReciprocalDirections()
@@ -307,7 +307,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Observer rotation and subject rotation change the reciprocal direction classifications even though the
-    /// distance never changes, and both count as material changes (AI-006 TR-49).
+    /// distance never changes, and both count as material changes (AI-006 TR-6/7).
     /// </summary>
     [Fact]
     public async Task DirectionChange_ObserverAndSubjectRotation_EmitReciprocalDirectionChanges()
@@ -365,7 +365,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Observer translation changing only the distance emits exactly like subject motion, demonstrating that observer
-    /// motion counts identically to subject motion (AI-006 TR-49).
+    /// motion counts identically to subject motion (AI-006 TR-6/7).
     /// </summary>
     [Fact]
     public async Task DistanceChange_FromObserverTranslation_EmitsUpdatedDistance()
@@ -414,7 +414,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Zero horizontal separation — a subject directly above the observer — classifies deterministically as Front for
-    /// both reciprocal directions (AI-006 TR-51).
+    /// both reciprocal directions (AI-006 TR-7).
     /// </summary>
     [Fact]
     public async Task ZeroHorizontalSeparation_SubjectDirectlyAbove_ClassifiesAsFront()
@@ -455,7 +455,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Re-focusing an immaterially moved subject creates no duplicate memory while a materially moved re-focus emits
-    /// immediately on the first frame, and cleared focus performs no sampling at all (AI-006 TR-47/49).
+    /// immediately on the first frame, and cleared focus performs no sampling at all (AI-006 TR-6).
     /// </summary>
     [Fact]
     public async Task RefocusSuppression_ImmaterialRefocusEmitsNothing_MaterialRefocusEmitsImmediately()
@@ -522,7 +522,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Emission-suppression state is retained per canonical subject FullId, so interleaved focus cycles between two
-    /// subjects compare against each subject's own last emitted state (AI-006 TR-49).
+    /// subjects compare against each subject's own last emitted state (AI-006 TR-6).
     /// </summary>
     [Fact]
     public async Task SubjectState_IsIndependentPerSubject()
@@ -591,7 +591,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Clearing focus, replacing the subject, and tree exit stop sampling without stale emissions, while a
-    /// replacement subject is sampled immediately (AI-006 TR-47).
+    /// replacement subject is sampled immediately (AI-006 TR-6).
     /// </summary>
     [Fact]
     public async Task ClearAndReplacement_StopSamplingWithoutStaleEmissions()
@@ -657,7 +657,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Invalid distance and angular tunables fail clearly when a subject attaches, before any sampling runs
-    /// (AI-006 TR-50).
+    /// (AI-006 TR-7/UR-5).
     /// </summary>
     [Fact]
     public async Task InvalidTunables_FailClearlyOnSubjectAttach_BeforeSampling()
@@ -718,7 +718,7 @@ public sealed class RelativePositionPerceptionIntegrationTests
 
     /// <summary>
     /// Emissions commit through the owning Mind as retained current-scene evidence, rather than persistent events,
-    /// with the exact type key <c>vision.relative_position</c> (AI-006 TR-46).
+    /// with the exact type key <c>vision.relative_position</c> (AI-006 TR-6).
     /// </summary>
     [Fact]
     public async Task Emissions_CommitThroughMind_AsRetainedRelativePositionEvidence()

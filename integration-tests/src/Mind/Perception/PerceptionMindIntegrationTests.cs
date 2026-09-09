@@ -69,7 +69,7 @@ public sealed class PerceptionMindIntegrationTests
     /// <summary>
     /// Percept interpretation serialises in publication order, faculty bindings snapshot per publication, and a
     /// component refresh rebinds observation subscriptions so emissions from replaced faculties stop committing
-    /// (AI-001 TR-8, AI-006 TR-23/34).
+    /// (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     [Fact]
     public async Task Intake_SerialisesAsyncFacultiesAndSnapshotsBindingsAcrossRefresh()
@@ -142,7 +142,7 @@ public sealed class PerceptionMindIntegrationTests
 
     /// <summary>
     /// Faults and invalid observations roll back only their own observation: earlier committed observations stand
-    /// and later queued items continue (AI-001 TR-8, AI-006 TR-34).
+    /// and later queued items continue (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     [Fact]
     public async Task Aggregate_FaultsAndInvalidObservationsRollBackOnlyThatObservationWithoutBlockingLaterPercepts()

@@ -19,7 +19,7 @@ namespace AlleyCat.IntegrationTests.Mind.Perception;
 
 /// <summary>
 /// Runtime contracts for the Mind percept/observation stream: subscription ownership, enqueue-order serialisation,
-/// transient retention, and per-observation atomicity (AI-001 TR-8, AI-006 TR-11/18/20–27).
+/// transient retention, and per-observation atomicity (AI-001 TR-8, AI-006 TR-1/2).
 /// </summary>
 [Headless]
 public sealed class PerceptionStreamMindIntegrationTests
@@ -27,7 +27,7 @@ public sealed class PerceptionStreamMindIntegrationTests
     /// <summary>
     /// Mind owns every bound faculty's observation stream for its node lifetime: emissions raised outside percept
     /// dispatch commit through Mind, and tree exit unsubscribes so later emissions never commit (AI-001 TR-8/11,
-    /// AI-006 TR-22/23).
+    /// AI-006 TR-1/2).
     /// </summary>
     [Fact]
     public async Task StreamOwnership_EmissionsOutsidePerceptDispatch_CommitThroughMindAndStopAfterExit()
@@ -74,7 +74,7 @@ public sealed class PerceptionStreamMindIntegrationTests
     /// <summary>
     /// One serial queue merges percept work and observations in enqueue order: emissions raised during in-flight
     /// percept work commit after that work finishes, publication callbacks return before any commit, and emissions
-    /// commit in emission order (AI-001 TR-8, AI-006 TR-34).
+    /// commit in emission order (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     [Fact]
     public async Task EnqueueOrder_EmissionsDuringPerceptProcessingCommitAfterInFlightWorkInEmissionOrder()
@@ -135,7 +135,7 @@ public sealed class PerceptionStreamMindIntegrationTests
 
     /// <summary>
     /// Visual presence alone is attention-only. Legacy retention declarations do not bypass policy-owned acceptance:
-    /// an undeclared observation receives the fallback retained/event policy (AI-001 TR-2/3; AI-006 TR-3).
+    /// an undeclared observation receives the fallback retained/event policy (AI-001 TR-2/3).
     /// </summary>
     [Fact]
     public async Task VisualPresence_IsAttentionOnlyWhileLegacyRetentionDoesNotBypassPolicyAcceptance()
@@ -185,7 +185,7 @@ public sealed class PerceptionStreamMindIntegrationTests
 
     /// <summary>
     /// Invalid attention behaviour rolls back only its own observation: a mixed or non-finite effect list mutates
-    /// nothing, while earlier and later observations still commit (AI-001 TR-8, AI-006 TR-24/34).
+    /// nothing, while earlier and later observations still commit (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     [Fact]
     public async Task Atomicity_InvalidAttentionBehaviour_MutatesNothingForThatObservationOnly()

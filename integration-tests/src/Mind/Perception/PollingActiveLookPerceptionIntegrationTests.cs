@@ -16,7 +16,7 @@ namespace AlleyCat.IntegrationTests.Mind.Perception;
 
 /// <summary>
 /// Runtime contracts for periodic re-examination of the active look subject: interval cadence without catch-up,
-/// in-flight skipping, live-subject guards, stop conditions, and interval validation (AI-006 TR-31).
+/// in-flight skipping, live-subject guards, stop conditions, and interval validation (AI-006 UR-5).
 /// </summary>
 [Headless]
 public sealed class PollingActiveLookPerceptionIntegrationTests
@@ -24,7 +24,7 @@ public sealed class PollingActiveLookPerceptionIntegrationTests
     /// <summary>
     /// Polling runs at most once per frame at the configured interval without delayed-frame catch-up, restarts the
     /// interval from each poll, stops on clear, replacement, and exit, and commits durable poll observations
-    /// through the owning Mind (AI-006 TR-31/34).
+    /// through the owning Mind (AI-006 TR-2).
     /// </summary>
     [Fact]
     public async Task Polling_RunsOncePerFrameAtIntervalWithoutCatchUp_AndStopsOnClearReplacementAndExit()
@@ -94,7 +94,7 @@ public sealed class PollingActiveLookPerceptionIntegrationTests
 
     /// <summary>
     /// A poll in flight skips later frames, and clearing the look target cancels the activation so the in-flight
-    /// poll observes cancellation and polling stops (AI-006 TR-31).
+    /// poll observes cancellation and polling stops (AI-006 TR-5/6).
     /// </summary>
     [Fact]
     public async Task Polling_SkipsWhileAPollIsInFlight_AndSurfacesActivationCancellationToTheInFlightPoll()

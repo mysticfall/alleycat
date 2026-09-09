@@ -305,7 +305,7 @@ public sealed class AgenticMindTests
         Assert.Same(result["player"], characters[alpha.FullId]);
         Assert.Equal(new[] { "char:zulu", "char:missing", "object:prop", "char:alpha" }, eligibleIDs);
         // Exactly one scene lookup per identity (one presence check plus four eligible IDs): no second visual
-        // survey and no hidden subject cache sit behind assembly (AI-006 TR-40, AI-001 AC-T18).
+        // survey and no hidden subject cache sit behind assembly (AI-006 TR-9, AI-003 TR-5).
         Assert.Equal(5, scene.FindCallCount);
     }
 

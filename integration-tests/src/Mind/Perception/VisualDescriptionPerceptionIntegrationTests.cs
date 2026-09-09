@@ -146,7 +146,7 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
 
     /// <summary>
     /// Reparenting during Describe invalidates association and cancellation prevents a completed emission; neither
-    /// route commits an observation through the owning Mind (AI-006 UR-11, TR-32).
+    /// route commits an observation through the owning Mind (AI-006 TR-5).
     /// </summary>
     [Fact]
     public async Task ReparentingAndCancellationDuringDescribe_ProduceNoCommittedObservation()

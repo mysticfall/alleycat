@@ -9,14 +9,14 @@ namespace AlleyCat.Mind.Perception;
 
 /// <summary>
 /// Polling faculty that observes the active look subject's position relative to the observing character and emits one
-/// durable <see cref="ObservedRelativePosition"/> observation per material change (AI-006 TR-46..TR-52).
+/// retained <see cref="ObservedRelativePosition"/> observation per material change (AI-006 TR-6/7).
 /// </summary>
 /// <remarks>
 /// The attach-time sample runs on the first process frame after a subject attaches, without waiting for
 /// <see cref="PollingActiveLookPerception.PollIntervalSeconds"/>; afterwards the inherited polling cadence
 /// re-examines the subject. At most one examination runs per frame in total. Geometry helpers operate only on
 /// <see cref="ISpatial"/> transforms and are kept private to this faculty, which therefore adds no Vision dependency
-/// for geometry (TR-52).
+/// for geometry (AI-006 TR-7; VISION-001 TR-44).
 /// </remarks>
 [GlobalClass]
 public sealed partial class RelativePositionPerception : PollingActiveLookPerception
@@ -114,7 +114,7 @@ public sealed partial class RelativePositionPerception : PollingActiveLookPercep
     {
         base.OnActiveSubjectDetached(subject);
         // The pending flag is cleared so a stale attach-time sample never runs after clear, replacement, or exit.
-        // Emission-suppression state deliberately persists across focus cycles for the node's lifetime (TR-49).
+        // Emission-suppression state deliberately persists across focus cycles for the node's lifetime (AI-006 TR-6).
         _initialSamplePending = false;
     }
 
@@ -155,9 +155,9 @@ public sealed partial class RelativePositionPerception : PollingActiveLookPercep
     }
 
     /// <summary>
-    /// Samples the subject's position relative to the observer and emits a durable observation when the sample is
+    /// Samples the subject's position relative to the observer and emits a retained observation when the sample is
     /// materially different from the last emitted state. Returns whether both spatial preconditions were met and the
-    /// sample ran; unmet preconditions skip sampling with no emission and no failure (TR-48).
+    /// sample ran; unmet preconditions skip sampling with no emission and no failure (AI-006 TR-6).
     /// </summary>
     private bool TryExamine(IVisualSubject subject, PerceptionContext context)
     {
@@ -180,7 +180,7 @@ public sealed partial class RelativePositionPerception : PollingActiveLookPercep
         }
 
         // The stored snapshot updates only on emission, so comparison is always against the last emitted state and
-        // sub-threshold drift accumulates until it crosses the threshold relative to that snapshot (TR-49). All
+        // sub-threshold drift accumulates until it crosses the threshold relative to that snapshot (AI-006 TR-6). All
         // dictionary access happens on the main thread: the immediate sample runs in _Process and polls start — and,
         // being fully synchronous, complete — inside _Process, so no cross-thread synchronisation is required.
         _lastEmitted[subjectId] = new EmittedState(distance, subjectDirection, observerDirection);
@@ -192,7 +192,7 @@ public sealed partial class RelativePositionPerception : PollingActiveLookPercep
     /// Determines whether a freshly sampled state differs materially from the last emitted state of the subject: the
     /// first-ever valid state is always material, and afterwards a material change is a distance drift of at least
     /// <see cref="MinimumDistanceChange"/> from the last emitted snapshot or either direction classification
-    /// changing (TR-49).
+    /// changing (AI-006 TR-6/7).
     /// </summary>
     private bool IsMaterialChange(
         string subjectId,
@@ -207,7 +207,7 @@ public sealed partial class RelativePositionPerception : PollingActiveLookPercep
     /// <summary>
     /// Classifies where <paramref name="to"/>'s origin lies relative to <paramref name="from"/>'s facing on the world
     /// ground plane (XZ). The tie-break order tests Front, then Back, then the signed lateral side, and zero
-    /// horizontal separation classifies deterministically as <see cref="RelativeDirection.Front"/> (TR-51).
+    /// horizontal separation classifies deterministically as <see cref="RelativeDirection.Front"/> (AI-006 TR-7).
     /// </summary>
     private RelativeDirection ClassifyBearing(Transform3D from, Transform3D to)
     {

@@ -340,7 +340,7 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Trivial faculty observation intake (AI-006 TR-22/23): validates and enqueues one observation work item without
+    /// Trivial faculty observation intake (AI-006 TR-1): validates and enqueues one observation work item without
     /// interpreting, committing, or blocking the emitting faculty.
     /// </summary>
     private void OnFacultyObserved(AgentObservation observation) => EnqueueObservation(observation);
@@ -380,7 +380,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// Enqueues one serial perception-work item and starts the drain worker when idle, preserving enqueue order across
-    /// percepts and observations (AI-001 TR-8, AI-006 TR-34).
+    /// percepts and observations (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     private void EnqueuePerceptionWork(PerceptionWork work)
     {
@@ -485,7 +485,7 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Commits one faculty-emitted observation as one independent atomic unit (AI-001 TR-8/UR-3, AI-006 TR-33–35): its
+    /// Commits one faculty-emitted observation as one independent atomic unit (AI-001 TR-8/UR-3, AI-006 TR-8): its
     /// attention effects apply together with, for durable observations, ingestion effects, or not at all.
     /// </summary>
     private ValueTask ProcessObservationAsync(QueuedObservation queued)
@@ -513,7 +513,7 @@ public abstract partial class Mind : Node
         if (observation.IsAttentionOnly)
         {
             // Transient observations apply attention atomically and nothing else: no stamp, duplicate filtering,
-            // timeline entry, notable accumulation, or notification (AI-001 UR-3, AI-006 TR-35).
+            // timeline entry, notable accumulation, or notification (AI-001 UR-3, AI-006 TR-3).
             lock (_observationStateLock)
             {
                 if (IsNodeLifetimeEnded)
@@ -730,7 +730,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// Removes every faculty observation-event subscription so rebind and exit never duplicate or outlive delivery
-    /// (AI-001 TR-8, AI-006 TR-23).
+    /// (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     private void UnsubscribeFromFaculties()
     {
@@ -802,7 +802,7 @@ public abstract partial class Mind : Node
     /// </summary>
     /// <remarks>
     /// Voice activity resolves through current-scene characters' composed <see cref="IVoice"/> via
-    /// <c>ICharacter.TryGetVoice</c>, mirroring the <c>SpeechPerception</c> attribution precedent (AI-006 TR-1).
+    /// <c>ICharacter.TryGetVoice</c>, mirroring the <c>SpeechPerception</c> attribution precedent (AI-006 TR-4).
     /// Each subscribed voice keeps its resolved owning character — or null when ambiguous — so the attended-speaker
     /// state never queries the Godot scene tree from continuations. Runs on the Godot thread.
     /// </remarks>
@@ -1790,7 +1790,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// One serialisable unit of perception work: either a percept fan-out or an observation awaiting atomic commit,
-    /// committed strictly in enqueue order (AI-001 TR-8, AI-006 TR-34).
+    /// committed strictly in enqueue order (AI-001 TR-8, AI-006 TR-2).
     /// </summary>
     private abstract record PerceptionWork;
 
