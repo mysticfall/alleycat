@@ -134,8 +134,8 @@ public sealed class PerceptionStreamMindIntegrationTests
     }
 
     /// <summary>
-    /// Visual presence alone is attention-only. Legacy retention declarations do not bypass policy-owned acceptance:
-    /// an undeclared observation receives the fallback retained/event policy (AI-001 TR-2/3).
+    /// Visual presence alone is attention-only (AI-006 TR-3). Legacy retention declarations do not bypass policy-owned
+    /// acceptance: an undeclared observation receives the fallback retained/event policy (AI-001 TR-2/3).
     /// </summary>
     [Fact]
     public async Task VisualPresence_IsAttentionOnlyWhileLegacyRetentionDoesNotBypassPolicyAcceptance()

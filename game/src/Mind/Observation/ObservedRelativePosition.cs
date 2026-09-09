@@ -2,7 +2,7 @@ using AlleyCat.Core;
 
 namespace AlleyCat.Mind.Observation;
 
-/// <summary>Durable observation of one subject's position relative to the observing character.</summary>
+/// <summary>Retained observation of one subject's position relative to the observing character.</summary>
 public sealed record ObservedRelativePosition : Observation
 {
     /// <summary>Stable exact semantic key for relative-position observations.</summary>

@@ -2,7 +2,7 @@ using AlleyCat.Core;
 
 namespace AlleyCat.Mind.Observation;
 
-/// <summary>Durable focused description of one canonically identified visual subject.</summary>
+/// <summary>Retained focused description of one canonically identified visual subject.</summary>
 public sealed record ObservedVisualDescription : Observation
 {
     /// <summary>Stable exact semantic key for focused visual descriptions.</summary>
