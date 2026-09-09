@@ -7,7 +7,7 @@ namespace AlleyCat.Mind.AI;
 
 /// <summary>
 /// Executes one long-running agent session as a replayed transcript driven through bounded, stateless provider
-/// requests (AI-002 Transcript Execution).
+/// requests (AI-002 TR-1/2).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,7 +30,7 @@ internal sealed class AgentSessionRunner
 {
     /// <summary>
     /// Canonical cancellation result for every tool call that produced no natural result, keeping a retained or
-    /// in-flight exchange protocol-valid (AI-002 TR-12). A disposed batch's canonical results are composed the same
+    /// in-flight exchange protocol-valid (AI-002 TR-19). A disposed batch's canonical results are composed the same
     /// way and then dropped with the whole exchange.
     /// </summary>
     private const string CancelledActionResult = "The action was cancelled before it completed.";

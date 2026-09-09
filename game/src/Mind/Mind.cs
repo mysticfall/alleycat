@@ -27,25 +27,25 @@ namespace AlleyCat.Mind;
 [GlobalClass]
 public abstract partial class Mind : Node
 {
-    /// <summary>Reason one observation wait completed (AI-002 TR-33).</summary>
+    /// <summary>Reason one observation wait completed (AI-002 TR-7).</summary>
     internal enum ObservationWaitWake
     {
         /// <summary>The requested wait duration elapsed without a qualifying wake.</summary>
         QuietExpiry,
 
-        /// <summary>An attended speaker finished speaking (AI-001 TR-34).</summary>
+        /// <summary>An attended speaker finished speaking (AI-002 TR-7).</summary>
         AttendedSpeakerFinished,
 
-        /// <summary>Accumulated importance reached the configured threshold (AI-001 TR-6).</summary>
+        /// <summary>Accumulated importance reached the configured threshold (AI-001 TR-7).</summary>
         ThresholdCrossed,
 
         /// <summary>
-        /// A fresh observation upgraded the complete accumulation regardless of cumulative importance (AI-001 TR-43).
+        /// A fresh observation upgraded the complete accumulation regardless of cumulative importance (AI-002 UR-5).
         /// </summary>
         FreshObservation,
     }
 
-    /// <summary>Delivery urgency of one pending observation window (AI-001 TR-44).</summary>
+    /// <summary>Delivery urgency of one pending observation window (AI-001 TR-7).</summary>
     internal enum ObservationDeliveryUrgency
     {
         /// <summary>Threshold-qualified ordinary delivery that never cancels session work.</summary>
@@ -56,7 +56,7 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Post-commit delivery signal (AI-001 TR-44): the pending window's delivery urgency and whether an active wait
+    /// Post-commit delivery signal (AI-001 TR-7): the pending window's delivery urgency and whether an active wait
     /// owns the delivery instead of the signalled runtime.
     /// </summary>
     /// <param name="Urgency">Delivery urgency of the newly deliverable window; fresh dominates ordinary.</param>
@@ -144,9 +144,9 @@ public abstract partial class Mind : Node
     private bool _enabled = true;
 
     /// <summary>
-    /// Occurs after a committed batch raises the pending accumulation's delivery urgency (AI-001 TR-44): carries
+    /// Occurs after a committed batch raises the pending accumulation's delivery urgency (AI-001 TR-7): carries
     /// delivery urgency — ordinary threshold-qualified delivery versus fresh-turn urgency — and whether an active
-    /// wait owns the delivery instead of the signalled runtime (AI-002 TR-41).
+    /// wait owns the delivery instead of the signalled runtime (AI-002 TR-9).
     /// </summary>
     internal event Action<ObservationDeliverySignal>? ObservationDeliverySignalled;
 
@@ -194,7 +194,7 @@ public abstract partial class Mind : Node
                 if (value && (_notablePending || _freshUrgencyPending))
                 {
                     // Delivery resumes for the preserved accumulation — including any retained fresh urgency
-                    // (AI-001 TR-5): a held deliverable window wakes an active wait. When no wait is active the
+                    // (AI-001 TR-7): a held deliverable window wakes an active wait. When no wait is active the
                     // window stays held for the next wait call or delivery claim.
                     _ = _activeWait?.TryWake(
                         _freshUrgencyPending ? ObservationWaitWake.FreshObservation : ObservationWaitWake.ThresholdCrossed);
@@ -294,7 +294,7 @@ public abstract partial class Mind : Node
         UnsubscribeFromSpeechVoices();
 
         // One irreversible lifetime boundary: cancels active waits, session activity, and cue subscriptions so no
-        // deferred callback accesses Mind services after exit (AI-001 TR-18).
+        // deferred callback accesses Mind services after exit (AI-001 TR-11).
         _nodeLifetimeCancellation.Cancel();
         Volatile.Write(ref _perceptionBindings, new Dictionary<Type, IPerception[]>());
         lock (_perceptionQueueLock)
@@ -380,7 +380,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// Enqueues one serial perception-work item and starts the drain worker when idle, preserving enqueue order across
-    /// percepts and observations (AI-001 TR-29, AI-006 TR-34).
+    /// percepts and observations (AI-001 TR-8, AI-006 TR-34).
     /// </summary>
     private void EnqueuePerceptionWork(PerceptionWork work)
     {
@@ -485,7 +485,7 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Commits one faculty-emitted observation as one independent atomic unit (AI-001 TR-30/41, AI-006 TR-33–35): its
+    /// Commits one faculty-emitted observation as one independent atomic unit (AI-001 TR-8/UR-3, AI-006 TR-33–35): its
     /// attention effects apply together with, for durable observations, ingestion effects, or not at all.
     /// </summary>
     private ValueTask ProcessObservationAsync(QueuedObservation queued)
@@ -513,7 +513,7 @@ public abstract partial class Mind : Node
         if (observation.IsAttentionOnly)
         {
             // Transient observations apply attention atomically and nothing else: no stamp, duplicate filtering,
-            // timeline entry, notable accumulation, or notification (AI-001 TR-41, AI-006 TR-35).
+            // timeline entry, notable accumulation, or notification (AI-001 UR-3, AI-006 TR-35).
             lock (_observationStateLock)
             {
                 if (IsNodeLifetimeEnded)
@@ -730,7 +730,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// Removes every faculty observation-event subscription so rebind and exit never duplicate or outlive delivery
-    /// (AI-001 TR-27, AI-006 TR-23).
+    /// (AI-001 TR-8, AI-006 TR-23).
     /// </summary>
     private void UnsubscribeFromFaculties()
     {
@@ -820,7 +820,7 @@ public abstract partial class Mind : Node
             if (currentOwners.TryGetValue(voice, out ICharacter? existingOwner)
                 && !ReferenceEquals(existingOwner, candidate))
             {
-                // Ambiguous composition never attributes: the voice can never cue or block (AI-001 TR-34).
+                // Ambiguous composition never attributes: the voice can never cue or block (AI-002 TR-7).
                 currentOwners[voice] = null;
                 continue;
             }
@@ -1024,7 +1024,7 @@ public abstract partial class Mind : Node
             return;
         }
 
-        // Attended-speaker-finished cue (AI-001 TR-34): wake an active wait and unblock a blocked speak. The wait
+        // Attended-speaker-finished cue (AI-002 TR-7): wake an active wait and unblock a blocked speak. The wait
         // itself decides whether anything notable is returned; sub-threshold observations are never promoted.
         lock (_observationStateLock)
         {
@@ -1049,7 +1049,7 @@ public abstract partial class Mind : Node
     /// </summary>
     /// <remarks>
     /// Blank voice IDs never attend, mirroring the <c>SpeechPerception</c> attribution precedent; unattributable and
-    /// ambiguous voices never cue or block (AI-001 TR-34, AI-002 TR-25).
+    /// ambiguous voices never cue or block (AI-002 TR-7).
     /// </remarks>
     private bool TryResolveAttendedSpeaker(IVoice voice)
     {
@@ -1080,7 +1080,7 @@ public abstract partial class Mind : Node
     /// A voice attends iff it is composed on exactly one current-scene character other than the owning character
     /// whose canonical <c>ICharacter.FullId</c> is present in the current attention snapshot at or above the
     /// retention threshold, regardless of weight or score. The owning character's own voice never blocks, and
-    /// unattributable voices never block (AI-002 TR-25). Safe from continuations: it reads only subscription state
+    /// unattributable voices never block (SPCH-005 TR-37). Safe from continuations: it reads only subscription state
     /// refreshed on the Godot thread, the lock-guarded attention snapshot, and the volatile speaking flag.
     /// </remarks>
     internal bool IsAttendedSpeakerSpeaking()
@@ -1394,7 +1394,7 @@ public abstract partial class Mind : Node
                 stampedObservations.Add(entry.Payload);
 
                 // Freshness upgrades the complete current accumulation — including preceding sub-threshold
-                // observations — to deliverable regardless of cumulative importance (AI-001 TR-43).
+                // observations — to deliverable regardless of cumulative importance (AI-002 UR-5).
                 _freshUrgencyPending |= entry.Scheduling.RequiresFreshTurn;
                 if (!_notablePending && _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
                 {
@@ -1439,10 +1439,10 @@ public abstract partial class Mind : Node
             ?? (observation as IHasCommitIdentity)?.CommitIdentity;
 
     /// <summary>
-    /// Delivers one urgency upgrade after its committing batch has settled (AI-001 TR-35/44): an active wait is
+    /// Delivers one urgency upgrade after its committing batch has settled (AI-001 TR-7, AI-002 TR-7): an active wait is
     /// woken through its normal completion mechanism — never by runner cancellation — with the wake reason matching
     /// the urgency, and listeners receive delivery urgency plus wait ownership. Disabled minds retain the window
-    /// without waking or signalling (AI-001 TR-5).
+    /// without waking or signalling (AI-001 TR-7).
     /// </summary>
     private void SignalObservationDelivery(ObservationDeliveryUrgency urgency)
     {
@@ -1469,7 +1469,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// Gets whether an observation wait is currently active: deterministic synchronisation for fixtures that must
-    /// observe strictly after a wait registered its delivery ownership (AI-002 TR-41).
+    /// observe strictly after a wait registered its delivery ownership (AI-002 TR-9).
     /// </summary>
     internal bool HasActiveObservationWait
     {
@@ -1661,8 +1661,8 @@ public abstract partial class Mind : Node
     /// </summary>
     /// <param name="maxWait">Maximum duration of one wait before quiet expiry.</param>
     /// <param name="cancellationToken">Cancellation that abandons the wait; node-lifetime cancellation is terminal
-    /// and never surfaces a normal wait result (AI-001 TR-19). A wait already woken through its normal completion
-    /// mechanism still delivers its window when this token is cancelled afterwards (AI-002 TR-41).</param>
+    /// and never surfaces a normal wait result (AI-001 TR-11). A wait already woken through its normal completion
+    /// mechanism still delivers its window when this token is cancelled afterwards (AI-002 TR-9).</param>
     /// <returns>The scheduling wake reason. Event text remains exclusively in the request-context timeline.</returns>
     internal async Task<WaitOutcome> WaitForNotableObservationsAsync(TimeSpan maxWait, CancellationToken cancellationToken)
     {
@@ -1713,7 +1713,7 @@ public abstract partial class Mind : Node
             else
             {
                 // Abandoned wait: cancellation — terminal node lifetime above all — must throw rather than surface a
-                // normal wait result (AI-001 TR-19).
+                // normal wait result (AI-001 TR-11).
                 waitToken.ThrowIfCancellationRequested();
             }
         }
@@ -1790,7 +1790,7 @@ public abstract partial class Mind : Node
 
     /// <summary>
     /// One serialisable unit of perception work: either a percept fan-out or an observation awaiting atomic commit,
-    /// committed strictly in enqueue order (AI-001 TR-29, AI-006 TR-34).
+    /// committed strictly in enqueue order (AI-001 TR-8, AI-006 TR-34).
     /// </summary>
     private abstract record PerceptionWork;
 

@@ -37,7 +37,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 {
     /// <summary>
     /// Missing session configuration is contained: the failure is logged once, the session never issues a
-    /// request, and it stays ended for the node's remaining lifetime (AI-002 TR-1/2).
+    /// request, and it stays ended for the node's remaining lifetime (AI-002 TR-1).
     /// </summary>
     [Fact]
     public async Task SessionFailure_WithMissingConfiguration_IsContainedLoggedOnceAndStaysEnded()
@@ -149,7 +149,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// Non-self observed speech during held generation requires a fresh turn immediately. Its replacement request
-    /// carries the rendered speech only in its event-timeline message (AI-001 TR-7, AI-002 TR-2/7–10).
+    /// carries the rendered speech only in its event-timeline message (AI-002 UR-5, TR-2/7–10).
     /// </summary>
     [Fact]
     public async Task ExternalSpeech_DuringGeneration_InvalidatesStaleGenerationImmediately()
@@ -202,7 +202,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A textless continued-segment resume crosses the real Voice-to-Mind subscription boundary, cancels the
     /// stale request, and holds the replacement until its own grouped completion has been perceived. Unrelated
-    /// group/index settlements and published settlement never release the lease (AI-002 TR-40/58).
+    /// group/index settlements and published settlement never release the lease (AI-002 TR-4/5, TR-11).
     /// </summary>
     [Fact]
     public async Task GroupedContinuation_ResumeCancelsAndHoldsUntilMatchingJoinedCompletion()
@@ -279,7 +279,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A textless onset cue crosses the real Voice-to-Mind subscription boundary, cancels the stale request, and
     /// holds the replacement until its own grouped completion has been perceived. Unrelated group settlements and
-    /// the published settlement never release the lease (AI-002 TR-40/58).
+    /// the published settlement never release the lease (AI-002 TR-4/5, TR-11).
     /// </summary>
     [Fact]
     public async Task StartedContinuation_OnsetCancelsAndHoldsUntilMatchingJoinedCompletion()
@@ -465,7 +465,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// A start cue that arrives after its group's completed speech already committed and its delivery was consumed
     /// cannot settle through delivery: the settled-hold watchdog releases the lease textlessly on the cue's own
     /// sweep, so the runner issues its next model request with no further settlement cue and without duplicating
-    /// the already-delivered speech (AI-002 TR-57 liveness).
+    /// the already-delivered speech (AI-002 TR-11 liveness).
     /// </summary>
     [Fact]
     public async Task StartedContinuation_CueAfterSpeechAlreadyDelivered_WatchdogReleasesHoldTextlessly()
@@ -540,7 +540,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A cue from a speaker the Mind does not attend registers nothing and cancels nothing: generation and the
     /// tool batch continue through the cue, no hold appears, and the speaker's completed
-    /// speech still arrives later as an ordinary all-hearer fresh turn (AI-001 TR-47, AI-002 TR-56).
+    /// speech still arrives later as an ordinary all-hearer fresh turn (SPCH-005 TR-37, AI-002 UR-5).
     /// </summary>
     [Fact]
     public async Task StartedContinuation_FromUnattendedSpeaker_RegistersNothingAndCancelsNothing()
@@ -570,7 +570,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             new FunctionCallContent("after-call", "speak", new Dictionary<string, object?> { ["speech"] = "After" }));
         clientProvider.EnqueueHoldForever();
         // No attention reinforcement: the speaker stays outside this Mind's attention snapshot, so its cues are
-        // never forwarded (AI-001 TR-47).
+        // never forwarded (SPCH-005 TR-37).
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
@@ -621,7 +621,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// voice, only the two attending the speaker cancel their in-flight request and hold their replacement
     /// behind their own cue lease — each independently, on its own session — while the unattended Mind's
     /// generation and tool batch continue through the cue, and the speaker's later completed speech still
-    /// reaches all three Minds as ordinary fresh observations (AI-001 TR-47, AI-002 TR-56/57).
+    /// reaches all three Minds as ordinary fresh observations (SPCH-005 TR-37, AI-002 UR-5/TR-11).
     /// </summary>
     [Fact]
     public async Task SharedSpeakerOnset_SuppressesAttendedMindsIndependentlyWhileUnattendedMindContinues()
@@ -683,7 +683,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind attendedMindA = CreateVoiceRoutedMind(ownerA, speaker, player, clientProviderA);
         TestAgenticMind attendedMindB = CreateVoiceRoutedMind(ownerB, speaker, player, clientProviderB);
         // No attention reinforcement for the third Mind: the speaker stays outside its attention snapshot, so
-        // the shared cue is never forwarded to it (AI-001 TR-47).
+        // the shared cue is never forwarded to it (SPCH-005 TR-37).
         TestAgenticMind unattendedMindC = CreateVoiceRoutedMind(
             ownerC,
             speaker,
@@ -1134,7 +1134,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => ownerVoice.CancellationObserved);
 
             // Not arbitration-protected: the cue's invalidation cancels the pre-hand-off submission with the
-            // ordinary silent-cancellation semantics (AI-002 TR-27/63) — no self-observation exists.
+            // ordinary silent-cancellation semantics (SPCH-005 TR-25/38) — no self-observation exists.
             Assert.True(ownerVoice.CancellationObserved, "The cue must withdraw the unhand-offed ordinary submission.");
             Assert.DoesNotContain(
                 mind.GetTimelineForTest(),
@@ -1205,7 +1205,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await ownerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             // Playback hand-off commits the ordinary submission irreversibly: the speaking window stays open and
-            // exactly one self-observation commits (AI-002 TR-26, SPCH-005 UR-14).
+            // exactly one self-observation commits (AI-002 TR-14, SPCH-005 UR-14).
             ownerVoice.CompleteHandOff();
             await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest().Any(
                 observation => observation is ObservedSpeech speech && speech.ActorId == owner.FullId));
@@ -1254,7 +1254,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// Node exit remains terminal while several cue holds coexist: the session ends quietly with no replacement
-    /// request, no fabricated replay, and no lifecycle work after teardown (AI-002 TR-44/57).
+    /// request, no fabricated replay, and no lifecycle work after teardown (AI-002 TR-14).
     /// </summary>
     [Fact]
     public async Task NodeExit_WithCoexistingContinuationHolds_EndsSessionQuietlyWithoutReplay()
@@ -1323,7 +1323,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// Same-group continuation leases retain their segment identity through AgenticMind: completing either segment
-    /// cannot start the replacement request while the other is still unresolved (AI-002 TR-58).
+    /// cannot start the replacement request while the other is still unresolved (AI-002 TR-11).
     /// </summary>
     [Fact]
     public async Task GroupedContinuation_TwoOutstandingSegmentsRequireBothMatchingCompletions()
@@ -1385,7 +1385,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// Once a prefix has reached accepted transcript history with an assistant call and tool result, a later
     /// continuation appears through the event-timeline tail. The accepted exchange is retained unchanged
-    /// (AI-002 TR-58/59).
+    /// (AI-002 TR-5, TR-11).
     /// </summary>
     [Fact]
     public async Task GroupedContinuation_AfterAcceptedPrefix_RendersWithoutRewritingAcceptedExchange()
@@ -1684,7 +1684,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         }
     }
 
-    /// <summary>Ungrouped external speech retains ordinary fresh invalidation and delivery behaviour (AI-002 TR-40).</summary>
+    /// <summary>Ungrouped external speech retains ordinary fresh invalidation and delivery behaviour (AI-002 TR-4/5).</summary>
     [Fact]
     public async Task UngroupedExternalSpeech_StillInvalidatesAndDeliversWithoutContinuationHold()
     {
@@ -1739,7 +1739,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// wait's own tool result carries the fresh speech plus its preceding FIFO accumulation — never generic
     /// action-interrupted wording — the batch's trailing call is skipped with the canonical cancellation result,
     /// no duplicate observation text exists for the wait-owned window, and exactly one replacement request
-    /// follows (AI-001 TR-43, AI-002 TR-40/41).
+    /// follows (AI-002 UR-5, TR-4/5 and TR-10).
     /// </summary>
     [Fact]
     public async Task ExternalSpeech_DuringActiveWait_DeliversWindowThroughNaturalWaitResultWithSingleReplacement()
@@ -1838,7 +1838,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// An ordinary visual description at its provisional importance during held generation is delivered without
     /// cancellation and rendered through its type-owned safe fallback in accumulation order at the next natural
-    /// boundary (AI-002 TR-39).
+    /// boundary (AI-002 UR-5).
     /// </summary>
     [Fact]
     public async Task NotableVisualDescription_DuringGeneration_UsesTypeOwnedFallbackChronologically()
@@ -2000,7 +2000,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// A fresh speech event invalidates stale generation and the replacement request materialises canonical timeline
-    /// context without an out-of-band payload (AI-001 TR-43/44, AI-002 TR-40).
+    /// context without an out-of-band payload (AI-001 TR-7, AI-002 UR-5/TR-4/5).
     /// </summary>
     [Fact]
     public async Task FreshSpeech_SupersedesGenerationThroughCanonicalContext()
@@ -2054,7 +2054,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// An ordinary pending window followed by a fresh observation coalesces in FIFO order into exactly one
-    /// event-timeline message on the single fresh replacement request (AI-002 TR-7–10, TR-40).
+    /// event-timeline message on the single fresh replacement request (AI-002 TR-7–10, TR-4/5).
     /// </summary>
     [Fact]
     public async Task OrdinaryAndFreshObservations_CoalesceFIFOIntoOneFreshReplacementRequest()
@@ -2110,7 +2110,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// Node exit cancels an in-flight generation request: the session ends quietly without retry and without
-    /// backend-failure diagnostics, while the Mind timeline persists (AI-002 TR-44, AI-001 TR-18).
+    /// backend-failure diagnostics, while the Mind timeline persists (AI-002 TR-14, AI-001 TR-11).
     /// </summary>
     [Fact]
     public async Task NodeExit_DuringGeneration_EndsSessionQuietlyWithoutRetryOrBackendFailure()
@@ -2157,7 +2157,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// Node exit while a tool is in flight settles the tool work without successful observation, and the session
-    /// ends quietly without backend-failure diagnostics (AI-002 TR-39/44/45).
+    /// ends quietly without backend-failure diagnostics (AI-002 UR-5, TR-14).
     /// </summary>
     [Fact]
     public async Task NodeExit_DuringToolPhase_SettlesToolWorkWithoutObservation()
@@ -2493,7 +2493,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// Plain <see cref="TestVoice" /> double without the admission capability (SPCH-005 TR-38) whose ordinary
     /// cancellable submission the test controls: the submission is recorded, completes only at the demanded
     /// playback hand-off, and observes caller cancellation — the non-capable owner voice for the ordinary-voice
-    /// fallback coverage (AI-002 TR-63/AC-27).
+    /// fallback coverage (SPCH-005 TR-38/AC-27).
     /// </summary>
     private sealed partial class ControllableFallbackVoice : TestVoice
     {

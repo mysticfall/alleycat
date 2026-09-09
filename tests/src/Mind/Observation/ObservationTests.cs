@@ -63,7 +63,7 @@ public sealed class ObservationTests
 
     /// <summary>
     /// Commit identity compares components ordinally and order-sensitively, so only the same tuple matches
-    /// (AI-001 TR-49).
+    /// (AI-001 TR-9).
     /// </summary>
     [Fact]
     public void ObservationCommitIdentity_ComparesOrdinalOrderedComponents()

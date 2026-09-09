@@ -17,7 +17,7 @@ public partial class SpeechTool : AgentTool
     private const string CutShortBeforeSpokenMessage =
         "Your speech was cut short by another event before it could be spoken.";
 
-    /// <summary>Model-facing name of the production speak tool (AI-002 TR-16).</summary>
+    /// <summary>Model-facing name of the production speak tool (AI-002 TR-13).</summary>
     internal const string ProductionToolName = "speak";
 
     /// <summary>
@@ -36,7 +36,8 @@ public partial class SpeechTool : AgentTool
     }
 
     /// <summary>
-    /// Runner-owned admission arbitration typed-bound at the AgenticMind composition boundary (AI-002 TR-19/25/56),
+    /// Runner-owned admission arbitration typed-bound at the AgenticMind composition boundary (AI-002 TR-13,
+    /// SPCH-005 TR-37),
     /// or null when this tool was authored or constructed outside that composition — such instances keep the
     /// ordinary cancellable submission path.
     /// </summary>
@@ -47,7 +48,7 @@ public partial class SpeechTool : AgentTool
 
     /// <summary>
     /// Creates a speech tool whose submissions arbitrate admission against the session runner's attended
-    /// start/resume holds (AI-002 TR-19/25/56).
+    /// start/resume holds (AI-002 TR-13, SPCH-005 TR-37).
     /// </summary>
     internal SpeechTool(ToolAdmissionBroker admission) : this()
     {
@@ -78,7 +79,7 @@ public partial class SpeechTool : AgentTool
         // not polluted by time spent waiting for another speaker.
         PipelineDebugLog.Marker("Speak tool invoked", $"{acceptedSpeech.Length} chars");
 
-        // Turn-taking guard (AI-002 TR-25): block while an attended speaker's window is open. The owning
+        // Turn-taking guard (SPCH-005 TR-37): block while an attended speaker's window is open. The owning
         // character's own voice never blocks, and unattributable voices never block.
         try
         {
@@ -86,25 +87,25 @@ public partial class SpeechTool : AgentTool
         }
         catch (OperationCanceledException) when (!mind.HasNodeLifetimeEnded)
         {
-            // Interruption while blocked never throws (AI-002 TR-27): nothing was submitted or observed.
+            // Interruption while blocked never throws (AI-002 TR-22): nothing was submitted or observed.
             return new AgentToolResult(CutShortBeforeSpokenMessage);
         }
 
-        // Playback hand-off, not admission, is the successful action boundary (AI-002 TR-26): the cancellable
+        // Playback hand-off, not admission, is the successful action boundary (AI-002 TR-14): the cancellable
         // submission completes exactly at hand-off, so its successful completion is itself the commit signal,
         // while failure or cancellation before it surfaces here without a result. Hand-off commits the speech
         // irreversibly, so cancellation observed after it — including fresh-turn invalidation — neither cuts
-        // playback nor withholds the self observation (AI-002 TR-27, SPCH-005 UR-14/TR-25).
+        // playback nor withholds the self observation (AI-002 TR-14, SPCH-005 UR-14/TR-25).
         try
         {
-            // TTS admission is arbitrated against attended start/resume holds (AI-002 TR-25/56; SPCH-005 TR-37):
+            // TTS admission is arbitrated against attended start/resume holds (AI-002 TR-13/14; SPCH-005 TR-37):
             // the transaction commits voice queue admission and the runner's protected state atomically, and a
             // cue-first refusal admits nothing — no TTS request, queue item, hearing event, or self-observation —
-            // surfacing here through the non-throwing not-delivered result (AI-002 TR-27). The capability is
-            // discovered from the authored voice projection without any concrete-voice dependency (AI-002 TR-63),
+            // surfacing here through the non-throwing not-delivered result (SPCH-005 TR-37). The capability is
+            // discovered from the authored voice projection without any concrete-voice dependency (SPCH-005 TR-37),
             // and a voice without it — or a tool composed without the session's admission arbitration — keeps the
             // ordinary cancellable submission path with its ordinary silent pre-hand-off withdrawal semantics
-            // (SPCH-005 TR-38, AI-002 TR-63).
+            // (SPCH-005 TR-38).
             if (voice is IAdmissionCapableVoice capableVoice
                 && Admission?.TryCreateTransaction() is { } admission)
             {

@@ -291,7 +291,7 @@ public sealed class AgentSessionRunnerTests
             Assert.Null(toolMode.RequiredFunctionName);
             Assert.False(options.AllowMultipleToolCalls);
             Assert.Null(options.ResponseFormat);
-            // No synthetic end-turn route exists in the session inventory (AI-002 TR-16).
+            // No synthetic end-turn route exists in the session inventory (AI-002 TR-13).
             Assert.Equal(
                 [SpeakToolName],
                 options.Tools!.Cast<AIFunction>().Select(tool => tool.Name));
@@ -733,7 +733,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Reasoning content before a valid call is tolerated and skipped during validation, while remaining transient
-    /// session protocol rather than player-visible text (AI-002 TR-53).
+    /// session protocol rather than player-visible text (AI-002 TR-12).
     /// </summary>
     /// <summary>Abandonment releases only its lease and does not invent model-facing input.</summary>
     [Fact]
@@ -771,7 +771,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Reasoning text is logged at trace level only when the trace level is enabled and the dedicated
-    /// <c>enableReasoningLogging</c> control is on (AI-002 TR-53).
+    /// <c>enableReasoningLogging</c> control is on.
     /// </summary>
     [Fact]
     public async Task RunAsync_WithReasoningContent_LogsReasoningAtTraceLevelOnlyWhenEnabled()
@@ -826,7 +826,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Model calls may omit optional tool arguments: a defaulted parameter stays optional for validation and
-    /// empty arguments execute the tool (AI-002 TR-31/36).
+    /// empty arguments execute the tool (AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task RunAsync_WithOmittedOptionalArguments_ExecutesTheTool()
@@ -888,7 +888,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// A throwing tool surfaces its error through the tool result so the agent decides whether and how to retry;
-    /// the session itself continues (AI-002 TR-42).
+    /// the session itself continues (AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenToolThrows_SurfacesErrorThroughToolResultAndContinues()
@@ -917,7 +917,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A fresh observation during model generation cancels the in-flight request, discards partial assistant
     /// output and resumes with a fresh request replaying the complete
-    /// transcript (AI-002 TR-40).
+    /// transcript (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringGeneration_CancelsRequestDiscardsPartialsAndRematerialisesContext()
@@ -956,7 +956,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A non-cooperative provider that returns a valid-looking response after its generation was invalidated has
     /// that late response discarded whole: it is never validated or executed, and the fresh request carries only
-    /// rematerialised canonical context (AI-002 TR-40).
+    /// rematerialised canonical context (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringGeneration_DiscardsAResponseReturnedAfterCancellation()
@@ -1029,7 +1029,7 @@ public sealed class AgentSessionRunnerTests
     /// never invokes the remaining calls, and appends the complete assistant exchange with exactly one
     /// protocol-valid result per call ID — every result without a natural outcome carries the canonical
     /// cancellation wording — followed by one payload-free replacement request
-    /// (AI-002 TR-40).
+    /// (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringFirstCallOfMultiCallBatch_CancelsCallSkipsRemainingAndSynthesisesOneResultPerCallID()
@@ -1074,7 +1074,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Fresh invalidation landing in the inter-call gap — after the active call completed but before the runner
-    /// started the next — never starts the remaining stale call (AI-002 TR-40).
+    /// started the next — never starts the remaining stale call (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_InTheInterCallGap_NeverStartsTheNextCall()
@@ -1128,7 +1128,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// Effects a non-cooperative tool committed before invalidation remain committed: its natural result is
     /// retained — never rolled back or misrepresented — while the remaining calls are still skipped with canonical
-    /// cancellation results (AI-002 TR-40).
+    /// cancellation results (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_AfterCommittedEffects_RetainsTheCommittedNaturalResult()
@@ -1172,7 +1172,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A tool completing at the same moment its batch is invalidated produces exactly one deterministic valid
     /// result for its call ID — its natural result — with no duplicate invocation, while every remaining call is
-    /// skipped (AI-002 TR-40).
+    /// skipped (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_RacingToolCompletion_ProducesExactlyOneResultWithoutDuplicateInvocation()
@@ -1224,7 +1224,7 @@ public sealed class AgentSessionRunnerTests
     /// A wait-owned fresh invalidation — signalled while the wait is the in-flight active phase — records the stale
     /// latch without cancelling that phase: the wait completes naturally with its delivery, the batch's remaining
     /// calls are skipped with canonical cancellation results, and the single replacement request carries the
-    /// wait's natural result without duplicated observation text (AI-002 TR-40/41).
+    /// wait's natural result without duplicated observation text (AI-002 TR-4/5 and TR-10).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_WithoutCancellingActivePhase_CompletesWaitNaturallyAndSkipsRemainingCalls()
@@ -1273,7 +1273,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Node-lifetime cancellation racing a fresh invalidation wins: the session
-    /// ends quietly, and no replacement request is issued (AI-002 TR-44 versus TR-40).
+    /// ends quietly, and no replacement request is issued (AI-002 TR-14 versus TR-4/5).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenLifetimeCancelsRacingFreshInvalidation_EndsQuietlyWithoutReplacementRequest()
@@ -1425,7 +1425,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Transient transport failures — network, I/O, timeout, and retryable provider statuses — are retried
-    /// transparently: never surfaced to the agent as a tool result or transcript entry (AI-002 TR-43).
+    /// transparently: never surfaced to the agent as a tool result or transcript entry (AI-002 TR-12).
     /// </summary>
     [Theory]
     [MemberData(nameof(TransientFailures))]
@@ -1466,7 +1466,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A provider timeout — a task cancellation on a linked token that is not the phase token — is classified as a
     /// transient transport failure, never as an expected interruption: the retry logs a transient warning, never
-    /// takes the interruption path, and adds no event text (AI-002 TR-43 versus TR-41).
+    /// takes the interruption path, and adds no event text (AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenProviderTimeoutRecovers_RetriesAsTransientFailureWithoutInterruptionSemantics()
@@ -1503,7 +1503,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Retry exhaustion ends the session through the contained failure path: one contained exception wrapping
-    /// the final transport failure, after exactly the configured number of retries (AI-002 TR-43).
+    /// the final transport failure, after exactly the configured number of retries (AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenTransientFailuresExhaustRetries_EndsSessionThroughContainedFailure()
@@ -1531,7 +1531,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// Persistent provider timeouts — task cancellations on a linked token that is not the phase token — exhaust
     /// the bounded transport retries into the contained session end instead of looping on interruption fresh
-    /// requests (AI-002 TR-43 versus TR-41).
+    /// requests (AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenProviderTimeoutsPersist_ExhaustsRetriesIntoContainedSessionEnd()
@@ -1599,7 +1599,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Node-lifetime cancellation during an in-flight request ends the session quietly — the cancellation is
-    /// never a backend failure and is never retried (AI-002 TR-44).
+    /// never a backend failure and is never retried (AI-002 TR-14).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenLifetimeCancelsDuringGeneration_EndsQuietlyWithoutRetry()
@@ -1690,7 +1690,7 @@ public sealed class AgentSessionRunnerTests
     /// A fresh invalidation during invalid-response backoff supersedes recovery without consuming its budget: the
     /// streak from the superseded response is not carried forward, so the replacement request's own invalid
     /// response still receives a full backoff before any exhaustion, and the replacement request carries the fresh
-    /// replacement request instead of a recovery request (AI-002 TR-40 versus TR-43).
+    /// replacement request instead of a recovery request (AI-002 TR-4/5 versus TR-12).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringInvalidResponseRecoveryBackoff_DoesNotConsumeRecoveryBudget()
@@ -1724,7 +1724,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A fresh invalidation arriving during a transport-retry delay supersedes the pending retry: the stale
     /// request is never re-issued, the transport-retry budget is not consumed by the invalidation, and the fresh
-    /// request replaces it (AI-002 TR-40 versus TR-43).
+    /// request replaces it (AI-002 TR-4/5 versus TR-12).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringTransportRetryDelay_SupersedesThePendingRetry()
@@ -1758,7 +1758,8 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// Freshness that linearises while a speak submission is still pending cancels it — speak-tool selection alone
     /// remains ordinary cancellable work — and the racing admission transaction is refused: its commit never runs,
-    /// while the assistant call ID still receives exactly one protocol-valid cancelled result (AI-002 TR-25/26/56).
+    /// while the assistant call ID still receives exactly one protocol-valid cancelled result (AI-002 TR-14,
+    /// SPCH-005 TR-37).
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_FreshnessFirst_RefusesAdmissionAndCancelsPendingSpeak()
@@ -1836,7 +1837,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// A speak-shaped tool that never reaches its admission transaction is still ordinary cancellable work: fresh
-    /// invalidation cancels it and its call ID receives the canonical cancelled result (AI-002 TR-56).
+    /// invalidation cancels it and its call ID receives the canonical cancelled result (SPCH-005 TR-37).
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_SpeakSelectionAlone_RemainsCancellableByFreshness()
@@ -1864,7 +1865,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Admission registration follows the composition-registered per-function phase policy, never the function
-    /// name (AI-002 TR-62): an arbitrary-named function bound with the admission-arbitration policy registers its
+    /// name (AI-002 TR-14): an arbitrary-named function bound with the admission-arbitration policy registers its
     /// pending-admission phase and admits with no cue pending, while the literal speak function name without a
     /// bound policy stays ordinary work whose admission transaction is unavailable.
     /// </summary>
@@ -1910,7 +1911,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Runner-only speech-key registration does not protect an admitted speak: canonical request context owns
-    /// continuation admission, so direct freshness still cancels the runner phase (AI-002 TR-26/40).
+    /// continuation admission, so direct freshness still cancels the runner phase (AI-002 TR-14, TR-4/5).
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_DirectFreshInvalidationCancelsTheAdmittedSpeak()
@@ -1940,7 +1941,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A fresh invalidation carrying an unrelated — or absent — speech key withdraws an admitted speak that has
     /// not crossed playback hand-off: protection applies only to the matching player-speech lifecycle (AI-002
-    /// TR-26/40).
+    /// TR-14, TR-4/5).
     /// </summary>
     /// <param name="unrelatedKeyMode">0: absent keys, 1: empty key set, 2: another speaker's key.</param>
     [Theory]
@@ -1986,7 +1987,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Node-lifetime cancellation remains terminal even against an admitted protected speak: the phase's
-    /// lifetime-linked token fires, the session ends quietly, and no replacement request is issued (AI-002 TR-44).
+    /// lifetime-linked token fires, the session ends quietly, and no replacement request is issued (AI-002 TR-14).
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_WhenLifetimeCancels_EndsAdmittedSpeakQuietly()
@@ -2013,8 +2014,8 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Fresh invalidation during the transport-retry delay supersedes the pending retry without consuming its budget:
-    /// the stale request is never re-issued and the replacement request needs no observation payload (AI-002 TR-40
-    /// versus TR-43).
+    /// the stale request is never re-issued and the replacement request needs no observation payload (AI-002 TR-4/5
+    /// versus TR-12).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringTransportRetryDelay_SupersedesRetryWithoutConsumingBudget()
@@ -2050,8 +2051,8 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Fresh invalidation during invalid-response recovery backoff supersedes recovery without consuming its budget:
-    /// the streak is not carried forward and the replacement request follows the settled hold (AI-002 TR-56 versus
-    /// TR-43).
+    /// the streak is not carried forward and the replacement request follows the settled hold (SPCH-005 TR-37 versus
+    /// AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringInvalidResponseRecoveryBackoff_WithoutPayloadDoesNotConsumeRecoveryBudget()
@@ -2084,7 +2085,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// Fresh invalidation cancels an active wait-shaped tool co-operatively — Mind's accumulation ownership is
     /// Mind-level state the runner never touches — and the wait call ID still receives exactly one result before
-    /// the payload-free replacement request (AI-002 TR-40/61).
+    /// the payload-free replacement request (AI-002 TR-4/5 and TR-9).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringActiveWait_CancelsTheWaitToolWithOneResultPerCallID()
@@ -2115,7 +2116,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// A non-cooperative provider response returned after fresh invalidation is discarded whole: the replacement
-    /// request replays only accepted history and never the stale call (AI-002 TR-40).
+    /// request replays only accepted history and never the stale call (AI-002 TR-4/5).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringGeneration_DiscardsTheLateResponse()
@@ -2548,7 +2549,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// Wait-shaped in-flight tool modelling an observation wait as the active phase: it records whether its phase
     /// token fired — proving whether an invalidation cancelled it — and completes naturally with a delivered-window
-    /// result only when released without cancellation (AI-002 TR-41).
+    /// result only when released without cancellation (AI-002 TR-9).
     /// </summary>
     private sealed class WaitLikeTool
     {
@@ -2618,7 +2619,8 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Speak-shaped in-flight tool driving the runner's admission transaction deterministically (AI-002 TR-25/56):
+    /// Speak-shaped in-flight tool driving the runner's admission transaction deterministically (AI-002 TR-14,
+    /// SPCH-005 TR-37):
     /// it can block before or after attempting admission, records whether the transaction's commit ran, whether
     /// admission was granted, and whether its phase token fired, and completes naturally only when released
     /// without cancellation.
@@ -2657,7 +2659,7 @@ public sealed class AgentSessionRunnerTests
         }
 
         public AIFunction Function
-            // Composition registers the speak function's admission-arbitration policy (AI-002 TR-62).
+            // Composition registers the speak function's admission-arbitration policy (AI-002 TR-14).
             => AgentSessionPhasePolicy.AdmissionArbitration.Bind(
                 AIFunctionFactory.Create(
                     (string speech, CancellationToken cancellationToken) => InvokeAsync(speech, cancellationToken),
@@ -2710,7 +2712,7 @@ public sealed class AgentSessionRunnerTests
 
     /// <summary>
     /// Tool that attempts the runner's admission transaction exactly once while invoked, recording whether the
-    /// transaction was granted and whether its commit ran, for phase-policy registration coverage (AI-002 TR-62).
+    /// transaction was granted and whether its commit ran, for phase-policy registration coverage (AI-002 TR-14).
     /// </summary>
     private sealed class AdmissionProbingTool(Func<AgentSessionRunner> runnerResolver, string? toolName = null)
     {

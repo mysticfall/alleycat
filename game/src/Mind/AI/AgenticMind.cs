@@ -33,7 +33,7 @@ public partial class AgenticMind : MindBase
 
     /// <summary>
     /// Bootstrap input message the session owner sends with the first request for both chat-client kinds
-    /// (AI-002 TR-7).
+    /// (AI-002 TR-2).
     /// </summary>
     internal const string SessionBootstrapInput = "Begin. Participate in the scene using the available tools.";
 
@@ -51,8 +51,8 @@ public partial class AgenticMind : MindBase
     public event Action<AgentObservation>? ObservationCommitted;
 
     /// <summary>
-    /// Creates the mind with its session-scoped speech-turn and continuation correlation coordinator (AI-001
-    /// TR-50, AI-002 TR-62): the coordinator owns every concrete speech observation read for this node's single
+    /// Creates the mind with its session-scoped speech-turn and continuation correlation coordinator
+    /// (AI-002 TR-13): the coordinator owns every concrete speech observation read for this node's single
     /// session.
     /// </summary>
     public AgenticMind()
@@ -140,7 +140,7 @@ public partial class AgenticMind : MindBase
 
     /// <summary>
     /// Starts the one session for this Mind's node lifetime — fire-and-forget with full containment: the session
-    /// never crashes the scene, and failures are logged like any contained response failure (AI-002 TR-1/2). A
+    /// never crashes the scene, and failures are logged like any contained response failure (AI-002 TR-1). A
     /// process-wide <c>--no-ai</c> switch instead ends the session before it begins with one Information notice.
     /// </summary>
     private void StartSession()
@@ -192,7 +192,7 @@ public partial class AgenticMind : MindBase
         }
         catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
-            // Expected node-lifetime end of the session (AI-002 TR-44): quiet, never a backend failure.
+            // Expected node-lifetime end of the session (AI-002 TR-14): quiet, never a backend failure.
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !lifetimeToken.IsCancellationRequested)
         {
@@ -208,7 +208,7 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Prepares the session start sequence (AI-002 TR-5/6, AI-008 TR-7): assembles the render context on demand,
+    /// Prepares the session start sequence (AI-002 TR-2, AI-003 TR-7; AI-008 TR-7): assembles the render context on demand,
     /// resolves the scenario once with the freshly built core context, seals and renders the PromptStack exactly
     /// once, and creates the session's tools and chat client.
     /// </summary>
@@ -226,7 +226,7 @@ public partial class AgenticMind : MindBase
         ICharacter character = ResolveOwningCharacter();
 
         // Phase 1: core render context — every reserved key except 'scenario', including the unconditional player
-        // context (AI-001 TR-25). Observations never enter the dictionary: they reach the model exclusively
+        // context (AI-003 TR-7). Observations never enter the dictionary: they reach the model exclusively
         // through tool results and per-request event-timeline context.
         Dictionary<string, object?> coreContext = CreateCoreRenderContext(
             character,
@@ -304,7 +304,7 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Bridges Mind's urgency-aware delivery signal into the session runtime (AI-001 TR-44, AI-002 TR-39/40/41).
+    /// Bridges Mind's urgency-aware delivery signal into the session runtime (AI-001 TR-7, AI-002 TR-7–9).
     /// Scheduling is deliberately payload-free: every event remains in Mind's persistent timeline and is rendered
     /// only by the canonical request-context source. Freshness alone invalidates stale work; ordinary pressure waits
     /// for the session's next natural request boundary and clears only after context confirmation.
@@ -356,17 +356,17 @@ public partial class AgenticMind : MindBase
         IGameClock clock,
         ToolAdmissionBroker toolAdmission)
     {
-        // Concrete capabilities bind typed to their concrete tool here at composition (AI-002 TR-19):
+        // Concrete capabilities bind typed to their concrete tool here at composition (AI-002 TR-13):
         // Speech-admission arbitration reaches only the speak tool; canonical request context owns all observation
         // delivery rather than the common tool session.
         SpeechTool speechTool = new(toolAdmission);
         WaitTool waitTool = new();
         AgentToolSession sessionServices = new(context, this, clock);
         WatchRegistry? watchRegistry = DiscoverWatchRegistry();
-        // Composition registers the speak tool's per-function phase policy (AI-002 TR-62): its invocation phase
+        // Composition registers the speak tool's per-function phase policy (AI-002 TR-14): its invocation phase
         // executes under admission arbitration, and the runner consults only this generic descriptor — never a
         // concrete tool, function name, or tool type. The production inventory is available without scene-authored
-        // configuration (AI-002 TR-16); authored entries add extra or test tools alongside it.
+        // configuration (AI-002 TR-13); authored entries add extra or test tools alongside it.
         List<AITool> functions =
         [
             AgentSessionPhasePolicy.AdmissionArbitration.Bind(
@@ -443,7 +443,7 @@ public partial class AgenticMind : MindBase
     /// template context, and the session flow seals it with the <c>scenario</c> key afterwards. Entries hold the raw
     /// <see cref="ICharacter" /> instances, whose template surface the curated member-access policy seals to exactly
     /// <c>FullId</c>, so sensitive character members stay unreachable from templates by construction. Observations
-    /// are never placed in the dictionary (AI-001 TR-25): they reach the model exclusively through AI-002 tool
+    /// are never placed in the dictionary (AI-002 TR-10): they reach the model exclusively through AI-002 tool
     /// results and per-request event-timeline context.
     /// </remarks>
     internal static Dictionary<string, object?> CreateCoreRenderContext(
@@ -733,7 +733,7 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Prepared session state captured once at session start (AI-002 TR-5/6): the trusted binding, the rendered
+    /// Prepared session state captured once at session start (AI-002 TR-2): the trusted binding, the rendered
     /// system instruction, the session-owner bootstrap input message, the decorated chat client, the bound
     /// tools, and the tool-admission carrier whose runner is attached at execution.
     /// </summary>

@@ -1,7 +1,7 @@
 namespace AlleyCat.Speech.Voice;
 
 /// <summary>
-/// Narrow, runner-owned arbitration token for exactly one speak submission (SPCH-005 TR-37; AI-002 TR-25/56).
+/// Narrow, runner-owned arbitration token for exactly one speak submission (SPCH-005 TR-37; AI-002 TR-14).
 /// </summary>
 /// <remarks>
 /// <para>

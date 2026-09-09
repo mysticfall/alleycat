@@ -106,7 +106,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
 
     /// <summary>
     /// Submits speech as an explicitly cancellable submission whose queue admission is arbitrated against attended
-    /// start/resume suppression holds (SPCH-005 TR-37; AI-002 TR-25/56). Implements the optional voice admission
+    /// start/resume suppression holds (SPCH-005 TR-37). Implements the optional voice admission
     /// capability discovered through <see cref="IAdmissionCapableVoice" /> — never a concrete-voice cast.
     /// </summary>
     /// <param name="speech">Speech text to submit.</param>

@@ -17,7 +17,7 @@ public sealed class CuratedTemplateMemberAccessStrategyTests
 {
     /// <summary>
     /// The curated annotations in the game assembly cover exactly <see cref="IIdentifiable.FullId" /> and seal
-    /// <see cref="ICharacter" /> (AI-003 TR-30 surface, expressed systemically).
+    /// <see cref="ICharacter" /> (TMPL-001 TR-14 surface, expressed systemically).
     /// </summary>
     [Fact]
     public void CuratedAnnotationsCoverExactlyTheIdentifiableFullIdMember()

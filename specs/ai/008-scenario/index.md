@@ -95,7 +95,7 @@ title: Scenario
     — the phase-2 addition after the manager query (TR-7) — whose value is the session's `Scenario`
      record or null. The key is reserved exactly like `character`, `characters`, and `player`: an
      authored entry colliding with `scenario`
-    must fail with the existing duplicate-key error. AI-001 TR-25 and AI-003 TR-20 enumerate this key in their
+    must fail with the existing duplicate-key error. AI-003 TR-5 and TR-7 enumerate this key in their
     composition lists; AI-008 is normative for its value and reservation semantics.
 11. The scenario must be rendered by a plain `FilePromptSection`
     in the shared generic NPC prompt stack referencing `res://prompts/scenario.md`, authored with a conditional guard

@@ -7,7 +7,7 @@ namespace AlleyCat.Speech.Voice;
 /// <remarks>
 /// <para>
 /// Consumers discover this as an optional capability of the resolved <see cref="IVoice" /> projection — never
-/// through a cast to a concrete voice class (AI-002 TR-63). A voice without this capability keeps the ordinary
+/// through a cast to a concrete voice class (SPCH-005 TR-37). A voice without this capability keeps the ordinary
 /// cancellable submission path (SPCH-005 TR-38): its speech is never refused at a suppression cue and is not
 /// arbitration-protected.
 /// </para>
@@ -22,7 +22,7 @@ internal interface IAdmissionCapableVoice
 {
     /// <summary>
     /// Submits speech as an explicitly cancellable submission whose queue admission is arbitrated against
-    /// attended start/resume suppression holds (SPCH-005 TR-37; AI-002 TR-25/56).
+    /// attended start/resume suppression holds (SPCH-005 TR-37; AI-002 TR-14).
     /// </summary>
     /// <param name="speech">Speech text to submit.</param>
     /// <param name="cancellationToken">Caller-supplied cancellation observed through generation, conversion, and

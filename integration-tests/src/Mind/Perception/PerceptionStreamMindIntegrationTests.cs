@@ -19,14 +19,14 @@ namespace AlleyCat.IntegrationTests.Mind.Perception;
 
 /// <summary>
 /// Runtime contracts for the Mind percept/observation stream: subscription ownership, enqueue-order serialisation,
-/// transient retention, and per-observation atomicity (AI-001 TR-17/29/30, AI-006 TR-11/18/20–27).
+/// transient retention, and per-observation atomicity (AI-001 TR-8, AI-006 TR-11/18/20–27).
 /// </summary>
 [Headless]
 public sealed class PerceptionStreamMindIntegrationTests
 {
     /// <summary>
     /// Mind owns every bound faculty's observation stream for its node lifetime: emissions raised outside percept
-    /// dispatch commit through Mind, and tree exit unsubscribes so later emissions never commit (AI-001 TR-27,
+    /// dispatch commit through Mind, and tree exit unsubscribes so later emissions never commit (AI-001 TR-8/11,
     /// AI-006 TR-22/23).
     /// </summary>
     [Fact]
@@ -74,7 +74,7 @@ public sealed class PerceptionStreamMindIntegrationTests
     /// <summary>
     /// One serial queue merges percept work and observations in enqueue order: emissions raised during in-flight
     /// percept work commit after that work finishes, publication callbacks return before any commit, and emissions
-    /// commit in emission order (AI-001 TR-29, AI-006 TR-34).
+    /// commit in emission order (AI-001 TR-8, AI-006 TR-34).
     /// </summary>
     [Fact]
     public async Task EnqueueOrder_EmissionsDuringPerceptProcessingCommitAfterInFlightWorkInEmissionOrder()
@@ -185,7 +185,7 @@ public sealed class PerceptionStreamMindIntegrationTests
 
     /// <summary>
     /// Invalid attention behaviour rolls back only its own observation: a mixed or non-finite effect list mutates
-    /// nothing, while earlier and later observations still commit (AI-001 TR-30, AI-006 TR-24/34).
+    /// nothing, while earlier and later observations still commit (AI-001 TR-8, AI-006 TR-24/34).
     /// </summary>
     [Fact]
     public async Task Atomicity_InvalidAttentionBehaviour_MutatesNothingForThatObservationOnly()

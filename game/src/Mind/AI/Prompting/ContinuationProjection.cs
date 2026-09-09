@@ -20,7 +20,7 @@ internal static class ContinuationProjection
     /// <summary>
     /// Prompting-owned correlation identity for one projected grouped-speech event: the contributing group's
     /// source voice, speech-group identity, and contributing segment indexes. Correlation metadata only
-    /// (AI-003 TR-33/35) — never model-facing wording, never rendered, and never a runner session-protocol type;
+    /// (AI-003 TR-10) — never model-facing wording, never rendered, and never a runner session-protocol type;
     /// the runtime consumption boundary translates it into opaque continuation identities.
     /// </summary>
     internal sealed record SpeechGroupCorrelation(

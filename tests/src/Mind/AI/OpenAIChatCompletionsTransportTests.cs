@@ -55,7 +55,7 @@ public sealed class OpenAIChatCompletionsTransportTests
         JsonElement[] firstMessages = [.. firstRequest.RootElement.GetProperty("messages").EnumerateArray()];
         Assert.Equal(["system", "user"], firstMessages.Select(message => message.GetProperty("role").GetString()));
         Assert.Equal(Instructions, firstMessages[0].GetProperty("content").GetString());
-        // Both chat-client kinds carry the session-owner bootstrap input message (AI-002 TR-7).
+        // Both chat-client kinds carry the session-owner bootstrap input message (AI-002 TR-2).
         Assert.Equal(AgenticMind.SessionBootstrapInput, firstMessages[1].GetProperty("content").GetString());
         AssertStrictToolOnlyRequest(firstRequest.RootElement, allowMultipleToolCalls);
         using var secondRequest = JsonDocument.Parse(handler.RequestBodies[1]);

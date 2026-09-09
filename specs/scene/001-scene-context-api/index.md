@@ -83,7 +83,7 @@ character and Godot node objects remain live.
 26. The reserved top-level `player` key of AgenticMind's session render dictionary under
     [AI-001](../../ai/001-mind/index.md) is the current `Player` consumer. The key is mandatory and unconditional,
     resolved via the session-captured `ISceneContext.Player` and never attention-gated; the attention-gated
-    `characters` dictionaries may omit the player. AI-001 TR-25 and [AI-008](../../ai/008-scenario/index.md) are
+    `characters` dictionaries may omit the player. AI-003 TR-7 and [AI-008](../../ai/008-scenario/index.md) are
     normative for the render-context composition. This use preserves fixed membership and live referenced objects; it
     adds no AI-specific members or mutable snapshot semantics to `ISceneContext`, mirroring the AI-002 tool-context
     use in TR-23.

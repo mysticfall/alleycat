@@ -141,7 +141,7 @@ streaming transcription or per-word drafts.
      `AutomaticGroupOpened(string speechGroupID)` signal — emitted once per group — is the authoritative source of the
      onset's real `(SpeechGroupID, SegmentIndex = 0)` identity (TR-25) and must be emitted immediately before the
      parameterless compatibility `RecordingStarted` event on the same Godot thread, so consumers observe the real
-     segment identity before the public speaking window opens (AI-001 TR-47). `RecordingStarted` is the public
+     segment identity before the public speaking window opens (SPCH-005 TR-37). `RecordingStarted` is the public
      exposure of the existing protected `OnRecordingStarted()` hook and must follow the same signal pattern as
      `TranscriptionCompleted`/`TranscriptionFailed`. `PlayerVoice` (SPCH-005) subscribes to it to open its speaking
      window; re-emission must not double-open an already open window.
@@ -199,7 +199,7 @@ streaming transcription or per-word drafts.
 28. **TR-28:** Manual abandonment notification. When a manual session ends without a finalisation result — transcriber
     teardown (`_ExitTree`), transcriber replacement or signal disconnection, or a disabled/cancelled manual capture —
     emit exactly one terminal parameterless `RecordingAbandoned` signal on the Godot thread, so downstream holders of
-    the synthetic manual token can settle the session textlessly (SPCH-005; AI-001 UR-14). A manual session that
+    the synthetic manual token can settle the session textlessly (SPCH-005 TR-36; AI-002 TR-11). A manual session that
     settles through an existing completion or failure outcome — including the empty-capture blank reported through
     `TranscriptionFailed` (TR-15) or a backend failure (TR-6) — must not also emit it: each manual session ends in
     exactly one terminal outcome. The notification is textless, never invents transcript content, and is the manual
@@ -269,15 +269,15 @@ need no path-specific handling and segment closures never re-open an already ope
 
 At a qualified automatic onset, `AutomaticGroupOpened(groupID)` precedes the compatibility signal so the real
 `(SpeechGroupID, SegmentIndex = 0)` identity is observable before the public window opens. Downstream textless start
-cues key off that identity (AI-001 TR-47), which is what makes suppression at speech onset and its deterministic
-arbitration against NPC TTS admission (AI-002 TR-25–TR-26) decidable before any text exists.
+cues key off that identity, which is what makes suppression at speech onset and its deterministic arbitration
+against NPC TTS admission (SPCH-005 TR-37) decidable before any text exists.
 
 ### Manual-Abandonment Signal
 
 Manual blank and failure completions already settle a manual session through public outcomes. The silent paths —
 teardown (`_ExitTree`), transcriber replacement or disconnection, and disabled/cancelled capture — dispatch no
 completion or failure, so the terminal `RecordingAbandoned` signal gives downstream holders of the synthetic manual
-token exactly one textless settlement point (AI-001 UR-14), mirroring automatic group abandonment (TR-16).
+token exactly one textless settlement point (SPCH-005 TR-36), mirroring automatic group abandonment (TR-16).
 
 ### Error Diagnostics Pattern
 
@@ -460,7 +460,7 @@ per-word, or draft mechanism exists on either path.
 17. **AC-17:** Lifecycle-signal tests verify each silent manual terminal path — transcriber teardown, transcriber
       replacement or disconnection, and disabled/cancelled manual capture — emits exactly one `RecordingAbandoned`
       notification with no completion or failure for that session, and that ordinary manual blank and failure
-      completions settle without any abandonment notification, satisfying TR-28 and cross-referencing AI-001 UR-14.
+      completions settle without any abandonment notification, satisfying TR-28 and cross-referencing SPCH-005 TR-36.
 
 **Traceability Map:** UR-1–UR-7 and TR-1–TR-2, TR-5–TR-11 → AC-1; UR-8 and TR-3, TR-12–TR-13 → AC-2–AC-3;
 UR-9 and TR-4, TR-14 → AC-4; TR-15–TR-16 → AC-5–AC-6; out-of-scope guard → AC-7; TR-17 → AC-8; UR-10 and

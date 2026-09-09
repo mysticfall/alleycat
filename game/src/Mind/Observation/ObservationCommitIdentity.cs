@@ -2,7 +2,7 @@ namespace AlleyCat.Mind.Observation;
 
 /// <summary>
 /// Immutable commit-identity tuple an observation may supply so Mind enforces exact-once ingestion
-/// (AI-001 TR-49). Components compare with ordinal value equality, order-sensitively; the tuple is ingestion
+/// (AI-001 TR-9). Components compare with ordinal value equality, order-sensitively; the tuple is ingestion
 /// correlation only and never participates in model-facing rendering.
 /// </summary>
 public sealed class ObservationCommitIdentity : IEquatable<ObservationCommitIdentity>
@@ -49,7 +49,7 @@ public sealed class ObservationCommitIdentity : IEquatable<ObservationCommitIden
 }
 
 /// <summary>
-/// Optional commit-identity contract for observation ingestion (AI-001 TR-49): any observation type may supply
+/// Optional commit-identity contract for observation ingestion (AI-001 TR-9): any observation type may supply
 /// an immutable identity tuple, and Mind enforces exact-once uniqueness atomically at its ingestion gate —
 /// enforcement stays in Mind, never in perception. Observations that supply no identity keep their ordinary
 /// duplicate policy.

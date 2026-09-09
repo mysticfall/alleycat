@@ -69,7 +69,7 @@ public sealed class PerceptionMindIntegrationTests
     /// <summary>
     /// Percept interpretation serialises in publication order, faculty bindings snapshot per publication, and a
     /// component refresh rebinds observation subscriptions so emissions from replaced faculties stop committing
-    /// (AI-001 TR-29, AI-006 TR-23/34).
+    /// (AI-001 TR-8, AI-006 TR-23/34).
     /// </summary>
     [Fact]
     public async Task Intake_SerialisesAsyncFacultiesAndSnapshotsBindingsAcrossRefresh()
@@ -142,7 +142,7 @@ public sealed class PerceptionMindIntegrationTests
 
     /// <summary>
     /// Faults and invalid observations roll back only their own observation: earlier committed observations stand
-    /// and later queued items continue (AI-001 TR-30, AI-006 TR-34).
+    /// and later queued items continue (AI-001 TR-8, AI-006 TR-34).
     /// </summary>
     [Fact]
     public async Task Aggregate_FaultsAndInvalidObservationsRollBackOnlyThatObservationWithoutBlockingLaterPercepts()
@@ -387,7 +387,7 @@ public sealed class PerceptionMindIntegrationTests
     /// <summary>
     /// Direct, tool-result, and perception intake share policy-owned duplicate staging before every ingestion side
     /// effect. Tool observations are actor-stamped before semantic comparison, while scheduling claims carry no
-    /// observation payload (AI-001 TR-37–39; AI-002 TR-7/8).
+    /// observation payload (AI-001 TR-3; AI-002 TR-7/8).
     /// </summary>
     [Fact]
     public async Task DuplicatePolicy_AllIngestionRoutesSuppressBeforeImportanceTimestampMutationAndNotification()
@@ -557,7 +557,7 @@ public sealed class PerceptionMindIntegrationTests
     }
 
     /// <summary>
-    /// The commit-identity gate is generic (AI-001 TR-49, AC-37): an arbitrary observation type supplying the
+    /// The commit-identity gate is generic (AI-001 TR-9, AC-37): an arbitrary observation type supplying the
     /// contract's identity tuple receives exact-once enforcement before every ingestion effect, while
     /// identity-free observations keep the ordinary allow policy regardless of content.
     /// </summary>
@@ -1053,7 +1053,7 @@ public sealed class PerceptionMindIntegrationTests
 
     /// <summary>
     /// Arbitrary non-speech observation supplying an identity tuple through the generic commit-identity contract
-    /// (AI-001 TR-49), proving the gate never depends on concrete observation types.
+    /// (AI-001 TR-9), proving the gate never depends on concrete observation types.
     /// </summary>
     private sealed record CommitIdentifiedObservation(string Stream, long Turn, string Value) : AgentObservation, IHasCommitIdentity
     {

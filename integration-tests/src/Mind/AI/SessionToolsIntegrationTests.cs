@@ -34,7 +34,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// Blank speech is rejected through the voice contract without submitting or observing anything
-    /// (AI-002 TR-25).
+    /// (AI-002 TR-12).
     /// </summary>
     [Fact]
     public async Task Speak_WithBlankInput_RejectsWithoutSubmissionOrObservation()
@@ -51,7 +51,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// Speech blocks while an attended speaker's window is open, is unblocked by the attended-speaker-finished
-    /// cue, and commits exactly one actor-stamped self observation at playback hand-off (AI-002 TR-25/26).
+    /// cue, and commits exactly one actor-stamped self observation at playback hand-off (SPCH-005 TR-37; AI-002 TR-14).
     /// </summary>
     [Fact]
     public async Task Speak_WhileAttendedSpeakerSpeaks_BlocksUntilCueThenSpeaksOnce()
@@ -79,7 +79,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// The owning character's own speaking voice and an unattributable voice never block speech
-    /// (AI-002 TR-25).
+    /// (SPCH-005 TR-37).
     /// </summary>
     [Fact]
     public async Task Speak_WithOwnOrUnattributableVoiceSpeaking_NeverBlocks()
@@ -100,7 +100,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// Interruption while speech is blocked returns the non-throwing cut-short result: nothing was submitted and
-    /// nothing was observed (AI-002 TR-27).
+    /// nothing was observed (AI-002 TR-22).
     /// </summary>
     [Fact]
     public async Task Speak_CancelledWhileBlocked_ReturnsCutShortResultWithoutObservation()
@@ -122,7 +122,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// Cancellation before playback hand-off withdraws the submission silently: no observed speech, no failure
-    /// broadcast, and the cut-short result (AI-002 TR-26/27, SPCH-005 TR-25).
+    /// broadcast, and the cut-short result (AI-002 TR-14/22, SPCH-005 TR-25).
     /// </summary>
     [Fact]
     public async Task Speak_CancelledBeforeHandOff_ReturnsCutShortResultSilently()
@@ -144,7 +144,7 @@ public sealed partial class SessionToolsIntegrationTests
     /// <summary>
     /// Cancellation landing after playback hand-off commits the speech: playback stays active — never cut by
     /// cancellation or freshness — and exactly one self observation is ingested with the delivered result
-    /// (AI-002 TR-27, SPCH-005 UR-14/TR-25).
+    /// (AI-002 TR-14, SPCH-005 UR-14/TR-25).
     /// </summary>
     [Fact]
     public async Task Speak_CancelledAfterHandOff_KeepsCommittedSpeechUncutAndObservesOnce()
@@ -172,7 +172,7 @@ public sealed partial class SessionToolsIntegrationTests
     /// The speak tool resolves the admission capability from the authored voice projection without any
     /// concrete-voice dependency: a capable voice receives the runner-owned admission transaction, its admitted
     /// submission commits at playback hand-off with exactly one self observation, and the ordinary cancellable
-    /// path stays untouched (AI-002 TR-63/AC-27, SPCH-005 TR-37).
+    /// path stays untouched (SPCH-005 TR-37/38, AC-27).
     /// </summary>
     [Fact]
     public async Task Speak_WithAdmissionCapableVoice_CommitsAtHandOffThroughTheCapability()
@@ -198,7 +198,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// A cue-first admission refusal through the capability surfaces the non-throwing not-delivered result with no
-    /// ordinary submission and no self observation (AI-002 TR-27/63, SPCH-005 TR-37): the transaction the tool
+    /// ordinary submission and no self observation (AI-002 TR-22, SPCH-005 TR-37): the transaction the tool
     /// resolved onto the capable voice refuses while the runner owns no pending arbitrated phase.
     /// </summary>
     [Fact]
@@ -226,7 +226,7 @@ public sealed partial class SessionToolsIntegrationTests
     /// An editor-authored speech tool resource — constructed outside the AgenticMind composition — takes the
     /// specified fallback path even for a capability voice: admission arbitration applies only to composition-bound
     /// tools, so the submission runs through the ordinary cancellable path with no admission transaction resolved,
-    /// commits at hand-off, and observes exactly once (AI-002 TR-63, SPCH-005 TR-38).
+    /// commits at hand-off, and observes exactly once (AI-002 TR-14, SPCH-005 TR-37/38).
     /// </summary>
     [Fact]
     public async Task Speak_WithEditorAuthoredToolAndCapableVoice_TakesOrdinarySubmissionPath()
@@ -251,7 +251,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// Creates the composition admission binding with an attached but never-run session runner, so tool-level
-    /// fixtures resolve real admission transactions while no provider is ever contacted (AI-002 TR-19/62).
+    /// fixtures resolve real admission transactions while no provider is ever contacted (AI-002 TR-13/14).
     /// </summary>
     private static ToolAdmissionBroker CreateUnstartedAdmissionBroker()
     {
@@ -348,7 +348,7 @@ public sealed partial class SessionToolsIntegrationTests
 
     /// <summary>
     /// An attended speaker finishing during the wait surfaces the cue phrase in the wait result
-    /// (AI-002 TR-33).
+    /// (AI-002 TR-7).
     /// </summary>
     [Fact]
     public async Task Wait_WhenAttendedSpeakerFinishes_ReportsCuePhrase()

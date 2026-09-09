@@ -12,7 +12,7 @@ namespace AlleyCat.Tests.Architecture;
 /// Guards the dependency boundaries restored by the module-boundary refactor so they cannot silently regress:
 /// Core stays free of feature diagnostics, Prompting owns projection identity without runner session-protocol
 /// types, the session runner and the common tool session stay generic, and generic Mind ingestion carries no
-/// speech modality branch (CORE-007 TR-19/20/21, AI-001 TR-49/50, AI-002 TR-19/23/62/63, AI-003 TR-35/36).
+/// speech modality branch (CORE-007 TR-19/20/21, AI-001 TR-9, AI-002 TR-13/14, SPCH-005 TR-37/38, AI-003 TR-10).
 /// The Speech-stays-Mind-free guard is kept in <see cref="PerceptSensingDependencyTests" />.
 /// </summary>
 public sealed class ModuleBoundaryDependencyTests
@@ -36,8 +36,8 @@ public sealed class ModuleBoundaryDependencyTests
     }
 
     /// <summary>
-    /// Prompting owns the projected event identity and must not expose runner session-protocol types (AI-003
-    /// TR-35/36): projection output carries the Prompting-owned <c>SpeechGroupCorrelation</c> only. Matching
+    /// Prompting owns the projected event identity and must not expose runner session-protocol types
+    /// (AI-003 TR-10): projection output carries the Prompting-owned <c>SpeechGroupCorrelation</c> only. Matching
     /// rule: ordinal substring for the runner-protocol continuation identity across every <c>*.cs</c> file under
     /// <c>game/src/Mind/AI/Prompting/</c>;
     /// unqualified use through parent-namespace resolution is caught the same as imported or qualified use.
@@ -46,7 +46,7 @@ public sealed class ModuleBoundaryDependencyTests
     public void Prompting_ExposesNoRunnerSessionProtocolTypes()
     {
         AssertSourcesContainNoTokens(
-            "Prompting must not expose runner session-protocol types (AI-003 TR-35/36).",
+            "Prompting must not expose runner session-protocol types (AI-003 TR-10).",
             RequireSourceTree("game", "src", "Mind", "AI", "Prompting"),
             StringComparison.Ordinal,
             "SpeechContinuationKey",
@@ -55,7 +55,7 @@ public sealed class ModuleBoundaryDependencyTests
 
     /// <summary>
     /// The session runner must operate only on generic phase concepts, with per-function phase policy registered
-    /// at tool composition (AI-002 TR-62): it must not reference, match, or name any concrete production tool,
+    /// at tool composition (AI-002 TR-13): it must not reference, match, or name any concrete production tool,
     /// function name, or tool type. Matching rule on <c>AgentSessionRunner.cs</c>: ordinal substring for the
     /// tool-namespace import <c>Mind.AI.Tool</c> and the tool type-name roots <c>SpeechTool</c>, <c>WaitTool</c>,
     /// <c>AgentTool</c>, and <c>ProductionToolName</c>, plus the case-insensitive
@@ -65,7 +65,7 @@ public sealed class ModuleBoundaryDependencyTests
     [Fact]
     public void AgentSessionRunner_ReferencesNoConcreteProductionTool()
     {
-        const string Rule = "The session runner must stay generic and reference no concrete production tool (AI-002 TR-62).";
+        const string Rule = "The session runner must stay generic and reference no concrete production tool (AI-002 TR-13).";
         string runner = RequireSourceFile("game", "src", "Mind", "AI", "AgentSessionRunner.cs");
 
         AssertSourcesContainNoTokens(
@@ -86,7 +86,7 @@ public sealed class ModuleBoundaryDependencyTests
 
     /// <summary>
     /// The common tool session binds only the shared tuple (Context, Mind, Clock) and carries no
-    /// feature services (AI-002 TR-19/23): speech-admission arbitration and wait-delivery acknowledgement bind
+    /// feature services (AI-002 TR-13): speech-admission arbitration and wait-delivery acknowledgement bind
     /// typed to their concrete tools at the AgenticMind composition boundary instead. Matching rule: reflection
     /// shape assertion — the exact public instance property set and constructor signature of
     /// <see cref="AgentToolSession" />, with public fields and events required empty, so any admission,
@@ -143,7 +143,7 @@ public sealed class ModuleBoundaryDependencyTests
     }
 
     /// <summary>
-    /// Mind's generic ingestion enforces commit identity without any modality-specific branch (AI-001 TR-49):
+    /// Mind's generic ingestion enforces commit identity without any modality-specific branch (AI-001 TR-9):
     /// speech observations supply their <c>(VoiceId, SpeechGroupID, SegmentIndex)</c> identity through the
     /// generic commit-identity contract, and speech correlation belongs to the session coordinator rather than
     /// Mind. Matching rule: ordinal substring <c>ObservedSpeech</c> anywhere in <c>Mind.cs</c> — a concrete
@@ -153,7 +153,7 @@ public sealed class ModuleBoundaryDependencyTests
     public void GenericMindIngestion_HasNoSpeechModalityBranch()
     {
         AssertSourcesContainNoTokens(
-            "Mind's generic ingestion must contain no concrete speech observation branch (AI-001 TR-49).",
+            "Mind's generic ingestion must contain no concrete speech observation branch (AI-001 TR-9).",
             [RequireSourceFile("game", "src", "Mind", "Mind.cs")],
             StringComparison.Ordinal,
             "ObservedSpeech");
@@ -161,7 +161,7 @@ public sealed class ModuleBoundaryDependencyTests
 
     /// <summary>
     /// SpeechTool discovers the admission capability through <c>IAdmissionCapableVoice</c> and must never depend
-    /// on or cast to a concrete voice class (AI-002 TR-63). Matching rule: case-insensitive substring
+    /// on or cast to a concrete voice class (SPCH-005 TR-37). Matching rule: case-insensitive substring
     /// <c>aivoice</c> anywhere in <c>SpeechTool.cs</c> — the capability interface name deliberately shares no
     /// characters with the token, so any match is a concrete-voice dependency.
     /// </summary>
@@ -169,25 +169,25 @@ public sealed class ModuleBoundaryDependencyTests
     public void SpeechTool_DoesNotDependOnConcreteVoiceClass()
     {
         AssertSourcesContainNoTokens(
-            "SpeechTool must resolve voice admission through the capability interface, never a concrete voice class (AI-002 TR-63).",
+            "SpeechTool must resolve voice admission through the capability interface, never a concrete voice class (SPCH-005 TR-37).",
             [RequireSourceFile("game", "src", "Mind", "AI", "Tool", "SpeechTool.cs")],
             StringComparison.OrdinalIgnoreCase,
             "aivoice");
     }
 
     /// <summary>
-    /// AgenticMind orchestrates session delivery without interpreting concrete observation records (AI-001
-    /// TR-50): no casting or aliasing concrete record types and no feature-payload reads — for speech,
+    /// AgenticMind orchestrates session delivery without interpreting concrete observation records (AI-002
+    /// TR-13): no casting or aliasing concrete record types and no feature-payload reads — for speech,
     /// <c>VoiceId</c>, <c>SpeechGroupID</c>, and <c>SegmentIndex</c> inspection belongs to the session-scoped
     /// <c>SpeechTurnContinuationCoordinator</c>. Matching rule: ordinal substring for the concrete observation
-    /// record names and TR-50's feature-payload member names anywhere in <c>AgenticMind.cs</c>; the abstract
+    /// record names and the feature-payload member names anywhere in <c>AgenticMind.cs</c>; the abstract
     /// <c>Observation</c> alias stays allowed.
     /// </summary>
     [Fact]
     public void AgenticMind_DoesNotInterpretConcreteObservationRecords()
     {
         AssertSourcesContainNoTokens(
-            "AgenticMind must delegate concrete observation interpretation to the session coordinator (AI-001 TR-50).",
+            "AgenticMind must delegate concrete observation interpretation to the session coordinator (AI-002 TR-13).",
             [RequireSourceFile("game", "src", "Mind", "AI", "AgenticMind.cs")],
             StringComparison.Ordinal,
             "ObservedSpeech",

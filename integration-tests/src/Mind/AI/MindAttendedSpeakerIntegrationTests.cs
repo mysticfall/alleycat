@@ -16,7 +16,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
 /// Godot-runtime coverage for Mind's attended-speaker-finished cue: attention membership, voice-to-owner
-/// attribution, and the wait/speak wake rules of AI-001 TR-34 and AI-002 TR-25/33.
+/// attribution, and the wait/speak wake rules of AI-002 TR-7 and SPCH-005 TR-37.
 /// </summary>
 [Headless]
 public sealed partial class MindAttendedSpeakerIntegrationTests
@@ -57,7 +57,7 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
 
     /// <summary>
     /// The idle wait blocks while an attended speaker's window is open and unblocks on the
-    /// attended-speaker-finished cue (AI-002 TR-25).
+    /// attended-speaker-finished cue (SPCH-005 TR-37).
     /// </summary>
     [Fact]
     public async Task WaitUntilAttendedSpeakerIdle_BlocksUntilAttendedSpeakerFinishes()
@@ -110,7 +110,7 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
 
     /// <summary>
     /// An attended speaker finishing wakes an active wait early with the cue flag and no promoted sub-threshold
-    /// observations (AI-001 TR-34, AI-002 TR-33).
+    /// observations (AI-002 TR-7).
     /// </summary>
     [Fact]
     public async Task Wait_WhenAttendedSpeakerFinishes_WakesEarlyWithCueFlagAndNothingNotable()

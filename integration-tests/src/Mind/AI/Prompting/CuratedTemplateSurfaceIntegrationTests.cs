@@ -13,7 +13,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 /// Godot-runtime coverage proving the curated member-access policy seals real scene characters end-to-end: a
 /// production render context over an instantiated authored character renders exactly the canonical
 /// <c>FullId</c> through the real engine, while every non-curated member — including the Godot <c>Node</c>
-/// surface — renders nil (AI-003 TR-30).
+/// surface — renders nil (TMPL-001 TR-14).
 /// </summary>
 [Headless]
 public sealed class CuratedTemplateSurfaceIntegrationTests

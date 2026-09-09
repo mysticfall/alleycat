@@ -1131,7 +1131,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         try
         {
             // One submission is cancelled mid-generation, before playback hand-off: it commits nothing and reports
-            // the non-throwing cut-short result (AI-002 TR-27).
+            // the non-throwing cut-short result (AI-002 TR-22).
             using CancellationTokenSource cancelledSubmission = new();
             Task<object?> cancelled = activeFunction.InvokeAsync(
                 new AIFunctionArguments { ["speech"] = "Cancelled request" },

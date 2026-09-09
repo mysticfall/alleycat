@@ -166,10 +166,11 @@ speaking windows by SPCH-005, and speech percepts by SPCH-006.
     Each cue is textless and transient — a lifecycle signal, not speech — and carries the exact segment identity of
     TR-13, with `SegmentIndex = 0` at the initial qualified onset; the onset cue precedes the group's `RecordingStarted`
     window signal (TR-9). Cues are forwarded through the player voice layer (SPCH-005) without entering the hearing path
-    (SPCH-006) and are attention-gated on the listening Mind side — source-generic, sampled exactly once at cue receipt
-    (AI-001 TR-47). Suppression effects are owned downstream (AI-002 TR-25, TR-26): the cue immediately holds the
-    attending listener's new AI reaction work, and its race against that listener's NPC TTS admission is deterministic,
-    arbitrated under the normative lock order `AIVoice._submissionLock → AgentSessionRunner._stateLock`:
+    (SPCH-006) and are attention-gated on the listening Mind side — source-generic, sampled exactly once at cue
+    receipt (SPCH-005 TR-37). Suppression effects are owned downstream (SPCH-005 TR-37, AI-002 TR-14): the cue
+    immediately holds the attending listener's new AI reaction work, and its race against that listener's NPC TTS
+    admission is deterministic, arbitrated under the normative lock order
+    `AIVoice._submissionLock → AgentSessionRunner._stateLock`:
     - Cue first: admission is refused — no TTS request, no queue item, no hearing event, no self-observation — and the
       speak tool returns its existing not-delivered result.
     - Admission first: the NPC speech is protected for its whole pipeline life and settles naturally; already-audible
@@ -197,7 +198,7 @@ speaking windows by SPCH-005, and speech percepts by SPCH-006.
   above are normative.
 - Player-facing microphone indicators, tones, or haptics (deferred until playtesting).
 - Interrupting already-audible NPC playback on player speech onset. Speech successfully admitted into the voice
-  pipeline before the cue is protected and settles naturally — it is never cut by this player turn (AI-002 TR-26).
+  pipeline before the cue is protected and settles naturally — it is never cut by this player turn (AI-002 TR-14).
 - Transcriber transport mechanics, request format, hint plumbing, completion metadata, and ordered settlement
   (SPCH-003).
 - `PlayerVoice` speaking-window mechanics and segment publication (SPCH-005), and speech percepts with their grouping
@@ -344,7 +345,7 @@ failure is surfaced once through the ordinary failure signal where the mode prov
 13. **AC-T13:** Tests verify both deterministic arbitration outcomes against NPC TTS admission under the TR-14 lock
      order: cue-first refuses admission with no TTS request, queue item, hearing event, or self-observation while the
      speak tool returns its existing not-delivered result, and admission-first leaves the admitted speech protected
-     through natural settlement (TR-14; AI-002 TR-25, TR-26).
+     through natural settlement (TR-14; SPCH-005 TR-37, AI-002 TR-14).
 
 **Traceability Map:** UR-1, UR-5 → AC-U1, AC-T5; UR-2, TR-1 → AC-U2; UR-3 → AC-U3; UR-4, TR-6 → AC-U4, AC-T3;
 UR-6, TR-4 → AC-U5, AC-T2; UR-7, TR-7 → AC-U6; UR-8, TR-8 → AC-U7, AC-T6; UR-9 → AC-U8; UR-10 → AC-U9; UR-11,

@@ -4,7 +4,7 @@ namespace AlleyCat.Mind.AI;
 
 /// <summary>
 /// Session-scoped carrier between the runner constructed at session execution and the admission-arbitrated tool
-/// bound earlier in session preparation (AI-002 TR-25/56, TR-62). Exposes only the narrow admission-transaction
+/// bound earlier in session preparation (AI-002 TR-13/14). Exposes only the narrow admission-transaction
 /// surface — never the runner itself — so the bound tool cannot reach any other session-runtime state.
 /// </summary>
 internal sealed class ToolAdmissionBroker
