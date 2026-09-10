@@ -213,7 +213,7 @@ without triage.
 
 1. **Classify** as `accepted`, `follow-up`, or `escalated`.
 2. **Extract** fields relevant to the subagent:
-   - `writer`: Doc Changes, Consistency Checks, Open Questions, Escalations.
+   - `writer`: Content Changes, Consistency Checks, Open Questions, Escalations.
    - `reviewer`: Blocking issues, Non-blocking improvements, Verified checks, Handoff Decision.
    - `lore-compiler`: validation result, checked paths, graph/suggestion findings, fixture conformance, escalations.
    - `coder`: Implementation Summary, Validation, Risks/Follow-Ups, Escalations.

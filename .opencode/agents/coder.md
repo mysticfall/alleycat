@@ -50,6 +50,11 @@ For tasks with visual acceptance criteria, use `godot-visual-verification` skill
 - Treat the invoking agent as your implementation lead; optimise for clear handoff, not long narration.
 - If the request is ambiguous, state the exact ambiguity and propose a minimal default before proceeding.
 - If proceeding would risk spec drift, stop and ask for confirmation instead of guessing.
+- When delivery depends on an unproven engine/API boundary, prove the smallest representative probe before expanding
+  shared contracts or adapters. Distinguish a documented limitation from a fixture/wiring hypothesis in escalations.
+- A runtime blocker does not waive independent build/format checks. After shared API changes, adapt affected consumers
+  within scope; otherwise report the exact incompatible paths and build diagnostics as blockers. Do not defer a broken
+  consumer silently to the next stage.
 
 ### Escalate Immediately When
 
@@ -62,7 +67,14 @@ For tasks with visual acceptance criteria, use `godot-visual-verification` skill
 
 Return one concise update with:
 
-1. **Implementation Summary** — what was changed and why (spec-linked).
-2. **Validation** — commands/checks run and outcomes; list anything not run.
+1. **Implementation Summary** — changed paths and behaviour linked to delegated requirements; identify partial work.
+2. **Validation** — exact commands/checks and outcomes; list anything not run with its specific reason. For each
+   critical acceptance claim, name the test/artefact and decisive assertion or measurement, plus any unproved remainder.
 3. **Risks/Follow-Ups** — residual risks, TODOs, or manual checks for the invoker.
 4. **Escalations** — explicit blockers/decisions needed (or `None`).
+
+Keep these headings for diagnostic and blocker-closure tasks too; put requested detail beneath them rather than
+replacing the handoff format. Put required behaviour/evidence gaps in `Escalations`, not only as later follow-ups.
+Distinguish synthetic inputs from engine-observed evidence and successful required behaviour from correct refusal.
+For performance claims, state the measured path, active state, iteration/work counts, and allocations; completed or
+inactive ticks do not prove active-path cost. Link detailed evidence instead of giving a full implementation tour.

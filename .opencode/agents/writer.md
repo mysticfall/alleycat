@@ -35,6 +35,10 @@ Return one concise update with:
 3. **Open Questions** — unresolved ambiguities needing invoker decision.
 4. **Escalations** — blockers or policy conflicts (or `None`).
 
+Keep these headings when adding task-specific detail. For requirement changes, cite the approved intent and acceptance
+mapping; report unavailable source material explicitly rather than treating implementation or old test thresholds as
+approval. In blocker follow-ups, retain issue IDs and report only the changed wording and closure evidence.
+
 ## Core Responsibilities
 
 - Translate requests into concise, structured Markdown that is easy for both humans and AI agents to parse.
@@ -67,7 +71,7 @@ If multiple contexts apply, combine the relevant guidance and make conflicts exp
 ### Heading Consistency
 
 - Use Markdown headings consistently (`#`, `##`, `###`).
-- Make the first letter of **each word** in headings upper case (Title Case).
+- Use Title Case as defined by `AGENTS.md`, keeping articles and conjunctions lowercase.
     - Good: `## Output Contract`
     - Bad: `## output contract`
 

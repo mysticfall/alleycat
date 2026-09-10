@@ -84,7 +84,7 @@ After each subagent response, the planner must explicitly triage and decide next
 2. **Extract** key fields from the response format:
     - `coder`: Implementation Summary, Validation, Risks/Follow-Ups, Escalations
     - `reviewer`: Blocking issues, Non-blocking improvements, Verified checks, Handoff Decision
-    - `writer`: Doc Changes, Consistency Checks, Open Questions, Escalations
+    - `writer`: Content Changes, Consistency Checks, Open Questions, Escalations
 3. **Act** based on class:
     - `accepted` → update TODOs and proceed.
     - `follow-up` → create focused follow-up subtask with narrowed acceptance criteria.
@@ -93,6 +93,16 @@ After each subagent response, the planner must explicitly triage and decide next
 For visual-spec tasks, apply §4.6 before final classification.
 
 Never pass through subagent output verbatim without this triage.
+
+Check substance as well as headings: reconcile critical requirements with named evidence and unproved remainders.
+Accept equivalent heading spellings when the fields are present; request only missing evidence in a resumed, focused
+follow-up, not a full rewrite. State what is accepted: diagnostic finding, partial delivery, or reviewed stage.
+Accepting a report does not close its implementation or review gate.
+
+Route an explicit escalation immediately: an in-scope gap may receive a focused `follow-up` with rationale;
+a scope, product, or contract decision requires `escalated` and a clear user decision request. Preserve conditional user
+approval exactly. Before proposing weaker requirements or replacement content, distinguish measured content/API limits
+from current implementation/fixture restrictions and trace any threshold to its approved authority.
 
 4. **Empty/No-Result Handling:** If a delegated task returns an empty payload, placeholder text, or no actionable
    evidence, classify as `follow-up` handoff failure immediately. Post a short recovery update, retry once with
@@ -132,6 +142,9 @@ When `reviewer` returns blocking issues:
 2. Redelegate with an explicit blocker-closure list (issue → required fix → required evidence).
 3. Require returned evidence for each blocker (code/tests/validation), not a generic “fixed” claim.
 4. Re-run `reviewer` and confirm each prior blocker is either resolved or explicitly re-raised.
+
+Keep blocker IDs and meanings stable across retries and summaries. Reconcile the review against the original closure
+list before accepting `Ready`; a renamed concern or unrelated passing suite does not close the original blocker.
 
 Do not move to user handoff while any previous blocker remains unverified.
 
@@ -195,7 +208,7 @@ Do not wait for the user to notice stalled delegation before reporting recovery 
 When a subagent response is weak, incomplete, or incorrect:
 
 1. Diagnose likely cause (missing context, ambiguous requirements, wrong agent choice, oversized task).
-2. Refine instruction and redelegate with tighter scope and clearer acceptance criteria.
+2. Refine instruction and redelegate only the unresolved delta, retaining valid evidence and the existing task context.
 3. If needed, switch to a more suitable subagent.
 
 If the same failure pattern repeats (for example, 3+ attempts without meaningful progress):
@@ -206,6 +219,10 @@ If the same failure pattern repeats (for example, 3+ attempts without meaningful
 - propose one or more alternative strategies.
 
 Do not retry indefinitely.
+
+For tooling disagreement, establish the installed version and supported output once; carry that evidence into later
+reviews instead of repeating an ineffective rebuild. Repeat validation only for changed code, failed checks, explicit
+stability requirements, or unresolved concerns; preserve the mandatory independent final gates.
 
 If a subagent repeatedly returns incomplete outputs (for example, missing required report sections), treat this as a
 handoff-quality failure: tighten instructions once, then escalate to the user with a concise decision request.

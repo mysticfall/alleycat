@@ -43,6 +43,8 @@ If multiple contexts apply, combine the relevant checklists and make conflicts e
 - [ ] The validation evidence is appropriate for the review context and strong enough to support the handoff decision.
 - [ ] Missing, conflicting, or impossible requirements are escalated rather than guessed around.
 - [ ] Any deferred issue is explicitly non-blocking and has a clear rationale.
+- [ ] For implementation readiness, critical user outcomes have success evidence, not just passing mechanism/refusal
+  tests. Fixtures exercise the required engine boundary and active state; thresholds trace to approved requirements.
 
 ## Escalate Immediately When
 
@@ -64,6 +66,11 @@ For each issue include:
 - File reference(s)
 - Why it matters (impact/risk)
 - Concrete fix recommendation
+
+For re-review, retain each original blocker ID and meaning and give a concise resolved/re-raised verdict with evidence.
+Give new concerns new IDs; do not substitute unrelated regression results for prior blocker closure.
+Distinguish observed violations from unavailable context or unverified claims. Tool-version/output disagreement alone
+does not establish repository drift; inspect the supported tool contract before requiring repeated regeneration.
 
 In **Verified Checks**, include:
 
