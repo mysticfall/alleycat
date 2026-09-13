@@ -8,18 +8,13 @@ services:
       - "8000:8000"
     volumes:
       - whisper-data:/var/lib/whisper-live
+    runtime: nvidia
     environment:
       - WHISPERLIVE_MODEL=small.en
       - WHISPERLIVE_LANGUAGE=en
       - WHISPERLIVE_API_KEY=
       - WHISPERLIVE_DISABLE_USAGE_COUNTS=1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - NVIDIA_VISIBLE_DEVICES=all
   audio2face-api:
     image: audio2face-api
     container_name: alleycat-audio2face-api
@@ -29,13 +24,9 @@ services:
       - "8765:8765"
     volumes:
       - audio2face-data:/app/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
 volumes:
   whisper-data:
     name: whisper-data
