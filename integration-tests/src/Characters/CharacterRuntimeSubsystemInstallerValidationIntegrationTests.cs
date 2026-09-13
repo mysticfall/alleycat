@@ -100,6 +100,53 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
     }
 
     /// <summary>
+    /// An invalid non-empty target cue array falls back to the valid template cue and publishes its rebased target instance.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_NullTargetAuthoredVisualCue_UsesAndPublishesRebasedTemplateCue()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        CharacterHub targetCharacter = Assert.IsType<CharacterHub>(fixture.TargetRoot, exactMatch: false);
+        var templateCue = new StaticVisualCue { Name = "BodyCue", ID = "body", Description = "Template cue." };
+        var targetCue = new StaticVisualCue { Name = "BodyCue", ID = "body", Description = "Rebased cue." };
+        fixture.TemplateCharacter.AddChild(templateCue);
+        targetCharacter.AddChild(targetCue);
+        fixture.TemplateCharacter.AuthoredVisualCues = [templateCue];
+        targetCharacter.AuthoredVisualCues = [null!];
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Same(targetCue, Assert.Single(targetCharacter.AuthoredVisualCues));
+        Assert.Same(targetCue, Assert.Single(targetCharacter.VisualCues));
+    }
+
+    /// <summary>
+    /// A valid target cue remains the published character-specific override of a distinct template cue.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_ValidTargetAuthoredVisualCue_OverridesAndPublishesTemplateCue()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        CharacterHub targetCharacter = Assert.IsType<CharacterHub>(fixture.TargetRoot, exactMatch: false);
+        var templateCue = new StaticVisualCue { Name = "BodyCue", ID = "body", Description = "Template cue." };
+        var targetCue = new StaticVisualCue { Name = "BodyCue", ID = "body", Description = "Target cue." };
+        fixture.TemplateCharacter.AddChild(templateCue);
+        targetCharacter.AddChild(targetCue);
+        fixture.TemplateCharacter.AuthoredVisualCues = [templateCue];
+        targetCharacter.AuthoredVisualCues = [targetCue];
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Same(targetCue, Assert.Single(targetCharacter.AuthoredVisualCues));
+        Assert.Same(targetCue, Assert.Single(targetCharacter.VisualCues));
+        Assert.NotSame(templateCue, Assert.Single(targetCharacter.VisualCues));
+    }
+
+    /// <summary>
     /// Final voice identity follows target-scene precedence and remains unique operational attribution for each NPC.
     /// </summary>
     [Headless]

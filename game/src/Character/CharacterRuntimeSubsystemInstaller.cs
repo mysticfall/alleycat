@@ -65,11 +65,9 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 this,
                 failOnUnresolved: true,
                 targetSceneOverrides: context.TargetSceneOverrides);
-            if (targetAuthoredVisualCues.Length > 0)
+            if (targetAuthoredVisualCues.Length > 0 && Array.TrueForAll(targetAuthoredVisualCues, static cue => cue is not null))
             {
-                // A final character scene can instance the shared base as its root. Godot then reports the base path
-                // as SceneFilePath, so local final-scene overrides are unavailable to TargetSceneOverrides. Preserve
-                // the already-resolved target cues rather than replacing their character-specific overrides.
+                // Preserve already-resolved target cues rather than replacing their character-specific overrides.
                 targetCharacter.AuthoredVisualCues = targetAuthoredVisualCues;
             }
             if (templateCharacter.IsInGroup(_actorsGroupName))
