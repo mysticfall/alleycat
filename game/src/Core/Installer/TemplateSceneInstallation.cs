@@ -1,3 +1,4 @@
+using System.Reflection;
 using Godot;
 
 namespace AlleyCat.Core.Installer;
@@ -16,6 +17,11 @@ public static class TemplateSceneInstallation
     /// <param name="installMode">Which part of the template instance should be installed.</param>
     /// <param name="sourcePath">Optional path within the template source for selected-subtree install modes.</param>
     /// <returns>The installation result.</returns>
+    /// <remarks>
+    /// Children mode installs copy only nodes the template adds above the configured baseline. Template-authored
+    /// property overrides on baseline-equivalent children are propagated to the target scene's equivalent nodes as
+    /// delta-only updates that respect target-scene authoring.
+    /// </remarks>
     public static SceneInstallationResult Install(
         ISceneInstaller installer,
         TemplateSceneInstallationContext context,
@@ -62,6 +68,10 @@ public static class TemplateSceneInstallation
         }
     }
 
+    /// <summary>
+    /// Installs the template root's children, skipping baseline-supplied children while propagating the template's
+    /// property overrides for them onto their target equivalents.
+    /// </summary>
     private static void InstallRootChildren(
         Node targetParent,
         Node templateRoot,
@@ -71,8 +81,10 @@ public static class TemplateSceneInstallation
         List<(Node Source, Node Candidate)> templateChildren = [];
         foreach (Node child in templateRoot.GetChildren())
         {
-            if (HasBaselineEquivalent(child, context))
+            Node? baselineChild = FindBaselineEquivalent(child, context);
+            if (baselineChild is not null)
             {
+                PropagateBaselineOverrides(child, baselineChild, context, installer);
                 continue;
             }
 
@@ -104,8 +116,10 @@ public static class TemplateSceneInstallation
         List<(Node Source, Node Candidate)> selectedChildren = [];
         foreach (Node child in selectedNode.GetChildren())
         {
-            if (HasBaselineEquivalent(child, context))
+            Node? baselineChild = FindBaselineEquivalent(child, context);
+            if (baselineChild is not null)
             {
+                PropagateBaselineOverrides(child, baselineChild, context, installer);
                 continue;
             }
 
@@ -115,12 +129,16 @@ public static class TemplateSceneInstallation
         InstallNodes(targetParent, selectedChildren, context, installer);
     }
 
-    private static bool HasBaselineEquivalent(Node templateNode, TemplateSceneInstallationContext context)
+    /// <summary>
+    /// Finds the baseline node equivalent to the supplied template node, matching by template-relative path, name, and
+    /// type compatibility.
+    /// </summary>
+    private static Node? FindBaselineEquivalent(Node templateNode, TemplateSceneInstallationContext context)
     {
         Node? baselineRoot = context.TemplateBaselineRoot;
         if (baselineRoot is null || !GodotObject.IsInstanceValid(baselineRoot))
         {
-            return false;
+            return null;
         }
 
         NodePath relativePath = context.TemplateRoot.GetPathTo(templateNode);
@@ -129,7 +147,108 @@ public static class TemplateSceneInstallation
             : baselineRoot.GetNodeOrNull(relativePath);
         return baselineNode is not null
             && baselineNode.Name == templateNode.Name
-            && NodesHaveCompatibleTypes(templateNode, baselineNode);
+            && NodesHaveCompatibleTypes(templateNode, baselineNode)
+            ? baselineNode
+            : null;
+    }
+
+    /// <summary>
+    /// Propagates template-authored property overrides for a baseline-equivalent node and its matched descendants onto
+    /// the target scene's equivalent nodes. Only properties whose template value differs from the baseline are applied,
+    /// properties authored by the target scene take precedence, and nodes without a unique target equivalent are
+    /// skipped silently.
+    /// </summary>
+    private static void PropagateBaselineOverrides(
+        Node templateNode,
+        Node baselineNode,
+        TemplateSceneInstallationContext context,
+        ISceneInstaller installer)
+    {
+        Node? targetNode = TemplateSceneTargetResolver.ResolveEquivalent(
+            templateNode,
+            context.TemplateRoot,
+            context.TargetRoot);
+        if (targetNode is not null
+            && GodotObject.IsInstanceValid(targetNode)
+            && NodesHaveCompatibleTypes(templateNode, targetNode))
+        {
+            ApplyOverrideDeltas(templateNode, baselineNode, targetNode, context, installer);
+        }
+
+        foreach (Node templateChild in templateNode.GetChildren())
+        {
+            Node? baselineChild = FindMatchedBaselineChild(templateChild, baselineNode);
+            if (baselineChild is not null)
+            {
+                PropagateBaselineOverrides(templateChild, baselineChild, context, installer);
+            }
+        }
+    }
+
+    private static Node? FindMatchedBaselineChild(Node templateChild, Node baselineParent)
+    {
+        foreach (Node baselineChild in baselineParent.GetChildren())
+        {
+            if (baselineChild.Name == templateChild.Name && NodesHaveCompatibleTypes(templateChild, baselineChild))
+            {
+                return baselineChild;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Applies the template's overrides relative to the baseline onto the equivalent target node: the transform when
+    /// both nodes are 3D and the transforms differ, plus exported property values that differ from the baseline.
+    /// </summary>
+    private static void ApplyOverrideDeltas(
+        Node templateNode,
+        Node baselineNode,
+        Node targetNode,
+        TemplateSceneInstallationContext context,
+        ISceneInstaller installer)
+    {
+        if (templateNode is Node3D templateNode3D
+            && baselineNode is Node3D baselineNode3D
+            && targetNode is Node3D targetNode3D
+            && templateNode3D.Transform != baselineNode3D.Transform
+            && !context.TargetSceneOverrides.IsAuthored(targetNode3D, Node3D.PropertyName.Transform))
+        {
+            targetNode3D.Transform = templateNode3D.Transform;
+        }
+
+        TemplateSceneReferenceRebaser.CopyExportedPropertyValues(
+            templateNode,
+            targetNode,
+            context.TemplateRoot,
+            context.TargetRoot,
+            installer,
+            propertyFilter: property => HasBaselinePropertyDelta(templateNode, baselineNode, property),
+            targetSceneOverrides: context.TargetSceneOverrides);
+    }
+
+    /// <summary>
+    /// Returns whether the template node's exported property differs from the baseline node's value for the same
+    /// property. Properties absent from the baseline node or declared with a different type have no comparable
+    /// baseline value and are treated as unchanged.
+    /// </summary>
+    private static bool HasBaselinePropertyDelta(Node templateNode, Node baselineNode, PropertyInfo property)
+    {
+        PropertyInfo? baselineProperty = baselineNode.GetType()
+            .GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public);
+        if (baselineProperty is null
+            || !baselineProperty.CanRead
+            || baselineProperty.PropertyType != property.PropertyType)
+        {
+            return false;
+        }
+
+        object? templateValue = property.GetValue(templateNode);
+        object? baselineValue = baselineProperty.GetValue(baselineNode);
+        return templateValue is null
+            ? baselineValue is not null
+            : !templateValue.Equals(baselineValue);
     }
 
     private static bool NodesHaveCompatibleTypes(Node templateNode, Node baselineNode)

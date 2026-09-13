@@ -10,6 +10,7 @@ public static class TemplateSceneReferenceRebaser
 {
     /// <summary>
     /// Copies exported CLR properties from one node to another, rebasing template-local node references to the target scene.
+    /// When <paramref name="propertyFilter" /> is supplied, only properties accepted by the filter are copied.
     /// </summary>
     public static void CopyExportedPropertyValues(
         Node source,
@@ -19,7 +20,8 @@ public static class TemplateSceneReferenceRebaser
         ISceneInstaller installer,
         IReadOnlyDictionary<Node, Node>? sourceNodeMap = null,
         bool failOnUnresolved = false,
-        TargetSceneOverrides? targetSceneOverrides = null)
+        TargetSceneOverrides? targetSceneOverrides = null,
+        Func<PropertyInfo, bool>? propertyFilter = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(destination);
@@ -28,6 +30,11 @@ public static class TemplateSceneReferenceRebaser
         foreach (PropertyInfo property in GetExportedWritableProperties(source.GetType()))
         {
             if (targetSceneOverrides?.IsAuthored(destination, property.Name) == true)
+            {
+                continue;
+            }
+
+            if (propertyFilter is not null && !propertyFilter(property))
             {
                 continue;
             }
@@ -170,93 +177,12 @@ public static class TemplateSceneReferenceRebaser
             return mapped;
         }
 
-        if (ReferenceEquals(node, templateRoot))
-        {
-            return targetRoot;
-        }
-
-        NodePath relativePath = templateRoot.GetPathTo(node);
-        Node? rebased = targetRoot.GetNodeOrNull(relativePath)
-            ?? TryRebaseViaEquivalentTargetRootChild(targetRoot, relativePath);
+        Node? rebased = TemplateSceneTargetResolver.ResolveEquivalent(node, templateRoot, targetRoot);
         return rebased ?? (failOnUnresolved
             ? throw new InvalidOperationException(
                 $"Template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' could not rebase "
-                + $"exported node reference '{relativePath}' for '{owner.GetPath()}' into target root '{targetRoot.GetPath()}'.")
+                + $"exported node reference '{templateRoot.GetPathTo(node)}' for '{owner.GetPath()}' into target root '{targetRoot.GetPath()}'.")
             : node);
-    }
-
-    private static Node? TryRebaseViaEquivalentTargetRootChild(Node targetRoot, NodePath relativePath)
-    {
-        string pathText = relativePath.ToString();
-        int separatorIndex = pathText.IndexOf('/');
-        if (separatorIndex < 0)
-        {
-            return TryResolveUniqueSkeletonBearingRootChild(targetRoot);
-        }
-
-        if (separatorIndex == pathText.Length - 1)
-        {
-            return null;
-        }
-
-        var suffixPath = new NodePath(pathText[(separatorIndex + 1)..]);
-        Node? uniqueCandidate = null;
-        foreach (Node targetChild in targetRoot.GetChildren())
-        {
-            Node? candidate = targetChild.GetNodeOrNull(suffixPath);
-            if (candidate is null)
-            {
-                continue;
-            }
-
-            if (uniqueCandidate is not null)
-            {
-                return null;
-            }
-
-            uniqueCandidate = candidate;
-        }
-
-        return uniqueCandidate;
-    }
-
-    private static Node? TryResolveUniqueSkeletonBearingRootChild(Node targetRoot)
-    {
-        Node? uniqueCandidate = null;
-        foreach (Node targetChild in targetRoot.GetChildren())
-        {
-            if (!HasSkeletonDescendant(targetChild))
-            {
-                continue;
-            }
-
-            if (uniqueCandidate is not null)
-            {
-                return null;
-            }
-
-            uniqueCandidate = targetChild;
-        }
-
-        return uniqueCandidate;
-    }
-
-    private static bool HasSkeletonDescendant(Node node)
-    {
-        if (node is Skeleton3D)
-        {
-            return true;
-        }
-
-        foreach (Node child in node.GetChildren())
-        {
-            if (HasSkeletonDescendant(child))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static Node? TryMapSourceNode(Node node, IReadOnlyDictionary<Node, Node>? sourceNodeMap)

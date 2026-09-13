@@ -8,7 +8,7 @@ namespace AlleyCat.Core.Installer;
 /// <param name="targetRoot">The scene or entity root that installers should modify.</param>
 /// <param name="metadataNamespace">The metadata namespace used for idempotency markers.</param>
 /// <param name="templateRoot">The instantiated template root used as the source for template installers.</param>
-/// <param name="templateBaselineRoot">The optional instantiated baseline scene used to ignore inherited template content.</param>
+/// <param name="templateBaselineRoot">The optional instantiated baseline scene used to ignore inherited template content and diff template-authored overrides.</param>
 /// <param name="targetSceneOverrides">The target scene's locally authored property index, captured before installation.</param>
 public class TemplateSceneInstallationContext(
     Node targetRoot,
@@ -25,7 +25,8 @@ public class TemplateSceneInstallationContext(
 
     /// <summary>
     /// Gets the optional instantiated baseline root for the template scene. When present, shared template installers
-    /// install only nodes that are authored by the template above this baseline.
+    /// install only nodes that are authored by the template above this baseline, and template-authored property
+    /// overrides on baseline-equivalent nodes are propagated to the target scene's equivalent nodes.
     /// </summary>
     public Node? TemplateBaselineRoot { get; } = templateBaselineRoot;
 

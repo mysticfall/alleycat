@@ -28,7 +28,9 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
 
     /// <summary>
     /// Gets or sets the baseline scene inherited by the role template. When assigned, template subtree installers copy
-    /// only nodes that the role template adds above this baseline, preventing full reference-character duplication.
+    /// only nodes that the role template adds above this baseline, and template-authored property overrides (such as
+    /// transforms) on baseline-equivalent nodes are propagated to the target scene's equivalent nodes without copying
+    /// the nodes themselves.
     /// </summary>
     [Export]
     public PackedScene? TemplateBaseline

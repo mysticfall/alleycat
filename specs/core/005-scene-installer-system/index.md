@@ -11,7 +11,10 @@ Establish a general, composable installer pattern for setting up and configuring
 template-backed installation. Template scenes are the authoritative, inspector-readable source for serialisable node
 references and reusable topology. Installers copy, rebase, and validate authored template contents instead of encoding
 primary scene topology in C#. Shared templates provide generic defaults and topology, while explicitly serialised
-configuration in a higher-layer target scene takes precedence for reused content.
+configuration in a higher-layer target scene takes precedence for reused content. Role templates install against a
+per-character baseline of content the target scene already owns: only template-added content is installed, and
+template-authored adjustments to baseline-shared nodes propagate to the target without overwriting explicitly authored
+target values.
 
 ## Goal
 
@@ -22,6 +25,8 @@ Provide a contract for composing scene setup logic through modular installers. T
 - Module installers encapsulate domain-specific setup, such as IK rigs, animation players, and AI controllers.
 - Template authors can inspect and maintain node references in scenes rather than reverse-engineering C# topology.
 - The pattern supports runtime and editor-debug installation for testing and scene management.
+- Templates install selectively against an optional baseline so shared content is not duplicated and template-authored
+  adjustments to shared nodes reach assembled scenes.
 - Character rig portability is achieved as a specific application of this general pattern.
 
 ## User Requirements
@@ -50,6 +55,13 @@ Provide a contract for composing scene setup logic through modular installers. T
 13. Target-scene settings that are not explicitly customised continue to receive current template defaults, and newly
     added template content installs with complete template state.
 14. Target-scene authoring precedence does not imply that arbitrary runtime mutations persist across installation.
+15. Characters assembled from imported source models keep a single copy of the skeleton and mesh content they already
+    own; installation adds only role-authored content such as IK targets, hands, eyes, and runtime modules.
+16. Template-authored adjustments to baseline-shared nodes — for example a 180° Y orientation correction authored on a
+    template wrapper node — reliably appear on the assembled character, including when the character's corresponding
+    node is named differently.
+17. Baseline-delta propagation honours target-scene authoring: values explicitly serialised in the target scene are
+    never overwritten by template deltas.
 
 ## Technical Requirements
 
@@ -136,6 +148,29 @@ Provide a contract for composing scene setup logic through modular installers. T
 41. Target-scene property precedence is independent of installer node ownership, deletion, and idempotency metadata;
     ownership markers do not determine whether a property is overridden.
 42. If a target has no source scene that can provide local `SceneState`, installation retains template-wins behaviour.
+43. Rig role installer roots export a per-character `PackedScene TemplateBaseline` alongside the `PackedScene Template`,
+    instantiate both, and expose the instantiated baseline root through `TemplateSceneInstallationContext`. Baselines
+    are configured per character through the same scene-override flow as templates: role installer scene defaults (for
+     example `npc_installer.tscn`) overridden per character by the character's installer configuration.
+44. A template child has a baseline equivalent when the instantiated baseline root contains a node at the same relative
+    path with a matching name and a type-compatible node type.
+45. When a baseline is configured, template children with baseline equivalents are not copied as new installs; only
+    template-added subtrees are installed. This restricts installation to role-added content (for example IK targets,
+    hands, eyes, and runtime modules) and prevents duplicating skeleton and mesh nodes the target character scene
+    already owns from its imported source model. Without a baseline, all selected template content is copied.
+46. For template children with a baseline equivalent, installers diff the template subtree against its baseline
+    equivalent and apply only differing values to the target scene's equivalent node: `Node3D.Transform` deltas and
+    exported-property value deltas. Properties equal to the baseline are never applied, so unchanged template state
+    never clobbers values authored in the target scene or its source model.
+47. Target-equivalent nodes for delta application resolve with the same rules as reference rebasing: the direct
+    relative path under the target root first; single-segment relative paths fall back to the unique skeleton-bearing
+    root child, while multi-segment relative paths fall back to a unique suffix match (first path segment stripped)
+    across root children. A template child with no resolvable target equivalent is silently skipped and never fails
+    the installation.
+48. Baseline-delta application is subject to the target-scene override precedence defined in Technical Requirements
+    36–42: properties explicitly serialised in the target scene are never overwritten by template deltas.
+49. Baseline-delta application is idempotent: repeated installation with the same template and baseline produces the
+    same assembled result without duplicating nodes.
 
 ## In Scope
 
@@ -161,6 +196,11 @@ Provide a contract for composing scene setup logic through modular installers. T
 - Reconciliation for reused template subtrees, including nested descendant installation and reference refresh.
 - Target-scene authoring precedence for reused exported properties, transforms, and direct character-root exports.
 - Local target `SceneState` capture and propagation through template and rig installation contexts.
+- Per-character `TemplateBaseline` configuration on rig role installer roots and propagation through
+  `TemplateSceneInstallationContext`.
+- Baseline-equivalence matching and template-added-only subtree installation.
+- Template-versus-baseline property and transform delta propagation to target-equivalent nodes, including
+  target-equivalent resolution, silent-skip semantics, and idempotency.
 
 ## Out Of Scope
 
@@ -173,6 +213,8 @@ Provide a contract for composing scene setup logic through modular installers. T
 - Replacing template-authored exported references with metadata binding as the normal authoring path.
 - Persistence of arbitrary runtime property mutations across installation.
 - Persistent previous-template snapshots or a full value-based three-way merge between target and template state.
+- Structural baseline merging beyond property and transform deltas, such as propagating node removals within
+  baseline-shared subtrees.
 
 ## Acceptance Criteria
 
@@ -191,6 +233,14 @@ Provide a contract for composing scene setup logic through modular installers. T
 11. Explicitly authored target-scene values on reused properties, transforms, and character-root exports survive
     automatic and repeated installation.
 12. Non-overridden reused values refresh from the template, while new template nodes install with complete state.
+13. Characters installed with a configured baseline contain no duplicated skeleton or mesh content from their source
+    model; only role-added content is installed.
+14. A template-authored orientation correction on a baseline-shared wrapper node (for example the 180° Y rotation in
+    `reference_male_base.tscn` and `reference_female_base.tscn`) appears on the assembled character's differently named
+    wrapper node (a uniquely skeleton-bearing target wrapper whose name differs from the template's baseline-root
+    wrapper node).
+15. Explicitly serialised target-scene values on baseline-shared nodes survive baseline-delta propagation and repeated
+    installation.
 
 ### Technical Requirements
 1. A core installer interface is defined in `AlleyCat.Core.Installer` with an explicit installation target context.
@@ -258,11 +308,30 @@ Provide a contract for composing scene setup logic through modular installers. T
 37. Tests verify a target without a usable source scene retains template-wins behaviour.
 38. Tests verify arbitrary runtime mutations and values inferred from previous-template snapshots are not treated as
     local target-scene overrides.
+39. Tests verify rig role installer roots instantiate the configured `TemplateBaseline` and expose it through
+    `TemplateSceneInstallationContext`, including per-character overrides of installer-scene defaults.
+40. Tests verify baseline-equivalence matching uses the same relative path, a matching name, and a type-compatible node
+    type for matched pairs, and that only template-added subtrees are copied when a baseline is configured while all
+    selected template content is copied without one.
+41. Tests verify template children with a baseline equivalent apply only differing `Node3D.Transform` and
+    exported-property values to the resolved target equivalent, and that equal-to-baseline values never overwrite
+    target-scene values.
+42. Tests verify target-equivalent resolution tries the direct relative path, then the unique skeleton-bearing root
+    child, then a unique name-suffix match, and that unresolved equivalents are skipped without failing the
+    installation.
+43. Tests verify properties explicitly serialised in the target scene are not overwritten by baseline-delta
+    application.
+44. Tests verify repeated installation with the same template and baseline is idempotent.
 
 ## References
 - `@game/src/Core/Installer/` — Installer system types
 - `@game/src/Core/Installer/TargetSceneOverrides.cs` — Local target-scene property precedence capture
+- `@game/src/Core/Installer/TemplateSceneInstallation.cs` — Template subtree installation, baseline-equivalence
+  matching, and template-versus-baseline delta propagation
 - `@game/src/Core/Installer/TemplateSceneReferenceRebaser.cs` — Template-root to target-root reference rebasing
+- `@game/src/Core/Installer/TemplateSceneTargetResolver.cs` — Target-equivalent node resolution for rebasing and
+  baseline-delta application
+- `@game/src/Rigging/Installation/RigRoleTemplateSceneInstaller.cs` — Role template and baseline configuration roots
 - [CORE-003: Component/Trait System](../003-component-system/index.md) — Potential component-holder integration
 - [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - [Character Generator](../../tooling/character-generator/index.md)

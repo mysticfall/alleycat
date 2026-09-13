@@ -129,6 +129,345 @@ public sealed class TemplateSceneInstallationIntegrationTests
     }
 
     /// <summary>
+    /// Template transform overrides on baseline-equivalent children reach the same-named target child without
+    /// copying the child or marking it installer-owned.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_PropagatesTransformOverrideToSameNamedTargetChild()
+    {
+        using var target = new Node { Name = "Target" };
+        var targetVisual = new Node3D { Name = "ReferenceVisual" };
+        targetVisual.AddChild(new Skeleton3D { Name = "Skeleton" });
+        target.AddChild(targetVisual);
+        using Node templateRoot = CreateBaselineDiffTemplateRoot();
+        using Node baselineRoot = CreateBaselineRoot();
+        Transform3D overrideTransform = CreateYawRotation(Mathf.Pi);
+        templateRoot.GetNode<Node3D>("ReferenceVisual").Transform = overrideTransform;
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal(overrideTransform, targetVisual.Transform);
+        Assert.Equal(1, CountDirectChildren(target, "ReferenceVisual"));
+        Assert.False(SceneInstallationMetadata.HasInstalled(targetVisual, context, installer));
+        Assert.True(target.HasNode("RuntimeModule"));
+    }
+
+    /// <summary>
+    /// Template transform overrides reach a differently named, unique skeleton-bearing target root child when the
+    /// template-relative name is absent from the target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_PropagatesTransformOverrideToSkeletonBearingTargetChild()
+    {
+        using var target = new Node { Name = "Target" };
+        var targetWrapper = new Node3D { Name = "AssembledModel" };
+        targetWrapper.AddChild(new Skeleton3D { Name = "GeneralSkeleton" });
+        target.AddChild(targetWrapper);
+        using Node templateRoot = CreateMaleWrapperTemplateRoot(CreateYawRotation(Mathf.Pi));
+        using Node baselineRoot = CreateMaleWrapperTemplateRoot(Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal(CreateYawRotation(Mathf.Pi), targetWrapper.Transform);
+        Assert.False(target.HasNode("Male"));
+        Assert.Equal(1, CountDirectChildren(target, "AssembledModel"));
+    }
+
+    /// <summary>
+    /// Template overrides on deeper baseline-equivalent nodes reach the unique target root child descendant matched
+    /// by path suffix when the verbatim template-relative path does not exist under the target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_PropagatesOverrideToSuffixMatchedTargetDescendant()
+    {
+        using var target = new Node { Name = "Target" };
+        var targetWrapper = new Node3D { Name = "AssembledModel" };
+        var targetSkeleton = new Skeleton3D { Name = "GeneralSkeleton" };
+        var targetAttachment = new InstallerOverrideProbe { Name = "HeadAttachment", PreservedValue = "target-value" };
+        targetSkeleton.AddChild(targetAttachment);
+        targetWrapper.AddChild(targetSkeleton);
+        target.AddChild(targetWrapper);
+        target.AddChild(new Node3D { Name = "IKTargets" });
+        Transform3D attachmentOverride = new(Transform3D.Identity.Basis, new Vector3(0.5f, 1.5f, 2.5f));
+        using Node templateRoot = CreateMaleAttachmentTemplateRoot("template-override", attachmentOverride);
+        using Node baselineRoot = CreateMaleAttachmentTemplateRoot("baseline-value", Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.False(target.HasNode("Male"));
+        Assert.Same(targetAttachment, targetWrapper.GetNode("GeneralSkeleton/HeadAttachment"));
+        Assert.Equal(attachmentOverride, targetAttachment.Transform);
+        Assert.Equal("template-override", targetAttachment.PreservedValue);
+        Assert.Equal(1, CountDirectChildren(targetSkeleton, "HeadAttachment"));
+    }
+
+    /// <summary>
+    /// Target transforms serialised by the target scene's local layer take precedence over template overrides.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_PreservesLocallyAuthoredTargetTransform()
+    {
+        using PackedScene targetScene = ResourceLoader.Load<PackedScene>(LocalOverrideTargetPath)
+            ?? throw new InvalidOperationException($"Failed to load installer override fixture '{LocalOverrideTargetPath}'.");
+        using Node target = targetScene.Instantiate();
+        InstallerOverrideProbe existing = target.GetNode<InstallerOverrideProbe>("Reused");
+        Transform3D localTransform = existing.Transform;
+        using Node templateRoot = CreateProbeTemplateRoot(
+            "delta-template-preserved",
+            "delta-template-refresh",
+            CreateYawRotation(Mathf.Pi));
+        using Node baselineRoot = CreateProbeTemplateRoot("baseline-preserved", "baseline-refresh", Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            Name = "BaselineOverrideInstaller",
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal(localTransform, existing.Transform);
+        Assert.Equal("local-nested-preserved", existing.PreservedValue);
+        Assert.Equal("delta-template-refresh", existing.RefreshValue);
+    }
+
+    /// <summary>
+    /// Baseline-equal template state is never copied onto the target, leaving custom target values untouched.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_WithoutDelta_LeavesCustomTargetValuesUntouched()
+    {
+        using var target = new Node { Name = "Target" };
+        Transform3D customTransform = new(Basis.FromEuler(new Vector3(0.3f, 0.2f, 0.1f)), new Vector3(4.0f, 5.0f, 6.0f));
+        var targetProbe = new InstallerOverrideProbe { Name = "Reused", PreservedValue = "custom-target", Transform = customTransform };
+        target.AddChild(targetProbe);
+        using Node templateRoot = CreateProbeTemplateRoot("shared-value", "shared-refresh", Transform3D.Identity);
+        using Node baselineRoot = CreateProbeTemplateRoot("shared-value", "shared-refresh", Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal(customTransform, targetProbe.Transform);
+        Assert.Equal("custom-target", targetProbe.PreservedValue);
+        Assert.Equal(1, CountDirectChildren(target, "Reused"));
+    }
+
+    /// <summary>
+    /// Template overrides on baseline nodes without any target equivalent are skipped silently.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_WithoutTargetEquivalent_SucceedsSilently()
+    {
+        using var target = new Node { Name = "Target" };
+        target.AddChild(new Node { Name = "Unrelated" });
+        using Node templateRoot = CreateMaleWrapperTemplateRoot(CreateYawRotation(Mathf.Pi));
+        using Node baselineRoot = CreateMaleWrapperTemplateRoot(Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.False(target.HasNode("Male"));
+        Assert.True(target.HasNode("Unrelated"));
+    }
+
+    /// <summary>
+    /// Ambiguous target equivalents (multiple skeleton-bearing root children) are skipped rather than guessed.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_AmbiguousTargetEquivalents_AreSkipped()
+    {
+        using var target = new Node { Name = "Target" };
+        var firstWrapper = new Node3D { Name = "First" };
+        firstWrapper.AddChild(new Skeleton3D { Name = "FirstSkeleton" });
+        var secondWrapper = new Node3D { Name = "Second" };
+        secondWrapper.AddChild(new Skeleton3D { Name = "SecondSkeleton" });
+        target.AddChild(firstWrapper);
+        target.AddChild(secondWrapper);
+        using Node templateRoot = CreateMaleWrapperTemplateRoot(CreateYawRotation(Mathf.Pi));
+        using Node baselineRoot = CreateMaleWrapperTemplateRoot(Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal(Transform3D.Identity, firstWrapper.Transform);
+        Assert.Equal(Transform3D.Identity, secondWrapper.Transform);
+    }
+
+    /// <summary>
+    /// Selected-node-children mode also propagates overrides on baseline-equivalent children of the selected node.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_SelectedNodeChildren_WithBaseline_PropagatesOverridesOnBaselineEquivalentChildren()
+    {
+        using var target = new Node { Name = "Target" };
+        var targetVisual = new Node3D { Name = "ReferenceVisual" };
+        var targetSkeleton = new Skeleton3D { Name = "Skeleton" };
+        var targetAttachment = new Marker3D { Name = "BaselineAttachment" };
+        targetSkeleton.AddChild(targetAttachment);
+        targetVisual.AddChild(targetSkeleton);
+        target.AddChild(targetVisual);
+        using Node templateRoot = CreateBaselineDiffTemplateRoot();
+        using Node baselineRoot = CreateBaselineRoot();
+        Transform3D skeletonOverride = CreateYawRotation(Mathf.Pi);
+        Transform3D attachmentOverride = new(Transform3D.Identity.Basis, new Vector3(1.5f, 2.5f, 3.5f));
+        templateRoot.GetNode<Node3D>("ReferenceVisual/Skeleton").Transform = skeletonOverride;
+        templateRoot.GetNode<Node3D>("ReferenceVisual/Skeleton/BaselineAttachment").Transform = attachmentOverride;
+        templateRoot.GetNode("ReferenceVisual").AddChild(new Node3D { Name = "VisualModule" });
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.SelectedNodeChildren,
+            SourcePath = new NodePath("ReferenceVisual"),
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal(skeletonOverride, targetSkeleton.Transform);
+        Assert.Equal(attachmentOverride, targetAttachment.Transform);
+        Assert.True(target.HasNode("VisualModule"));
+        Assert.Equal(1, CountDirectChildren(targetSkeleton, "BaselineAttachment"));
+    }
+
+    /// <summary>
+    /// Exported property deltas between template and baseline propagate to the target's equivalent node.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_PropagatesExportedPropertyDelta()
+    {
+        using var target = new Node { Name = "Target" };
+        var targetProbe = new InstallerOverrideProbe { Name = "Reused", PreservedValue = "custom-target" };
+        target.AddChild(targetProbe);
+        using Node templateRoot = CreateProbeTemplateRoot("template-override", "template-refresh", Transform3D.Identity);
+        using Node baselineRoot = CreateProbeTemplateRoot("baseline-value", "baseline-refresh", Transform3D.Identity);
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Equal("template-override", targetProbe.PreservedValue);
+        Assert.Equal("template-refresh", targetProbe.RefreshValue);
+    }
+
+    /// <summary>
+    /// Repeated installs propagate the same override values without duplicating nodes or accumulating state.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_RepeatedInstall_IsIdempotent()
+    {
+        using var target = new Node { Name = "Target" };
+        var targetVisual = new Node3D { Name = "ReferenceVisual" };
+        targetVisual.AddChild(new Skeleton3D { Name = "Skeleton" });
+        target.AddChild(targetVisual);
+        using Node templateRoot = CreateBaselineDiffTemplateRoot();
+        using Node baselineRoot = CreateBaselineRoot();
+        Transform3D overrideTransform = CreateYawRotation(Mathf.Pi);
+        templateRoot.GetNode<Node3D>("ReferenceVisual").Transform = overrideTransform;
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult first = installer.Install(context);
+        SceneInstallationResult second = installer.Install(context);
+
+        Assert.True(first.Succeeded, string.Join('\n', first.Errors));
+        Assert.True(second.Succeeded, string.Join('\n', second.Errors));
+        Assert.Equal(overrideTransform, targetVisual.Transform);
+        Assert.Equal(1, CountDirectChildren(target, "ReferenceVisual"));
+        Assert.Equal(1, CountDirectChildren(target, "RuntimeModule"));
+    }
+
+    /// <summary>
     /// Repeated selected-subtree installation reuses same-name/type nodes and preserves sibling installer output.
     /// </summary>
     [Headless]
@@ -234,6 +573,46 @@ public sealed class TemplateSceneInstallationIntegrationTests
         Assert.Equal(1, CountDirectChildren(target.GetNode("VisualRoot"), "ModuleB"));
         Assert.False(HasExportedProperty(visualInstaller, "Template"));
         Assert.False(HasExportedProperty(childInstaller, "Template"));
+    }
+
+    /// <summary>
+    /// A role installer instantiates the configured baseline for its child installers, and a character-level
+    /// <c>TemplateBaseline</c> assignment overrides the installer scene's serialised default.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void RigRoleTemplateSceneInstaller_TemplateBaseline_UsesCharacterOverrideBeforeInstallerSceneDefault()
+    {
+        using PackedScene templateScene = CreateRoleTemplateScene();
+        using PackedScene defaultBaselineScene = CreateWrapperBaselineScene(CreateYawRotation(Mathf.Pi));
+        using PackedScene characterBaselineScene = CreateWrapperBaselineScene(Transform3D.Identity);
+        using PackedScene installerScene = CreateRoleInstallerScene(templateScene, defaultBaselineScene);
+        using RigRoleTemplateSceneInstaller roleInstaller =
+            Assert.IsType<RigRoleTemplateSceneInstaller>(installerScene.Instantiate());
+        Assert.NotNull(roleInstaller.Template);
+        Assert.NotNull(roleInstaller.TemplateBaseline);
+
+        // Installer-scene default: the baseline equals the template wrapper, so no delta propagates to the target.
+        using Node defaultTarget = CreateAssembledModelTargetRoot("TargetDefault");
+        Node3D defaultWrapper = defaultTarget.GetNode<Node3D>("AssembledModel");
+        SceneInstallationResult defaultResult = roleInstaller.Install(new SceneInstallationContext(defaultTarget));
+
+        Assert.True(defaultResult.Succeeded, string.Join('\n', defaultResult.Errors));
+        Assert.Equal(Transform3D.Identity, defaultWrapper.Transform);
+        Assert.False(defaultTarget.HasNode("Male"));
+        Assert.True(defaultTarget.HasNode("RuntimeModule"));
+
+        // Character-level assignment mirrors how concrete character scenes override installer-scene defaults.
+        roleInstaller.TemplateBaseline = characterBaselineScene;
+        using Node characterTarget = CreateAssembledModelTargetRoot("TargetCharacter");
+        Node3D characterWrapper = characterTarget.GetNode<Node3D>("AssembledModel");
+        SceneInstallationResult characterResult = roleInstaller.Install(new SceneInstallationContext(characterTarget));
+
+        Assert.True(characterResult.Succeeded, string.Join('\n', characterResult.Errors));
+        Assert.Equal(CreateYawRotation(Mathf.Pi), characterWrapper.Transform);
+        Assert.False(characterTarget.HasNode("Male"));
+        Assert.True(characterTarget.HasNode("RuntimeModule"));
+        Assert.Equal(1, CountDirectChildren(characterTarget, "AssembledModel"));
     }
 
     /// <summary>
@@ -584,6 +963,91 @@ public sealed class TemplateSceneInstallationIntegrationTests
         root.AddChild(new Node3D { Name = "RuntimeModule" });
         return root;
     }
+
+    private static Node CreateMaleWrapperTemplateRoot(Transform3D wrapperTransform)
+    {
+        var root = new Node { Name = "TemplateRoot" };
+        var wrapper = new Node3D { Name = "Male", Transform = wrapperTransform };
+        wrapper.AddChild(new Skeleton3D { Name = "GeneralSkeleton" });
+        root.AddChild(wrapper);
+        return root;
+    }
+
+    private static Node CreateMaleAttachmentTemplateRoot(string attachmentValue, Transform3D attachmentTransform)
+    {
+        var root = new Node { Name = "TemplateRoot" };
+        var wrapper = new Node3D { Name = "Male" };
+        var skeleton = new Skeleton3D { Name = "GeneralSkeleton" };
+        skeleton.AddChild(new InstallerOverrideProbe
+        {
+            Name = "HeadAttachment",
+            PreservedValue = attachmentValue,
+            Transform = attachmentTransform,
+        });
+        wrapper.AddChild(skeleton);
+        root.AddChild(wrapper);
+        return root;
+    }
+
+    private static PackedScene CreateRoleTemplateScene()
+    {
+        Node root = CreateMaleWrapperTemplateRoot(CreateYawRotation(Mathf.Pi));
+        root.AddChild(new Node3D { Name = "RuntimeModule" });
+        return PackTemplateScene(root);
+    }
+
+    private static PackedScene CreateWrapperBaselineScene(Transform3D wrapperTransform)
+        => PackTemplateScene(CreateMaleWrapperTemplateRoot(wrapperTransform));
+
+    private static PackedScene CreateRoleInstallerScene(PackedScene template, PackedScene baseline)
+    {
+        var roleInstaller = new RigRoleTemplateSceneInstaller
+        {
+            Name = "NpcCharacterInstaller",
+            Template = template,
+            TemplateBaseline = baseline,
+        };
+        roleInstaller.AddChild(new RigTemplateSubtreeInstaller
+        {
+            Name = "TemplateRootSubtreesInstaller",
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        });
+        return PackTemplateScene(roleInstaller);
+    }
+
+    private static PackedScene PackTemplateScene(Node root)
+    {
+        AssignTemplateOwnerRecursively(root, root);
+        var packedScene = new PackedScene();
+        Assert.Equal(Error.Ok, packedScene.Pack(root));
+        root.Dispose();
+        return packedScene;
+    }
+
+    private static Node CreateAssembledModelTargetRoot(string rootName)
+    {
+        var target = new Node { Name = rootName };
+        var wrapper = new Node3D { Name = "AssembledModel" };
+        wrapper.AddChild(new Skeleton3D { Name = "GeneralSkeleton" });
+        target.AddChild(wrapper);
+        return target;
+    }
+
+    private static Node CreateProbeTemplateRoot(string preservedValue, string refreshValue, Transform3D transform)
+    {
+        var root = new Node { Name = "TemplateRoot" };
+        root.AddChild(new InstallerOverrideProbe
+        {
+            Name = "Reused",
+            PreservedValue = preservedValue,
+            RefreshValue = refreshValue,
+            Transform = transform,
+        });
+        return root;
+    }
+
+    private static Transform3D CreateYawRotation(float radians)
+        => new(Basis.FromEuler(new Vector3(0.0f, radians, 0.0f)), Vector3.Zero);
 
     private static void AssignTemplateOwnerRecursively(Node owner, Node node)
     {
