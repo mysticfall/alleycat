@@ -23,6 +23,13 @@ specifications wiki, with each spec acting as the source of truth for planning a
   only the current contract — git history is the archive. This applies to specifications, code comments, tests,
   and asset metadata alike.
 
+## Bug Work
+
+For a reproducible defect, the reported user-visible symptom remains the parent acceptance outcome. The `planner`,
+`coder`, and `reviewer` instructions own role-specific reproduction, implementation, evidence, and review enforcement.
+Urgent safety or integrity containment may precede reproduction only when delaying containment would itself be unsafe;
+containment is not symptom resolution, and the parent outcome remains open.
+
 ## Project Structure
 
 ```text

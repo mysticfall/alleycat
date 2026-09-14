@@ -16,6 +16,8 @@ agents, skills, commands, MCP configuration, or permission rules.
 
 ## Checks
 
+- [ ] Original user-visible outcomes and evidence contracts are preserved before report-format or blocker-bookkeeping
+  concerns are assessed.
 - [ ] The changed artefact is in the correct OpenCode location and uses the expected file shape.
 - [ ] Markdown-based agent, command, or skill changes pass the Markdown checklist where applicable.
 - [ ] Agent prompts describe runtime agent behaviour, not meta-instructions about editing the agent.
@@ -23,6 +25,13 @@ agents, skills, commands, MCP configuration, or permission rules.
 - [ ] Skills have valid frontmatter, focused trigger descriptions, and scoped instructions.
 - [ ] Reviewer-only guidance lives in reviewer-owned files unless it should be globally discoverable as a skill.
 - [ ] Configuration changes preserve schema validity and existing unrelated settings.
+- [ ] Adversarial instruction walkthroughs cover mechanism-green/symptom-red, blocker-only closure,
+  implementation-derived acceptance, truncated observation, static evidence for temporal claims, unavailable
+  reproduction, blocker-only readiness, and restart-state preservation.
+- [ ] Workflow-only validation is distinguished from gameplay suites; unrelated gameplay checks are not required for an
+  instruction-only patch.
+- [ ] Any restart handoff is concise and current, preserves unresolved status, withdraws superseded readiness claims,
+  states the next authorised action, and is linked from workflow guidance.
 - [ ] The handoff reminds the user to quit and restart OpenCode after config-time file changes.
 
 ## Escalate Immediately When

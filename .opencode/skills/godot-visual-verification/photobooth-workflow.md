@@ -1,6 +1,9 @@
 # Photobooth Workflow Guide
 
-Use this guide for all feature work that requires visual verification.
+Use this guide when a photobooth is the selected evidence harness. The primary
+[`godot-visual-verification`](SKILL.md) skill owns claim selection, regression-first sequencing, static versus temporal
+evidence, conditional infrastructure, acceptance, and reporting. An actual reproducer may be more representative and
+does not require a photobooth, screenshot runner, or integration test.
 
 ## Step 1: Create A Test Scene
 
@@ -67,14 +70,22 @@ A self-contained test scene can be opened directly in the Godot editor for inspe
 done in the script, the editor shows only the base scene with no IK nodes, making it impossible to debug configuration
 issues (such as missing bone names or incorrect node paths) without running the script.
 
-## Step 2: Use The Test Scene To Implement The Feature
+## Step 2: Establish the Visible Baseline
 
-Write a runner script with the same base name as the test scene and store it alongside the scene:
+For a reported defect, use the scene before production implementation to reproduce the symptom and record evidence that
+fails the criterion defined under the primary skill. For temporal claims, collect a frame sequence or other
+time-resolved evidence over the complete reported transition and visible settling period; isolated checkpoints are
+insufficient.
+
+## Optional Scripted Capture Runner
+
+If scripted capture is selected, write a runner with the same base name as the test scene and store it alongside the
+scene:
 
 - `@game/tests/<feature>/<test_name>.tscn`
 - `@game/tests/<feature>/<test_name>.gd`
 
-The runner should:
+For defect work, wait until the symptom-red baseline exists. The runner should then:
 
 1. Load/instantiate the test scene.
 2. Apply scenario state A, then capture screenshots.
@@ -84,9 +95,12 @@ The runner should:
 Use `Photobooth.capture_screenshots(file_name)` for full camera sets and `CameraRig.capture_screenshot(file_name)` when
 single-camera captures are needed.
 
-## Step 3: Add C# Integration Tests
+Rerun the unchanged visible regression after meaningful production changes and on the final candidate.
 
-Add a C# integration test that loads the same test scene and validates behaviour using non-visual checks.
+## Optional Supporting C# Integration Tests
+
+Add a C# integration test only when it is selected as supporting evidence. When selected, load the same test scene and
+validate behaviour using non-visual checks.
 
 Examples:
 
@@ -94,8 +108,8 @@ Examples:
 - Transform/rotation constraints.
 - Node states and flags after scenario transitions.
 
-This test should verify functional correctness that corresponds to what was visually validated in the photobooth
-captures.
+This test should verify supporting functional correctness corresponding to the visible evidence. Non-visual assertions
+do not replace time-resolved evidence for temporal claims.
 
 ## Run Commands
 
@@ -126,22 +140,8 @@ godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- -
 
 ## Screenshot Review
 
-After each capture run, **visually inspect** representative screenshots to verify correctness — do not treat
-file-generation alone as evidence of success.
-
-When checking screenshots:
-
-1. Use the `read` tool to load and inspect each image.
-2. Inspect the loaded image for specific deviations (for example "is the character's head tilted backward, or still
-   neutral?").
-3. Compare scenario screenshots against each other (for example "up" vs "lean-back") to confirm each scenario produces
-   a visually distinct result.
-4. If a scenario screenshot looks identical to the neutral/default pose, treat it as a verification failure even if the
-   file was generated successfully.
-
-If the `read` tool output is unclear or ambiguous, share the
-screenshots with the user (they will appear inline in the conversation) and ask the user to
-make the visual judgement. Do not fabricate visual observations.
+Apply the image inspection, comparison-table, ambiguity, camera-sanity, and escalation rules in the primary
+[`godot-visual-verification`](SKILL.md) skill. File generation alone is not evidence of visible correctness.
 
 ## Screenshot Output
 

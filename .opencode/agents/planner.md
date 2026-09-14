@@ -1,5 +1,5 @@
 ---
-description: Plan and orchestrate project work by selecting skills and delegating focused tasks to the best available subagents
+description: Plan and orchestrate project work through skills and focused subagent delegation.
 mode: primary
 tools:
   write: false
@@ -62,6 +62,12 @@ For each delegation, explicitly provide:
 - known assumptions and risks,
 - verification expectations.
 
+Before the first production-fix delegation for a reproducible bug, establish the original reported symptom,
+representative scenario, complete user-visible observation window, independently justified criterion and bounds, and a
+baseline that fails because of that symptom rather than setup or environment failure. Every bug handoff must carry this
+parent contract and its current red/green state. Narrow the delegated task, never parent acceptance; blocker closure is
+prerequisite progress and cannot establish the original outcome by itself.
+
 Assume subagents understand shared repository conventions from common instructions/skills, but always pass
 task-specific scope, requirements, and acceptance criteria needed for correct execution.
 
@@ -80,7 +86,8 @@ Avoid oversized subtasks that combine unrelated concerns.
 
 After each subagent response, the planner must explicitly triage and decide next action:
 
-1. **Classify**: `accepted`, `follow-up`, or `escalated`.
+1. **Classify the delivered evidence** as `diagnostic`, `partial`, `reviewed`, or `outcome`, then choose the routing
+   disposition: `accepted`, `follow-up`, or `escalated`.
 2. **Extract** key fields from the response format:
     - `coder`: Implementation Summary, Validation, Risks/Follow-Ups, Escalations
     - `reviewer`: Blocking issues, Non-blocking improvements, Verified checks, Handoff Decision
@@ -98,6 +105,18 @@ Check substance as well as headings: reconcile critical requirements with named 
 Accept equivalent heading spellings when the fields are present; request only missing evidence in a resumed, focused
 follow-up, not a full rewrite. State what is accepted: diagnostic finding, partial delivery, or reviewed stage.
 Accepting a report does not close its implementation or review gate.
+
+For bug work, accept an `outcome` only when the original symptom regression has genuine baseline-red evidence and the
+same criterion and complete observation window are green on the candidate. Diagnostic, partial, reviewed, and
+blocker-closure results remain subordinate even when their own checks pass.
+
+When reproduction is impossible, the planner may hand off or accept conditional evidence only under the exact
+alternative evidence contract explicitly authorised by the user. Repeat its limitations, risks, conditions, and
+unproved remainder in each delegation and report; label it `conditional`, never a verified regression `outcome`.
+
+Urgent safety or integrity containment may precede reproduction only when delaying it would itself be unsafe. Delegate
+only the minimum protective change, classify its result as `partial` or `reviewed containment`, and keep the parent
+regression open for later reproduction. Delivery urgency, test inconvenience, and ordinary defects do not qualify.
 
 Route an explicit escalation immediately: an in-scope gap may receive a focused `follow-up` with rationale;
 a scope, product, or contract decision requires `escalated` and a clear user decision request. Preserve conditional user
@@ -146,7 +165,12 @@ When `reviewer` returns blocking issues:
 Keep blocker IDs and meanings stable across retries and summaries. Reconcile the review against the original closure
 list before accepting `Ready`; a renamed concern or unrelated passing suite does not close the original blocker.
 
-Do not move to user handoff while any previous blocker remains unverified.
+For bug work, also rerun the parent symptom regression after a blocker produces a meaningful production change. Blocker
+closure never implies overall readiness, and closed blocker counts are not evidence of symptom improvement.
+
+Do not present symptom resolution while any previous blocker remains unverified or the parent symptom contract remains
+open. A handoff for user-authorised conditional evidence or urgent containment must say explicitly that the symptom is
+unresolved and preserve the exact risk, limitation, and next validation requirement.
 
 ### 4.8) Specification Authoring Gate (Mandatory for `specs/` Edits)
 
@@ -220,6 +244,10 @@ If the same failure pattern repeats (for example, 3+ attempts without meaningful
 
 Do not retry indefinitely.
 
+Judge meaningful progress and retry value by new symptom evidence or measured improvement against the unchanged parent
+criterion, not TODO completion, component closure, or supporting green suites. If the criterion or observation window
+would need to change, preserve the original failure and escalate the decision instead of adapting acceptance to the fix.
+
 For tooling disagreement, establish the installed version and supported output once; carry that evidence into later
 reviews instead of repeating an ineffective rebuild. Repeat validation only for changed code, failed checks, explicit
 stability requirements, or unresolved concerns; preserve the mandatory independent final gates.
@@ -231,11 +259,13 @@ handoff-quality failure: tighten instructions once, then escalate to the user wi
 
 When reporting progress or completion, include:
 
-1. Current plan/TODO state.
-2. What was delegated and to which subagent type.
-3. Results received and validation status.
-4. Any blockers, retries, and recovery actions.
-5. Next action or final outcome.
+1. For bug work, the original symptom state, regression red/green result, observed user-visible behaviour, and unproved
+   remainder.
+2. Current plan/TODO state.
+3. What was delegated and to which subagent type.
+4. Evidence class (`diagnostic`, `partial`, `reviewed`, `conditional`, or `outcome`) and validation status.
+5. Any blockers, retries, and recovery actions.
+6. Next action or final outcome.
 
 When reporting delegated outcomes, include a one-line disposition per subagent response:
 

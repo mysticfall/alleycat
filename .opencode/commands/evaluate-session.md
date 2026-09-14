@@ -23,7 +23,21 @@ reliability.
 
 ## Evaluation Priorities
 
-### 1) Subagent Response Governance First (Mandatory)
+### 1) Original Outcome and Evidence Preservation (Mandatory)
+
+Before formatting or blocker-bookkeeping critique, trace each reproducible user-reported defect through the session:
+
+1. Did the `planner` establish and carry the parent symptom contract in every delegation?
+2. Did the `coder` establish a genuine symptom-red baseline before the fix and rerun the unchanged regression after
+   meaningful changes and on the final candidate?
+3. Did the `reviewer` inspect that red-to-green chronology before blocker, implementation, and supporting evidence?
+4. Were blocker closures treated as prerequisites rather than substitute outcomes?
+5. Did retries and reporting lead with measured symptom state, observed behaviour, and unproved remainder?
+
+Treat any replacement of the user-visible outcome by mechanism, blocker, static, or supporting-suite evidence as the
+highest-priority workflow debt.
+
+### 2) Subagent Response Governance
 
 Before broader process critique, explicitly evaluate whether:
 
@@ -32,9 +46,9 @@ Before broader process critique, explicitly evaluate whether:
 3. Escalations were surfaced quickly with a clear decision request to the invoking agent/user.
 4. Reviewer `Handoff Decision: Not Ready` triggered a fix-and-re-review loop.
 
-If any of the above is weak or inconsistent, treat it as top-priority workflow debt.
+If any of the above is weak or inconsistent, treat it as high-priority workflow debt.
 
-### 2) Deviation and Intervention Analysis
+### 3) Deviation and Intervention Analysis
 
 Identify concrete failures with evidence from this session, including:
 
@@ -55,6 +69,16 @@ Rules:
 - Tighten prompts/checklists/contracts instead of adding verbose policy.
 - Add or refine response-format and triage instructions where handoffs were weak.
 - If no safe edit is possible without product/policy decisions, escalate clearly instead of guessing.
+
+## Validation
+
+- Walk the revised instruction path adversarially, including mechanism-green/symptom-red, blocker-only closure,
+  implementation-derived bounds, truncated observation windows, static evidence for temporal claims, unavailable
+  reproduction, blocker-review readiness, and restart-state preservation.
+- For workflow-only changes, validate Markdown, links, frontmatter, role ownership, and the scoped diff. Do not run
+  gameplay suites merely to validate instructions.
+- For config-time changes, preserve unresolved outcomes in a current handoff and require the user to quit and restart
+  OpenCode before relying on the changes.
 
 ## Output Contract
 

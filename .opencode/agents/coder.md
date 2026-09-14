@@ -22,18 +22,40 @@ Godot engine.
 - Do not run the full integration suite while implementing; full integration-suite verification is reserved for the
   reviewer/final hand-off gate unless the invoking agent or user explicitly requests an exception. Do not run the full
   unit suite by default either; prefer filtered unit tests while iterating.
-- If no focused automated test exists for the changed behaviour, run the closest affected filtered test set and report the
-  coverage gap in `Validation`.
-- For automated integration test runs, do **not** default to `--headless`. Use `--headless` only when the selected test is
+- If no focused automated test exists for the changed behaviour, run the closest affected filtered test set and report
+  the coverage gap in `Validation`.
+- For automated integration test runs, do **not** default to `--headless`. Use `--headless` only when the selected test
+  is
   known to be headless-compatible through its spec, test contract, or `[Headless]` annotation. The integration test
   framework already launches Godot with `--xr-mode off`; direct `godot-mono` commands must pass `--xr-mode off`
   explicitly.
+
+## Bug-Fix Entry Gate
+
+- Before a production bug fix, create or reuse a regression that genuinely fails on the reported symptom across the
+  complete user-visible observation window. Existing nearby green tests, component failures, mechanism checks, setup
+  failures, or environment failures do not satisfy this gate.
+- Instrumentation, diagnostics, or fixture work may precede the fix to establish that baseline. It must reproduce the
+  relevant behaviour and production wiring without bypassing, replacing, or changing the reported symptom.
+- Record the complete user-visible observation window and acceptance criterion before implementation. Derive bounds from
+  approved requirements or independently justified visible behaviour, never from what the proposed implementation emits.
+- Preserve the original criterion and observation window during implementation. Rerun the unchanged regression after
+  each meaningful production change and on the final candidate.
+- If reproduction is impossible, report the defect as unresolved and escalate for an alternative-evidence decision
+  rather than applying a speculative patch.
+- After explicit user authorisation of an alternative evidence contract, work only within its exact conditions and
+  report its limitations, risks, and unproved remainder. Do not report conditional evidence as red-to-green
+  verification.
+- Urgent safety or integrity containment may precede reproduction only when delay would itself be unsafe. Make only the
+  minimum protective change, label it containment rather than verified resolution, and keep the parent symptom
+  regression open for later reproduction and validation. Ordinary delivery pressure does not qualify.
 
 ## Visual Verification Tasks
 
 For tasks with visual acceptance criteria, use `godot-visual-verification` skill and follow its workflow and gate.
 
-- Create/maintain a photobooth test scene under `@game/tests/<feature>/` before final visual validation.
+- Prefer an existing representative reproducer for reported visual defects. Create or maintain a photobooth under
+  `@game/tests/<feature>/` only when it is the most representative or useful evidence harness.
 - Verify camera rig and marker framing before scenario-level screenshot captures.
 - **Never use `--headless` when running scripts that capture screenshots.** Headless mode disables the renderer and
   produces blank/failed captures.
@@ -78,3 +100,7 @@ replacing the handoff format. Put required behaviour/evidence gaps in `Escalatio
 Distinguish synthetic inputs from engine-observed evidence and successful required behaviour from correct refusal.
 For performance claims, state the measured path, active state, iteration/work counts, and allocations; completed or
 inactive ticks do not prove active-path cost. Link detailed evidence instead of giving a full implementation tour.
+
+For bug work, put the representative scenario, baseline symptom-red result, unchanged criterion and observation window,
+final green/red result of the same regression, observed behaviour, and unresolved remainder first in `Validation`.
+Supporting checks may follow but cannot replace this red-to-green account.
