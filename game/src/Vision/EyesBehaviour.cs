@@ -21,6 +21,7 @@ public partial class EyesBehaviour : Node, IVision
         new ReadOnlyCollection<Type>([typeof(VisualSurveyPercept), typeof(LookTargetChangedPercept)]);
 
     private EyesController? _controller;
+    private EyesTransformGaze? _transformGaze;
     private VisualCue? _lookTarget;
     private bool _lookTargetExplicitlyAssigned;
     private bool _deferredRefreshScheduled;
@@ -53,7 +54,7 @@ public partial class EyesBehaviour : Node, IVision
             field = value;
             if (_controller is not null && !AreSameNode(previousTree, value))
             {
-                _controller = null;
+                DeactivateController();
             }
 
             TryInitialiseController();
@@ -71,6 +72,48 @@ public partial class EyesBehaviour : Node, IVision
         set
         {
             field = value;
+            ScheduleDeferredRefresh();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the left eye node rotated by the transform-driven gaze backend. Assigning both
+    /// eye nodes selects that backend; neither keeps the default blendshape backend.
+    /// </summary>
+    [Export]
+    public Node3D? LeftEye
+    {
+        get;
+        set
+        {
+            Node3D? previousEye = field;
+            field = value;
+            if (_controller is not null && !AreSameNode(previousEye, value))
+            {
+                DeactivateController();
+            }
+
+            ScheduleDeferredRefresh();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the right eye node rotated by the transform-driven gaze backend. Assigning both
+    /// eye nodes selects that backend; neither keeps the default blendshape backend.
+    /// </summary>
+    [Export]
+    public Node3D? RightEye
+    {
+        get;
+        set
+        {
+            Node3D? previousEye = field;
+            field = value;
+            if (_controller is not null && !AreSameNode(previousEye, value))
+            {
+                DeactivateController();
+            }
+
             ScheduleDeferredRefresh();
         }
     }
@@ -301,6 +344,7 @@ public partial class EyesBehaviour : Node, IVision
 
     private void TryInitialiseController()
     {
+        bool usesTransformGaze = false;
         if (IsInsideTree())
         {
             if (!IsValidNode(AnimationTree))
@@ -326,6 +370,16 @@ public partial class EyesBehaviour : Node, IVision
             {
                 SetResolvedLookTarget(null, explicitlyAssigned: false);
             }
+
+            // The active gaze backend is inferred from eye-node authoring, never selected explicitly.
+            ValidateEyeNodePairAuthoring();
+            usesTransformGaze = IsValidNode(LeftEye) && IsValidNode(RightEye);
+            if (_controller is not null && _controller.TransformGazeOutput != usesTransformGaze)
+            {
+                // Gaze output ownership is exclusive: rebuild the controller when authoring selects
+                // a different backend, restoring any transform-controlled eyes to their neutral pose.
+                DeactivateController();
+            }
         }
 
         AnimationTree? animationTree = AnimationTree;
@@ -334,7 +388,7 @@ public partial class EyesBehaviour : Node, IVision
             return;
         }
 
-        _controller = new EyesController(animationTree)
+        _controller = new EyesController(animationTree, usesTransformGaze)
         {
             MaxHorizontalAngleDegrees = _maxHorizontalAngleDegrees,
             MaxVerticalAngleDegrees = _maxVerticalAngleDegrees,
@@ -343,6 +397,7 @@ public partial class EyesBehaviour : Node, IVision
             MaximumBlinkInterval = _maximumBlinkInterval,
             BlinkDuration = _blinkDuration,
         };
+        _transformGaze = usesTransformGaze ? new EyesTransformGaze(LeftEye!, RightEye!) : null;
         SetProcess(true);
     }
 
@@ -356,7 +411,7 @@ public partial class EyesBehaviour : Node, IVision
     {
         if (_controller is not null && !IsInstanceValid(_controller.AnimationTree))
         {
-            _controller = null;
+            DeactivateController();
             AnimationTree = IsInsideTree() ? GetNodeOrNull<AnimationTree>("../AnimationTree") : null;
         }
 
@@ -366,15 +421,22 @@ public partial class EyesBehaviour : Node, IVision
             return;
         }
 
+        Transform3D eyeOriginGlobalTransform = Transform3D.Identity;
         if (EyeOrigin is Node3D eyeOrigin)
         {
-            _controller.EyeOriginGlobalTransform = IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
+            eyeOriginGlobalTransform = IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
                 ? eyeOrigin.GlobalTransform
                 : Transform3D.Identity;
+            _controller.EyeOriginGlobalTransform = eyeOriginGlobalTransform;
         }
 
         Vector3 lookPoint = UpdateSaccadeLookPoint(delta);
         _controller.Update(delta, lookPoint);
+
+        if (_transformGaze is EyesTransformGaze transformGaze)
+        {
+            transformGaze.ApplyGaze(eyeOriginGlobalTransform, _controller.ResolveCurrentGazeDelta());
+        }
     }
 
     /// <summary>
@@ -631,6 +693,44 @@ public partial class EyesBehaviour : Node, IVision
 
     private static bool IsValidNode(Node? node) => node is not null && IsInstanceValid(node);
 
+    /// <summary>
+    /// Validates that the authored eye-node pair selects exactly one gaze backend: both
+    /// <see cref="LeftEye"/> and <see cref="RightEye"/> assigned selects the transform backend,
+    /// neither keeps the default blendshape backend, and exactly one is invalid authoring. This is
+    /// the single inference rule shared by activation and runtime installer validation.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when exactly one eye node is assigned.</exception>
+    public void ValidateEyeNodePairAuthoring()
+    {
+        bool hasLeftEye = IsValidNode(LeftEye);
+        bool hasRightEye = IsValidNode(RightEye);
+        if (hasLeftEye == hasRightEye)
+        {
+            return;
+        }
+
+        string assignedPropertyName = hasLeftEye ? nameof(LeftEye) : nameof(RightEye);
+        string missingPropertyName = hasLeftEye ? nameof(RightEye) : nameof(LeftEye);
+        throw new InvalidOperationException(
+            $"{nameof(EyesBehaviour)} '{DescribeNodePath()}' requires '{nameof(LeftEye)}' and '{nameof(RightEye)}' "
+            + $"to be assigned together to select the transform-driven gaze backend; '{missingPropertyName}' is not "
+            + $"assigned to a valid node while '{assignedPropertyName}' is. Assign both eye nodes, or clear both to "
+            + "keep the default blendshape backend.");
+    }
+
+    private string DescribeNodePath() => IsInsideTree() ? GetPath().ToString() : Name;
+
+    private void DeactivateController()
+    {
+        if (_transformGaze is EyesTransformGaze transformGaze)
+        {
+            transformGaze.RestoreNeutralTransforms();
+            _transformGaze = null;
+        }
+
+        _controller = null;
+    }
+
     private static bool AreSameNode(Node? left, Node? right)
         => ReferenceEquals(left, right)
             || (left is not null
@@ -744,18 +844,16 @@ public partial class EyesBehaviour : Node, IVision
     public void TriggerBlink() => _controller?.TriggerBlink();
 
     /// <summary>
-    /// Gets the horizontal look seek time currently written by the runtime controller.
+    /// Gets the horizontal look seek time currently reported by the runtime controller's shared gaze state.
     /// </summary>
     public float GetHorizontalLookSeekTime()
-        => _controller?.AnimationTree.Get(EyesAnimationTreePaths.GetHorizontalLookSeekParameter()).AsSingle()
-            ?? EyesLookMath.NeutralSeekTimeSeconds;
+        => _controller?.CurrentHorizontalSeekTime ?? EyesLookMath.NeutralSeekTimeSeconds;
 
     /// <summary>
-    /// Gets the vertical look seek time currently written by the runtime controller.
+    /// Gets the vertical look seek time currently reported by the runtime controller's shared gaze state.
     /// </summary>
     public float GetVerticalLookSeekTime()
-        => _controller?.AnimationTree.Get(EyesAnimationTreePaths.GetVerticalLookSeekParameter()).AsSingle()
-            ?? EyesLookMath.NeutralSeekTimeSeconds;
+        => _controller?.CurrentVerticalSeekTime ?? EyesLookMath.NeutralSeekTimeSeconds;
 
     /// <summary>
     /// Gets whether the runtime controller currently has a valid look target.

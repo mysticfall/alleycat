@@ -548,6 +548,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 
         RequireAssigned(eyes.AnimationTree, eyes, nameof(EyesBehaviour.AnimationTree));
         RequireAssigned(eyes.EyeOrigin, eyes, nameof(EyesBehaviour.EyeOrigin));
+        eyes.ValidateEyeNodePairAuthoring();
     }
 
     private static void ValidateHands(params HandPoseBehaviour?[] hands)

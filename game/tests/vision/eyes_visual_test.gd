@@ -3,6 +3,7 @@ extends SceneTree
 const TEST_SCENE_PATH := "res://tests/vision/eyes_visual_test.tscn"
 const ANIMATION_TREE_SCENE_PATH := "res://assets/characters/templates/animation/animation_tree.tscn"
 const EYES_BEHAVIOUR_SCRIPT_PATH := "res://src/Vision/EyesBehaviour.cs"
+const STATIC_CUE_SCRIPT_PATH := "res://src/Vision/StaticVisualCue.cs"
 const OUTPUT_ROOT := "VISION-001/eyes_visual"
 
 const HORIZONTAL_BLEND_PARAM := "parameters/EyesHorizontalLookBlend/blend_amount"
@@ -58,7 +59,11 @@ func _run() -> void:
 	if animation_tree == null:
 		return
 
-	var look_target: Marker3D = Marker3D.new()
+	# EyesBehaviour.LookTarget is strongly typed as VisualCue, so the runtime look target
+	# must be a StaticVisualCue node (a plain Marker3D fails the C# cast).
+	var look_target: Node3D = Node3D.new()
+	look_target.set_script(load(STATIC_CUE_SCRIPT_PATH) as Script)
+	look_target.set_meta("_custom_type_script", ResourceLoader.get_resource_uid(STATIC_CUE_SCRIPT_PATH))
 	look_target.name = "EyesLookTarget"
 	photobooth.add_child(look_target)
 

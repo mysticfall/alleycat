@@ -330,6 +330,142 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Authoring no eye nodes keeps the default blendshape backend and passes installer validation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_NeitherEyeNodeAuthoring_KeepsBlendshapeBackend()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Null(fixture.TargetEyes!.LeftEye);
+        Assert.Null(fixture.TargetEyes!.RightEye);
+    }
+
+    /// <summary>
+    /// Authoring both eye nodes selects the transform backend and passes installer validation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_BothEyeNodesAuthoring_SucceedsWithReferencesRetained()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        Node3D leftEye = CreateEyeNode("LeftEye");
+        Node3D rightEye = CreateEyeNode("RightEye");
+        fixture.TargetRoot.AddChild(leftEye);
+        fixture.TargetRoot.AddChild(rightEye);
+        fixture.TargetEyes!.LeftEye = leftEye;
+        fixture.TargetEyes!.RightEye = rightEye;
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.Same(leftEye, fixture.TargetEyes.LeftEye);
+        Assert.Same(rightEye, fixture.TargetEyes.RightEye);
+    }
+
+    /// <summary>
+    /// A left-only eye pair is rejected before eye behaviour is enabled, with an error naming the unpaired reference.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_LeftEyeOnlyAuthoring_RejectedWithActionablePairError()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        Node3D leftEye = CreateEyeNode("LeftEye");
+        fixture.TargetRoot.AddChild(leftEye);
+        fixture.TargetEyes!.LeftEye = leftEye;
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        string error = Assert.Single(result.Errors);
+        Assert.False(result.Succeeded);
+        Assert.Contains(nameof(EyesBehaviour.LeftEye), error, StringComparison.Ordinal);
+        Assert.Contains(nameof(EyesBehaviour.RightEye), error, StringComparison.Ordinal);
+        Assert.Contains("together", error, StringComparison.Ordinal);
+        Assert.Contains($"'{nameof(EyesBehaviour.RightEye)}' is not assigned", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A right-only eye pair is rejected before eye behaviour is enabled, with an error naming the unpaired reference.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_RightEyeOnlyAuthoring_RejectedWithActionablePairError()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        Node3D rightEye = CreateEyeNode("RightEye");
+        fixture.TargetRoot.AddChild(rightEye);
+        fixture.TargetEyes!.RightEye = rightEye;
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        string error = Assert.Single(result.Errors);
+        Assert.False(result.Succeeded);
+        Assert.Contains(nameof(EyesBehaviour.LeftEye), error, StringComparison.Ordinal);
+        Assert.Contains(nameof(EyesBehaviour.RightEye), error, StringComparison.Ordinal);
+        Assert.Contains("together", error, StringComparison.Ordinal);
+        Assert.Contains($"'{nameof(EyesBehaviour.LeftEye)}' is not assigned", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Transform-mode authoring still requires the eyes animation library and blink tracks.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TransformModeWithoutEyeAnimationLibrary_FailsClearly()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        Node3D leftEye = CreateEyeNode("LeftEye");
+        Node3D rightEye = CreateEyeNode("RightEye");
+        fixture.TargetRoot.AddChild(leftEye);
+        fixture.TargetRoot.AddChild(rightEye);
+        fixture.TargetEyes!.LeftEye = leftEye;
+        fixture.TargetEyes!.RightEye = rightEye;
+        AnimationPlayer animationPlayer = fixture.TargetRoot.GetNode<AnimationPlayer>("AnimationPlayer");
+        animationPlayer.RemoveAnimationLibrary(_eyesLibraryName);
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        string error = Assert.Single(result.Errors);
+        Assert.False(result.Succeeded);
+        Assert.Contains(_eyesLibraryName.ToString(), error, StringComparison.Ordinal);
+        Assert.Contains("AnimationLibrary", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Transform-mode authoring still requires an assigned eye origin.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TransformModeWithoutEyeOrigin_FailsClearly()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        Node3D leftEye = CreateEyeNode("LeftEye");
+        Node3D rightEye = CreateEyeNode("RightEye");
+        fixture.TargetRoot.AddChild(leftEye);
+        fixture.TargetRoot.AddChild(rightEye);
+        fixture.TargetEyes!.LeftEye = leftEye;
+        fixture.TargetEyes!.RightEye = rightEye;
+        fixture.TargetEyes!.EyeOrigin = null;
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        string error = Assert.Single(result.Errors);
+        Assert.False(result.Succeeded);
+        Assert.Contains(nameof(EyesBehaviour.EyeOrigin), error, StringComparison.Ordinal);
+    }
+
+    private static Node3D CreateEyeNode(string name)
+        => new()
+        {
+            Name = name,
+        };
+
     private static void AssertGeneratedEyeFilters(AnimationTree animationTree)
     {
         AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false);

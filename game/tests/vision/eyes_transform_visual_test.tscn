@@ -1,0 +1,402 @@
+[gd_scene format=4]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/templates/face_cam.tscn" id="1_uou4d"]
+[ext_resource type="Script" path="res://src/Vision/StaticVisualCue.cs" id="2_jb614"]
+[ext_resource type="Script" path="res://src/Vision/EyesBehaviour.cs" id="3_vqi88"]
+[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" id="4_wcnje"]
+[ext_resource type="Script" path="res://scripts/photobooth/debug_marker.gd" id="5_0cn38"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ncukc"]
+albedo_color = Color(0.8, 0.62, 0.52, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_ryfuf"]
+material = SubResource("StandardMaterial3D_ncukc")
+size = Vector3(0.17, 0.21, 0.15)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_u2n64"]
+albedo_color = Color(0.93, 0.91, 0.88, 1)
+roughness = 0.3
+
+[sub_resource type="SphereMesh" id="SphereMesh_ehh6i"]
+material = SubResource("StandardMaterial3D_u2n64")
+radius = 0.024
+height = 0.048
+radial_segments = 24
+rings = 16
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_x23do"]
+albedo_color = Color(0.05, 0.18, 0.55, 1)
+roughness = 0.25
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4hfp3"]
+material = SubResource("StandardMaterial3D_x23do")
+top_radius = 0.012
+bottom_radius = 0.012
+height = 0.004
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4sw1h"]
+albedo_color = Color(0.02, 0.02, 0.02, 1)
+roughness = 0.15
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_d46et"]
+material = SubResource("StandardMaterial3D_4sw1h")
+top_radius = 0.006
+bottom_radius = 0.006
+height = 0.0045
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_41vu6"]
+albedo_color = Color(0.93, 0.91, 0.88, 1)
+roughness = 0.3
+
+[sub_resource type="SphereMesh" id="SphereMesh_s2l7f"]
+material = SubResource("StandardMaterial3D_41vu6")
+radius = 0.024
+height = 0.048
+radial_segments = 24
+rings = 16
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qeja0"]
+albedo_color = Color(0.05, 0.18, 0.55, 1)
+roughness = 0.25
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_6wqfp"]
+material = SubResource("StandardMaterial3D_qeja0")
+top_radius = 0.011
+bottom_radius = 0.011
+height = 0.004
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6qrb0"]
+albedo_color = Color(0.02, 0.02, 0.02, 1)
+roughness = 0.15
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_2ye5r"]
+material = SubResource("StandardMaterial3D_6qrb0")
+top_radius = 0.0055
+bottom_radius = 0.0055
+height = 0.0045
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_53b1k"]
+cull_mode = 2
+albedo_color = Color(0.68, 0.47, 0.38, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ecgk8"]
+cull_mode = 2
+albedo_color = Color(0.68, 0.47, 0.38, 1)
+roughness = 0.85
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_2e3bf"]
+_blend_shape_names = PackedStringArray("eyeBlinkLeft", "eyeBlinkRight", "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft", "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight", "eyeLookDownLeft", "eyeLookDownRight")
+_surfaces = [{
+"aabb": AABB(-0.07784574, -0.057947434, -0.0876422, 0.07921791, 0.119284466, 0.0906522),
+"blend_shapes": PackedByteArray("AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAEpabb2mm0Q7AAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACA"),
+"format": 34359742471,
+"index_count": 36,
+"index_data": PackedByteArray("AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA"),
+"material": SubResource("StandardMaterial3D_53b1k"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 24,
+"vertex_data": PackedByteArray("YNqzOlOzOT3BfbO9YNqzOlOzOT3egyy9YNqzOos8ez3egyy9YNqzOos8ez3BfbO9lm2fvVOzOT3BfbO9lm2fvVOzOT3egyy9lm2fvYs8ez3egyy9lm2fvYs8ez3BfbO9lm2fvYs8ez3BfbO9YNqzOos8ez3BfbO9YNqzOos8ez3egyy9lm2fvYs8ez3egyy9lm2fvVOzOT3BfbO9YNqzOlOzOT3BfbO9YNqzOlOzOT3egyy9lm2fvVOzOT3egyy9lm2fvVOzOT3egyy9YNqzOlOzOT3egyy9YNqzOos8ez3egyy9lm2fvYs8ez3egyy9lm2fvVOzOT3BfbO9YNqzOlOzOT3BfbO9YNqzOos8ez3BfbO9lm2fvYs8ez3BfbO9////f/9//7////9//3//v////3//f/+/////f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//38AAAAA/7//fwAAAAD/v/9/AAAAAP+//38AAAAA/7//f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+}, {
+"aabb": AABB(0, -0.054160003, -0.08106782, 0.06456937, 0.11450644, 0.08407782),
+"blend_shapes": PackedByteArray("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAOHWXb2mm0Q7AAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACA"),
+"format": 34359742471,
+"index_count": 36,
+"index_data": PackedByteArray("AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA"),
+"material": SubResource("StandardMaterial3D_ecgk8"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 24,
+"vertex_data": PackedByteArray("8jyEPZukNT3jBqa98jyEPZukNT3oNyC98jyEPdMtdz3oNyC98jyEPdMtdz3jBqa9DNxhPJukNT3jBqa9DNxhPJukNT3oNyC9DNxhPNMtdz3oNyC9DNxhPNMtdz3jBqa9DNxhPNMtdz3jBqa98jyEPdMtdz3jBqa98jyEPdMtdz3oNyC9DNxhPNMtdz3oNyC9DNxhPJukNT3jBqa98jyEPZukNT3jBqa98jyEPZukNT3oNyC9DNxhPJukNT3oNyC9DNxhPJukNT3oNyC98jyEPZukNT3oNyC98jyEPdMtdz3oNyC9DNxhPNMtdz3oNyC9DNxhPJukNT3jBqa98jyEPZukNT3jBqa98jyEPdMtdz3jBqa9DNxhPNMtdz3jBqa9////f/9//7////9//3//v////3//f/+/////f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//38AAAAA/7//fwAAAAD/v/9/AAAAAP+//38AAAAA/7//f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+}]
+
+[sub_resource type="Animation" id="Animation_l2d2i"]
+length = 0.3
+tracks/0/type = "blend_shape"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("GeneralSkeleton/Female_body:eyeBlinkLeft")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0, 0.15, 1, 1, 0.3, 1, 0)
+tracks/1/type = "blend_shape"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("GeneralSkeleton/Female_body:eyeBlinkRight")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0, 0.15, 1, 1, 0.3, 1, 0)
+
+[sub_resource type="Animation" id="Animation_ecc1u"]
+tracks/0/type = "blend_shape"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("GeneralSkeleton/Female_body:eyeLookInLeft")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0)
+tracks/1/type = "blend_shape"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("GeneralSkeleton/Female_body:eyeLookInRight")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0)
+tracks/2/type = "blend_shape"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("GeneralSkeleton/Female_body:eyeLookOutLeft")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = PackedFloat32Array(0, 1, 0)
+tracks/3/type = "blend_shape"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("GeneralSkeleton/Female_body:eyeLookOutRight")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = PackedFloat32Array(0, 1, 0)
+
+[sub_resource type="Animation" id="Animation_swt2h"]
+tracks/0/type = "blend_shape"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("GeneralSkeleton/Female_body:eyeLookUpLeft")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0)
+tracks/1/type = "blend_shape"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("GeneralSkeleton/Female_body:eyeLookUpRight")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0)
+tracks/2/type = "blend_shape"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("GeneralSkeleton/Female_body:eyeLookDownLeft")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = PackedFloat32Array(0, 1, 0)
+tracks/3/type = "blend_shape"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("GeneralSkeleton/Female_body:eyeLookDownRight")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = PackedFloat32Array(0, 1, 0)
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_48sed"]
+_data = {
+&"Eyes Blink": SubResource("Animation_l2d2i"),
+&"Eyes Right Left": SubResource("Animation_ecc1u"),
+&"Eyes Up Down": SubResource("Animation_swt2h")
+}
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_60ag3"]
+animation = &"eyes/Eyes Blink"
+
+[sub_resource type="AnimationNodeOneShot" id="AnimationNodeOneShot_pph0l"]
+
+[sub_resource type="AnimationNodeTimeScale" id="AnimationNodeTimeScale_hp7j8"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_scmno"]
+animation = &"eyes/Eyes Right Left"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_chbuh"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Female_body:eyeLookDownLeft", "GeneralSkeleton/Female_body:eyeLookDownRight", "GeneralSkeleton/Female_body:eyeLookInLeft", "GeneralSkeleton/Female_body:eyeLookInRight", "GeneralSkeleton/Female_body:eyeLookOutLeft", "GeneralSkeleton/Female_body:eyeLookOutRight", "GeneralSkeleton/Female_body:eyeLookUpLeft", "GeneralSkeleton/Female_body:eyeLookUpRight"]
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_37bfm"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_p61j5"]
+animation = &"eyes/Eyes Right Left"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_ujyg2"]
+animation = &"eyes/Eyes Up Down"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_i4jru"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Female_body:eyeLookDownLeft", "GeneralSkeleton/Female_body:eyeLookDownRight", "GeneralSkeleton/Female_body:eyeLookInLeft", "GeneralSkeleton/Female_body:eyeLookInRight", "GeneralSkeleton/Female_body:eyeLookOutLeft", "GeneralSkeleton/Female_body:eyeLookOutRight", "GeneralSkeleton/Female_body:eyeLookUpLeft", "GeneralSkeleton/Female_body:eyeLookUpRight"]
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_nggpc"]
+
+[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_hl6pt"]
+nodes/EyesBlinkAnimation/node = SubResource("AnimationNodeAnimation_60ag3")
+nodes/EyesBlinkAnimation/position = Vector2(0, 0)
+nodes/EyesBlinkTimeScale/node = SubResource("AnimationNodeTimeScale_hp7j8")
+nodes/EyesBlinkTimeScale/position = Vector2(200, 0)
+nodes/EyesBlinkOneShot/node = SubResource("AnimationNodeOneShot_pph0l")
+nodes/EyesBlinkOneShot/position = Vector2(400, 0)
+nodes/EyesHorizontalLookAnimation/node = SubResource("AnimationNodeAnimation_scmno")
+nodes/EyesHorizontalLookAnimation/position = Vector2(0, 200)
+nodes/EyesHorizontalLookSeek/node = SubResource("AnimationNodeTimeSeek_37bfm")
+nodes/EyesHorizontalLookSeek/position = Vector2(200, 200)
+nodes/EyesHorizontalLookBlend/node = SubResource("AnimationNodeBlend2_chbuh")
+nodes/EyesHorizontalLookBlend/position = Vector2(600, 100)
+nodes/EyesLookBaseAnimation/node = SubResource("AnimationNodeAnimation_p61j5")
+nodes/EyesLookBaseAnimation/position = Vector2(600, 320)
+nodes/EyesVerticalLookAnimation/node = SubResource("AnimationNodeAnimation_ujyg2")
+nodes/EyesVerticalLookAnimation/position = Vector2(0, 400)
+nodes/EyesVerticalLookSeek/node = SubResource("AnimationNodeTimeSeek_nggpc")
+nodes/EyesVerticalLookSeek/position = Vector2(200, 400)
+nodes/EyesVerticalLookBlend/node = SubResource("AnimationNodeBlend2_i4jru")
+nodes/EyesVerticalLookBlend/position = Vector2(800, 200)
+node_connections = [&"output", 0, &"EyesBlinkOneShot", &"EyesBlinkTimeScale", 0, &"EyesBlinkAnimation", &"EyesBlinkOneShot", 0, &"EyesVerticalLookBlend", &"EyesBlinkOneShot", 1, &"EyesBlinkTimeScale", &"EyesHorizontalLookSeek", 0, &"EyesHorizontalLookAnimation", &"EyesHorizontalLookBlend", 0, &"EyesLookBaseAnimation", &"EyesHorizontalLookBlend", 1, &"EyesHorizontalLookSeek", &"EyesVerticalLookSeek", 0, &"EyesVerticalLookAnimation", &"EyesVerticalLookBlend", 0, &"EyesHorizontalLookBlend", &"EyesVerticalLookBlend", 1, &"EyesVerticalLookSeek"]
+
+[node name="" unique_id=406188165 instance=ExtResource("1_uou4d")]
+
+[node name="Female" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=1792987446]
+visible = false
+
+[node name="EyesTransformRig" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="1" unique_id=1667585525]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0.02)
+
+[node name="Head" type="Node3D" parent="Subject/EyesTransformRig" index="0" unique_id=194310341]
+
+[node name="Skull" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head" index="0" unique_id=1042748301]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0.01)
+mesh = SubResource("BoxMesh_ryfuf")
+
+[node name="LeftEyeSocket" type="Node3D" parent="Subject/EyesTransformRig/Head" index="1" unique_id=1682665203]
+transform = Transform3D(1.098637, -0.2807442, 0, 0.33984825, 0.90756965, 0, 0, 0, 1.05, -0.033, 0.022, -0.055)
+
+[node name="LeftEye" type="Node3D" parent="Subject/EyesTransformRig/Head/LeftEyeSocket" index="0" unique_id=247091106]
+transform = Transform3D(1.2388622, -0.062133282, 0.11336286, 0.06227415, 1.0453337, 0.07591895, -0.15440993, -0.07692061, 0.9401517, -0.004, 0.003, 0.002)
+
+[node name="Eyeball" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head/LeftEyeSocket/LeftEye" index="0" unique_id=120838345]
+mesh = SubResource("SphereMesh_ehh6i")
+
+[node name="Iris" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head/LeftEyeSocket/LeftEye" index="1" unique_id=1787331700]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.0225)
+mesh = SubResource("CylinderMesh_4hfp3")
+
+[node name="Pupil" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head/LeftEyeSocket/LeftEye" index="2" unique_id=169388374]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.0245)
+mesh = SubResource("CylinderMesh_d46et")
+
+[node name="RightEyeSocket" type="Node3D" parent="Subject/EyesTransformRig/Head" index="2" unique_id=1922625976]
+transform = Transform3D(0.9887711, -0.03261183, 0.1458363, 0, 0.97589743, 0.21822962, -0.14943814, -0.21577914, 0.9649392, 0.036, 0.026, -0.05)
+
+[node name="RightEye" type="Node3D" parent="Subject/EyesTransformRig/Head/RightEyeSocket" index="0" unique_id=629402313]
+transform = Transform3D(0.91050076, 0.032730393, -0.1277383, -0.045751125, 0.91425985, -0.09184675, 0.123673715, 0.09725077, 0.9064476, 0.003, -0.002, 0.001)
+
+[node name="Eyeball" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head/RightEyeSocket/RightEye" index="0" unique_id=799666853]
+mesh = SubResource("SphereMesh_s2l7f")
+
+[node name="Iris" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head/RightEyeSocket/RightEye" index="1" unique_id=1865553172]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.0225)
+mesh = SubResource("CylinderMesh_6wqfp")
+
+[node name="Pupil" type="MeshInstance3D" parent="Subject/EyesTransformRig/Head/RightEyeSocket/RightEye" index="2" unique_id=279496826]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.0245)
+mesh = SubResource("CylinderMesh_2ye5r")
+
+[node name="EyeOrigin" type="Node3D" parent="Subject/EyesTransformRig/Head" index="3" unique_id=794489973]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.024, -0.06)
+
+[node name="GeneralSkeleton" type="Node3D" parent="Subject/EyesTransformRig" index="1" unique_id=1805802487]
+
+[node name="Female_body" type="MeshInstance3D" parent="Subject/EyesTransformRig/GeneralSkeleton" index="0" unique_id=1986178020]
+mesh = SubResource("ArrayMesh_2e3bf")
+blend_shapes/eyeBlinkLeft = 0.0
+blend_shapes/eyeBlinkRight = 0.0
+blend_shapes/eyeLookInLeft = 0.0
+blend_shapes/eyeLookInRight = 0.0
+blend_shapes/eyeLookOutLeft = 0.0
+blend_shapes/eyeLookOutRight = 0.0
+blend_shapes/eyeLookUpLeft = 0.0
+blend_shapes/eyeLookUpRight = 0.0
+blend_shapes/eyeLookDownLeft = 0.0
+blend_shapes/eyeLookDownRight = 0.0
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Subject/EyesTransformRig" index="2" unique_id=2078801355]
+libraries/eyes = SubResource("AnimationLibrary_48sed")
+
+[node name="AnimationTree" type="AnimationTree" parent="Subject/EyesTransformRig" index="3" unique_id=656678625]
+tree_root = SubResource("AnimationNodeBlendTree_hl6pt")
+anim_player = NodePath("../AnimationPlayer")
+parameters/EyesBlinkTimeScale/scale = 1.0
+parameters/EyesBlinkOneShot/active = false
+parameters/EyesBlinkOneShot/internal_active = false
+parameters/EyesBlinkOneShot/request = 0
+parameters/EyesHorizontalLookSeek/seek_request = 0.5
+parameters/EyesHorizontalLookBlend/blend_amount = 1.0
+parameters/EyesVerticalLookSeek/seek_request = 0.5
+parameters/EyesVerticalLookBlend/blend_amount = 1.0
+
+[node name="GazeTarget" type="Node3D" parent="Subject/EyesTransformRig" index="4" unique_id=58492867]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -0.06)
+script = ExtResource("2_jb614")
+metadata/_custom_type_script = 39335408628192026
+
+[node name="Eyes" type="Node" parent="Subject/EyesTransformRig" index="5" unique_id=220634962 node_paths=PackedStringArray("AnimationTree", "EyeOrigin", "LeftEye", "RightEye")]
+script = ExtResource("3_vqi88")
+AnimationTree = NodePath("../AnimationTree")
+EyeOrigin = NodePath("../Head/EyeOrigin")
+LeftEye = NodePath("../Head/LeftEyeSocket/LeftEye")
+RightEye = NodePath("../Head/RightEyeSocket/RightEye")
+SaccadeInterval = 0.0
+SaccadeAmplitude = 0.0
+MaxHorizontalAngleDegrees = 35.0
+MaxVerticalAngleDegrees = 25.0
+LookSmoothingTime = 0.12
+MinimumBlinkInterval = 99.0
+MaximumBlinkInterval = 99.0
+BlinkDuration = 0.5
+metadata/_custom_type_script = 5500281226496115871
+
+[node name="CameraRig" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527]
+image_size = Vector2(768, 768)
+
+[node name="TargetNeutral" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=1247060835 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 1.524, -0.74)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "N"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="TargetLeft" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=1699464559 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, -0.29583278, 1.524, -0.67441547)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "L"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="TargetRight" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="2" unique_id=2075810167 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0.29583278, 1.524, -0.67441547)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "R"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="TargetUp" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="3" unique_id=686909295 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 1.7634141, -0.69778484)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "U"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="TargetDown" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="4" unique_id=2069905750 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 1.284586, -0.69778484)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "D"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="TargetDiagonal" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="5" unique_id=555460199 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, -0.2331018, 1.6836802, -0.680442)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "X"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="TargetBeyondLimit" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="6" unique_id=611558908 instance=ExtResource("4_wcnje")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0.5299543, 1.9782466, -0.09299543)
+visible = false
+script = ExtResource("5_0cn38")
+label_text = "B"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
