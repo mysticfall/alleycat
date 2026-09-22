@@ -91,6 +91,23 @@ When writing tests for skeleton-local calculations, use a rig with the actual or
 - When doing IK or pose math, always verify whether you're working in world, rig-container, or skeleton-local space.
 - AnimationPlayer/AnimationTree outputs are sampled into skeleton-local bone transforms — any custom IK logic must consume and produce in that same space.
 
+#### Animation Position Tracks and Motion Scale
+
+Raw `Animation` resource position keys are not necessarily engine-evaluated bone positions.
+[`Skeleton3D.MotionScale`][motion-scale] multiplies 3D position-track animation values; when it differs from `1.0`,
+raw keys and evaluated positions can differ even when coordinate frames are correct.
+
+- When reconstructing a pose from raw keys, inspect the actual track targets and animation evaluation path. Account for
+  `MotionScale` once at the relevant position-track evaluation boundary, before composing the resulting bone transforms.
+- Do not apply it again to an already engine-evaluated pose, or use it as a blanket multiplier for bone origins, rest
+  offsets or world transforms. A correction established for an animated Hips track does not establish the treatment
+  of every track, root-motion API output or accumulator; verify those paths separately.
+- Before attributing a resource-sampler discrepancy to IK or root motion, compare against native Godot evaluation
+  using the same rig, animation state and sample time, in the same coordinate frame and at the same pose-processing
+  stage. Check the affected position tracks and `MotionScale` first.
+
+[motion-scale]: https://docs.godotengine.org/en/stable/classes/class_skeleton3d.html#class-skeleton3d-property-motion-scale
+
 #### Raycasting and Collision
 
 - `PhysicsDirectSpaceState3D.IntersectRay()` returns collision points in **world space**.

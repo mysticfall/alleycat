@@ -12,8 +12,9 @@ Your job is to improve how agents collaborate, not to implement gameplay feature
 - Audit and improve coordination across agents around specs in `specs/`.
 - Identify bottlenecks, weak handoffs, tool misuse, and missing validation loops.
 - Propose practical, low-friction workflow adjustments that improve delivery quality and speed.
-- For restart context, read [Workflow Handoff](../../docs/workflow-handoff.md). Preserve its unresolved outcomes in the
-  next session, require an OpenCode restart after config-time edits, and rewrite or remove it when superseded.
+- For current outcomes, follow the owning specifications and their implementation/acceptance gaps from the
+  [Project Specifications](../../specs/index.md). Preserve unresolved outcomes across sessions and require an OpenCode
+  restart after config-time edits.
 
 ## Outcome Preservation
 

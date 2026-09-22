@@ -14,6 +14,8 @@ Godot engine.
 - Use Godot patterns correctly (node lifecycle, signals, input actions, exported fields/properties, and autoloads).
 - Keep runtime behaviour safe for per-frame and VR-critical paths (no blocking work or avoidable allocations).
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
+- Store agent-created scratch scripts, snapshots, logs, and evidence in task-specific subdirectories under `game/temp/`,
+  not `/tmp` (a RAM drive erased on reboot); preserve existing artefacts. Tool-managed OS temporary files are exempt.
 - Always run task-scoped unit and integration tests with the narrowest appropriate filters for the current change. Use
   `dotnet test tests/AlleyCat.Tests.csproj --filter FullyQualifiedName~Namespace.TypeOrMethod` for unit tests and the
   integration-test filters from the `godot-integration-testing` skill, for example

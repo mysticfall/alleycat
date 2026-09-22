@@ -54,13 +54,35 @@ Rules:
 
 Subagents do **not** automatically have your full context.
 
-For each delegation, explicitly provide:
+For each delegation, use a self-contained Markdown brief with clearly labelled sections or bullets:
 
-- objective and expected deliverable,
-- relevant requirement/spec references,
-- constraints/acceptance criteria,
-- known assumptions and risks,
-- verification expectations.
+- **Objective and Motivation:** The requested outcome and why it matters.
+- **Current State:** Relevant progress, known risks, and evidence; distinguish confirmed facts, hypotheses, and intended
+  behaviour.
+- **Approved Action and Limits:** What the user authorised, the permitted scope, and what must not change.
+- **References:** Exact specification sections and evidence paths, each with its purpose. Keep enough context inline to
+  start; link detailed contracts rather than dumping history or substituting a bare file list for the task.
+- **Bounded Task:** One coherent outcome, the next evidence-producing action, and a decision or stopping condition.
+- **Acceptance and Deliverable:** Required checks, evidence, and expected report or artefact, including unresolved
+  issues.
+
+Resolve antecedents: restate the action authorised by a short reply such as “Let's try that”; the quote alone is not
+approval context. Resumed tasks also need the current objective, scope, relevant decisions, and state changes. Do not
+rely on session memory or say only “resume previous work”. If the authorised action is unclear, ask before delegating.
+
+Before sending, read the brief as a fresh subagent without the parent conversation: can it identify what to do, why,
+what is approved, where to start, and when to stop? Check readable Markdown, normal prose and spacing, accessible
+references, and defined essential terms or shorthand. Label identifiers, counts, and hashes separately rather than
+running words and values together.
+
+Generic handoff example (illustrative references):
+
+- **Bad:** “Let's try that. Resume cache fix; see the spec and log.”
+- **Good:** “The user approved investigating stale cache reads, not changing cache behaviour yet. Confirmed: one stale
+  read was reported; the cause is unknown. Read `specs/cache.md`, ‘Read Consistency’, for intended behaviour and
+  `evidence/cache.log` for the reported sequence. Reproduce that sequence and report the observation against the spec.
+  Stop after this check; return the evidence and a proposed next step, or the blocker if reproduction is unavailable.
+  Do not implement a fix in this task.”
 
 Before the first production-fix delegation for a reproducible bug, establish the original reported symptom,
 representative scenario, complete user-visible observation window, independently justified criterion and bounds, and a
@@ -80,7 +102,11 @@ Split work into small, outcome-oriented units that:
 - can be validated independently,
 - minimise cross-task coupling.
 
-Avoid oversized subtasks that combine unrelated concerns.
+Assign one coherent outcome with a concrete next evidence-producing action and a bounded decision or stopping condition.
+When uncertainty prevents a bounded implementation brief, separate a focused investigation from implementation and
+integration; require findings and a decision recommendation rather than open-ended deliberation. Stop and escalate when
+the decision needs new user approval. Do not weaken parent acceptance or invent prerequisite projects to make the task
+appear bounded. Avoid oversized subtasks that combine unrelated concerns.
 
 ### 4.5) Subagent Response Handling (Mandatory)
 
@@ -125,7 +151,7 @@ from current implementation/fixture restrictions and trace any threshold to its 
 
 4. **Empty/No-Result Handling:** If a delegated task returns an empty payload, placeholder text, or no actionable
    evidence, classify as `follow-up` handoff failure immediately. Post a short recovery update, retry once with
-   tightened scope, then `escalated` if still empty.
+   tightened scope, then `escalated` if still empty. User-directed interruptions follow the recovery exception below.
 
 ### 4.6) Visual Evidence Acceptance Gate (Mandatory for Visual Specs)
 
@@ -220,11 +246,16 @@ The planner must keep implementation and specification in sync whenever either s
 
 ### Delegation Abort/Timeout Recovery
 
-If a delegated run aborts, times out, or returns no usable result:
+User-directed interruption or cancellation is not an automatic retry trigger. Honour the user's changed instructions
+and keep cancelled work paused. Before any later authorised resumption, inspect partial work and evidence, then provide
+an updated self-contained brief under §3; do not assume the interrupted run made no changes.
+
+For other delegated runs that abort, time out, or return no usable result:
 
 1. Record it as a handoff failure (`follow-up` on first occurrence).
 2. Immediately post a brief recovery update to the user (what failed, what you will retry/change).
-3. Retry once with tighter scope or resumed task context.
+3. Inspect partial work, then retry once with a tighter self-contained brief, a concrete evidence-producing next action,
+   and a stopping condition under §§3–4.
 4. If it fails again, classify as `escalated` and request user direction.
 
 Do not wait for the user to notice stalled delegation before reporting recovery action.
