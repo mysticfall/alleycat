@@ -1,0 +1,38 @@
+[gd_scene format=3 uid="uid://e35m2i3wc5q1"]
+
+[ext_resource type="Texture2D" uid="uid://c8dy8tu0bb6ul" path="res://assets/characters/eyes/realistic_eye_eye_iris_diff.png" id="1_g3w8f"]
+[ext_resource type="ArrayMesh" uid="uid://7o0j30ybbhif" path="res://assets/characters/eyes/eye.res" id="1_uqmbu"]
+[ext_resource type="Shader" uid="uid://2k5w43ebmdbe" path="res://addons/HumanShaders/eye_shader.gdshader" id="2_uqmbu"]
+[ext_resource type="Texture2D" uid="uid://bcfgtc350v4n6" path="res://addons/HumanShaders/Resources/Eye/eye_iris_nrm.png" id="3_pnf8q"]
+[ext_resource type="Texture2D" uid="uid://bye2oqplgx3f7" path="res://addons/HumanShaders/Resources/Eye/eye_sclera_diff.png" id="4_ivrdq"]
+[ext_resource type="Texture2D" uid="uid://cfttb0ix0yoes" path="res://addons/HumanShaders/Resources/Eye/eye_sclera_nrm.png" id="5_dmh5r"]
+[ext_resource type="Texture2D" uid="uid://0gyhyfjxoap5" path="res://addons/HumanShaders/Resources/Eye/eye_iris_parallax.png" id="6_at6qm"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6c5hr"]
+render_priority = 0
+shader = ExtResource("2_uqmbu")
+shader_parameter/sclera_albedo = Color(1, 1, 1, 1)
+shader_parameter/iris_albedo = Color(1, 1, 1, 1)
+shader_parameter/sclera_albedo_texture = ExtResource("4_ivrdq")
+shader_parameter/iris_albedo_texture = ExtResource("1_g3w8f")
+shader_parameter/height_enabled = true
+shader_parameter/sclera_normal_texture = ExtResource("5_dmh5r")
+shader_parameter/iris_normal_texture = ExtResource("3_pnf8q")
+shader_parameter/normal_strength = 1.0
+shader_parameter/iris_scale = 3.5
+shader_parameter/roughness = 0.1
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/use_heightmap = true
+shader_parameter/texture_heightmap = ExtResource("6_at6qm")
+shader_parameter/heightmap_scale = 32.0
+shader_parameter/heightmap_flip = Vector2(1, 1)
+shader_parameter/subsurface_scattering = false
+shader_parameter/use_noise = false
+shader_parameter/subsurface_scattering_strength = 0.4
+shader_parameter/uv1_scale = Vector3(1, 1, 1)
+shader_parameter/uv1_offset = Vector3(0, 0, 0)
+
+[node name="Eye" type="MeshInstance3D" unique_id=1947916395]
+mesh = ExtResource("1_uqmbu")
+surface_material_override/0 = SubResource("ShaderMaterial_6c5hr")

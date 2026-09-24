@@ -1,8 +1,10 @@
 [gd_scene format=3 uid="uid://baxl54fq0rpj3"]
 
 [ext_resource type="PackedScene" uid="uid://bsfkxbo34s5ch" path="res://assets/characters/reference/male/reference_male.blend" id="1_5molt"]
+[ext_resource type="PackedScene" uid="uid://e35m2i3wc5q1" path="res://assets/characters/eyes/eye.tscn" id="2_2vgb1"]
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="2_btvlx"]
 [ext_resource type="Resource" uid="uid://bqt323cv54sr3" path="res://assets/characters/reference/male/body_collider_profile.tres" id="3_sypgb"]
+[ext_resource type="Material" uid="uid://dd8apgq2pxle8" path="res://assets/characters/eyes/materials/eye_blue.tres" id="3_y0aai"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_2m28j"]
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/templates/ik/arm_ik_target_set.tres" id="5_xp4vs"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="6_2lsar"]
@@ -53,7 +55,18 @@ bone_idx = 44
 unique_name_in_owner = true
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
 
-[node name="BodyVisualCue" type="Node3D" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1094214123]
+[node name="Eyes" type="Node3D" parent="Male/GeneralSkeleton/Head" index="1" unique_id=923790350]
+transform = Transform3D(0.9999999, 1.1197691e-08, -7.9220605e-08, -9.709778e-09, 1.0000001, -2.0861626e-07, 8.606003e-08, 2.2351745e-07, 1, -0.00013457201, 0.0047768354, 0.012184938)
+
+[node name="RightEye" parent="Male/GeneralSkeleton/Head/Eyes" index="0" unique_id=936203780 instance=ExtResource("2_2vgb1")]
+transform = Transform3D(0.99813515, 0, -0.06104854, 0, 0.99999964, 0, 0.061048564, 0, 0.9981348, -0.03, 0.033, 0.069)
+surface_material_override/0 = ExtResource("3_y0aai")
+
+[node name="LeftEye" parent="Male/GeneralSkeleton/Head/Eyes" index="1" unique_id=1812947711 instance=ExtResource("2_2vgb1")]
+transform = Transform3D(0.99813473, 0, 0.06104855, 0, 1, 0, -0.061048537, 0, 0.9981349, 0.029862586, 0.03287351, 0.069146395)
+surface_material_override/0 = ExtResource("3_y0aai")
+
+[node name="BodyVisualCue" type="Node3D" parent="Male/GeneralSkeleton/Head" index="2" unique_id=1094214123]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
 script = ExtResource("13_e6bn2")
 Description = "A character."
@@ -390,10 +403,12 @@ motion_mode = 1
 root_node = NodePath("../Male")
 tree_root = ExtResource("19_4r77l")
 
-[node name="Eyes" type="Node" parent="." index="4" unique_id=1588776453 node_paths=PackedStringArray("AnimationTree", "EyeOrigin")]
+[node name="Eyes" type="Node" parent="." index="4" unique_id=1588776453 node_paths=PackedStringArray("AnimationTree", "EyeOrigin", "LeftEye", "RightEye")]
 script = ExtResource("11_2lsar")
 AnimationTree = NodePath("../AnimationTree")
 EyeOrigin = NodePath("../Male/GeneralSkeleton/Head/Viewpoint")
+LeftEye = NodePath("../Male/GeneralSkeleton/Head/Eyes/LeftEye")
+RightEye = NodePath("../Male/GeneralSkeleton/Head/Eyes/RightEye")
 MaxHorizontalAngleDegrees = 35.0
 MaxVerticalAngleDegrees = 25.0
 LookSmoothingTime = 0.08

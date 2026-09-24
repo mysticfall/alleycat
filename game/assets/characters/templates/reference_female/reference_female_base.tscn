@@ -1,9 +1,11 @@
 [gd_scene format=3 uid="uid://c7xlydturc3b0"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
+[ext_resource type="PackedScene" uid="uid://e35m2i3wc5q1" path="res://assets/characters/eyes/eye.tscn" id="2_8lkn1"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Rigging/Physics/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/templates/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
 [ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Vision/StaticVisualCue.cs" id="3_oqvej"]
+[ext_resource type="Material" uid="uid://ofx12dc08l30" path="res://assets/characters/eyes/materials/eye_brown.tres" id="3_wibk3"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]
 [ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Vision/SphereVisualBounds.cs" id="4_8lkn1"]
@@ -44,7 +46,18 @@ bone_idx = 46
 unique_name_in_owner = true
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
 
-[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head" index="1" unique_id=1755026393]
+[node name="Eyes" type="Node3D" parent="Female/GeneralSkeleton/Head" index="1" unique_id=315872910]
+transform = Transform3D(1, 1.688899e-17, 7.1054274e-15, -8.1761126e-17, 0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0)
+
+[node name="RightEye" parent="Female/GeneralSkeleton/Head/Eyes" index="0" unique_id=936203780 instance=ExtResource("2_8lkn1")]
+transform = Transform3D(0.99813527, 1.3422084e-17, -0.061048552, 0, 1.0000001, 0, 0.06104857, -2.842171e-14, 0.998135, -0.027996054, 0.033459187, 0.07247043)
+surface_material_override/0 = ExtResource("3_wibk3")
+
+[node name="LeftEye" parent="Female/GeneralSkeleton/Head/Eyes" index="1" unique_id=671141081 instance=ExtResource("2_8lkn1")]
+transform = Transform3D(0.99813527, 1.3423778e-17, 0.06104853, 0, 1.0000002, 0, -0.06104857, -2.842171e-14, 0.9981346, 0.02754473, 0.033190966, 0.071679935)
+surface_material_override/0 = ExtResource("3_wibk3")
+
+[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head" index="2" unique_id=1755026393]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
 script = ExtResource("3_oqvej")
 Description = "A character."
@@ -363,10 +376,12 @@ root_node = NodePath("../Female")
 [node name="AnimationPlayer" parent="." index="3" unique_id=2087271274]
 libraries/locomotion = ExtResource("13_locomotion")
 
-[node name="Eyes" type="Node" parent="." index="5" unique_id=1199535973 node_paths=PackedStringArray("AnimationTree", "EyeOrigin")]
+[node name="Eyes" type="Node" parent="." index="5" unique_id=1199535973 node_paths=PackedStringArray("AnimationTree", "EyeOrigin", "LeftEye", "RightEye")]
 script = ExtResource("10_eyesbehaviour")
 AnimationTree = NodePath("../AnimationTree")
 EyeOrigin = NodePath("../Female/GeneralSkeleton/Head/Viewpoint")
+LeftEye = NodePath("../Female/GeneralSkeleton/Head/Eyes/LeftEye")
+RightEye = NodePath("../Female/GeneralSkeleton/Head/Eyes/RightEye")
 MaxHorizontalAngleDegrees = 35.0
 MaxVerticalAngleDegrees = 25.0
 LookSmoothingTime = 0.08

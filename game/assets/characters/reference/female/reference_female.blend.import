@@ -32943,6 +32943,9 @@ _subresources={
 "retarget/bone_map": Resource("uid://db42k2j8v05ku", "res://assets/characters/reference/skeleton_profiles/bone_map_makehuman.tres"),
 "retarget/rest_fixer/fix_silhouette/enable": true,
 "retarget/rest_fixer/fix_silhouette/filter": [&"Head", &"Neck", &"UpperChest", &"Chest", &"Spine", &"Hips", &"RightThumbMetacarpal", &"RightThumbProximal", &"RightThumbDistal", &"RightIndexProximal", &"RightIndexIntermediate", &"RightIndexDistal", &"RightMiddleProximal", &"RightMiddleIntermediate", &"RightMiddleDistal", &"RightRingProximal", &"RightRingIntermediate", &"RightRingDistal", &"RightLittleProximal", &"RightLittleIntermediate", &"RightLittleDistal", &"LeftThumbMetacarpal", &"LeftThumbProximal", &"LeftThumbDistal", &"LeftIndexProximal", &"LeftIndexIntermediate", &"LeftIndexDistal", &"LeftMiddleProximal", &"LeftMiddleIntermediate", &"LeftMiddleDistal", &"LeftRingProximal", &"LeftRingIntermediate", &"LeftRingDistal", &"LeftLittleProximal", &"LeftLittleIntermediate", &"LeftLittleDistal", &"RightFoot", &"LeftFoot"]
+},
+"PATH:Female/Skeleton3D/Female_high-poly": {
+"import/skip_import": true
 }
 }
 }
