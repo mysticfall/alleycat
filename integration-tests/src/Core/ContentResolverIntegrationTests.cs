@@ -20,6 +20,7 @@ public sealed class ContentResolverIntegrationTests
             requestedPackId: "req",
             defaultPackId: "def",
             isIntegrationTest: true,
+            skipContentPack: false,
             sceneExists: _ => true,
             fallbackStartScenePath: "res://assets/scenes/empty.tscn");
 

@@ -23,6 +23,9 @@ public static class ContentPaths
     /// <summary>Command-line argument used to request a specific content pack.</summary>
     public const string CommandLineArgument = "--content-pack";
 
+    /// <summary>Command-line user argument that skips configured or requested content packs.</summary>
+    public const string SkipContentPackSwitch = "--no-content-pack";
+
     /// <summary>
     /// Returns the root resource path for an optional content pack.
     /// </summary>

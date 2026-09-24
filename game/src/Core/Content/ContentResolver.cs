@@ -40,24 +40,33 @@ public partial class ContentResolver : IContentResolver
     /// <inheritdoc />
     public string ResolveStartScenePath(string fallbackStartScenePath)
     {
-        (bool isIntegrationTest, string? requestedPackId, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
+        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
         string? defaultPackId = _defaultPackId;
 
         string resolved = SelectStartScenePath(
             requestedPackId,
             defaultPackId,
             isIntegrationTest,
+            skipContentPack,
             sceneExists,
             fallbackStartScenePath);
+
+        if (skipContentPack)
+        {
+            _logger.LogInformation(
+                "Content pack selection skipped by {Switch}; using built-in default content.",
+                ContentPaths.SkipContentPackSwitch);
+        }
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
-                "Resolved start scene {ResolvedPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
+                "Resolved start scene {ResolvedPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}, contentPackSkipped={ContentPackSkipped}).",
                 resolved,
                 requestedPackId,
                 defaultPackId,
-                isIntegrationTest);
+                isIntegrationTest,
+                skipContentPack);
         }
 
         return resolved;
@@ -81,31 +90,40 @@ public partial class ContentResolver : IContentResolver
     /// Resolves the active content context from the current runtime inputs.
     /// </summary>
     /// <remarks>
-    /// Content inputs (command-line pack request, manifest default pack, integration-test mode) are fixed for the
-    /// process lifetime, so <see cref="GetCurrentContentContext"/> caches the resolved context instead of
-    /// re-resolving it on every call. Initialisation is guarded because first access can race between the
-    /// per-frame attention loop and perception handling.
+    /// Content inputs (command-line pack request, content-pack skip switch, manifest default pack, integration-test
+    /// mode) are fixed for the process lifetime, so <see cref="GetCurrentContentContext"/> caches the resolved
+    /// context instead of re-resolving it on every call. Initialisation is guarded because first access can race
+    /// between the per-frame attention loop and perception handling.
     /// </remarks>
     private ContentContext ResolveContentContext()
     {
-        (bool isIntegrationTest, string? requestedPackId, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
+        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
         string? defaultPackId = _defaultPackId;
 
         ContentContext context = SelectCurrentContentContext(
             requestedPackId,
             defaultPackId,
             isIntegrationTest,
+            skipContentPack,
             sceneExists);
+
+        if (skipContentPack)
+        {
+            _logger.LogInformation(
+                "Content pack selection skipped by {Switch}; using built-in default content.",
+                ContentPaths.SkipContentPackSwitch);
+        }
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
-                "Resolved content context {ContentID} at {RootPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
+                "Resolved content context {ContentID} at {RootPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}, contentPackSkipped={ContentPackSkipped}).",
                 context.ContentID,
                 context.RootPath,
                 requestedPackId,
                 defaultPackId,
-                isIntegrationTest);
+                isIntegrationTest,
+                skipContentPack);
         }
 
         return context;
@@ -115,9 +133,24 @@ public partial class ContentResolver : IContentResolver
     /// Reads the process-level inputs used for content resolution. Internal virtual seam so Godot-free unit
     /// coverage can substitute the runtime reads and count resolution attempts.
     /// </summary>
-    /// <returns>Integration-test flag, optional requested pack identifier, and start-scene existence probe.</returns>
-    internal virtual (bool IsIntegrationTest, string? RequestedPackId, Func<string, bool> SceneExists) ReadRuntimeContentInputs()
-        => (RuntimeContext.IsIntegrationTest(), ReadRequestedPackId(), static path => ResourceLoader.Exists(path));
+    /// <returns>
+    /// Integration-test flag, optional requested pack identifier, content-pack skip flag, and start-scene
+    /// existence probe.
+    /// </returns>
+    internal virtual (bool IsIntegrationTest, string? RequestedPackId, bool SkipContentPack, Func<string, bool> SceneExists) ReadRuntimeContentInputs()
+        => (RuntimeContext.IsIntegrationTest(), ReadRequestedPackId(), ContainsSkipContentPackSwitch(OS.GetCmdlineUserArgs()), static path => ResourceLoader.Exists(path));
+
+    /// <summary>
+    /// Determines whether the supplied command-line user arguments contain the content-pack skip switch.
+    /// </summary>
+    /// <remarks>
+    /// Pure and free of Godot APIs so switch matching stays unit-testable without a Godot runtime.
+    /// </remarks>
+    public static bool ContainsSkipContentPackSwitch(IReadOnlyList<string> userArgs)
+    {
+        ArgumentNullException.ThrowIfNull(userArgs);
+        return userArgs.Contains(ContentPaths.SkipContentPackSwitch, StringComparer.Ordinal);
+    }
 
     /// <summary>
     /// Pure, Godot-free selection logic used to pick the start scene path.
@@ -126,12 +159,13 @@ public partial class ContentResolver : IContentResolver
         string? requestedPackId,
         string? defaultPackId,
         bool isIntegrationTest,
+        bool skipContentPack,
         Func<string, bool> sceneExists,
         string fallbackStartScenePath,
         string contentRoot = ContentPaths.ContentRoot,
         string startSceneFileName = ContentPaths.StartSceneFileName)
     {
-        if (isIntegrationTest)
+        if (isIntegrationTest || skipContentPack)
         {
             return fallbackStartScenePath;
         }
@@ -163,13 +197,14 @@ public partial class ContentResolver : IContentResolver
         string? requestedPackId,
         string? defaultPackId,
         bool isIntegrationTest,
+        bool skipContentPack,
         Func<string, bool> sceneExists,
         string contentRoot = ContentPaths.ContentRoot,
         string startSceneFileName = ContentPaths.StartSceneFileName)
     {
         ArgumentNullException.ThrowIfNull(sceneExists);
 
-        if (isIntegrationTest)
+        if (isIntegrationTest || skipContentPack)
         {
             return ContentContext.Default;
         }

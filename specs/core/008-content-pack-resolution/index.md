@@ -35,6 +35,8 @@ requested pack cannot start.
    content is built in or supplied by an optional pack.
 8. Gameplay that reads the current content context every frame or per percept stays responsive without repeated
    resolution work, and opted-in debug logging reports content resolution once rather than on every read.
+9. A player or operator can bypass any configured or requested content pack via a launch switch and start with the
+   built-in default content. When no content pack is configured or requested, behaviour is unchanged.
 
 ## Technical Requirements
 
@@ -69,11 +71,24 @@ requested pack cannot start.
     paths from the generic content root.
 15. `GetCurrentContentContext` must resolve the current-content context once per resolver instance and cache it behind
     lock-guarded lazy initialisation, because its inputs are fixed for the process lifetime: the command-line pack
-    request, the manifest default pack read at construction, and the integration-test flag set before the Godot
-    process spawns. The DI singleton makes the cache process-wide during gameplay. A resolution failure must throw
-    without caching so the next call retries, and the integration-test bypass is unchanged. The resolution and
-    start-scene debug logs must be guarded with `IsEnabled(LogLevel.Debug)` per CORE-007, keeping their templated
-    messages and rendering unchanged.
+    request, the skip switch, the manifest default pack read at construction, and the integration-test flag set
+    before the Godot process spawns. The DI singleton makes the cache process-wide during gameplay. A resolution
+    failure must throw without caching so the next call retries, and the integration-test bypass is unchanged. The
+    resolution and start-scene debug logs must be guarded with `IsEnabled(LogLevel.Debug)` per CORE-007, keeping
+    their templated messages and rendering the `contentPackSkipped` field alongside the existing fields.
+16. The skip switch literal is `--no-content-pack`, defined as the constant `ContentPaths.SkipContentPackSwitch`. It
+    must be passed as a user argument after Godot's `--` separator (for example
+    `godot-mono --path game -- --no-content-pack`) and resolved from `OS.GetCmdlineUserArgs()`, matching how the
+    game's other custom user-arg switches (`--no-ai`, `--skip-splash`) are resolved. The switch must not activate
+    when passed before the `--` separator.
+17. When the skip switch is present, both start-scene resolution and current-content resolution must skip the
+    requested pack and the manifest default pack (steps 1 and 2 of the requirement 9 priority order), mirroring the
+    integration-test bypass: start-scene resolution returns the supplied fallback and current-content resolution
+    returns `ContentContext.Default` (`default` at `res://`), and no pack start scene is probed. The switch takes
+    precedence over an explicit `--content-pack` request and the manifest default pack without reporting a conflict.
+    With no pack requested or configured, resolution is unchanged.
+18. When the skip switch is active, resolution must emit one Information-level log notice that configured content
+    packs are skipped, so an operator can determine from the logs why a configured pack did not load.
 
 ## In Scope
 
@@ -84,6 +99,8 @@ requested pack cannot start.
 - `ContentResolver` resolution algorithm and its integration-test bypass via `RuntimeContext`.
 - Missing manifest handling before Godot resource loading.
 - Command-line argument handling for `--content-pack`.
+- Skip-switch contract (`--no-content-pack` as a user argument after Godot's `--` separator), bypassing requested and
+  manifest-default packs.
 - `Game` node wiring of the resolver against its `FallbackStartScene` export.
 - Once-per-instance current-content resolution caching and level-guarded resolution debug logging.
 
@@ -120,6 +137,18 @@ requested pack cannot start.
 11. Tests verify the current-content context resolves once per resolver instance and is reused on later calls, that a
     resolution failure is not cached and is retried on the next call, and that resolution debug logging is skipped when
     Debug is filtered (User Requirement 8, Technical Requirement 15).
+12. When `--no-content-pack` is passed as a user argument after the `--` separator and a manifest default pack is
+    configured, start-scene resolution returns the supplied fallback and the current-content context resolves to
+    `default` at `res://`, and no pack start scene is probed (User Requirement 9, Technical Requirements 16
+    and 17).
+13. When `--no-content-pack` is combined with an explicit `--content-pack` request, the skip switch takes precedence:
+    resolution returns the fallback start scene and the `default` content context without reporting a conflict
+    (User Requirement 9, Technical Requirement 17).
+14. When no content pack is requested or configured, `--no-content-pack` leaves resolution results unchanged (User
+    Requirement 9, Technical Requirement 17).
+15. The skip switch does not activate when passed before the `--` separator (Technical Requirement 16).
+16. Resolution emits one Information-level notice when the skip switch is active, and the Debug resolution templates
+    render the `contentPackSkipped` field (Technical Requirements 15 and 18).
 
 ## References
 

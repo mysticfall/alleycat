@@ -54,6 +54,7 @@ Custom game options are passed as user arguments after Godot's `--` separator, f
 | ------ | ----------- |
 | `-- --skip-splash` | Skips the splash screen at startup. |
 | `-- --no-ai` | Suppresses all Mind agent sessions. NPCs keep perceiving and attending, but make no LLM requests. |
+| `-- --no-content-pack` | Skips any configured or requested content pack and starts the built-in default content. |
 | `-- --integration-test-session <args>` | Runs a persistent integration test session used by the test framework. |
 | `-- --integration-probe <args>` | Integration test assembly/type discovery probe used by the test framework. |
 
