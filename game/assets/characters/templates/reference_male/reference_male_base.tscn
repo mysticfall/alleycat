@@ -389,12 +389,6 @@ motion_mode = 1
 [node name="AnimationTree" parent="." index="3" unique_id=2098590596 instance=ExtResource("9_xp4vs")]
 root_node = NodePath("../Male")
 tree_root = ExtResource("19_4r77l")
-parameters/EyesBlinkOneShot/active = false
-parameters/EyesBlinkOneShot/internal_active = false
-parameters/EyesBlinkOneShot/request = 0
-parameters/EyesVerticalLookSeek/seek_request = -1.0
-parameters/EyesHorizontalLookSeek/seek_request = -1.0
-parameters/EyesBlinkTimeScale/scale = 1.0
 
 [node name="Eyes" type="Node" parent="." index="4" unique_id=1588776453 node_paths=PackedStringArray("AnimationTree", "EyeOrigin")]
 script = ExtResource("11_2lsar")

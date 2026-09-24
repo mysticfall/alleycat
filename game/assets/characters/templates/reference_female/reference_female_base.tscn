@@ -359,12 +359,6 @@ shape = SubResource("SphereShape3D_osxwe")
 
 [node name="AnimationTree" parent="." index="4" unique_id=527893103 instance=ExtResource("8_2a5tg")]
 root_node = NodePath("../Female")
-parameters/EyesBlinkOneShot/active = false
-parameters/EyesBlinkOneShot/internal_active = false
-parameters/EyesBlinkOneShot/request = 0
-parameters/EyesVerticalLookSeek/seek_request = 0.5
-parameters/EyesHorizontalLookSeek/seek_request = 0.5
-parameters/EyesBlinkTimeScale/scale = 1.0
 
 [node name="AnimationPlayer" parent="." index="3" unique_id=2087271274]
 libraries/locomotion = ExtResource("13_locomotion")
