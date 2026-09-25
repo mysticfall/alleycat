@@ -70,9 +70,10 @@ public sealed class EyesBlendTreeIntegrationTests
         Node instance = scene.Instantiate();
         try
         {
+            // The high-poly mesh is excluded by reference_female.blend.import, so only the body and
+            // eyelash meshes are imported with eye look blend shapes.
             AssertNeutralEyeLookDown(instance.GetNode("Female/GeneralSkeleton/Female_body"));
             AssertNeutralEyeLookDown(instance.GetNode("Female/GeneralSkeleton/Female_eyelashes01"));
-            AssertNeutralEyeLookDown(instance.GetNode("Female/GeneralSkeleton/Female_high-poly"));
         }
         finally
         {
