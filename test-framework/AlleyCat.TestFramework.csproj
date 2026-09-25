@@ -16,10 +16,10 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Agents.AI" Version="1.18.0" />
-        <PackageReference Include="Microsoft.Testing.Platform" Version="2.3.3" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.22.0" />
+        <PackageReference Include="Microsoft.Testing.Platform" Version="2.4.1" PrivateAssets="all" />
         <PackageReference Include="xunit" Version="2.9.3"/>
-        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.400" />
+        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.401" />
     </ItemGroup>
 
     <ItemGroup>
