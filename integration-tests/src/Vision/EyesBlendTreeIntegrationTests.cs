@@ -461,11 +461,12 @@ public sealed class EyesBlendTreeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies reference NPC eye look overlays stay enabled for forward fallback and runtime target paths.
+    /// Verifies reference NPC eye look blends stay suppressed for the authored transform-driven gaze
+    /// backend in forward fallback and runtime target phases.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task ReferenceFemaleNpcEyesBehaviour_FallbackAndRuntimeTargetKeepLookBlendsEnabled()
+    public async Task ReferenceFemaleNpcEyesBehaviour_FallbackAndRuntimeTargetSuppressLookBlendsForTransformGaze()
     {
         SceneTree sceneTree = GetSceneTree();
         PackedScene scene = LoadPackedScene(ReferenceNpcScenePath);
@@ -501,8 +502,12 @@ public sealed class EyesBlendTreeIntegrationTests
             await WaitForFramesAsync(sceneTree, 6);
 
             Assert.False(eyes.Call("HasRuntimeLookTarget").AsBool());
-            Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
-            Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
+            // The template authors realistic eye nodes, so the transform-gaze backend owns eye rotation
+            // and the blendshape look overlays stay suppressed; blink output is unaffected.
+            Assert.NotNull(eyes.Get("LeftEye").AsGodotObject());
+            Assert.NotNull(eyes.Get("RightEye").AsGodotObject());
+            Assert.Equal(0f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
+            Assert.Equal(0f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
 
             lookTarget.GlobalPosition = eyeOrigin.GlobalTransform * new Vector3(10f, 10f, -10f);
             eyes.Set("LookTarget", lookTarget);
@@ -510,8 +515,8 @@ public sealed class EyesBlendTreeIntegrationTests
             await WaitForFramesAsync(sceneTree, 6);
 
             Assert.True(eyes.Call("HasRuntimeLookTarget").AsBool());
-            Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
-            Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
+            Assert.Equal(0f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
+            Assert.Equal(0f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
         }
         finally
         {
