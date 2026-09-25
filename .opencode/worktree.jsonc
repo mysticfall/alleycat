@@ -16,8 +16,6 @@
     // Directories to symlink (saves disk space)
     // Example: ["node_modules"]
     "symlinkDirs": [
-      "game/addons/Mirror3D",
-      "game/addons/HumanShaders",
       "game/content",
       "game/models/supertonic-3/onnx",
       "game/models/supertonic-3/voice_styles",

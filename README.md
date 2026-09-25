@@ -21,9 +21,10 @@ than practical use in production projects.
 
 ## 🧩 Godot Addons
 
-This project requires the following Godot addons:
+This project uses assets from the following Godot addons:
 
-- [Mirror3D](https://godotengine.org/asset-library/asset/3983) — a customisable 3D mirror addon using a SubViewport.
+- [Mirror3D](https://godotengine.org/asset-library/asset/3983) — A customisable 3D mirror addon using a SubViewport.
+- [HumanShaders](https://github.com/matmadness/HumanShaders) — A set of shaders for Godot to create realistic humanoid characters.
 
 ## 🧹 C# Linting and Formatting
 

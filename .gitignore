@@ -3,7 +3,8 @@
 !game/addons/
 game/addons/*
 !game/addons/alleycat_editor/
-!game/addons/alleycat_editor/**
+!game/addons/HumanShaders/
+!game/addons/Mirror3D/
 game/content/
 android/
 
