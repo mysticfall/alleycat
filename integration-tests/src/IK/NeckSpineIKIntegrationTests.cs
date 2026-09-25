@@ -15,14 +15,43 @@ public sealed class NeckSpineIKIntegrationTests
         "res://assets/characters/templates/reference_male/reference_male_base.tscn";
     private const string IkNodeName = "NeckSpineIK";
 
+    // The female template carries the restored per-joint limitation frames (twist axes with pitch
+    // offsets); the male template keeps the default frames.
+    private static readonly int[] _femaleRotationAxes = [0, 0, 3, 3, 3];
+    private static readonly JointLimitationFrame[] _femaleLimitationFrames =
+    [
+        new(RightAxis: 2, RotationOffset: new Quaternion(-0.087156f, 0f, 0f, 0.996195f)),
+        new(RightAxis: 2, RotationOffset: new Quaternion(-0.087156f, 0f, 0f, 0.996195f)),
+        new(RightAxis: 2, RotationOffset: new Quaternion(-0.087156f, 0f, 0f, 0.996195f)),
+        new(RightAxis: 2, RotationOffset: new Quaternion(0.258819f, 0f, 0f, 0.965926f)),
+    ];
+    private static readonly int[] _maleRotationAxes = [0, 0, 3, 3, 0];
+    private static readonly JointLimitationFrame[] _maleLimitationFrames =
+    [
+        new(RightAxis: 0, RotationOffset: Quaternion.Identity),
+        new(RightAxis: 0, RotationOffset: Quaternion.Identity),
+        new(RightAxis: 0, RotationOffset: Quaternion.Identity),
+        new(RightAxis: 0, RotationOffset: Quaternion.Identity),
+    ];
+
+    private readonly record struct JointLimitationFrame(int RightAxis, Quaternion RotationOffset);
+
     /// <summary>
     /// The supported base templates author independently resolved, constrained local neck-spine chains.
     /// </summary>
     [Fact]
     public async Task ReferenceBaseTemplates_AuthorLocallyResolvedNeckSpineIK()
     {
-        await AssertLocalNeckSpineIKConfigurationAsync(ReferenceFemaleBaseScenePath, "Female/GeneralSkeleton");
-        await AssertLocalNeckSpineIKConfigurationAsync(ReferenceMaleBaseScenePath, "Male/GeneralSkeleton");
+        await AssertLocalNeckSpineIKConfigurationAsync(
+            ReferenceFemaleBaseScenePath,
+            "Female/GeneralSkeleton",
+            _femaleRotationAxes,
+            _femaleLimitationFrames);
+        await AssertLocalNeckSpineIKConfigurationAsync(
+            ReferenceMaleBaseScenePath,
+            "Male/GeneralSkeleton",
+            _maleRotationAxes,
+            _maleLimitationFrames);
     }
 
     private static IReadOnlyList<int> ResolveIkChainBoneIndices(Skeleton3D skeleton, Node ikNode)
@@ -71,7 +100,11 @@ public sealed class NeckSpineIKIntegrationTests
             : skeleton.FindBone(configuredName);
     }
 
-    private static async Task AssertLocalNeckSpineIKConfigurationAsync(string scenePath, NodePath skeletonPath)
+    private static async Task AssertLocalNeckSpineIKConfigurationAsync(
+        string scenePath,
+        NodePath skeletonPath,
+        IReadOnlyList<int> expectedRotationAxes,
+        IReadOnlyList<JointLimitationFrame> expectedLimitationFrames)
     {
         SceneTree sceneTree = GetSceneTree();
         Node templateRoot = LoadPackedScene(scenePath).Instantiate();
@@ -102,7 +135,7 @@ public sealed class NeckSpineIKIntegrationTests
             Assert.Equal(skeleton.FindBone("Head"), chainBoneIndices[0]);
             Assert.Equal(skeleton.FindBone("Spine"), chainBoneIndices[^1]);
 
-            AssertJointConstraints(ikNode);
+            AssertJointConstraints(ikNode, expectedRotationAxes, expectedLimitationFrames);
         }
         finally
         {
@@ -111,23 +144,35 @@ public sealed class NeckSpineIKIntegrationTests
         }
     }
 
-    private static void AssertJointConstraints(Node ikNode)
+    private static void AssertJointConstraints(
+        Node ikNode,
+        IReadOnlyList<int> expectedRotationAxes,
+        IReadOnlyList<JointLimitationFrame> expectedLimitationFrames)
     {
-        ReadOnlySpan<int> expectedRotationAxes = [0, 0, 3, 3, 0];
+        Assert.Equal(expectedRotationAxes.Count - 1, expectedLimitationFrames.Count);
 
-        for (int jointIndex = 0; jointIndex < expectedRotationAxes.Length; jointIndex++)
+        for (int jointIndex = 0; jointIndex < expectedRotationAxes.Count; jointIndex++)
         {
             Assert.Equal(expectedRotationAxes[jointIndex], (int)ikNode.Get($"settings/0/joints/{jointIndex}/rotation_axis"));
 
             GodotObject? limitation = ikNode.Get($"settings/0/joints/{jointIndex}/limitation").AsGodotObject();
-            if (jointIndex < 4)
-            {
-                Assert.NotNull(limitation);
-            }
-            else
+            if (jointIndex >= expectedLimitationFrames.Count)
             {
                 Assert.Null(limitation);
+                continue;
             }
+
+            Assert.NotNull(limitation);
+            JointLimitationFrame expected = expectedLimitationFrames[jointIndex];
+            Assert.Equal(
+                expected.RightAxis,
+                (int)ikNode.Get($"settings/0/joints/{jointIndex}/limitation/right_axis"));
+
+            Quaternion actualOffset = ikNode.Get($"settings/0/joints/{jointIndex}/limitation/rotation_offset").AsQuaternion();
+            Assert.Equal(expected.RotationOffset.X, actualOffset.X, precision: 5);
+            Assert.Equal(expected.RotationOffset.Y, actualOffset.Y, precision: 5);
+            Assert.Equal(expected.RotationOffset.Z, actualOffset.Z, precision: 5);
+            Assert.Equal(expected.RotationOffset.W, actualOffset.W, precision: 5);
         }
     }
 }
