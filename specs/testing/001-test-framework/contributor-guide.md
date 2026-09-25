@@ -46,6 +46,9 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
 `<Fully.Qualified.TypeName>.<MethodName>` selector, or the command is rejected. A `--test-class` list must contain at
 least one non-empty class name; an all-empty list is likewise rejected. Trait and category filters are unsupported.
 
+Selection is separate from the live-LLM gate: tests marked `[LiveLlm]` additionally require `--live-llm`, and no
+selector can bypass that gate. See [Live LLM Tests](#live-llm-tests).
+
 ## Choosing an Execution Mode
 
 Windowed mode is the default and is required for renderer-dependent tests. Do not substitute headless mode merely to
@@ -71,6 +74,105 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
 ```
 
 `--headless` overrides every test's `Headless` attribute and routes all selected tests to the headless session.
+
+## Live LLM Tests
+
+A small set of integration tests call real LLM providers. They are opt-in: excluded from every default, filtered, and
+exact-selected run unless `--live-llm` is supplied. This keeps routine runs free of credentials, network access, and
+provider cost.
+
+### Identifying Live Tests
+
+Live tests carry `[LiveLlm]` from `AlleyCat.TestFramework` on the test method or on the declaring class; either marker
+gates every fact in the class, and the attribute is inherited. The representative fixture is
+`AlleyCat.IntegrationTests.Mind.AI.LiveRoleplayIntegrationTests`, which is also `[Headless]`.
+
+### Selection Semantics
+
+| Run | Ordinary Tests | `[LiveLlm]` Tests |
+| --- | --- | --- |
+| Default (no options) | Selected | Excluded: no discovered, in-progress, or terminal node. |
+| Exact selectors or MTP UID filter | Selected when matching. | Still excluded; selectors cannot bypass the gate. |
+| `--live-llm` | Selected as usual. | Permitted when also matching the selectors. |
+| `--live-llm --headless …` | Headless-routed as usual. | Permitted and headless-routed. |
+
+- `--live-llm` permits; it never excludes ordinary tests, so one run can mix both.
+- Excluded live tests are invisible in results — not skipped — and can never produce a passed node.
+- `--live-llm` takes no arguments; `--live-llm <value>` is rejected during validation.
+
+### Configuring AITest
+
+Live clients read only the `AITest` section of the running game's merged configuration. The shipped
+`game/AlleyCat.yaml` deliberately defines no active `AITest` section (a commented-out example documents its
+shape); supply your own values through the user override (`user://AlleyCat.yaml`; on Linux
+`~/.local/share/godot/app_userdata/AlleyCat/AlleyCat.yaml`):
+
+```yaml
+AITest:
+    Host: "https://<your-openai-compatible-host>/v1"
+    Model: "<your-model>"
+    ApiKey: "<your-key>"
+    #Timeout: 120   # Optional; positive seconds. Omitted keeps the client default.
+```
+
+- `Host` must be an absolute HTTP(S) URL including the API base path; a bare host or root-only path is rejected.
+- The production `AI` section is never consulted and never substitutes for missing `AITest` values.
+- Never commit credentials: the user override is the runtime-only secret boundary, and each contributor supplies
+  their own.
+
+### Configuration Failures
+
+Missing or invalid settings fail fast with fixed, section-correct, secret-free messages. Each failure names the key —
+for example `AITest:Timeout` — distinguishes configured from missing values, and never echoes configured values.
+Missing or blank `Host`, `Model`, or `ApiKey`, a non-absolute or non-HTTP(S) `Host`, a `Host` without an API base
+path, and a non-positive `Timeout` each produce their own message. Treat these as local configuration errors, not
+product regressions.
+
+### Support APIs
+
+- `LiveLLMClientFactory.CreateLiveClients()` — builds a `LiveLLMClientPair` from the merged configuration's
+  `AITest` section; the only authorised credential reader.
+- `LiveLLMClientPair` — disposable target/judge `IChatClient` pair. Its public constructor keeps each client
+  separately injectable for deterministic fakes, and is the seam for future target ≠ judge substitution; no
+  divergent configuration exists today.
+- `LiveLLMEvaluation.EvaluateAsync(…)` — single-shot target-then-judge flow with fail-closed metric validation,
+  inclusive threshold, sanitised failures, and disposal of the owned pair.
+
+### Writing Or Extending A Live Test
+
+Follow the `LiveRoleplayIntegrationTests` pattern:
+
+1. Mark the fixture `[LiveLlm]` (plus `[Headless]` when renderer-independent).
+2. Assert deterministic pre-network state first — for example that the real rendered prompt carries the expected
+   committed lore facts — so prompt-pipeline regressions fail cheaply without provider calls.
+3. Inside the running `Game`, call `LiveLLMClientFactory.CreateLiveClients()` and make one live call through
+   `LiveLLMEvaluation.EvaluateAsync` with an explicit grounding context (for example
+   `GroundednessEvaluatorContext`) and an explicit threshold within the 1–5 rubric. The evaluator must declare
+   exactly one numeric metric. Threshold 5 is deliberately stricter than the library's built-in
+   greater-than-or-equal-to-4 interpretation when the question requires the full record.
+4. Assert deterministic post-response shape afterwards — non-empty text, no function calls, no leaked `char:`
+   identifiers. The judge verdict complements these assertions; it never replaces them.
+5. Do not assert exact generated sentences and do not retry a failed evaluation until it passes.
+
+### Cost, Serial Execution, And Timeouts
+
+- Every permitted live test makes real billable calls: one target request plus one judge request per evaluation.
+  Keep selectors narrow and never re-run failures to grind out a pass.
+- Target and judge calls run serially within the test; keep other provider work out of the fact.
+- Facts receive no runner cancellation token. The host bounds the whole fact — including both LLM calls — with
+  `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` (default 120,000 ms); raise it for slow providers. `AITest:Timeout` is only
+  the per-request SDK network timeout, not the test budget.
+
+### Running Live Tests
+
+```bash
+# Default suite: live tests stay excluded; no AITest credentials required.
+dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj
+
+# The selected live fixture, explicitly permitted:
+dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
+  --live-llm --headless --test-class AlleyCat.IntegrationTests.Mind.AI.LiveRoleplayIntegrationTests
+```
 
 ## Timing Hygiene For Physics-Driven Waits
 
@@ -125,6 +227,9 @@ Timeout values are positive milliseconds. An unset, invalid, or non-positive val
 | `ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS` | 5,000 | Matching shutdown acknowledgement and process-exit grace. |
 | `ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS` | 120,000 | Optional import preflight. |
 
+For live LLM tests, the one dispatched test request covers both serial provider calls; there is no cooperative
+cancellation token, so budget accordingly (see [Live LLM Tests](#live-llm-tests)).
+
 The dynamic-load probe runs before selected tests. To run the optional import preflight before that probe, set
 `ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT=1` for the command. It runs Godot import in headless recovery mode and is the
 first recovery step for a missing or stale import cache:
@@ -150,6 +255,11 @@ ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT=1 \
    report.
 5. **Windowed environment failure:** use Xvfb when available. If a renderer-dependent test cannot obtain a display,
    report the environment limitation rather than replacing the required windowed coverage with headless execution.
+6. **Live LLM failure:** classify before acting. A secret-free `AITest:…` configuration message means a local
+   settings problem — fix your user override. A per-test timeout means the fact budget was exceeded — narrow the run
+   and raise `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` for slow providers. A sanitised threshold or fail-closed metric
+   failure is a genuine evaluation result — inspect the deterministic prompt and response assertions; do not retry
+   until it passes.
 
 ## Verification Commands
 

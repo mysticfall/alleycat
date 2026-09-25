@@ -29,26 +29,28 @@ public static class TestingPlatformBuilderHook
             _ => new TestFrameworkCapabilities([]),
             (_, serviceProvider) =>
             {
-                (GodotCliTestSelector selector, bool headlessOverride) = GetCliSelector(serviceProvider);
+                (GodotCliTestSelector selector, bool headlessOverride, bool liveLlmEnabled) = GetCliPolicy(serviceProvider);
                 return new GodotTestFramework(
                     testAssembly,
                     selector,
                     processFactory: null,
-                    headlessOverride);
+                    headlessOverride,
+                    liveLlmEnabled);
             });
     }
 
-    private static (GodotCliTestSelector Selector, bool HeadlessOverride) GetCliSelector(
+    private static (GodotCliTestSelector Selector, bool HeadlessOverride, bool LiveLlmEnabled) GetCliPolicy(
         IServiceProvider serviceProvider)
     {
         if (serviceProvider.GetService(typeof(ICommandLineOptions)) is not ICommandLineOptions commandLineOptions)
         {
-            return (GodotCliTestSelector.None, false);
+            return (GodotCliTestSelector.None, HeadlessOverride: false, LiveLlmEnabled: false);
         }
 
         GodotCliTestSelector selector = GodotTestCommandLineOptions.Parse(commandLineOptions);
         bool headlessOverride = GodotTestCommandLineOptions.IsHeadless(commandLineOptions);
+        bool liveLlmEnabled = GodotTestCommandLineOptions.IsLiveLlm(commandLineOptions);
 
-        return (selector, headlessOverride);
+        return (selector, headlessOverride, liveLlmEnabled);
     }
 }

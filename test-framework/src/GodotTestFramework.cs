@@ -34,6 +34,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private readonly int _requestTimeoutMs;
     private readonly int _cleanupTimeoutMs;
     private readonly bool _headlessOverride;
+    private readonly bool _liveLlmEnabled;
     private readonly Dictionary<TestNodeUid, MethodInfo> _testsByUid;
 
     internal GodotTestFramework(Assembly testAssembly, GodotCliTestSelector cliSelector)
@@ -54,10 +55,21 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         GodotCliTestSelector cliSelector,
         IGodotProcessFactory? processFactory,
         bool headlessOverride)
+        : this(testAssembly, cliSelector, processFactory, headlessOverride, liveLlmEnabled: false)
+    {
+    }
+
+    internal GodotTestFramework(
+        Assembly testAssembly,
+        GodotCliTestSelector cliSelector,
+        IGodotProcessFactory? processFactory,
+        bool headlessOverride,
+        bool liveLlmEnabled)
     {
         _testAssembly = testAssembly;
         _cliSelector = cliSelector;
         _headlessOverride = headlessOverride;
+        _liveLlmEnabled = liveLlmEnabled;
         _godotBinaryPath = ResolveGodotBinaryPath();
         _workspaceRootPath = ResolveWorkspaceRootPath(testAssembly);
         _preflightTimeoutMs = ResolveTimeout(
@@ -334,7 +346,9 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
                     .Where(_testsByUid.ContainsKey)
                     .Select(uid => (uid, _testsByUid[uid]));
 
-        return candidates.Where(candidate => _cliSelector.Matches(candidate.Method));
+        return candidates
+            .Where(candidate => _cliSelector.Matches(candidate.Method))
+            .Where(candidate => _liveLlmEnabled || !IsLiveLlmTest(candidate.Method));
     }
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
@@ -538,6 +552,14 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
         return classAttribute?.Enabled ?? false;
     }
+
+    /// <summary>
+    /// Resolves whether a test method is live-LLM-gated by checking for a method-level or
+    /// class-level <see cref="LiveLlmAttribute"/>. Either marker marks the test as live.
+    /// </summary>
+    private static bool IsLiveLlmTest(MethodInfo method)
+        => method.GetCustomAttribute<LiveLlmAttribute>() is not null
+            || method.DeclaringType?.GetCustomAttribute<LiveLlmAttribute>() is not null;
 
     private async Task CleanupTimedOutProcessAsync(IGodotProcess process)
     {

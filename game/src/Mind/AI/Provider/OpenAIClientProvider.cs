@@ -128,19 +128,19 @@ public partial class OpenAIClientProvider : ClientProvider
             if (string.IsNullOrWhiteSpace(endpointUrl))
             {
                 throw new InvalidOperationException(
-                    $"Missing '{ConfigSection}/Host' in OpenAI client config '{ConfigPathDescription}'.");
+                    $"Missing '{SectionName}/Host' in OpenAI client config '{ConfigPathDescription}'.");
             }
 
             if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out Uri? endpointUri))
             {
                 throw new InvalidOperationException(
-                    $"Config key '{ConfigSection}/Host' must be a valid absolute endpoint URL. Got '{endpointUrl}'.");
+                    $"Config key '{SectionName}/Host' must be a valid absolute endpoint URL. Got '{endpointUrl}'.");
             }
 
             _ = endpointUri.AbsolutePath.Length == 0
                 || string.Equals(endpointUri.AbsolutePath, "/", StringComparison.Ordinal)
                 ? throw new InvalidOperationException(
-                    $"Config key '{ConfigSection}/Host' must include the API base path (for example 'https://api.openai.com/v1'). Got '{endpointUrl}'.")
+                    $"Config key '{SectionName}/Host' must include the API base path (for example 'https://api.openai.com/v1'). Got '{endpointUrl}'.")
                 : 0;
 
             return endpointUri;
@@ -148,6 +148,8 @@ public partial class OpenAIClientProvider : ClientProvider
 
         private OpenAIClientOptions CreateClientOptions()
             => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds);
+
+        private string SectionName { get; init; } = ConfigSection;
 
         private string ConfigPathDescription { get; init; } = DefaultConfigPath;
 
@@ -175,12 +177,29 @@ public partial class OpenAIClientProvider : ClientProvider
             => Load(LoadConfiguration(configPath, defaultConfigurationLoader, customConfigurationLoader), configPath);
 
         internal static OpenAIClientProviderSettings Load(IConfiguration configuration, string configPathDescription)
+            => Load(configuration, configPathDescription, ConfigSection);
+
+        /// <summary>
+        /// Loads settings from an arbitrary configuration section, carrying the section name into diagnostics.
+        /// </summary>
+        /// <remarks>
+        /// Production defaulting still applies (model fallback and compatible-backend key fallback); consumers
+        /// needing strict validation — such as live test configuration — must validate the section before loading.
+        /// </remarks>
+        internal static OpenAIClientProviderSettings Load(
+            IConfiguration configuration,
+            string configPathDescription,
+            string sectionName)
         {
             ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
 
             AIOptions options = new();
-            configuration.GetSection(ConfigSection).Bind(options);
-            return Load(options, configPathDescription);
+            configuration.GetSection(sectionName).Bind(options);
+            return Load(options, configPathDescription) with
+            {
+                SectionName = sectionName,
+            };
         }
 
         private static IConfiguration LoadConfiguration(string configPath)

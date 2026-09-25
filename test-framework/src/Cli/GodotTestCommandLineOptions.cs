@@ -10,6 +10,7 @@ internal static class GodotTestCommandLineOptions
     public const string TestClassOptionName = "test-class";
     public const string TestMethodOptionName = "test-method";
     public const string HeadlessOptionName = "headless";
+    public const string LiveLlmOptionName = "live-llm";
 
     private static readonly IReadOnlyCollection<CommandLineOption> _options =
     [
@@ -26,6 +27,11 @@ internal static class GodotTestCommandLineOptions
         new CommandLineOption(
             HeadlessOptionName,
             "Run all integration tests in headless mode. Overrides per-test HeadlessAttribute settings.",
+            ArgumentArity.Zero,
+            isHidden: false),
+        new CommandLineOption(
+            LiveLlmOptionName,
+            "Permit integration tests marked with LiveLlmAttribute to run. Live-marked tests stay excluded without this flag.",
             ArgumentArity.Zero,
             isHidden: false),
     ];
@@ -136,6 +142,12 @@ internal static class GodotTestCommandLineOptions
     public static bool IsHeadless(ICommandLineOptions commandLineOptions)
         => commandLineOptions.IsOptionSet(HeadlessOptionName);
 
+    /// <summary>
+    /// Checks whether the <c>--live-llm</c> CLI flag is set.
+    /// </summary>
+    public static bool IsLiveLlm(ICommandLineOptions commandLineOptions)
+        => commandLineOptions.IsOptionSet(LiveLlmOptionName);
+
     private static string ToCommandLineName(string optionName) => $"--{optionName}";
 }
 
@@ -155,10 +167,16 @@ internal sealed class GodotTestCommandLineOptionsProvider : ICommandLineOptionsP
 
     public Task<ValidationResult> ValidateOptionArgumentsAsync(CommandLineOption commandOption, string[] arguments)
     {
-        return string.Equals(commandOption.Name, GodotTestCommandLineOptions.HeadlessOptionName, StringComparison.Ordinal)
+        string[] zeroArityOptionNames =
+        [
+            GodotTestCommandLineOptions.HeadlessOptionName,
+            GodotTestCommandLineOptions.LiveLlmOptionName,
+        ];
+
+        return zeroArityOptionNames.Contains(commandOption.Name, StringComparer.Ordinal)
             && arguments.Length > 0
             ? Task.FromResult(ValidationResult.Invalid(
-                $"Option '--{GodotTestCommandLineOptions.HeadlessOptionName}' does not accept any arguments."))
+                $"Option '--{commandOption.Name}' does not accept any arguments."))
             : ValidationResult.ValidTask;
     }
 

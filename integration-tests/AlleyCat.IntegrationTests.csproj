@@ -20,6 +20,7 @@
     <ItemGroup>
         <PackageReference Include="GodotSharp" Version="4.7.2" />
         <PackageReference Include="Microsoft.Agents.AI" Version="1.22.0" />
+        <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Quality" Version="10.10.0" />
         <PackageReference Include="Microsoft.Testing.Platform" Version="2.4.1" />
         <PackageReference Include="Microsoft.Testing.Platform.MSBuild" Version="2.4.1" />
         <PackageReference Include="xunit.assert" Version="2.9.3"/>

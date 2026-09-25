@@ -1,6 +1,7 @@
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.Transcription;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace AlleyCat.Tests.Configuration;
@@ -91,5 +92,115 @@ public sealed class ConfigurationConsumerSettingsTests
         Assert.Equal("https://ai.example/v1", settings.Host);
         Assert.Equal("gpt-4o-mini", settings.Model);
         Assert.Equal("test-key", settings.ApiKey);
+    }
+
+    /// <summary>
+    /// The section-aware loader binds the requested section's values, not the production AI section.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromConfiguration_BindsNamedSection()
+    {
+        IConfiguration configuration = BuildConfiguration(
+            ("AI:Host", "https://production.example/v1"),
+            ("AI:Model", "production-model"),
+            ("AI:ApiKey", "production-key"),
+            ("AI:Timeout", "30"),
+            ("AITest:Host", " https://live.example/v1 "),
+            ("AITest:Model", " live-model "),
+            ("AITest:ApiKey", " live-key "),
+            ("AITest:Timeout", "45"));
+
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+            configuration,
+            "unit-config",
+            "AITest");
+
+        Assert.Equal("https://live.example/v1", settings.Host);
+        Assert.Equal("live-model", settings.Model);
+        Assert.Equal("live-key", settings.ApiKey);
+        Assert.Equal(45, settings.TimeoutSeconds);
+    }
+
+    /// <summary>
+    /// The two-argument configuration load keeps binding the production AI section.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromConfiguration_DefaultsToProductionAISection()
+    {
+        IConfiguration configuration = BuildConfiguration(
+            ("AI:Host", "https://production.example/v1"),
+            ("AI:Model", "production-model"),
+            ("AITest:Host", "https://live.example/v1"),
+            ("AITest:Model", "live-model"));
+
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(configuration, "unit-config");
+
+        Assert.Equal("https://production.example/v1", settings.Host);
+        Assert.Equal("production-model", settings.Model);
+    }
+
+    /// <summary>
+    /// Named-section loads carry the section name into endpoint diagnostics.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromNamedSection_CarriesSectionNameIntoEndpointDiagnostics()
+    {
+        IConfiguration configuration = BuildConfiguration(
+            ("AITest:Model", "live-model"),
+            ("AITest:ApiKey", "live-key"));
+
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+            configuration,
+            "unit-config",
+            "AITest");
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(settings.CreateEndpointUri);
+        Assert.Equal("Missing 'AITest/Host' in OpenAI client config 'unit-config'.", error.Message);
+    }
+
+    /// <summary>
+    /// Production AI endpoint diagnostics stay byte-identical for default loads.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromConfiguration_ProducesUnchangedAIEndpointDiagnostics()
+    {
+        IConfiguration configuration = BuildConfiguration(
+            ("AI:Model", "production-model"),
+            ("AI:ApiKey", "production-key"));
+
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(configuration, "unit-config");
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(settings.CreateEndpointUri);
+        Assert.Equal("Missing 'AI/Host' in OpenAI client config 'unit-config'.", error.Message);
+    }
+
+    /// <summary>
+    /// Named-section loads keep production defaulting semantics, so strict consumers must validate first.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromNamedSection_RetainsProductionModelDefault()
+    {
+        IConfiguration configuration = BuildConfiguration(
+            ("AITest:Host", "https://live.example/v1"),
+            ("AITest:Model", "  "),
+            ("AITest:ApiKey", "live-key"));
+
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+            configuration,
+            "unit-config",
+            "AITest");
+
+        Assert.Equal("gpt-4o-mini", settings.Model);
+    }
+
+    private static IConfiguration BuildConfiguration(params (string Key, string Value)[] values)
+    {
+        Dictionary<string, string?> configurationValues = [];
+        foreach ((string key, string value) in values)
+        {
+            configurationValues[key] = value;
+        }
+
+        return new ConfigurationBuilder().AddInMemoryCollection(configurationValues).Build();
     }
 }

@@ -24,9 +24,14 @@ public sealed class TestSelectionOptionsTests
         Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.TestClassOptionName);
         Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.TestMethodOptionName);
         Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.HeadlessOptionName);
+        Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.LiveLlmOptionName);
 
         CommandLineOption headlessOption = options.Single(o => o.Name == GodotTestCommandLineOptions.HeadlessOptionName);
         Assert.Equal(ArgumentArity.Zero, headlessOption.Arity);
+
+        CommandLineOption liveLlmOption = options.Single(o => o.Name == GodotTestCommandLineOptions.LiveLlmOptionName);
+        Assert.Equal(ArgumentArity.Zero, liveLlmOption.Arity);
+        Assert.False(liveLlmOption.IsHidden);
     }
 
     /// <summary>
@@ -331,6 +336,48 @@ public sealed class TestSelectionOptionsTests
     }
 
     /// <summary>
+    /// Ensures <see cref="GodotTestCommandLineOptions.IsHeadless"/> stays disabled when only
+    /// <c>--live-llm</c> is supplied.
+    /// </summary>
+    [Fact]
+    public void IsHeadless_ReturnsFalse_WhenOnlyLiveLlmFlagIsSet()
+    {
+        var commandLineOptions = new StubCommandLineOptions(
+            new Dictionary<string, string[]> { [GodotTestCommandLineOptions.LiveLlmOptionName] = [] });
+
+        bool result = GodotTestCommandLineOptions.IsHeadless(commandLineOptions);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// Ensures <see cref="GodotTestCommandLineOptions.IsLiveLlm"/> returns <c>true</c> when the flag is set.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlm_ReturnsTrue_WhenFlagIsSet()
+    {
+        var commandLineOptions = new StubCommandLineOptions(
+            new Dictionary<string, string[]> { [GodotTestCommandLineOptions.LiveLlmOptionName] = [] });
+
+        bool result = GodotTestCommandLineOptions.IsLiveLlm(commandLineOptions);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures <see cref="GodotTestCommandLineOptions.IsLiveLlm"/> returns <c>false</c> when the flag is not set.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlm_ReturnsFalse_WhenFlagIsNotSet()
+    {
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>());
+
+        bool result = GodotTestCommandLineOptions.IsLiveLlm(commandLineOptions);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
     /// Ensures validation rejects arguments supplied to the <c>--headless</c> flag.
     /// </summary>
     [Fact]
@@ -344,6 +391,62 @@ public sealed class TestSelectionOptionsTests
 
         Assert.False(validation.IsValid);
         Assert.Contains("does not accept any arguments", validation.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Ensures validation rejects arguments supplied to the <c>--live-llm</c> flag.
+    /// </summary>
+    [Fact]
+    public async Task ValidateOptionArgumentsAsync_RejectsArgumentsForLiveLlm()
+    {
+        var provider = new GodotTestCommandLineOptionsProvider();
+        CommandLineOption liveLlmOption = provider.GetCommandLineOptions()
+            .Single(o => o.Name == GodotTestCommandLineOptions.LiveLlmOptionName);
+
+        ValidationResult validation = await provider.ValidateOptionArgumentsAsync(liveLlmOption, ["unexpected"]);
+
+        Assert.False(validation.IsValid);
+        Assert.Contains("does not accept any arguments", validation.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Ensures validation accepts the <c>--live-llm</c> flag supplied without arguments.
+    /// </summary>
+    [Fact]
+    public async Task ValidateOptionArgumentsAsync_AcceptsZeroArgumentsForLiveLlm()
+    {
+        var provider = new GodotTestCommandLineOptionsProvider();
+        CommandLineOption liveLlmOption = provider.GetCommandLineOptions()
+            .Single(o => o.Name == GodotTestCommandLineOptions.LiveLlmOptionName);
+
+        ValidationResult validation = await provider.ValidateOptionArgumentsAsync(liveLlmOption, []);
+
+        Assert.True(validation.IsValid);
+    }
+
+    /// <summary>
+    /// Ensures selector precedence is unchanged when <c>--live-llm</c> is also supplied.
+    /// </summary>
+    [Fact]
+    public void Parse_PreservesMethodSelectorPrecedence_WhenLiveLlmFlagIsSet()
+    {
+        string classSelector = typeof(SelectorFixtureA).FullName!;
+        string methodSelector = $"{typeof(SelectorFixtureB).FullName}.{nameof(SelectorFixtureB.TargetMethod)}";
+
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestClassOptionName] = [classSelector],
+            [GodotTestCommandLineOptions.TestMethodOptionName] = [methodSelector],
+            [GodotTestCommandLineOptions.LiveLlmOptionName] = [],
+        });
+
+        GodotCliTestSelector selector = GodotTestCommandLineOptions.Parse(commandLineOptions);
+
+        MethodInfo classMethod = typeof(SelectorFixtureA).GetMethod(nameof(SelectorFixtureA.TargetMethod))!;
+        MethodInfo selectedMethod = typeof(SelectorFixtureB).GetMethod(nameof(SelectorFixtureB.TargetMethod))!;
+
+        Assert.False(selector.Matches(classMethod));
+        Assert.True(selector.Matches(selectedMethod));
     }
 
     private sealed class StubCommandLineOptions(IReadOnlyDictionary<string, string[]> options) : ICommandLineOptions

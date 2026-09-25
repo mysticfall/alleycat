@@ -30,6 +30,15 @@ AI:
     Model: google/gemma-4-31b-it
     Timeout: 30
 
+# Live LLM test backend settings, read only by opt-in integration tests run with --live-llm.
+# Supply real values through the user override (user://AlleyCat.yaml) instead of committing them
+# here; the example stays commented out so shipped defaults define no active section.
+#AITest:
+#    Host: "https://openrouter.ai/api/v1"
+#    Model: google/gemma-4-31b-it
+#    ApiKey: "<your-api-key>"
+#    Timeout: 30
+
 # Diagnostics toggles for AI request and response logging.
 Diagnostics:
     AI:

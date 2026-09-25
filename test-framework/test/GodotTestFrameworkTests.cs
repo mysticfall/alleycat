@@ -1,4 +1,12 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Microsoft.Testing.Platform.CommandLine;
+using Microsoft.Testing.Platform.Extensions.Messages;
+using Microsoft.Testing.Platform.Extensions.TestFramework;
+using Microsoft.Testing.Platform.Messages;
+using Microsoft.Testing.Platform.Requests;
+using Microsoft.Testing.Platform.TestHost;
 using Xunit;
 
 namespace AlleyCat.TestFramework.Tests;
@@ -281,6 +289,72 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
+    /// Ensures a test without any <c>[LiveLlm]</c> marker is not live-gated.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlmTest_ReturnsFalse_WhenNoMarkerIsPresent()
+    {
+        MethodInfo method = GetLiveLlmFixtureMethod(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
+
+        bool result = InvokePrivateStatic<bool>("IsLiveLlmTest", method);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// Ensures a method-level <c>[LiveLlm]</c> marker marks the test as live.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlmTest_ReturnsTrue_WhenMethodIsMarked()
+    {
+        MethodInfo method = GetLiveLlmFixtureMethod(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
+
+        bool result = InvokePrivateStatic<bool>("IsLiveLlmTest", method);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures a class-level <c>[LiveLlm]</c> marker marks unmarked methods of the declaring class as live.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlmTest_ReturnsTrue_WhenDeclaringClassIsMarked()
+    {
+        MethodInfo method = GetLiveLlmFixtureMethod(typeof(LiveLlmClassMarkedFixture), nameof(LiveLlmClassMarkedFixture.LiveTest));
+
+        bool result = InvokePrivateStatic<bool>("IsLiveLlmTest", method);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures class-level and method-level <c>[LiveLlm]</c> markers combine with OR.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlmTest_ReturnsTrue_WhenMethodAndDeclaringClassAreMarked()
+    {
+        MethodInfo method = GetLiveLlmFixtureMethod(typeof(LiveLlmMethodAndClassMarkedFixture), nameof(LiveLlmMethodAndClassMarkedFixture.LiveTest));
+
+        bool result = InvokePrivateStatic<bool>("IsLiveLlmTest", method);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures a method declared on a class inside a <c>[LiveLlm]</c>-marked hierarchy is live-marked through
+    /// its declaring type without changing method identity.
+    /// </summary>
+    [Fact]
+    public void IsLiveLlmTest_ReturnsTrue_WhenMethodIsDeclaredOnDerivedClassOfMarkedBase()
+    {
+        MethodInfo method = GetLiveLlmFixtureMethod(typeof(LiveLlmDerivedFixture), nameof(LiveLlmDerivedFixture.DerivedLiveTest));
+
+        bool result = InvokePrivateStatic<bool>("IsLiveLlmTest", method);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
     /// Ensures <c>--headless</c> is excluded for windowed sessions when no attribute or override is present.
     /// </summary>
     [Fact]
@@ -331,6 +405,294 @@ public sealed class GodotTestFrameworkTests
         Assert.Equal(Assembly.GetExecutingAssembly().Location, args[sessionIndex + 2]);
     }
 
+    /// <summary>
+    /// Ensures live-marked tests produce no run nodes and launch no process when <c>--live-llm</c> is absent,
+    /// even when explicitly selected by UID.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_ExcludesLiveMarkedTests_WhenLiveLlmFlagIsAbsent()
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+
+            var factory = new FakeGodotProcessFactory();
+            GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
+            var messageBus = new RecordingMessageBus();
+            var request = new RunTestExecutionRequest(
+                CreateTestSessionContext(),
+                new TestNodeUidListFilter([GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest))]));
+
+            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+            Assert.Empty(messageBus.Published);
+            Assert.Empty(factory.Invocations);
+        }
+    }
+
+    /// <summary>
+    /// Ensures ordinary tests still run when <c>--live-llm</c> is absent and a mixed selection also names a
+    /// live-marked test.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_DoesNotExcludeOrdinaryTests_WhenLiveLlmFlagIsAbsent()
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+
+            TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
+            TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
+
+            var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(ordinaryUid)]);
+            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
+            GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
+            var messageBus = new RecordingMessageBus();
+            var request = new RunTestExecutionRequest(
+                CreateTestSessionContext(),
+                new TestNodeUidListFilter([ordinaryUid, liveUid]));
+
+            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+            Assert.Equal(2, factory.Invocations.Count);
+            Assert.Contains("--integration-probe", factory.Invocations[0]);
+
+            List<string> runRequestIds = GetRunRequestIds(session);
+            Assert.Equal([ordinaryUid.Value], runRequestIds);
+
+            List<TestNode> nodes = NodesOf(messageBus);
+            Assert.Equal(2, nodes.Count);
+            AssertNodeState(nodes[0], ordinaryUid, IsInProgressState);
+            AssertNodeState(nodes[1], ordinaryUid, IsPassedState);
+        }
+    }
+
+    /// <summary>
+    /// Ensures <c>--live-llm</c> permits live-marked tests to run and report passed nodes while ordinary tests
+    /// remain selected, preserving session routing.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_IncludesLiveMarkedTests_WhenLiveLlmFlagIsPresent()
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+
+            TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
+            TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
+
+            var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(liveUid), ResultStage(ordinaryUid)]);
+            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
+            GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: true);
+            var messageBus = new RecordingMessageBus();
+            var request = new RunTestExecutionRequest(
+                CreateTestSessionContext(),
+                new TestNodeUidListFilter([liveUid, ordinaryUid]));
+
+            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+            Assert.Equal(2, factory.Invocations.Count);
+            Assert.Contains("--integration-probe", factory.Invocations[0]);
+            Assert.Contains(GodotSessionProtocol.SessionCommandArg, factory.Invocations[1]);
+            Assert.DoesNotContain("--headless", factory.Invocations[1]);
+
+            List<string> runRequestIds = GetRunRequestIds(session);
+            Assert.Equal([liveUid.Value, ordinaryUid.Value], runRequestIds);
+
+            List<TestNode> nodes = NodesOf(messageBus);
+            Assert.Equal(4, nodes.Count);
+            AssertNodeState(nodes[0], liveUid, IsInProgressState);
+            AssertNodeState(nodes[1], liveUid, IsPassedState);
+            AssertNodeState(nodes[2], ordinaryUid, IsInProgressState);
+            AssertNodeState(nodes[3], ordinaryUid, IsPassedState);
+        }
+    }
+
+    /// <summary>
+    /// Ensures an exact <c>--test-method</c> selector cannot bypass the live gate.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_ExactMethodSelectorCannotBypassLiveGate()
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+
+            var factory = new FakeGodotProcessFactory();
+            GodotTestFramework framework = CreateFramework(
+                factory,
+                liveLlmEnabled: false,
+                selector: GodotCliTestSelector.ForMethod(
+                    typeof(LiveLlmMethodMarkedFixture).FullName!,
+                    nameof(LiveLlmMethodMarkedFixture.LiveTest)));
+            var messageBus = new RecordingMessageBus();
+            var request = new RunTestExecutionRequest(CreateTestSessionContext());
+
+            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+            Assert.Empty(messageBus.Published);
+            Assert.Empty(factory.Invocations);
+        }
+    }
+
+    /// <summary>
+    /// Ensures an exact <c>--test-class</c> selector cannot bypass the live gate for class-marked tests.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_ExactClassSelectorCannotBypassLiveGate()
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+
+            var factory = new FakeGodotProcessFactory();
+            GodotTestFramework framework = CreateFramework(
+                factory,
+                liveLlmEnabled: false,
+                selector: GodotCliTestSelector.ForClass(typeof(LiveLlmClassMarkedFixture).FullName!));
+            var messageBus = new RecordingMessageBus();
+            var request = new RunTestExecutionRequest(CreateTestSessionContext());
+
+            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+            Assert.Empty(messageBus.Published);
+            Assert.Empty(factory.Invocations);
+        }
+    }
+
+    /// <summary>
+    /// Ensures discovery excludes live-marked tests when <c>--live-llm</c> is absent, even when explicitly
+    /// selected by UID, and launches no process.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteRequestAsync_Discovery_ExcludesLiveMarkedTests_WhenLiveLlmFlagIsAbsent()
+    {
+        var factory = new FakeGodotProcessFactory();
+        GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
+        var messageBus = new RecordingMessageBus();
+        var request = new DiscoverTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest))]));
+
+        await framework.ExecuteRequestAsync(CreateRequestContext(request, messageBus));
+
+        Assert.Empty(messageBus.Published);
+        Assert.Empty(factory.Invocations);
+    }
+
+    /// <summary>
+    /// Ensures discovery keeps ordinary tests while excluding only the live-marked entries of a mixed selection.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteRequestAsync_Discovery_OnlyExcludesLiveMarkedTests_WhenLiveLlmFlagIsAbsent()
+    {
+        GodotTestFramework framework = CreateFramework(new FakeGodotProcessFactory(), liveLlmEnabled: false);
+        var messageBus = new RecordingMessageBus();
+        TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
+        TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
+        var request = new DiscoverTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([ordinaryUid, liveUid]));
+
+        await framework.ExecuteRequestAsync(CreateRequestContext(request, messageBus));
+
+        List<TestNode> nodes = NodesOf(messageBus);
+        TestNode discoveredNode = Assert.Single(nodes);
+        AssertNodeState(discoveredNode, ordinaryUid, IsDiscoveredState);
+    }
+
+    /// <summary>
+    /// Ensures discovery reports live-marked tests alongside ordinary tests when <c>--live-llm</c> is present.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteRequestAsync_Discovery_IncludesLiveMarkedTests_WhenLiveLlmFlagIsPresent()
+    {
+        GodotTestFramework framework = CreateFramework(new FakeGodotProcessFactory(), liveLlmEnabled: true);
+        var messageBus = new RecordingMessageBus();
+        TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmClassMarkedFixture), nameof(LiveLlmClassMarkedFixture.LiveTest));
+        var request = new DiscoverTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([liveUid]));
+
+        await framework.ExecuteRequestAsync(CreateRequestContext(request, messageBus));
+
+        List<TestNode> nodes = NodesOf(messageBus);
+        TestNode discoveredNode = Assert.Single(nodes);
+        AssertNodeState(discoveredNode, liveUid, IsDiscoveredState);
+    }
+
+    /// <summary>
+    /// Ensures the builder policy fails closed for every flag when the command-line service is absent.
+    /// </summary>
+    [Fact]
+    public void GetCliPolicy_FailsClosed_WhenCommandLineServiceIsAbsent()
+    {
+        (GodotCliTestSelector selector, bool headlessOverride, bool liveLlmEnabled) =
+            InvokeGetCliPolicy(new StubServiceProvider(service: null));
+
+        Assert.Equal(GodotCliTestSelector.None, selector);
+        Assert.False(headlessOverride);
+        Assert.False(liveLlmEnabled);
+    }
+
+    /// <summary>
+    /// Ensures the builder policy enables live permission alone when only <c>--live-llm</c> is supplied.
+    /// </summary>
+    [Fact]
+    public void GetCliPolicy_EnablesLiveLlmOnly_WhenLiveLlmFlagIsSet()
+    {
+        var commandLineOptions = new StubCommandLineOptions(
+            new Dictionary<string, string[]> { [GodotTestCommandLineOptions.LiveLlmOptionName] = [] });
+
+        (GodotCliTestSelector selector, bool headlessOverride, bool liveLlmEnabled) =
+            InvokeGetCliPolicy(new StubServiceProvider(commandLineOptions));
+
+        Assert.Equal(GodotCliTestSelector.None, selector);
+        Assert.False(headlessOverride);
+        Assert.True(liveLlmEnabled);
+    }
+
+    /// <summary>
+    /// Ensures the builder policy carries headless and live permissions together without interference.
+    /// </summary>
+    [Fact]
+    public void GetCliPolicy_CombinesHeadlessAndLiveLlmFlags()
+    {
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.HeadlessOptionName] = [],
+            [GodotTestCommandLineOptions.LiveLlmOptionName] = [],
+        });
+
+        (GodotCliTestSelector selector, bool headlessOverride, bool liveLlmEnabled) =
+            InvokeGetCliPolicy(new StubServiceProvider(commandLineOptions));
+
+        Assert.Equal(GodotCliTestSelector.None, selector);
+        Assert.True(headlessOverride);
+        Assert.True(liveLlmEnabled);
+    }
+
+    /// <summary>
+    /// Ensures the builder policy parses exact selectors alongside the live permission.
+    /// </summary>
+    [Fact]
+    public void GetCliPolicy_ParsesMethodSelectorAlongsideLiveLlmFlag()
+    {
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>
+        {
+            [GodotTestCommandLineOptions.TestMethodOptionName] =
+            [$"{typeof(LiveLlmMethodMarkedFixture).FullName!}.{nameof(LiveLlmMethodMarkedFixture.LiveTest)}"],
+            [GodotTestCommandLineOptions.LiveLlmOptionName] = [],
+        });
+
+        (GodotCliTestSelector selector, bool headlessOverride, bool liveLlmEnabled) =
+            InvokeGetCliPolicy(new StubServiceProvider(commandLineOptions));
+
+        Assert.True(selector.Matches(GetLiveLlmFixtureMethod(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest))));
+        Assert.False(headlessOverride);
+        Assert.True(liveLlmEnabled);
+    }
+
     private static object CreateFrameworkInstance(object? processFactory = null)
     {
         Type selectorType = _godotTestFrameworkType.Assembly
@@ -358,6 +720,171 @@ public sealed class GodotTestFrameworkTests
 
         return constructor.Invoke([Assembly.GetExecutingAssembly(), selector, processFactory, headlessOverride]);
     }
+
+    /// <summary>
+    /// Creates a framework instance through the live-permission constructor overload used by the builder hook.
+    /// </summary>
+    private static GodotTestFramework CreateFramework(
+        FakeGodotProcessFactory factory,
+        bool liveLlmEnabled = false,
+        GodotCliTestSelector? selector = null)
+        => new(
+            Assembly.GetExecutingAssembly(),
+            selector ?? GodotCliTestSelector.None,
+            factory,
+            headlessOverride: false,
+            liveLlmEnabled);
+
+    private static TestSessionContext CreateTestSessionContext()
+    {
+        ConstructorInfo constructor = typeof(TestSessionContext)
+            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidate => candidate.GetParameters().Length == 1);
+
+        return (TestSessionContext)constructor.Invoke([new SessionUid("live-llm-gate-session")]);
+    }
+
+    private static ExecuteRequestContext CreateRequestContext(IRequest request, RecordingMessageBus messageBus)
+#pragma warning disable TPEXP // IExecuteRequestCompletionNotifier is MTP preview API.
+        => new(request, messageBus, new CompletionNotifier(), CancellationToken.None);
+#pragma warning restore TPEXP
+
+    private static (GodotCliTestSelector Selector, bool HeadlessOverride, bool LiveLlmEnabled) InvokeGetCliPolicy(
+        IServiceProvider serviceProvider)
+    {
+        MethodInfo method = typeof(TestingPlatformBuilderHook)
+            .GetMethod("GetCliPolicy", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new MissingMethodException(nameof(TestingPlatformBuilderHook), "GetCliPolicy");
+
+        object? result = method.Invoke(null, [serviceProvider]);
+        Assert.NotNull(result);
+
+        ITuple tuple = Assert.IsAssignableFrom<ITuple>(result);
+        return ((GodotCliTestSelector)tuple[0]!, (bool)tuple[1]!, (bool)tuple[2]!);
+    }
+
+    private static MethodInfo GetLiveLlmFixtureMethod(Type fixtureType, string methodName)
+        => fixtureType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)
+            ?? throw new MissingMethodException(fixtureType.FullName, methodName);
+
+    private static TestNodeUid GetLiveLlmFixtureUid(Type fixtureType, string methodName)
+        => TestCaseUidFactory.Create(GetLiveLlmFixtureMethod(fixtureType, methodName));
+
+    private static List<TestNode> NodesOf(RecordingMessageBus messageBus)
+        => [.. messageBus.Published.OfType<TestNodeUpdateMessage>().Select(message => message.TestNode)];
+
+    private static void AssertNodeState(TestNode node, TestNodeUid expectedUid, Action<IProperty> assertStateProperty)
+    {
+        Assert.Equal(expectedUid, node.Uid);
+        assertStateProperty(node.Properties.Single<IProperty>());
+    }
+
+    private static void IsInProgressState(IProperty stateProperty)
+        => Assert.IsType<InProgressTestNodeStateProperty>(stateProperty);
+
+    private static void IsPassedState(IProperty stateProperty)
+        => Assert.IsType<PassedTestNodeStateProperty>(stateProperty);
+
+    private static void IsDiscoveredState(IProperty stateProperty)
+        => Assert.IsType<DiscoveredTestNodeStateProperty>(stateProperty);
+
+    /// <summary>
+    /// Executes one framework request synchronously under the shared environment lock pattern.
+    /// </summary>
+    private static void ExecuteRequest(GodotTestFramework framework, ExecuteRequestContext context)
+#pragma warning disable xUnit1031
+        => framework.ExecuteRequestAsync(context).GetAwaiter().GetResult();
+#pragma warning restore xUnit1031
+
+    private static List<string> GetRunRequestIds(FakeGodotProcess session)
+        =>
+        [
+            .. ParseRunCommands(session.WrittenLines)
+                .Select(command => command.GetProperty("RequestId").GetString()!),
+        ];
+
+    private static string SessionLinePrefix => "ALLEYCAT_INTEGRATION_SESSION:";
+
+    private static string ReadyLine()
+        => SessionLinePrefix + JsonSerializer.Serialize(new
+        {
+            Version = 1,
+            Kind = "ready",
+        });
+
+    private static string ResultLine(TestNodeUid uid, string outcome)
+        => SessionLinePrefix + JsonSerializer.Serialize(new
+        {
+            Version = 1,
+            Kind = "result",
+            RequestId = uid.Value,
+            Outcome = outcome,
+            Message = (string?)null,
+            Stack = (string?)null,
+            SessionReusable = true,
+        });
+
+    private static FakeSessionStage ResultStage(TestNodeUid uid, string outcome = "passed")
+        => new(OutputEvents:
+        [
+            new FakeOutputEvent(TimeSpan.Zero, FakeOutputStream.StdOut, ResultLine(uid, outcome)),
+        ]);
+
+    private static List<JsonElement> ParseRunCommands(IReadOnlyList<string> writtenLines)
+        =>
+        [
+            .. writtenLines
+                .Select(ParseCommand)
+                .Where(command => string.Equals(command.GetProperty("Kind").GetString(), "run", StringComparison.Ordinal)),
+        ];
+
+    private static JsonElement ParseCommand(string line) => JsonSerializer.Deserialize<JsonElement>(line);
+
+    private sealed class StubServiceProvider(object? service) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => service;
+    }
+
+    private sealed class StubCommandLineOptions(IReadOnlyDictionary<string, string[]> options) : ICommandLineOptions
+    {
+        public bool IsOptionSet(string optionName) => options.ContainsKey(optionName);
+
+        public bool TryGetOptionArgumentList(string optionName, out string[] arguments)
+        {
+            if (options.TryGetValue(optionName, out string[]? configuredArguments))
+            {
+                arguments = configuredArguments;
+                return true;
+            }
+
+            arguments = [];
+            return false;
+        }
+    }
+
+    private sealed class RecordingMessageBus : IMessageBus
+    {
+        public List<IData> Published { get; } = [];
+
+        public Task PublishAsync(IDataProducer dataProducer, IData data)
+        {
+            Published.Add(data);
+            return Task.CompletedTask;
+        }
+    }
+
+#pragma warning disable TPEXP // IExecuteRequestCompletionNotifier is MTP preview API.
+    private sealed class CompletionNotifier : IExecuteRequestCompletionNotifier
+    {
+        public bool IsCompleted
+        {
+            get;
+            private set;
+        }
+
+        public void Complete() => IsCompleted = true;
+    }
+#pragma warning restore TPEXP
 
     private static FakeGodotProcess CreateSuccessfulProbeProcess()
     {
@@ -448,4 +975,57 @@ public sealed class GodotTestFrameworkTests
         {
         }
     }
+
+    // Live-LLM gate fixtures are deliberately private so the xUnit runner does not execute them, while the
+    // framework's reflection-based discovery still sees their [Fact] methods through assembly.GetTypes().
+#pragma warning disable xUnit1000 // These are framework-discovery fixtures, not xUnit test classes.
+    private sealed class LiveLlmUnmarkedFixture
+    {
+        [Fact]
+        public static void OrdinaryTest()
+        {
+        }
+    }
+
+    private sealed class LiveLlmMethodMarkedFixture
+    {
+        [Fact]
+        [LiveLlm]
+        public static void LiveTest()
+        {
+        }
+    }
+
+    [LiveLlm]
+    private sealed class LiveLlmClassMarkedFixture
+    {
+        [Fact]
+        public static void LiveTest()
+        {
+        }
+    }
+
+    [LiveLlm]
+    private sealed class LiveLlmMethodAndClassMarkedFixture
+    {
+        [Fact]
+        [LiveLlm]
+        public static void LiveTest()
+        {
+        }
+    }
+
+    [LiveLlm]
+    private abstract class LiveLlmMarkedBaseFixture
+    {
+    }
+
+    private sealed class LiveLlmDerivedFixture : LiveLlmMarkedBaseFixture
+    {
+        [Fact]
+        public static void DerivedLiveTest()
+        {
+        }
+    }
+#pragma warning restore xUnit1000
 }

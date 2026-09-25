@@ -9,12 +9,14 @@ title: Integration Test Framework
 
 Provide a dependable integration test framework for behaviours requiring Godot runtime APIs. It must support local and
 headless execution, selective runs, stable test identity, actionable diagnostics, and materially faster full-suite
-execution through persistent reusable runtime sessions.
+execution through persistent reusable runtime sessions. Integration tests that call live external LLM services must be
+opt-in so default runs need no credentials and incur no provider cost.
 
 ## Goal
 
 Enable contributors and agents to validate Godot-runtime behaviour with repeatable, debuggable integration-test runs,
-keeping full-suite execution fast enough for routine pre-handoff verification.
+keeping full-suite execution fast enough for routine pre-handoff verification, while live LLM tests stay explicitly
+gated so only opted-in runs contact real providers.
 
 ## User Requirements
 
@@ -27,6 +29,14 @@ keeping full-suite execution fast enough for routine pre-handoff verification.
 5. Every test must still be reported individually, and each failure must remain attributable to the exact test that
    produced it.
 6. An unhealthy session must never poison the results of tests that run after it is replaced.
+7. Default suite runs must not require live LLM credentials, network access, or provider cost: live-marked tests stay
+   excluded from discovery and execution unless explicitly permitted.
+8. Explicitly permitting live tests must add them to a run without removing ordinary tests, so one selected run can
+   mix both.
+9. A live test excluded by the gate must produce no result at all — never a passed node — so a green run without the
+   opt-in never implies live coverage.
+10. Live-test configuration and diagnostics must never expose credentials: private settings are supplied locally by
+    each contributor, and failure messages stay secret-free.
 
 ## Technical Requirements
 
@@ -61,6 +71,26 @@ keeping full-suite execution fast enough for routine pre-handoff verification.
     semantics bound the resulting blast radius.
 16. The [Integration-Test Contributor Guide](contributor-guide.md) is the normative operational contract for
     contributor run, filter, diagnostic, timeout, and recovery workflows.
+17. Integration tests requiring live LLM access must carry `[LiveLlm]` on the method or its declaring class
+    (inherited; either marker marks the test) and are governed by the central gate defined in
+    [Live LLM Testing](#live-llm-testing).
+18. The gate must apply to both discovery and execution with eligibility defined as: existing UID/CLI selection AND
+    (`--live-llm` supplied OR test not live-marked). Exact `--test-class`/`--test-method` selectors and MTP UID
+    execution filters must not bypass it, and an excluded live test must produce no discovered node, no in-progress
+    node, no terminal node, and no passed result.
+19. The `--live-llm` option must be zero-argument (arguments rejected during validation), default false, and fail
+    closed when the command-line options service is unavailable. Supplying it permits live-marked tests without
+    excluding ordinary tests and leaves `--headless`, selector precedence, session lifecycle, preflight, and result
+    semantics unchanged.
+20. Live test clients must resolve settings only from the `AITest` section of the running `Game` merged
+    configuration — never the production `AI` section, with no fallback — validating required `Host`, `Model`, and
+    `ApiKey` and optional positive `Timeout` (seconds) with secret-free, section-correct diagnostics, as defined in
+    [Live LLM Testing](#live-llm-testing).
+21. Live evaluation must follow the fail-closed contracts in [Live LLM Testing](#live-llm-testing): single-shot
+    serial target-then-judge execution, a validated single numeric metric on the documented 1–5 rubric, an inclusive
+    threshold, sanitised failure output, disposal of owned clients on every path, and no retry-until-pass.
+22. Evaluation dependencies are permitted only in the integration-test project; the game project must not reference
+    `Microsoft.Extensions.AI.Evaluation.Quality` or its evaluation-core transitives.
 
 ## In Scope
 
@@ -71,6 +101,8 @@ keeping full-suite execution fast enough for routine pre-handoff verification.
 - Per-test lifecycle support via constructor and disposal patterns.
 - Persistent session execution: mode-partitioned reusable sessions, serial in-session execution, the session wire
   protocol, runtime-owned baseline restoration, and session restart semantics.
+- Opt-in gated discovery and execution for `[LiveLlm]` integration tests, the dedicated `AITest` configuration
+  boundary, and the reusable live client and evaluation support layer.
 
 ## Out Of Scope
 
@@ -81,6 +113,10 @@ keeping full-suite execution fast enough for routine pre-handoff verification.
 - Collection-level fixtures (`IClassFixture`, `ICollectionFixture`).
 - Parallel execution within a session; execution is strictly serial.
 - OS-process and CLR isolation between tests within a session.
+- Provisioning, distributing, or storing live LLM credentials; each contributor supplies a private local override.
+- Live-evaluation result caching, dashboards, or reporting beyond the existing per-test MTP nodes.
+- Divergent target/judge provider configuration; the injectable client pair is the seam, but both clients use the
+  same `AITest` settings today.
 
 ## Contributor Operations
 
@@ -194,6 +230,10 @@ Timeout environment variables keep their roles:
   termination if it is absent, invalid, mismatched, or late.
 - `ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS` — retains its role for the optional import preflight.
 
+The per-request timeout bounds the whole dispatched fact with no cooperative cancellation token reaching the test
+body; live LLM tests must therefore fit both serial provider calls inside it (see
+[Live LLM Testing](#live-llm-testing)).
+
 ## Lifecycle Invocation Policy
 
 For each test method execution, inside the session:
@@ -233,6 +273,81 @@ default, headless for `[Headless]` — because a session process's rendering mod
 Windowed mode is retained as the default because it mirrors editor/runtime rendering more closely. Headless mode is an
 explicit framework capability for tests whose contracts do not depend on a renderer.
 
+## Live LLM Testing
+
+This section is a normative dependency for the live-LLM Technical Requirements above. It defines the opt-in gate, the
+dedicated configuration boundary, and the reusable client and evaluation support layer for integration tests that call
+real LLM providers. Operational workflows live in the
+[Integration-Test Contributor Guide](contributor-guide.md#live-llm-tests).
+
+### Opt-In Gate
+
+- `[LiveLlm]` (`test-framework/src/LiveLlmAttribute.cs`) is valid on methods and classes, is inherited, and marks a
+  test when either the method or its declaring type carries it.
+- The zero-argument `--live-llm` CLI flag defaults to false, rejects arguments during validation, and fails closed
+  (live tests stay excluded) when the command-line options service is unavailable.
+- One gate in `GodotTestFramework.FilteredTests` serves both discovery and execution. Eligibility is: existing
+  UID/CLI selection AND (`--live-llm` present OR test not live-marked). Exact `--test-class`/`--test-method`
+  selectors and MTP UID execution filters cannot bypass it.
+- An excluded live test produces no discovered node, no in-progress node, no terminal node, and no test process
+  launch; it can never be reported as passed.
+- `--live-llm` only permits; it never excludes ordinary tests. `--headless`, selector precedence, session lifecycle,
+  preflight, and result semantics are unchanged by the flag.
+
+### Configuration Boundary
+
+- Live settings resolve only from the `AITest` section of the merged configuration of the running `Game`
+  (`integration-tests/src/Support/AI/LiveLLMClientFactory.cs`). The production `AI` section is never consulted and
+  no production default substitutes for a missing test setting.
+- The shipped `game/AlleyCat.yaml` intentionally defines no active `AITest` section; a commented-out example
+  documents its shape. Private values come from the contributor's local user override (`user://AlleyCat.yaml`) and
+  must never be committed; the factory reading the running `Game` configuration is the only authorised credential
+  boundary.
+- Required settings: `Host` — an absolute HTTP(S) URL including the API base path (for example
+  `https://api.openai.com/v1`); `Model`; `ApiKey`. Optional: `Timeout` — a positive number of seconds; omitted keeps
+  the existing client default. The shape mirrors `AIOptions`.
+- Validation failures are fixed, section-correct, and secret-free: they name keys (for example `AITest:Timeout`),
+  distinguish configured from missing values, and never echo configured values. Test-local clients disable SDK
+  retries (`ClientRetryPolicy(0)`) and message-content logging without changing production logging.
+- The game's production `AI` loading paths are unchanged; the arbitrary-section settings loader is an internal
+  overload of `OpenAIClientProvider.OpenAIClientProviderSettings`
+  (`game/src/Mind/AI/Provider/OpenAIClientProvider.cs`).
+
+### Client And Evaluation Support
+
+- `LiveLLMClientFactory.CreateLiveClients()` returns a disposable `LiveLLMClientPair` holding separately constructed
+  target and judge `IChatClient`s built from the same `AITest` settings. The pair's public constructor keeps each
+  client independently injectable — the design boundary for deterministic fakes and future target/judge
+  substitution — although no divergent target/judge configuration exists today.
+- `LiveLLMEvaluation.EvaluateAsync` (`integration-tests/src/Support/AI/LiveLLMEvaluation.cs`) performs exactly one
+  non-streaming target request and then exactly one judge evaluation, forwarding the cancellation token to both. It
+  rejects a target response that lacks assistant text or attempts function calls before judging.
+- Judge results are validated fail-closed before scoring: the evaluator declares exactly one metric; the metric is
+  present and a `NumericMetric`; its value is finite and within the documented 1–5 rubric; its reason is non-empty;
+  it carries no error-severity diagnostics; and its interpretation is not marked failed. The threshold comparison
+  is inclusive.
+- Failure output carries metric name, score, interpretation rating, threshold, and bounded sanitised judge reasoning
+  only. Raw provider exceptions, diagnostic collections, configuration records, and credential-shaped values are
+  never serialised into assertion output.
+- The evaluation call owns and disposes the client pair on every path, and there is no retry-until-pass: a failed
+  evaluation is a failed test.
+- The representative fixture `integration-tests/src/Mind/AI/LiveRoleplayIntegrationTests.cs` is marked `[LiveLlm]`
+  and `[Headless]`; it asserts the real rendered prompt's committed lore facts before any network call, performs
+  the live target call, asserts response shape deterministically, then judges groundedness with an explicitly
+  passed `GroundednessEvaluatorContext` at threshold 5 — deliberately stricter than the evaluator's built-in
+  greater-than-or-equal-to-4 interpretation.
+- `Microsoft.Extensions.AI.Evaluation.Quality` (and its transitive evaluation core) is referenced only by
+  `integration-tests/AlleyCat.IntegrationTests.csproj`, never by the game project.
+
+### Cost And Timing
+
+- Every permitted live test makes real, billable provider calls — one target request plus one judge request per
+  evaluation — and target and judge calls are serial within the test.
+- Parameterless facts receive no runner cancellation token; `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` bounds the host's
+  whole-fact wait and must cover both calls. `AITest:Timeout` is only the per-request SDK network timeout. No new
+  timeout mechanism exists; raise the fact budget for slow providers rather than expecting cooperative
+  cancellation.
+
 ## Supported CLI Options
 
 - `--test-class <Fully.Qualified.TypeName[,...]>` — narrows selection to tests whose declaring type exactly matches
@@ -240,6 +355,8 @@ explicit framework capability for tests whose contracts do not depend on a rende
 - `--test-method <Fully.Qualified.TypeName.MethodName[,...]>` — narrows selection to the listed exact test methods.
 - `--headless` — forces all tests to run in headless mode. Overrides per-test and per-class `HeadlessAttribute`
   settings. Intended for tests known to be safe without renderer-backed behaviour.
+- `--live-llm` — permits integration tests marked `[LiveLlm]` to run; live-marked tests stay excluded without this
+  flag. Takes no arguments and never excludes ordinary tests; see [Live LLM Testing](#live-llm-testing).
 
 **Selector lists:** each selection option takes one value that may be a comma-separated list of exact, fully
 qualified selectors, selecting the union of all matches; a single selector behaves exactly as before. Every
@@ -285,16 +402,33 @@ all-empty list (for example `","`) is rejected during validation.
 14. The [Integration-Test Contributor Guide](contributor-guide.md) provides a linked, executable quick start; exact
     selectors; windowed, Xvfb, headless, and XR guidance; outcome and session diagnostics; timeout mapping; and
     actionable recovery for protocol, timeout, crash, non-reusable-session, import-cache, and preflight failures.
-15. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements.
+15. Without `--live-llm`, live-marked tests are absent from discovery and execution — including under exact
+    `--test-class`, `--test-method`, and MTP UID selection — producing no discovered, in-progress, or terminal node
+    and no passed result; the default suite runs without `AITest` credentials.
+16. With `--live-llm`, live-marked tests run alongside ordinary tests under unchanged selector, headless, session,
+    preflight, and result semantics.
+17. `--live-llm` rejects arguments and fails closed when the command-line options service is unavailable.
+18. Live settings resolve only from `AITest` with the documented required/optional shape; missing or invalid
+    settings fail with secret-free, section-correct messages that never echo configured values.
+19. Evaluation failures stay sanitised (metric name, score/rating, threshold, redacted bounded reasoning), the
+    evaluation support layer is verifiable deterministically with fake clients, and no path retries a failed
+    evaluation until it passes.
+20. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-19
+    additionally verify User Requirements 7-10 and Technical Requirements 17-22.
 
 ## References
 
 - @test-framework/src/TestingPlatformBuilderHook.cs
 - @test-framework/src/GodotTestFramework.cs
+- @test-framework/src/LiveLlmAttribute.cs
 - @test-framework/AlleyCat.TestFramework.csproj
 - @test-framework/AlleyCat.TestFramework.Tests.csproj
 - @integration-tests/AlleyCat.IntegrationTests.csproj
 - @integration-tests/src/Testing/ReusableSessionIntegrationTests.cs
+- @integration-tests/src/Support/AI/LiveLLMClientFactory.cs
+- @integration-tests/src/Support/AI/LiveLLMClientPair.cs
+- @integration-tests/src/Support/AI/LiveLLMEvaluation.cs
+- @integration-tests/src/Mind/AI/LiveRoleplayIntegrationTests.cs
 - @game/src/Testing/TestRuntimeRunner.cs
 - [Integration-Test Contributor Guide](contributor-guide.md)
 - @specs/index.md
