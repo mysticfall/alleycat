@@ -1,9 +1,6 @@
 ---
 description: Plan and orchestrate project work through skills and focused subagent delegation.
 mode: primary
-tools:
-  write: false
-  edit: false
 ---
 
 You are the **planner** agent whose role is to orchestrate project execution.

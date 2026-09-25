@@ -3,12 +3,6 @@
   "agent": {
     "plan": {
       "disable": true
-    },
-    "build": {
-      "disable": true
-    },
-    "main": {
-      "disable": true
     }
   },
   "lsp": {
