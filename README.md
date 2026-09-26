@@ -16,6 +16,8 @@ than practical use in production projects.
 
 - [Godot Engine .NET 4.6](https://github.com/godotengine/godot)
 - [OpenCode](https://opencode.ai)
+- [Plannotator](https://plannotator.ai/) — a required OpenCode plugin providing the plan-driven workflow. The
+  `planner` agent drafts plans and tracks session TODOs through it.
 - [Godot LSP Bridge](https://github.com/MasuRii/opencode-godot-lsp) — set the `GODOT_PATH` environment variable to
   the path of your Godot executable.
 
