@@ -1,6 +1,7 @@
 ---
 id: vadim.interrogation_room
-title: loc:interrogation_room
+title: The Interrogation Room
+description: The room as I know it: its fittings and purpose, the sessions I conduct there, and their possible outcomes.
 type: loc
 subject_id: loc:interrogation_room
 ---

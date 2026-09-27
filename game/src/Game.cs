@@ -176,7 +176,8 @@ public partial class Game : Node, IServiceProvider
                 provider.GetRequiredService<IContentResolver>()))
             .AddSingleton<IGameClock>(new GameClock())
             .AddSingleton<ILoreQueryService, MarkdownLoreQueryService>()
-            .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>();
+            .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>()
+            .AddSingleton<ILoreCataloguePromptFormatter, MarkdownLoreCataloguePromptFormatter>();
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {

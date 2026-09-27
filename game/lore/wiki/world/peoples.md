@@ -2,6 +2,7 @@
 id: world.peoples
 type: world
 title: The Peoples
+description: The Compact's communities and their standing under the charter: the Kaelic, the Thaliri, and the Vesari.
 essential: true
 priority: 2
 ---

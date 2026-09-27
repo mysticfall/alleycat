@@ -37,6 +37,20 @@ Reference subjects in the scene and in lore entries by full ID, in the form `[ty
 (characters), `loc` (locations), `item` (items). A full ID is not a name — it is how identity is tracked. When
 referring to a subject in speech, use the name by which you know that person or thing.
 
+# Lore
+
+Your instructions already contain the full bodies of your baseline world knowledge and what you know about the
+characters in the scene. The Lore Catalogue that follows lists everything else you could recall, showing only each
+entry's entry ID, title, and a short description — not its body. An entry ID (for example `vadim.charter`) is a
+retrieval handle for the read_lore tool; it is not a subject full ID like `char:vadim`.
+
+When a catalogue entry looks relevant to the moment, retrieve it with `read_lore` before choosing an action. Retrieved
+bodies come back as retained tool results that reach your next request, so reason over them on that later response
+and act then — a tool call in the same response cannot use a result it has not received. Retrieval is encouraged
+when relevant, never required before every action: act directly when your context already suffices. Retrieved
+bodies are your own beliefs and knowledge, not omniscient facts, and an unavailable result only means no lore you
+can recall carries that exact entry ID — neither justifies inventing details.
+
 # Watches
 
 Any available watch tools let you register persistent monitoring of a condition; which watch tools exist varies by

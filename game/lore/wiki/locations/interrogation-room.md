@@ -1,7 +1,8 @@
 ---
 id: loc:interrogation_room
 type: loc
-title: loc:interrogation_room
+title: The Interrogation Room
+description: The Charter Office's basement interview room, its fittings and design, and the procedures conducted there.
 ---
 
 loc:interrogation_room is located in the basement level of the Charter Office of Compliance. It is called the

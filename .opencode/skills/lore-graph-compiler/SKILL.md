@@ -19,15 +19,19 @@ Every task must operate on exactly one active content context.
 
 ## Lore Root Contract
 
-The current runtime essential-lore slice only requires the canonical wiki directory:
+The current AI-004 runtime slice loads observer perspective lore only:
 
 ```text
 <lore-root>/
-└── wiki/          # Canonical Markdown lore pages.
+└── perspectives/  # Observer perspective Markdown lore; runtime source for essential world injection,
+                   # the session-start catalogue, and entry-ID retrieval.
 ```
 
+The canonical `wiki/` tree below is authoring-only at runtime: AI-004 never injects, catalogues, or retrieves
+canonical pages for an observer perspective, and `essential` marks perspective world lore only.
+
 Graph compilation work may add the extended directories below when that workflow is invoked. Do not require these
-directories for the runtime `default` sample lore root used by the essential-lore prompt injection slice.
+directories for the runtime `default` sample lore root used by the prompt injection slice.
 
 ```text
 <lore-root>/
@@ -42,8 +46,9 @@ may demonstrate the structure, but must not be treated as the schema authority.
 
 ## Wiki Page Convention
 
-Markdown pages under `<root>/wiki` are canonical lore source. Essential-lore runtime pages only require valid
-frontmatter and boolean `essential` values when present.
+Markdown pages under `<root>/wiki` are canonical authoring source; runtime essential lore, the catalogue, and
+entry-ID retrieval read the perspective trees per AI-004. Runtime-eligible pages require valid frontmatter, and every
+`essential` value must be a boolean when present.
 
 Markdown pages are graph node candidates when graph compilation is in scope and they include YAML frontmatter with these
 fields:
@@ -52,13 +57,18 @@ Required fields:
 
 - `id`: stable graph node ID, using a namespace-style value such as `character.alley`.
 - `type`: node type ID defined by ontology.
-- `title`: human-readable display title.
+- `title`: human-readable display title in Title Case, independent of `id` (the AI-004 display-title convention;
+  known names or observer-known descriptive labels, never IDs).
 
 Optional fields:
 
 - `aliases`: list of alternate names that can resolve to the node.
 - `tags`: list of loose authoring labels. Tags are not a substitute for typed graph relationships.
-- `essential`: when `true`, marks the page for static essential-lore prompt injection.
+- `description`: optional single-line scope preview of the topics the page covers; not a fact summary or a
+  when/why lookup trigger (the AI-004 description convention).
+- `essential`: when `true`, marks world lore for baseline essential-lore prompt injection when read from a perspective
+  tree. AI-004 loads observer perspective lore only, so an `essential: true` flag on a canonical `wiki/` page is
+  preserved authoring metadata with no runtime injection effect.
 - `links`: list of explicit typed graph relationships from this page's node.
 
 Each `links` item must include:
@@ -120,10 +130,15 @@ Optional relation type fields:
 
 - Active content id: `default` or an optional pack id.
 - Active lore root: `game/lore` for `default`, or `game/content/<id>/lore` for an optional pack.
-- Canonical wiki source: `<root>/wiki`.
 
-Additional inputs are required only when graph compilation, ontology validation, or suggestions are in scope:
+Runtime perspective validation (essential-lore validation, catalogue, or entry-ID retrieval checks) requires the active
+observer perspective tree `<lore-root>/perspectives/<observer-type>/<observer-id>/` instead of canonical wiki; AI-004
+loads observer perspective lore only, so ordinary runtime validation must not require `<root>/wiki`.
 
+Additional inputs are required only when canonical wiki, graph compilation, ontology validation, or suggestion work is
+requested:
+
+- Canonical wiki source: `<root>/wiki` (canonical wiki work and graph compilation).
 - Canonical ontology source: `<root>/ontology`.
 - Derived graph output: `<root>/compiled`.
 - Advisory suggestions: `<root>/suggestions`.
@@ -131,8 +146,8 @@ Additional inputs are required only when graph compilation, ontology validation,
 
 ## Deterministic Sync Rules
 
-Apply these rules when graph compilation or derived artefact sync is invoked. For the current essential-lore runtime
-slice, validate Markdown source and essential-lore frontmatter without requiring graph output.
+Apply these rules when graph compilation or derived artefact sync is invoked. For the current AI-004 runtime slice,
+validate Markdown source and essential frontmatter without requiring graph output.
 
 1. Treat wiki and ontology files as source of truth.
 2. Treat compiled artefacts as replaceable derived output, but avoid unnecessary rewrites.
@@ -145,8 +160,13 @@ slice, validate Markdown source and essential-lore frontmatter without requiring
 
 - [ ] The active content id maps to `game/lore` (`res://lore`) for `default`, or to
       `game/content/<id>/lore` (`res://content/<id>/lore`) for an optional pack.
-- [ ] The canonical wiki source exists at `<root>/wiki` for essential-lore runtime loading.
-- [ ] Every `essential` value, when present, is a boolean.
+- [ ] Runtime lore resolves under `<lore-root>/perspectives/<observer-type>/<observer-id>/` per AI-004; the canonical
+      `wiki/` tree is authoring-only at runtime.
+- [ ] Every `essential` value, when present, is a boolean. Only perspective world `essential: true` entries mark lore
+      for baseline prompt injection; canonical world `essential` flags are preserved authoring metadata with no
+      runtime injection effect.
+- [ ] Every `description`, when present, is a single-line scope preview of the page's covered topics, not a fact
+      summary or a when/why lookup trigger.
 
 Additional checks apply only when graph compilation or ontology validation is in scope:
 
@@ -176,7 +196,9 @@ Do not apply these to canon unless the invoking agent says the user approved the
 ## Response Requirement
 
 Use this response shape when graph compilation or suggestion work is invoked. Essential-lore validation may return a
-focused report that covers content context, wiki source, essential-frontmatter validation, and escalations.
+focused report that covers content context, the lore source validated (the observer perspective tree for runtime
+validation; canonical wiki only when canonical or graph work is requested), essential-frontmatter validation, and
+escalations.
 
 Return the `lore-compiler` final report shape exactly:
 

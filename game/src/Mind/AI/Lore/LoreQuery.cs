@@ -118,3 +118,82 @@ public sealed record LoreQuery
     public static LoreQuery Essential(string observerID) => new(observerID, [LoreSubjectRequest.World()]);
 
 }
+
+/// <summary>
+/// Describes an observer-scoped catalogue query: every runtime-eligible entry in the bound content root and
+/// observer perspective across the world, character, and location collections (AI-004 requirement 44). Entries
+/// return in World, Characters, Locations group order with deterministic ordering inside each group. Selection
+/// driven by prompt-side automatic injection stays a prompt concern; the catalogue query itself excludes
+/// nothing.
+/// </summary>
+public sealed record LoreCatalogueQuery
+{
+    /// <summary>Creates a catalogue query for one observer perspective.</summary>
+    public LoreCatalogueQuery(string observerID)
+    {
+        IdentityValidator.ValidateFullId(observerID, nameof(observerID));
+        ObserverID = observerID;
+    }
+
+    /// <summary>Gets the canonical observer FullId.</summary>
+    public string ObserverID
+    {
+        get;
+    }
+}
+
+/// <summary>
+/// Describes an exact entry-ID batch lookup for one observer perspective. Entry IDs are opaque exact strings
+/// distinct from subject FullIds: they match by ordinal equality without case folding, trimming, subject-ID
+/// interpretation, or alias lookup (AI-004 requirement 43). The complete batch is validated before any read: it
+/// must be non-empty with no null or blank IDs, and repeated IDs are deduplicated by ordinal equality while
+/// preserving first-request order (AI-004 requirement 47).
+/// </summary>
+public sealed record LoreEntryIDQuery
+{
+    /// <summary>Creates an entry-ID batch lookup for one observer perspective.</summary>
+    public LoreEntryIDQuery(string observerID, IEnumerable<string> entryIDs)
+    {
+        IdentityValidator.ValidateFullId(observerID, nameof(observerID));
+        ObserverID = observerID;
+        ArgumentNullException.ThrowIfNull(entryIDs);
+
+        List<string> uniqueIDs = [];
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach (string? entryID in entryIDs)
+        {
+            if (string.IsNullOrWhiteSpace(entryID))
+            {
+                throw new ArgumentException(
+                    "Lore entry IDs must be exact non-blank strings; the batch rejects null or blank IDs.",
+                    nameof(entryIDs));
+            }
+
+            if (seen.Add(entryID))
+            {
+                uniqueIDs.Add(entryID);
+            }
+        }
+
+        if (uniqueIDs.Count == 0)
+        {
+            throw new ArgumentException("At least one lore entry ID is required.", nameof(entryIDs));
+        }
+
+        EntryIDs = uniqueIDs.AsReadOnly();
+    }
+
+    /// <summary>Gets the canonical observer FullId.</summary>
+    public string ObserverID
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Gets the distinct requested entry IDs in first-request order. Lookup results align with this order.
+    /// </summary>
+    public IReadOnlyList<string> EntryIDs
+    {
+        get;
+    }
+}

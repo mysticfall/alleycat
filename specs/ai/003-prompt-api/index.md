@@ -31,7 +31,9 @@ information it has already been supplied.
 7. Shared watch guidance refers to available watch tools rather than a fixed tool set and presents listed watches as
    monitoring registrations, not assertions that a condition is currently true.
 8. An NPC always sees the current game time in its current scene status — including when no character is attended — on
-   the same clock as its event-history timestamps.
+    the same clock as its event-history timestamps.
+9. An NPC keeps its automatic lore context and receives a stable, grouped catalogue of remaining available lore, with
+   guidance to retrieve relevant entries before acting without making retrieval mandatory.
 
 ## Technical Requirements
 
@@ -72,10 +74,10 @@ information it has already been supplied.
 ### Shared Context Interpretation Guidance
 
 12. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
-    instruction — must carry character-neutral guidance covering four concepts: event-history interpretation,
-    current-scene interpretation, action selection, and available watch tools. The concepts are mandatory delivery
-    content; exact prose wording stays tunable. The guidance must not contradict AI-002's automatic per-request
-    delivery, payload-free wait semantics, or tool-exchange disposal (AI-002 TR-17–TR-22).
+    instruction — must carry character-neutral guidance covering event-history interpretation,
+    current-scene interpretation, action selection, available watch tools, and lore discovery/retrieval. These are
+    mandatory content; exact prose stays tunable. Guidance must not contradict AI-002's automatic per-request delivery,
+    payload-free wait semantics, or tool-exchange disposal (AI-002 TR-17–TR-22).
 13. Event-history guidance must match AI-002's timeline-message contract: established entries are prior context, the
     new-history tail marks entries presented since the NPC's previous valid response, and neither label alone means a
     conversational contribution has been answered or resolved.
@@ -88,12 +90,21 @@ information it has already been supplied.
     reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
     remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
     freedom to act, speak, or stay silent according to character and scenario. It must not contradict tool-exchange
-    disposal (AI-002 TR-17–TR-22): settled tool exchanges are never model-visible, and completed actions surface
-    through remembered events and fresh scene status rather than retained tool messages.
+    disposal (AI-002 TR-17–TR-22): disposed `speak`/`wait` exchanges are never model-visible. Completed actions surface
+    through remembered events and fresh scene status; non-opted exchanges, including lore retrieval, remain retained.
 16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
     arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
     removal handle (AI-010 TR-5).
+17. The shared NPC static stack preserves essential-world bodies followed by scene-character bodies, then renders
+    AI-004's grouped catalogue of all remaining eligible observer/content-scoped entries. AI-004 normatively owns
+    metadata, shared selection/exclusion, ordering, empty output, formatting, and isolation. These are session-start
+    lore inputs, not a dynamic scene projection; no automatic location section or catalogue rebuild is required.
+18. Shared lore guidance distinguishes automatically supplied bodies from catalogue listings, identifies exact entry IDs
+    as `read_lore` handles rather than subject `FullId` values, and encourages retrieving relevant entries before
+    choosing an action. Returned bodies are the character's available beliefs, not omniscient facts; unavailable results
+    do not justify invention. Retrieval results reach subsequent reasoning through AI-002's retained exchanges, not
+    observations. Do not require retrieval before every action or promise same-response reasoning over tool results.
 
 ## In Scope
 
@@ -102,8 +113,9 @@ information it has already been supplied.
 - Unconditional current game-time rendering in `CurrentSceneStatus`, on the game clock shared with event timestamps.
 - Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
 - Session-fixed scenario context and fresh request-scene snapshot separation.
-- Character-neutral shared context-interpretation guidance (event history, current scene, action selection, watches)
-  required in the authored static instruction.
+- Character-neutral shared context-interpretation guidance (history, current scene, action selection, watches, lore)
+  in the authored static instruction.
+- Session-start grouped lore catalogue after unchanged automatic lore bodies, under AI-004's normative contracts.
 
 ## Out Of Scope
 
@@ -130,7 +142,9 @@ information it has already been supplied.
 6. Acceptance shows the current scene status always presents the current game time — including with an empty attended
    list — on the same clock as event timestamps, while event entries keep their original observation times.
 7. Acceptance shows the shared instruction never contradicts the common game clock, the snapshot capture of the
-   current scene status, or completed actions surfacing through event history and current scene status.
+    current scene status, or completed actions surfacing through event history and current scene status.
+8. Acceptance shows unchanged automatic lore context alongside a grouped catalogue of remaining available lore, and
+   guidance to retrieve relevant entries before acting without requiring retrieval for every action (UR-9).
 
 ### Technical Requirements
 
@@ -150,8 +164,8 @@ information it has already been supplied.
 6. Tests verify continuation projection preserves segment grouping, ordering, correlation, and latest-event placement
    while projected speech uses canonical observation-owned text.
 7. Tests verify the authored shared instruction contains guidance covering each required concept — history
-   interpretation, current-scene evidence limits and timestamps, action selection, and watch registration — and stays
-   consistent with AI-002's automatic per-request delivery, payload-free wait semantics, and tool-exchange disposal.
+    interpretation, current-scene evidence limits and timestamps, action selection, watches, and lore retrieval — and
+    stays consistent with AI-002's automatic per-request delivery, payload-free wait semantics, and disposal.
 8. Tests verify shared watch guidance is composition-neutral, referring to available watch tools and presenting listed
    watches as registrations rather than condition truth, and that it routes watch transitions through ordinary event
    history.
@@ -160,11 +174,17 @@ information it has already been supplied.
    events keep their original observation times.
 10. Tests verify the current-time capture is frozen with its request — exact transport retries keep it while recovery
     and replacement recapture — and that the authored shared guidance does not contradict the common game clock, the
-    snapshot capture, or completed actions surfacing only through remembered events and fresh scene status.
+     snapshot capture, or completed actions surfacing only through remembered events and fresh scene status.
+11. Tests verify the catalogue renders once at session start after unchanged automatic lore sections, obeys AI-004's
+    shared-selection and presentation contracts, and is not rebuilt by fresh scene status or retrieval (TR-17).
+12. Tests verify shared guidance distinguishes listings from bodies and entry IDs from subject IDs, encourages relevant
+    retrieval for subsequent reasoning, treats results as observer beliefs, and promises neither mandatory retrieval,
+    invented missing lore, observations, nor same-response reasoning over results (TR-18).
 
 ## References
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
+- [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [AI-010: Agent Watches](../010-agent-watches/index.md)

@@ -258,7 +258,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
         object[] orderedSections = [.. sections.Cast<object>()];
-        Assert.Equal(4, orderedSections.Length);
+        Assert.Equal(5, orderedSections.Length);
         object instructionSection = orderedSections[0];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
@@ -267,14 +267,16 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sectionText = ReadResourceText(sectionFilePath);
         // The shared instruction stays a character-parameterised template rather than fixed prose.
         Assert.Contains("{{ character.FullId }}", sectionText, StringComparison.Ordinal);
-        // Shared context-interpretation guidance (AI-003 TR-12–16): the four mandatory concepts — event-history
-        // interpretation, current-scene interpretation, action selection, and watches — stay authored as sections,
-        // character-neutrally. Exact prose wording is game content and stays tunable, so only section structure
-        // and character neutrality are asserted.
+        // Shared context-interpretation guidance (AI-003 TR-12–18): the five mandatory concepts — event-history
+        // interpretation, current-scene interpretation, action selection, watches, and lore discovery/retrieval —
+        // stay authored as sections, character-neutrally. Exact prose wording is game content and stays tunable, so
+        // only section structure and character neutrality are asserted.
         Assert.Contains("# Event History", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Current Scene", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Choosing Actions", sectionText, StringComparison.Ordinal);
+        Assert.Contains("# Lore", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Watches", sectionText, StringComparison.Ordinal);
+        Assert.Contains("read_lore", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("watch_proximity", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
@@ -282,11 +284,14 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
         Assert.Equal("AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection", orderedSections[2].GetType().FullName);
         Assert.Equal("Characters", GetPropertyValue<string>(orderedSections[2], "Name"));
-        object scenarioSection = orderedSections[3];
+        // The grouped catalogue of remaining lore follows the automatic lore bodies (AI-003 TR-17; AI-004 TR-46).
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.LoreCataloguePromptSection", orderedSections[3].GetType().FullName);
+        Assert.Equal("Lore Catalogue", GetPropertyValue<string>(orderedSections[3], "Name"));
+        object scenarioSection = orderedSections[4];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
         Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
         Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
-        // The production tool inventory (speak, wait) is created internally without scene authoring
+        // The production tool inventory (speak, wait, read_lore) is created internally without scene authoring
         // (AI-002 TR-13): authored tools remain an extension point and are empty in the shared templates.
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));
         Assert.Empty(tools.Cast<object>());

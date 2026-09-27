@@ -38,6 +38,8 @@ accurately.
    and cancelled or failed speech leaves no invented memory.
 10. An NPC always knows the current game time when it reasons, carried by current scene status under AI-003 on the same
     clock as its event history.
+11. An NPC can read discovered lore before choosing an action; retrieved knowledge remains available to subsequent
+    reasoning without creating remembered events or changing the world.
 
 ## Technical Requirements
 
@@ -82,7 +84,8 @@ accurately.
 12. Provider responses remain tool-only and are completely validated before any tool effect. Invalid responses have no
     transcript, observation, action, or watermark effect and use bounded recovery; transport retry and recovery remain
     contained.
-13. The tool inventory includes `speak`, `wait`, and authorable watch tools from AI-010. Tool delegates send any
+13. The tool inventory includes `speak`, `wait`, `read_lore` from AI-004, and authorable watch tools from AI-010.
+     Tool delegates send any
      resulting observations through Mind's atomic queue. Tool validation and typed tool binding occur only at
      AgenticMind composition; the common runtime has no feature service bag.
 14. Speech admitted to its voice pipeline remains committed at playback hand-off and uses Mind's node-lifetime
@@ -116,15 +119,29 @@ accurately.
     reasoning content — together with their tool-result message. Disposal is all-or-nothing per exchange, leaving no
     partial removal and no orphaned tool call or result.
 20. An exchange is disposed iff every tool call in its batch targets a disposal-opted tool. `speak` and `wait` opt in;
-    every other tool — authorable watch tools from AI-010 and authored extras — defaults to retention. A batch mixing
-    opted and non-opted calls is retained whole.
+    every other tool — `read_lore`, authorable watch tools from AI-010, and authored extras — defaults to retention.
+    A batch mixing opted and non-opted calls is retained whole.
 21. The bootstrap input is never removed, so a fully disposed transcript reduces to the bootstrap input alone.
     Session-wide tool call-ID duplicate validation is independent of transcript retention: a consumed call ID stays
     consumed for the whole session even after its exchange is disposed.
 22. Disposed tool results never appear in any request context. Committed speech survives through the persisted
     self-speech observation in the per-request event timeline (AI-001); speech cancelled or failed before playback
     hand-off leaves no character-visible trace; infrastructure failures stay in runtime diagnostics and are never
-    promoted to timeline or scene text.
+     promoted to timeline or scene text.
+
+### Read-Only Lore Tool
+
+23. Compose `read_lore` at AgenticMind with the associated character's trusted observer identity, current content
+    context, and existing asynchronous lore query and formatting dependencies. Only entry IDs are model inputs: the
+    model cannot supply an observer, content root, or source path. AI-004's Discovery and Entry-ID Retrieval section
+    is normative for validation, ordering, deduplication, unavailable results, isolation, cleaning, and cancellation.
+24. `read_lore` is read-only and emits no Mind observations or lore mutations. Its successful exchange follows default
+    retention (TR-20), so the next provider request includes the results before a subsequent action decision. Do not add
+    a memory subsystem, special scheduling path, or disposal override; mixed batches retain the whole exchange as usual.
+25. Model-facing retrieval guidance explains exact entry-ID inputs, explicit unavailable results, and retained returned
+    knowledge. Encourage a retrieval request followed by reasoning over the result before choosing a relevant action;
+    a later call in the same provider response cannot reason over a result not yet received. Retrieval is not mandatory
+    before every action, and `speak`/`wait` guidance and disposal remain unchanged.
 
 ## In Scope
 
@@ -138,6 +155,7 @@ accurately.
 - Accurate model-facing session-tool descriptions for automatic delivery, `wait`, and `speak`.
 - Continuation admission and confirmation settlement.
 - Composition-time binding of watch tools with AI-010.
+- Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
 
 ## Out Of Scope
 
@@ -145,7 +163,7 @@ accurately.
 - Summarisation-based transcript compaction and any generic retained-result or working-memory channel. Retention — and
   therefore accumulation — remains for non-opted tools: watch arming and acknowledgement feedback stays model-visible
   per AI-010's current contracts.
-- Watch-exchange disposal, lore tooling and lore working context, and new retry subsystems.
+- Watch-exchange disposal, a separate lore working-memory subsystem, and new retry subsystems.
 - Final timeout, threshold, and retry tuning values.
 
 ## Acceptance Criteria
@@ -168,7 +186,9 @@ accurately.
 6. Acceptance shows committed speech is remembered exactly once as the NPC's own event, and neither cancelled nor
    failed speech leaves a fabricated memory or character-visible trace.
 7. Acceptance shows the NPC can always read the current game time from its current scene status, on the same clock as
-   its event timestamps.
+    its event timestamps.
+8. A deterministic provider fixture requests lore, consumes its returned bodies on the next reasoning request, and then
+   chooses an action without lore retrieval producing remembered events (UR-11).
 
 ### Technical Requirements
 
@@ -197,9 +217,14 @@ accurately.
     persisted self-speech timeline observation, and pre-hand-off cancelled or failed speech leaves no timeline or
     scene trace.
 13. Tests verify every logical request's current scene status carries its snapshot's current game time (AI-003 TR-6).
+14. Tests verify `read_lore` binds trusted observer/content dependencies at AgenticMind, exposes only entry IDs, and
+    follows AI-004's single/batch, missing-result, formatting, isolation, and cancellation contracts (TR-23).
+15. Tests verify no retrieval observations, retained results on the next provider request, whole mixed-batch retention,
+    unchanged `speak`/`wait` disposal, and guidance on retrieval before a subsequent action decision (TR-24–TR-25).
 
 ## References
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
+- [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-010: Agent Watches](../010-agent-watches/index.md)

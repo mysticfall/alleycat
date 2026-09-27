@@ -1,6 +1,7 @@
 ---
 id: vadim.peoples
 title: The Peoples
+description: The Compact's three communities, their standing, my view of each, and the Vesari share of my caseload.
 type: world
 essential: true
 ---

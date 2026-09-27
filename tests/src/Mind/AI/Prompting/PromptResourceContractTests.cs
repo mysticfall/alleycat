@@ -21,6 +21,7 @@ public sealed class PromptResourceContractTests
         AssertResourceContract<FilePromptSection>();
         AssertResourceContract<EssentialLorePromptSection>();
         AssertResourceContract<CharacterLorePromptSection>();
+        AssertResourceContract<LoreCataloguePromptSection>();
         AssertResourceContract<PseudoXmlPromptWriter>(expectTool: true);
     }
 

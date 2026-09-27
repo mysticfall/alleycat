@@ -20,9 +20,26 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
     private const string CommentOpenMarker = "<!--";
     private const string CommentCloseMarker = "-->";
 
+    /// <summary>
+    /// The scope-wide collection order used by catalogue and entry-ID queries, matching the catalogue's World,
+    /// Characters, Locations group order.
+    /// </summary>
+    private static readonly LoreSubjectKind[] _scopeKindOrder =
+        [LoreSubjectKind.World, LoreSubjectKind.Character, LoreSubjectKind.Location];
+
     private readonly Action<string>? _warn = logger is null
         ? null
         : message => logger.LogWarning("Lore: {Warning}", message);
+
+    /// <summary>
+    /// Test instrumentation observing every Markdown file read at the moment the file opens successfully and
+    /// before its text is read. Production leaves it unset; deterministic cancellation tests use it to trigger
+    /// cancellation during a specific read (AI-004 requirement 49).
+    /// </summary>
+    internal Action<string>? FileReadObserver
+    {
+        get; set;
+    }
 
     /// <inheritdoc />
     public Task<IReadOnlyList<LoreEntry>> QueryAsync(
@@ -34,10 +51,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        int observerSeparator = query.ObserverID.IndexOf(':', StringComparison.Ordinal);
-        string observerType = query.ObserverID[..observerSeparator];
-        string observerId = query.ObserverID[(observerSeparator + 1)..];
-        string perspectiveRoot = CombineResourcePath(content.RootPath, $"lore/perspectives/{observerType}/{observerId}/");
+        string perspectiveRoot = GetPerspectiveRoot(content, query.ObserverID);
         Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = [];
         List<LoreEntry> entries = [];
 
@@ -66,10 +80,153 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             }
         }
 
+        // Cancellation observed during the reads must cancel the whole query before it completes successfully
+        // (AI-004 requirement 49).
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<LoreEntry>>(entries);
     }
 
-    private static IReadOnlyList<LoreMarkdownDocument> ReadCollection(
+    /// <inheritdoc />
+    public Task<IReadOnlyList<LoreEntry>> QueryCatalogueAsync(
+        ContentContext content,
+        LoreCatalogueQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind =
+            ReadScope(content, query.ObserverID, cancellationToken, _warn);
+        // Cancellation observed during the reads must cancel the whole query before it completes successfully,
+        // including through result construction (AI-004 requirement 49).
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateScopedEntryIDUniqueness(documentsByKind);
+
+        List<LoreEntry> entries = [];
+        foreach (LoreSubjectKind kind in _scopeKindOrder)
+        {
+            List<LoreMarkdownDocument> documents = [.. documentsByKind[kind]];
+            documents.Sort(CompareDocuments);
+            foreach (LoreMarkdownDocument document in documents)
+            {
+                entries.Add(ToEntry(document, kind));
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<LoreEntry>>(entries);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<LoreEntryLookup>> QueryEntriesAsync(
+        ContentContext content,
+        LoreEntryIDQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind =
+            ReadScope(content, query.ObserverID, cancellationToken, _warn);
+        // Cancellation observed during the reads must cancel the whole query before it completes successfully,
+        // including through result construction (AI-004 requirement 49).
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateScopedEntryIDUniqueness(documentsByKind);
+
+        Dictionary<string, (LoreMarkdownDocument Document, LoreSubjectKind Kind)> documentsByID =
+            new(StringComparer.Ordinal);
+        foreach (LoreSubjectKind kind in _scopeKindOrder)
+        {
+            foreach (LoreMarkdownDocument document in documentsByKind[kind])
+            {
+                if (document.ID is not null)
+                {
+                    documentsByID.Add(document.ID, (document, kind));
+                }
+            }
+        }
+
+        List<LoreEntryLookup> lookups = new(query.EntryIDs.Count);
+        foreach (string entryID in query.EntryIDs)
+        {
+            lookups.Add(documentsByID.TryGetValue(entryID, out (LoreMarkdownDocument Document, LoreSubjectKind Kind) match)
+                ? new LoreEntryLookup(entryID, ToEntry(match.Document, match.Kind))
+                : new LoreEntryLookup(entryID, null));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<LoreEntryLookup>>(lookups);
+    }
+
+    private static string GetPerspectiveRoot(ContentContext content, string observerID)
+    {
+        int observerSeparator = observerID.IndexOf(':', StringComparison.Ordinal);
+        string observerType = observerID[..observerSeparator];
+        string observerId = observerID[(observerSeparator + 1)..];
+        return CombineResourcePath(content.RootPath, $"lore/perspectives/{observerType}/{observerId}/");
+    }
+
+    /// <summary>
+    /// Reads every runtime-eligible collection in one observer/content scope: world, characters, then
+    /// locations, including nested subdirectories at any depth.
+    /// </summary>
+    private Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> ReadScope(
+        ContentContext content,
+        string observerID,
+        CancellationToken cancellationToken,
+        Action<string>? warn)
+    {
+        string perspectiveRoot = GetPerspectiveRoot(content, observerID);
+        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = [];
+        foreach (LoreSubjectKind kind in _scopeKindOrder)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            documentsByKind.Add(kind, ReadCollection(perspectiveRoot, kind, cancellationToken, warn));
+            // A cancellation landing inside a collection's final read must not let the scope read complete
+            // successfully (AI-004 requirement 49).
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        return documentsByKind;
+    }
+
+    /// <summary>
+    /// Enforces AI-004 requirement 43: entry IDs must be ordinally unique across all runtime-eligible world,
+    /// character, and location entries within one observer/content scope, including nested pages. The thrown
+    /// diagnostics name the conflicting source paths for internal triage only; model-facing failures must not
+    /// surface them. Reuse across observers or content roots stays valid because validation never crosses a
+    /// scope boundary.
+    /// </summary>
+    private static void ValidateScopedEntryIDUniqueness(
+        IReadOnlyDictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind)
+    {
+        Dictionary<string, string> sourcePathsByID = new(StringComparer.Ordinal);
+        foreach (LoreSubjectKind kind in _scopeKindOrder)
+        {
+            foreach (LoreMarkdownDocument document in documentsByKind[kind])
+            {
+                if (document.ID is null)
+                {
+                    continue;
+                }
+
+                if (sourcePathsByID.TryGetValue(document.ID, out string? existingSourcePath))
+                {
+                    throw new InvalidOperationException(
+                        $"Duplicate lore entry ID '{document.ID}' in the '{GetFolderName(kind)}' collection at " +
+                        $"'{document.SourcePath}' conflicts with the entry at '{existingSourcePath}'. Lore entry IDs " +
+                        "must be unique across all runtime-eligible world, character, and location entries within " +
+                        "one observer and content scope.");
+                }
+
+                sourcePathsByID.Add(document.ID, document.SourcePath);
+            }
+        }
+    }
+
+    private IReadOnlyList<LoreMarkdownDocument> ReadCollection(
         string perspectiveRoot,
         LoreSubjectKind kind,
         CancellationToken cancellationToken,
@@ -81,6 +238,9 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         {
             cancellationToken.ThrowIfCancellationRequested();
             LoreMarkdownDocument? document = ReadDocument(path, kind, warn);
+            // Cancellation can land inside the read itself — including the collection's final read, whose
+            // cancellation would otherwise never be observed before completion (AI-004 requirement 49).
+            cancellationToken.ThrowIfCancellationRequested();
             if (document is not null)
             {
                 documents.Add(document);
@@ -102,7 +262,8 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             document.Body,
             document.Priority,
             kind,
-            document.SubjectID);
+            document.SubjectID,
+            document.Description);
 
     /// <summary>
     /// Orders documents by priority, then ID, then title, then source path using ordinal comparisons. Runtime
@@ -166,7 +327,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         }
     }
 
-    private static LoreMarkdownDocument? ReadDocument(string path, LoreSubjectKind kind, Action<string>? warn)
+    private LoreMarkdownDocument? ReadDocument(string path, LoreSubjectKind kind, Action<string>? warn)
     {
         using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read);
         if (file is null)
@@ -175,15 +336,18 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             throw new InvalidOperationException($"Could not read lore file '{path}'. Godot FileAccess error: {error}.");
         }
 
+        FileReadObserver?.Invoke(path);
         return ParseDocument(file.GetAsText(), path, kind, warn);
     }
 
     /// <summary>
     /// Parses a Markdown lore page, applying read-time triage and parse-time body cleaning (AI-004 requirements
-    /// 36 to 41). Returns <see langword="null" /> for skipped pages: pages without a frontmatter block or whose
-    /// frontmatter carries no <c>id</c> are skipped silently, while unterminated frontmatter, unclosed
-    /// <c>lore:ignore</c> fences, and bodies emptied by cleaning are skipped with a warning through
-    /// <paramref name="warn" />. Frontmatter field validation stays fail-hard for <c>id</c>-bearing pages.
+    /// 36 to 41). The optional <c>description</c> is a single-line frontmatter value where absent or blank means
+    /// no description (AI-004 requirement 42). Returns <see langword="null" /> for skipped pages: pages without
+    /// a frontmatter block or whose frontmatter carries no <c>id</c> are skipped silently, while unterminated
+    /// frontmatter, unclosed <c>lore:ignore</c> fences, and bodies emptied by cleaning are skipped with a warning
+    /// through <paramref name="warn" />. Frontmatter field validation stays fail-hard for <c>id</c>-bearing
+    /// pages.
     /// </summary>
     internal static LoreMarkdownDocument? ParseDocument(
         string markdown,
@@ -219,6 +383,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         string title = GetRequiredField(frontmatter, "title", sourcePath);
         bool essential = ParseEssential(frontmatter, sourcePath);
         int priority = ParsePriority(frontmatter, sourcePath);
+        string? description = GetOptionalField(frontmatter, "description");
         string? subjectID = ParseSubjectID(frontmatter, sourcePath, kind);
         string body = CleanBody(normalised[(end + "\n---\n".Length)..], sourcePath, warn);
         if (body.Length == 0)
@@ -227,7 +392,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             return null;
         }
 
-        return new LoreMarkdownDocument(id, title, subjectID, essential, priority, body, sourcePath);
+        return new LoreMarkdownDocument(id, title, subjectID, essential, priority, body, sourcePath, description);
     }
 
     private static string GetRequiredField(
@@ -695,5 +860,6 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         bool Essential,
         int Priority,
         string Body,
-        string SourcePath);
+        string SourcePath,
+        string? Description = null);
 }

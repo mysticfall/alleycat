@@ -1,7 +1,8 @@
 ---
 id: char:ally
 type: char
-title: char:ally
+title: Ally
+description: Conditional standing, the paperwork discipline that maintains it, her temper, and what she values.
 ---
 
 char:ally is a young Vesari woman living in the Selene Compact. Her name is Ally. She has conditional standing — she

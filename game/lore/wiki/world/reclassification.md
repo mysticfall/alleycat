@@ -2,6 +2,7 @@
 id: world.reclassification
 type: world
 title: Reclassification
+description: The administrative loss of conditional standing: triggers, investigation, determination, and aftermath.
 essential: true
 priority: 4
 ---

@@ -323,6 +323,36 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
+    /// The optional description is single-line authored metadata: absent or blank values mean no description
+    /// and populated values carry through without quotes (AI-004 requirement 42).
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("\"\"", null)]
+    [InlineData("Hidden riverside cache under the charter office.", "Hidden riverside cache under the charter office.")]
+    [InlineData("\"A hidden cache\"", "A hidden cache")]
+    public void ParseDocument_ParsesOptionalSingleLineDescription(string? descriptionValue, string? expected)
+    {
+        string descriptionLine = descriptionValue is null ? string.Empty : $"description: {descriptionValue}\n";
+        string markdown = $"""
+            ---
+            id: test.page
+            title: Test Page
+            {descriptionLine}---
+            Body.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(
+            markdown,
+            SourcePath);
+
+        Assert.NotNull(document);
+        Assert.Equal(expected, document.Description);
+    }
+
+    /// <summary>
     /// A closed <c>lore:ignore</c> block is removed inclusively: both markers and all content between them are
     /// gone, while surrounding content is retained.
     /// </summary>
@@ -748,5 +778,156 @@ public sealed class MarkdownLoreQueryServiceTests
 
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => service.QueryAsync(ContentContext.Default, LoreQuery.Essential("char:vadim"), cancellation.Token));
+    }
+
+    /// <summary>
+    /// A pre-cancelled catalogue query stops before attempting any storage access.
+    /// </summary>
+    [Fact]
+    public async Task QueryCatalogueAsync_WhenAlreadyCancelled_ThrowsCancellation()
+    {
+        MarkdownLoreQueryService service = new();
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.QueryCatalogueAsync(
+                ContentContext.Default,
+                new LoreCatalogueQuery("char:vadim"),
+                cancellation.Token));
+    }
+
+    /// <summary>
+    /// A pre-cancelled entry-ID query stops before attempting any storage access.
+    /// </summary>
+    [Fact]
+    public async Task QueryEntriesAsync_WhenAlreadyCancelled_ThrowsCancellation()
+    {
+        MarkdownLoreQueryService service = new();
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.QueryEntriesAsync(
+                ContentContext.Default,
+                new LoreEntryIDQuery("char:vadim", ["vadim.charter"]),
+                cancellation.Token));
+    }
+
+    /// <summary>
+    /// Catalogue queries validate their observer FullId at construction, before any read.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("vadim")]
+    [InlineData("Char:vadim")]
+    public void CatalogueQuery_RejectsNonCanonicalObserverID(string observerID)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new LoreCatalogueQuery(observerID));
+
+        Assert.NotEmpty(exception.Message);
+    }
+
+    /// <summary>
+    /// Catalogue queries preserve the canonical observer FullId (AI-004 requirement 44).
+    /// </summary>
+    [Fact]
+    public void CatalogueQuery_PreservesCanonicalObserverFullId()
+    {
+        LoreCatalogueQuery query = new("char:vadim");
+
+        Assert.Equal("char:vadim", query.ObserverID);
+    }
+
+    /// <summary>
+    /// Entry-ID queries validate their observer FullId at construction, before any read.
+    /// </summary>
+    [Fact]
+    public void EntryIDQuery_RejectsNonCanonicalObserverID()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => new LoreEntryIDQuery("vadim", ["vadim.charter"]));
+
+        Assert.NotEmpty(exception.Message);
+    }
+
+    /// <summary>
+    /// The complete ID batch is validated before reads: a null batch is rejected outright (AI-004 requirement
+    /// 47).
+    /// </summary>
+    [Fact]
+    public void EntryIDQuery_RejectsNullBatch()
+        => _ = Assert.Throws<ArgumentNullException>(() => new LoreEntryIDQuery("char:vadim", null!));
+
+    /// <summary>
+    /// The complete ID batch is validated before reads: an empty batch is invalid input, not an empty lookup
+    /// (AI-004 requirement 47).
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t")]
+    public void EntryIDQuery_RejectsBlankIDItems(string blankID)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => new LoreEntryIDQuery("char:vadim", ["vadim.charter", blankID]));
+
+        Assert.Contains("entry ID", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The complete ID batch is validated before reads: null items are invalid input (AI-004 requirement 47).
+    /// </summary>
+    [Fact]
+    public void EntryIDQuery_RejectsNullIDItem()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => new LoreEntryIDQuery("char:vadim", ["vadim.charter", null!]));
+
+        Assert.Contains("entry ID", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The batch must contain at least one ID: an empty list is invalid input rather than an empty result
+    /// (AI-004 requirement 47).
+    /// </summary>
+    [Fact]
+    public void EntryIDQuery_RejectsEmptyBatch()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => new LoreEntryIDQuery("char:vadim", []));
+
+        Assert.Contains("At least one lore entry ID", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Entry IDs are exact opaque strings: duplicates collapse by ordinal equality in first-request order with
+    /// no case folding and no trimming of requested values (AI-004 requirements 43 and 47).
+    /// </summary>
+    [Fact]
+    public void EntryIDQuery_DeduplicatesByOrdinalEqualityPreservingFirstRequestOrder()
+    {
+        LoreEntryIDQuery query = new(
+            "char:vadim",
+            ["b.entry", "a.entry", "b.entry", "a.entry ", "B.entry", "a.entry"]);
+
+        Assert.Equal(["b.entry", "a.entry", "a.entry ", "B.entry"], query.EntryIDs);
+    }
+
+    /// <summary>
+    /// Lookup results associate the requested ID with either a found entry or an explicit unavailable status
+    /// (AI-004 requirement 48).
+    /// </summary>
+    [Fact]
+    public void LoreEntryLookup_MarksExplicitUnavailableStatus()
+    {
+        LoreEntry entry = new("id.entry", "Title", "Body.");
+        LoreEntryLookup found = new("id.entry", entry);
+        LoreEntryLookup missing = new("missing.entry", null);
+
+        Assert.True(found.Found);
+        Assert.Same(entry, found.Entry);
+        Assert.False(missing.Found);
+        Assert.Null(missing.Entry);
     }
 }

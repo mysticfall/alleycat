@@ -8,8 +8,8 @@ title: Lore And Backstory Source Compilation
 ## Requirement
 
 The current implementation slice must support content-scoped perspective Markdown lore roots as the human source of
-truth for what each character believes or knows, with runtime loading and prompt injection for the active AgenticMind
-perspective.
+truth for what each character believes or knows, with automatic prompt injection, a discoverable catalogue, and
+read-only entry-ID retrieval for the active AgenticMind perspective.
 
 ## Goal
 
@@ -23,8 +23,8 @@ lore-management workflows in this slice.
 2. Authors can organise lore by observer perspective so a character prompt receives that character's beliefs and
    knowledge, not an omniscient canonical fact list.
 3. Authors can mark perspective world lore as essential so baseline world context is injected for the active character.
-4. Location and character lore is selected when it is contextually relevant, such as the current location, the character
-   themself, scene participants, or conversation participants.
+4. Essential world and scene-character lore bodies remain automatically available. Contextual character and location
+   queries remain available; this slice does not automatically inject location lore.
 5. Prompt consumers receive deterministic lore text with each entry clearly demarcated by its title.
 6. Authoritative lore remains controlled by the human-authored perspective wiki, not by generated graph artefacts.
 7. Authors do not need to duplicate every canonical subject for every character perspective.
@@ -33,7 +33,8 @@ lore-management workflows in this slice.
    substitute for observer knowledge in this slice.
 10. Perspective entries do not force prompt consumers to invent unstated facts when they claim the observer knows a
     concrete detail that may affect dialogue or action.
-11. Future dynamic lore retrieval should use the same query abstraction as the first-slice prompt injection path.
+11. An NPC can discover all remaining available lore and request one or more exact entry IDs, then read the bodies on a
+    subsequent reasoning request before choosing an action. Retrieval is encouraged when relevant, not mandatory.
 12. Authors write perspective entries in the observer character's first-person subjective voice, as an internal
     monologue on the subject: the entry conveys all observer-available information about the subject so the topic is
     understandable without the canonical `wiki/` entry, the prose reflects the observer's personality, attitudes, and
@@ -41,16 +42,34 @@ lore-management workflows in this slice.
     the observer's own self-perception or rationalisations without omniscient asides or new concrete prompt-usable
     facts.
 13. Subjects in prompt-facing lore are referenced by full ID (`[type]:[id]`, with types `char`, `loc`, and `item`)
-    rather than by name: subject-bound entries carry the subject's full ID as the frontmatter `title`, which the lore
-    formatter renders as a Markdown heading in prompts, body prose references subjects by full ID where the name would
-    appear, names are carried as explicit lore facts (a canonical entry states the name once; a perspective entry
-    states a name the observer knows or states that the name is unknown), and natural dialogue or speech uses known
-    names rather than full IDs.
-14. Authors write entries without a title heading duplicating the frontmatter `title`: body content starts directly
+    rather than by name: body prose references subjects by full ID where the name would appear, names are carried as
+    explicit lore facts (a canonical entry states the name once; a perspective entry states a name the observer knows
+    or states that the name is unknown), and natural dialogue or speech uses known names rather than full IDs. Entry
+    and subject identity live in the frontmatter `id` and `subject_id`, never in the display title.
+14. Titles are readable display labels independent of IDs, written in Title Case. Use a known name (for example
+    **Ally**) when the observer's knowledge supports it; otherwise use an observer-known descriptive label (for
+    example **The Detained Vesari**), never an invented name or a name the observer does not know. Canonical and
+    perspective entries for the same subject may use different titles without changing their identity relationship.
+    The lore formatter renders titles as Markdown headings in prompts. Existing lowercase metadata keys, `type`
+    values, and boolean tokens remain lowercase.
+15. Authors write entries without a title heading duplicating the frontmatter `title`: body content starts directly
     after the frontmatter and authored sections start at `#` at authoring time, with the entry title rendered into
     the prompt by the lore formatter instead.
-15. Authors can co-locate authoring-time material with runtime lore — scratch pages, note sections, HTML comments, and
+16. Authors can co-locate authoring-time material with runtime lore — scratch pages, note sections, HTML comments, and
     source link syntax — without it reaching prompts or breaking runtime queries.
+17. The session-start catalogue groups remaining entries under World, Characters, and Locations, omits empty groups,
+    and lists each entry's exact ID, title, and optional description. Missing descriptions need no generated fallback.
+18. Discovery and retrieval expose neither canonical pages, other observers' knowledge, authoring-only material, nor
+    source paths. Unknown IDs produce explicit unavailable results, never fabricated knowledge.
+19. Descriptions are concise scope previews: they identify the meaningful topics or dimensions of information the
+    entry covers, so retrieval relevance can be inferred without reading the body. Advertised topics are grounded in
+    the entry body, observer-safe, and written in sentence case with an initial capital. A description is neither a
+    summary of the entry's facts nor a lookup instruction: it avoids when/why-only triggers, imperative or
+    mandatory-retrieval framing, stage directions, and behavioural absolutes, and it narrows the entry to a specific
+    scenario only when that scenario is intrinsic to the entry itself (for example a scenario entry), never to
+    narrow a broader character, location, or world profile.
+20. All 15 existing default lore pages receive scope-preview descriptions without changing facts or essential flags;
+    canonical descriptions remain authoring-only at runtime.
 
 ## Technical Requirements
 
@@ -72,8 +91,8 @@ lore-management workflows in this slice.
 7. Runtime lore access must go through an asynchronous query service that accepts content context, observer `FullId`,
    and query intent.
 8. AgenticMind lore prompt consumption must query lore for its associated character perspective and remain read-only.
-9. Wiki pages may include frontmatter fields such as `id`, `title`, `aliases`, `tags`, `essential`, `priority`, and
-   typed `links`. The `id` field is the runtime-inclusion discriminator: a page without a frontmatter `id` (including
+9. Wiki pages may include frontmatter fields such as `id`, `title`, `description`, `aliases`, `tags`, `essential`,
+   `priority`, and typed `links`. The `id` field controls runtime inclusion: a page without an `id` (including
    a page with no frontmatter block at all) is authoring-time only and is excluded from runtime queries.
 10. A top-level frontmatter field `essential: true` marks only world lore for baseline prompt injection.
 11. `essential`, when present on an `id`-bearing page, must be parsed and validated as a boolean.
@@ -116,8 +135,8 @@ lore-management workflows in this slice.
     channel, not in character belief lore.
 29. Perspective authoring and validation must flag claims that imply concrete prompt-usable knowledge without including
     the value or explicitly scoping it as unknown, unavailable, or not prompt-relevant.
-30. Future dynamic lore retrieval must use the same asynchronous query service abstraction, adding query intents or
-    filters rather than introducing a separate retrieval pathway.
+30. Catalogue and batch entry-ID retrieval must extend the existing asynchronous query service with query intents or
+    filters, preserving contextual queries rather than introducing a separate retrieval pathway.
 31. Character and location lore-subject requests accept canonical `FullId` values only: `char:<id>` and `loc:<id>`.
     They validate the required type and reject bare or differently typed values.
 32. `CharacterLorePromptSection` must query every character in `ISceneContext.Characters` from the owning character's
@@ -149,7 +168,46 @@ lore-management workflows in this slice.
     - Autolinks: `<url>` becomes `url`.
     - Bare `[label]` with no following `(` or `[`, image syntax, and `[[…]]` wiki links are left untouched.
 41. An `id`-bearing page whose body is empty after parse-time cleaning is excluded from query results with a logged
-    warning, not an error.
+     warning, not an error.
+
+### Discovery and Entry-ID Retrieval
+
+42. Parse optional `description` as a single-line frontmatter value using the existing simple frontmatter format, not
+    general YAML. Absent or blank values mean no description; do not derive excerpts or model summaries from bodies.
+    Descriptions are runtime-facing authored metadata and must not contain authoring-only notes or source paths.
+    Description quality (user requirement 19) and title readability (user requirement 14) are authoring conventions,
+    not parser rules: the parser accepts any nonempty `title` value, so readable display titles and legacy ID-shaped
+    titles are equally valid and no new rejection rule is introduced.
+43. Lore entry IDs are distinct from subject `FullId` values. Match entry IDs by exact ordinal equality, without case
+    folding, trimming requested values, subject-ID interpretation, or alias lookup. Require uniqueness across all
+    runtime-eligible world, character, and location entries within one observer/content scope, including nested pages.
+    Catalogue and ID queries validate this scope before returning results: ambiguous IDs fail the query rather than
+    selecting arbitrarily. Diagnostics identify the conflicting sources internally; model-facing failures expose no
+    source paths. Reuse across observers or content roots is valid.
+44. Catalogue selection includes every runtime-eligible entry in the bound observer/content scope except entries
+    actually selected for the shared stack's automatic essential-world and scene-character injection. Share selection
+    logic with those sections rather than duplicating their rules. Exclude by entry ID, not subject ID or category.
+    Location entries remain discoverable; no current-location property or automatic location-selection system is needed.
+45. The catalogue formatter emits groups in World, Characters, Locations order and applies requirement 14's
+    deterministic ordering within each group. Every selected entry appears once with exact ID, title, and optional
+    description, but no body or source path. Omit empty groups and omit catalogue content when all groups are empty.
+46. Render the catalogue once as part of AI-003's session-start system instruction, after the automatic lore sections.
+    Later retrieval does not rebuild it. Ordinary asynchronous reads require no new cache or snapshot subsystem.
+47. The `read_lore` input is a non-empty list of entry-ID strings; a single lookup uses a one-element list. Validate the
+    complete list before lookup: reject missing, null, non-list, empty-list, non-string, or blank-ID inputs as invalid,
+    with no partial lore result. Non-blank strings are exact lookup keys, not paths. Deduplicate repeated IDs by ordinal
+    equality, preserving first-request order; return exactly one result per distinct ID in that order.
+48. Each successful batch result explicitly associates its requested ID with either its formatted lore body or an
+    unavailable status. Unknown IDs, including IDs available only outside the bound scope, are unavailable without
+    revealing whether another scope contains them. Mixed found/missing batches succeed with both result kinds.
+    Automatically injected entries remain retrievable. Use the existing cleaned entries and lore body formatter
+    (requirements 21 and 36–41); the result envelope adds ID association without changing body formatting.
+49. Catalogue and ID queries accept and propagate cancellation through asynchronous reads. Cancellation before
+    completion cancels the whole operation: do not return a successful partial batch or translate cancellation into
+    unavailable lore. Source validation failures remain errors, not missing knowledge. No arbitrary batch limit is set.
+50. AI-002 normatively owns `read_lore` composition, trusted observer/content binding, no-observation execution, and
+    default exchange retention. AI-003 normatively owns static catalogue composition and guidance to retrieve relevant
+    lore before acting. Neither integration may bypass the isolation and cleaning contracts here.
 
 ## In Scope
 
@@ -172,12 +230,17 @@ lore-management workflows in this slice.
 - Authoring guidance that prevents perspective entries from implying unstated concrete prompt-usable facts.
 - First-person subjective voice authoring convention for perspective entries as the observer's internal monologue on
   the subject.
-- Full-ID subject referencing in prompt-facing lore: `[type]:[id]` titles for subject-bound entries, full-ID subject
-  references in body prose, and names carried as explicit lore facts under the canonical/perspective name rule.
+- Full-ID subject referencing in prompt-facing lore: identity carried by `id`/`subject_id` and full-ID subject
+  references in body prose, names carried as explicit lore facts under the canonical/perspective name rule, and
+  readable Title Case observer-safe display titles independent of IDs.
 - H1-less entry authoring: body content starts directly after frontmatter and authored sections start at `#`, with
   entry titles rendered into prompts by the Markdown lore formatter.
 - Read-time page triage and parse-time body cleaning in the Markdown lore backend: `id`-based inclusion,
   `lore:ignore` omission, bare HTML comment stripping, and link-label reduction before entry construction.
+- Optional descriptions, grouped session-start discovery, scoped unique entry IDs, and asynchronous batch retrieval.
+- Scope-preview descriptions on all 15 default pages, preserving facts, perspective boundaries, and essential
+  flags.
+- Deterministic query, prompt, and tool-flow validation with the AI-002 and AI-003 integrations.
 
 ## Out Of Scope
 
@@ -194,6 +257,8 @@ lore-management workflows in this slice.
   tooling.
 - Mandatory external graph databases or embedding stores.
 - Final production lore content beyond the small example set.
+- Automatic location injection or new location-selection infrastructure, catalogue hot reload, automatic summarisation,
+  and live-model behavioural experiments. Deterministic validation of availability and execution flow remains required.
 
 ## Acceptance Criteria
 
@@ -212,11 +277,12 @@ lore-management workflows in this slice.
 7. Omniscient constraints required for LLM behaviour are kept out of character belief lore and represented only through
    system/developer rules or a future narrator/game-master channel.
 8. World entries with `essential: true` are included in baseline prompt lore for the active perspective.
-9. Location and character entries are included only when contextually relevant, not because they are marked essential.
+9. Contextual location and character queries select by subject, not by `essential`; automatic injection remains limited
+   to essential world and scene-character bodies, with no automatic location section.
 10. Any present `essential` value on an `id`-bearing page is validated as a boolean, and any present `priority` value
     participates in deterministic API ordering.
-11. Entries with equal priority are ordered deterministically by entry `id`, then title, then the backend-internal
-    source path. Fixture/sample tests exercise this tie-break order when priorities are used.
+11. Entries are ordered deterministically by priority and exact entry `id`; title and backend-internal source path
+    remain final sort keys without permitting duplicate runtime-eligible IDs within an observer/content scope.
 12. `LoreEntry` does not expose source path as public result data; the Markdown backend retains it privately for
     diagnostics and the final sorting tie-breaker.
 13. Runtime prompt sections query the lore abstraction, not hardcoded prompt-section paths, and do not write lore data.
@@ -247,11 +313,14 @@ lore-management workflows in this slice.
 25. Perspective entries are written in the observer character's first-person subjective voice and remain
     information-complete without the canonical `wiki/` entry, conveying all observer-available information about the
     subject.
-26. Subject-bound lore entries, canonical `wiki/` entries and perspective entries alike, use their subject's full ID
-    (`[type]:[id]`) as the frontmatter `title`, which the lore formatter renders as a Markdown heading, reference
-    subjects by full ID in body prose where the name would appear, and handle names per the full-ID rule: canonical
-    entries state the subject's name once as an explicit fact, and perspective entries state a known name or state
-    that the observer does not know it.
+26. Subject-bound lore entries, canonical `wiki/` entries and perspective entries alike, reference subjects by full
+    ID in body prose where the name would appear and handle names per the full-ID rule: canonical entries state the
+    subject's name once as an explicit fact, and perspective entries state a known name or state that the observer
+    does not know it. Their `title` values are readable Title Case display labels independent of IDs — a known name
+    where the observer's knowledge supports it, otherwise an observer-known descriptive label, never an invented or
+    leaked unknown name — and canonical and perspective titles for the same subject may differ. Legacy ID-shaped
+    titles remain runtime-valid; reviews flag newly authored ID-shaped titles as convention issues, not parser
+    errors.
 27. Authored lore entries omit a heading that duplicates the frontmatter `title`: body content starts directly after
     the frontmatter and authored sections start at `#` at authoring time.
 28. Authoring-time content never reaches prompts: pages without a frontmatter `id` (including files with no frontmatter
@@ -267,7 +336,37 @@ lore-management workflows in this slice.
 31. Frontmatter validation on `id`-bearing pages remains fail-hard: invalid `title`, `subject_id`, `essential`, or
     `priority` values throw rather than skip.
 32. The default lore formatter's output contract is unchanged by parse-time cleaning: the requirement 21 formatting
-    behaviour and its tests hold without modification.
+     behaviour and its tests hold without modification.
+
+### Discovery User Requirements
+
+33. The NPC retains the same automatic lore bodies and sees every other eligible entry exactly once in the grouped
+    catalogue, including locations and fixture-authored non-essential world lore. Empty groups are absent; descriptions
+    are optional, with no generated fallback. This verifies user requirements 4, 11, and 17.
+34. Deterministic provider fixtures show an NPC requesting relevant IDs, receiving their bodies on the next reasoning
+    request, and then choosing an action. Retrieval is not a prerequisite for every action. No canonical,
+    other-observer, authoring-only, or source-path information leaks; unavailable entries yield no fabricated knowledge.
+    This verifies user requirements 11 and 18, not a live model's ability to choose the right entry.
+35. Content checks confirm scope-preview descriptions on all 15 default pages — topic lists grounded in each entry
+    body, in sentence case with an initial capital, with no fact summaries, when/why-only lookup triggers, stage
+    directions, behavioural absolutes, or unjustified scenario narrowing — plus unchanged lore facts and essential
+    flags, and no runtime exposure of canonical descriptions (user requirements 19 and 20).
+
+### Discovery Technical Requirements
+
+36. Metadata tests cover absent, blank, and populated descriptions while retaining page triage and cleaning behaviour
+    (TR-42), and confirm the parser accepts readable display titles and legacy ID-shaped titles alike without new
+    rejection rules (TR-42, user requirement 14). Query tests cover recursive collections, all three categories, exact
+    ordinal IDs, duplicates across categories, allowed reuse across scopes, observer/content isolation, and no
+    canonical fallback (TR-30, TR-43).
+37. Prompt tests prove shared automatic-selection exclusion, unchanged automatic bodies, exact-once listings, category
+    and within-category order, optional descriptions, coherent empty output, and session-start-only rendering
+    (TR-44–TR-46). Use non-essential-world fixtures rather than changing default essential flags.
+38. Batch tests cover single and multiple IDs, invalid whole-list inputs, repeated requested IDs, first-request
+    ordering, mixed found/missing results, automatic-entry retrieval, ID-associated bodies, scoped duplicate failures
+    with internal diagnostics only, and cancellation without partial success (TR-43, TR-47–TR-49).
+39. AI-002 and AI-003 acceptance verifies trusted tool binding, retained retrieval reaching the next provider request,
+    no observations, unchanged action disposal, and shared retrieval guidance (TR-50).
 
 ## References
 

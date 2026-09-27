@@ -1,6 +1,7 @@
 ---
 id: vadim.ally
-title: char:ally
+title: Ally
+description: What char:ally's file contains, how I read a record, and how I approach her case and recommendation.
 type: char
 subject_id: char:ally
 ---

@@ -1,6 +1,7 @@
 ---
 id: vadim.charter
 title: The Charter
+description: The charter as I read it: obligations and standing, the line between person and asset, and my view of it.
 type: world
 essential: true
 ---

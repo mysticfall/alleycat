@@ -367,6 +367,18 @@ public sealed class EssentialLoreIntegrationTests
             Query = query;
             return Task.FromResult(entries);
         }
+
+        public Task<IReadOnlyList<LoreEntry>> QueryCatalogueAsync(
+            ContentContext content,
+            LoreCatalogueQuery query,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException("The contextual capture stub does not serve catalogue queries.");
+
+        public Task<IReadOnlyList<LoreEntryLookup>> QueryEntriesAsync(
+            ContentContext content,
+            LoreEntryIDQuery query,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException("The contextual capture stub does not serve entry-ID queries.");
     }
 
     private sealed class CapturingLoreLogger : ILogger<MarkdownLoreQueryService>

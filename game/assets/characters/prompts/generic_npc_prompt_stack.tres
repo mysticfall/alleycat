@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://bkdyco5nf5xyp" path="res://src/Mind/AI/Prompting/FilePromptSection.cs" id="1_2m31c"]
 [ext_resource type="Script" uid="uid://b5evrsqr6axkt" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
 [ext_resource type="Script" uid="uid://ma8scv62385o" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
+[ext_resource type="Script" uid="uid://bw4auhhfuy2rh" path="res://src/Mind/AI/Prompting/LoreCataloguePromptSection.cs" id="5_lorcata"]
 [ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
 
 [sub_resource type="Resource" id="Resource_fqak1"]
@@ -18,6 +19,10 @@ Name = "Lore"
 script = ExtResource("3_0apto")
 Name = "Characters"
 
+[sub_resource type="Resource" id="Resource_lorcata"]
+script = ExtResource("5_lorcata")
+Name = "Lore Catalogue"
+
 [sub_resource type="Resource" id="Resource_0apto"]
 script = ExtResource("1_2m31c")
 FilePath = "res://prompts/scenario.md"
@@ -25,4 +30,4 @@ Name = "Scenario"
 
 [resource]
 script = ExtResource("4_bwdq6")
-Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_0apto")]
+Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_lorcata"), SubResource("Resource_0apto")]

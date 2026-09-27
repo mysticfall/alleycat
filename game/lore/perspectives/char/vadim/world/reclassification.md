@@ -1,6 +1,7 @@
 ---
 id: vadim.reclassification
 title: Reclassification
+description: Reclassification as I understand it: triggers, procedure, determination, and the limits of my role.
 type: world
 essential: true
 ---

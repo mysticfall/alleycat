@@ -5,6 +5,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
+using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.SceneStatus;
@@ -361,6 +362,13 @@ public partial class AgenticMind : MindBase
         // delivery rather than the common tool session.
         SpeechTool speechTool = new(toolAdmission);
         WaitTool waitTool = new();
+        // The read-only lore tool binds its trusted observer/content scope and typed lore dependencies at this
+        // composition boundary (AI-002 TR-23): the model supplies entry IDs only, never an observer, content root,
+        // or source path.
+        ReadLoreTool readLoreTool = new(
+            Game.Instance.GetRequiredService<ILoreQueryService>(),
+            Game.Instance.GetRequiredService<ILorePromptFormatter>(),
+            GameLoggerResolver.ResolveRequired<ReadLoreTool>());
         AgentToolSession sessionServices = new(context, this, clock);
         WatchRegistry? watchRegistry = DiscoverWatchRegistry();
         // Composition registers the speak tool's per-function phase policy (AI-002 TR-14): its invocation phase
@@ -372,6 +380,7 @@ public partial class AgenticMind : MindBase
             AgentSessionPhasePolicy.AdmissionArbitration.Bind(
                 speechTool.CreateFunction(context, this, dispatcher, sessionServices)),
             waitTool.CreateFunction(context, this, dispatcher, sessionServices),
+            readLoreTool.CreateFunction(context, this, dispatcher, sessionServices),
             new UnwatchTool(watchRegistry).CreateFunction(context, this, dispatcher, sessionServices),
         ];
         if (watchRegistry is not null)

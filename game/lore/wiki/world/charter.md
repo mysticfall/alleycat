@@ -2,6 +2,7 @@
 id: world.charter
 type: world
 title: The Charter
+description: The Selene Compact's charter: obligations, recognition, persons versus assets, and its enforcement.
 essential: true
 priority: 1
 ---

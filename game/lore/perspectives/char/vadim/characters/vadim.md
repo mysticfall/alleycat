@@ -1,6 +1,7 @@
 ---
 id: vadim.self
-title: char:vadim
+title: Vadim
+description: My background, professional identity, self-image, and attitudes towards the Office and those I investigate.
 type: char
 subject_id: char:vadim
 ---

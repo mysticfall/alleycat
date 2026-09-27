@@ -1,7 +1,8 @@
 ---
 id: char:vadim
 type: char
-title: char:vadim
+title: Vadim
+description: Background, professional identity, self-image, and attitudes towards the Office and those he investigates.
 ---
 
 char:vadim is a Kaelic man and an officer of the Charter Office of Compliance. His name is Vadim. He has held this

@@ -1,6 +1,7 @@
 ---
 id: vadim.charter_office
 title: The Charter Office
+description: The Office I serve, its mandate and mundane work, its discretion and final say, and my place in it.
 type: world
 essential: true
 ---
