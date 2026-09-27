@@ -8,8 +8,9 @@ game/addons/*
 game/content/
 android/
 
-# JetBrains IDE
+# IDE settings
 .idea/
+.vscode/
 
 # .NET
 bin/
