@@ -10,13 +10,17 @@ title: Integration Test Framework
 Provide a dependable integration test framework for behaviours requiring Godot runtime APIs. It must support local and
 headless execution, selective runs, stable test identity, actionable diagnostics, and materially faster full-suite
 execution through persistent reusable runtime sessions. Integration tests that call live external LLM services must be
-opt-in so default runs need no credentials and incur no provider cost.
+opt-in so default runs need no credentials and incur no provider cost. The same opt-in boundary authorises live LLM
+experiment harnesses: bounded, caller-declared scenarios that may make several provider requests and offer tools,
+capture inspectable evidence traces, and aggregate a fixed trial batch into one reported outcome.
 
 ## Goal
 
 Enable contributors and agents to validate Godot-runtime behaviour with repeatable, debuggable integration-test runs,
 keeping full-suite execution fast enough for routine pre-handoff verification, while live LLM tests stay explicitly
-gated so only opted-in runs contact real providers.
+gated so only opted-in runs contact real providers. Live LLM support doubles as a reusable, Mind-independent
+experiment workflow: discover effective model inputs empirically through bounded live scenarios, use the captured
+evidence to design production APIs, then lock behaviour down with deterministic tests.
 
 ## User Requirements
 
@@ -35,8 +39,15 @@ gated so only opted-in runs contact real providers.
    mix both.
 9. A live test excluded by the gate must produce no result at all — never a passed node — so a green run without the
    opt-in never implies live coverage.
-10. Live-test configuration and diagnostics must never expose credentials: private settings are supplied locally by
-    each contributor, and failure messages stay secret-free.
+10. Live-test configuration, diagnostics, and evidence traces must never expose credentials: private settings are
+    supplied locally by each contributor, and failure messages stay secret-free.
+11. Contributors must be able to author live experiments that make a declared, bounded number of provider requests per
+    test — including multi-request conversations and requests that offer tools — under the same opt-in gate, without a
+    framework-imposed single-shot limit.
+12. A completed live experiment must account for every attempted trial in distinct reported categories — successful,
+    valid-but-unsuccessful, invalid evaluation, and execution failure — so a passing result never hides dropped trials.
+13. Trial evidence — requests, tool exchanges, responses, and their ordering — must remain inspectable after the run so
+    contributors can diagnose behaviour without re-running providers.
 
 ## Technical Requirements
 
@@ -69,8 +80,9 @@ gated so only opted-in runs contact real providers.
     cleanup timeout rather than accepting the session as cleanly shut down.
 15. OS-process and CLR isolation between tests is NOT guaranteed within a session; baseline restoration and restart
     semantics bound the resulting blast radius.
-16. The [Integration-Test Contributor Guide](contributor-guide.md) is the normative operational contract for
-    contributor run, filter, diagnostic, timeout, and recovery workflows.
+16. Operational how-to guidance for contributor run, filter, diagnostic, timeout, and recovery workflows is carried
+    by the `godot-integration-testing` agent skill (`.opencode/skills/godot-integration-testing/SKILL.md`); this
+    specification owns the contractual limits those workflows must respect.
 17. Integration tests requiring live LLM access must carry `[LiveLlm]` on the method or its declaring class
     (inherited; either marker marks the test) and are governed by the central gate defined in
     [Live LLM Testing](#live-llm-testing).
@@ -86,10 +98,33 @@ gated so only opted-in runs contact real providers.
     configuration — never the production `AI` section, with no fallback — validating required `Host`, `Model`, and
     `ApiKey` and optional positive `Timeout` (seconds) with secret-free, section-correct diagnostics, as defined in
     [Live LLM Testing](#live-llm-testing).
-21. Live evaluation must follow the fail-closed contracts in [Live LLM Testing](#live-llm-testing): single-shot
-    serial target-then-judge execution, a validated single numeric metric on the documented 1–5 rubric, an inclusive
-    threshold, sanitised failure output, disposal of owned clients on every path, and no retry-until-pass.
-22. Evaluation dependencies are permitted only in the integration-test project; the game project must not reference
+21. Live test execution must separate execution, evaluation, and assertion as defined in
+    [Live LLM Testing](#live-llm-testing): a scenario declares a bounded number of target requests with scripted or
+    explicitly generated continuations, the harness executes the scenario and captures evidence, evaluation consumes
+    the captured evidence without re-running the target, and assertions consume the reported results.
+22. The experiment or test must own its `LiveLLMClientPair` for its complete lifetime: execution and evaluation
+    operations borrow the clients and must never dispose them. The single-shot evaluation helper may remain only as
+    an actively-used convenience composition of these contracts, with its single-request and text-only restrictions
+    treated as fixture-specific choices, not harness limits.
+23. Scenarios may send tool-bearing requests: request options may carry tool definitions and settings, and responses
+    containing tool calls are captured as legitimate experimental output whose validity is decided by
+    scenario-specific checks. The harness must never automatically execute model-selected functions; tool results are
+    scripted or produced by explicit bounded handlers and are labelled as simulated, not executed gameplay.
+24. Judge evaluation must follow the fail-closed contracts in [Live LLM Testing](#live-llm-testing): a validated
+    single declared numeric metric on the documented 1–5 rubric, an inclusive threshold, sanitised failure output,
+    and no retry-until-pass.
+25. Live experiments must use fixed-batch aggregation as defined in [Live LLM Testing](#live-llm-testing): trial
+    counts and aggregation rules are declared before execution, every attempted trial is retained and reported in
+    distinct categories, a valid below-threshold score is a recorded unsuccessful trial rather than an immediate
+    abort, malformed judge output is an evaluation error that can never pass, an incomplete batch cannot pass as a
+    successful subset, and execution neither retries failures nor stops once enough successes accumulate.
+26. Scenarios must produce versioned, sanitised, inspectable evidence traces as defined in
+    [Live LLM Testing](#live-llm-testing), preserved partially on failure and stored separately from evaluation
+    results; credentials, configuration or client objects, and raw provider exceptions are never serialised into
+    traces or assertion output.
+27. Live timing must account for target, continuation-generator, and judge requests: the host's whole-fact timeout
+    must cover the entire declared batch, as defined in [Live LLM Testing](#live-llm-testing).
+28. Evaluation dependencies are permitted only in the integration-test project; the game project must not reference
     `Microsoft.Extensions.AI.Evaluation.Quality` or its evaluation-core transitives.
 
 ## In Scope
@@ -102,7 +137,9 @@ gated so only opted-in runs contact real providers.
 - Persistent session execution: mode-partitioned reusable sessions, serial in-session execution, the session wire
   protocol, runtime-owned baseline restoration, and session restart semantics.
 - Opt-in gated discovery and execution for `[LiveLlm]` integration tests, the dedicated `AITest` configuration
-  boundary, and the reusable live client and evaluation support layer.
+  boundary, the reusable live client and evaluation support layer, and the experiment harness contracts: bounded
+  multi-request scenarios, tool-bearing exchanges, caller-owned client lifetimes, evidence traces, and fixed-batch
+  trial aggregation.
 
 ## Out Of Scope
 
@@ -114,14 +151,10 @@ gated so only opted-in runs contact real providers.
 - Parallel execution within a session; execution is strictly serial.
 - OS-process and CLR isolation between tests within a session.
 - Provisioning, distributing, or storing live LLM credentials; each contributor supplies a private local override.
-- Live-evaluation result caching, dashboards, or reporting beyond the existing per-test MTP nodes.
+- Result caching, dashboards, or hosted reporting for live experiments beyond the per-test MTP nodes, the in-fact
+  batch report, and the local trace artefacts.
 - Divergent target/judge provider configuration; the injectable client pair is the seam, but both clients use the
   same `AITest` settings today.
-
-## Contributor Operations
-
-The [Integration-Test Contributor Guide](contributor-guide.md) is a normative dependency for the contributor workflow
-required by Technical Requirement 16.
 
 ## Session Execution Model
 
@@ -222,17 +255,18 @@ The framework cannot reset test-owned state. Tests remain responsible for cleani
 
 ### Timeout Mapping
 
-Timeout environment variables keep their roles:
+Timeout environment variables keep their roles. Values are positive milliseconds; an unset, invalid, or
+non-positive value falls back to the listed default:
 
-- `ALLEYCAT_GODOT_PREFLIGHT_TIMEOUT_MS` — session-start/`ready` timeout.
-- `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` — per-request timeout.
-- `ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS` — wait for matching `shutdown-complete` during graceful shutdown, then force
-  termination if it is absent, invalid, mismatched, or late.
-- `ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS` — retains its role for the optional import preflight.
+- `ALLEYCAT_GODOT_PREFLIGHT_TIMEOUT_MS` (default 30,000) — dynamic-load probe and session-start/`ready` timeout.
+- `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` (default 120,000) — per-request timeout bounding one dispatched test request.
+- `ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS` (default 5,000) — wait for matching `shutdown-complete` during graceful
+  shutdown, then force termination if it is absent, invalid, mismatched, or late.
+- `ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS` (default 120,000) — the optional import preflight.
 
 The per-request timeout bounds the whole dispatched fact with no cooperative cancellation token reaching the test
-body; live LLM tests must therefore fit both serial provider calls inside it (see
-[Live LLM Testing](#live-llm-testing)).
+body; live LLM tests must therefore fit their entire declared batch — every scenario request, continuation,
+evaluation, and the aggregation — inside it (see [Live LLM Testing](#live-llm-testing)).
 
 ## Lifecycle Invocation Policy
 
@@ -276,9 +310,9 @@ explicit framework capability for tests whose contracts do not depend on a rende
 ## Live LLM Testing
 
 This section is a normative dependency for the live-LLM Technical Requirements above. It defines the opt-in gate, the
-dedicated configuration boundary, and the reusable client and evaluation support layer for integration tests that call
-real LLM providers. Operational workflows live in the
-[Integration-Test Contributor Guide](contributor-guide.md#live-llm-tests).
+dedicated configuration boundary, and the reusable client, experiment, and evaluation support layer for integration
+tests that call real LLM providers. Operational workflows live in the `godot-integration-testing` agent skill, and
+live-LLM experiment methodology in the `llm-experiment-driven-development` skill.
 
 ### Opt-In Gate
 
@@ -307,46 +341,105 @@ real LLM providers. Operational workflows live in the
   `https://api.openai.com/v1`); `Model`; `ApiKey`. Optional: `Timeout` — a positive number of seconds; omitted keeps
   the existing client default. The shape mirrors `AIOptions`.
 - Validation failures are fixed, section-correct, and secret-free: they name keys (for example `AITest:Timeout`),
-  distinguish configured from missing values, and never echo configured values. Test-local clients disable SDK
-  retries (`ClientRetryPolicy(0)`) and message-content logging without changing production logging.
+  distinguish configured from missing values, and never echo configured values. Each invalid shape produces its own
+  message: missing or blank `Host`, `Model`, or `ApiKey`; a `Host` that is not an absolute HTTP(S) URL; a `Host`
+  without an API base path; and a non-positive `Timeout`. Test-local clients disable SDK retries
+  (`ClientRetryPolicy(0)`) and message-content logging without changing production logging.
 - The game's production `AI` loading paths are unchanged; the arbitrary-section settings loader is an internal
   overload of `OpenAIClientProvider.OpenAIClientProviderSettings`
   (`game/src/Mind/AI/Provider/OpenAIClientProvider.cs`).
 
-### Client And Evaluation Support
+### Experiment Execution Model
 
 - `LiveLLMClientFactory.CreateLiveClients()` returns a disposable `LiveLLMClientPair` holding separately constructed
   target and judge `IChatClient`s built from the same `AITest` settings. The pair's public constructor keeps each
-  client independently injectable — the design boundary for deterministic fakes and future target/judge
-  substitution — although no divergent target/judge configuration exists today.
-- `LiveLLMEvaluation.EvaluateAsync` (`integration-tests/src/Support/AI/LiveLLMEvaluation.cs`) performs exactly one
-  non-streaming target request and then exactly one judge evaluation, forwarding the cancellation token to both. It
-  rejects a target response that lacks assistant text or attempts function calls before judging.
+  client independently injectable — the design boundary for deterministic fakes and future target/judge substitution —
+  although no divergent target/judge configuration exists today.
+- Live tests are experiments with three separated stages: **execution** runs a declared scenario and captures
+  evidence, **evaluation** judges the captured evidence, and **assertion** turns reported results into test outcomes.
+  Evaluation must consume captured evidence and never re-run the target to obtain it.
+- A scenario declares a bounded number of target requests before execution. One request is the minimal scenario;
+  multi-request sequences interleave target responses with continuations that are either scripted by the experiment
+  or generated explicitly — including LLM-generated continuations that may use the same model under a separate
+  context. Scenario code may declare a cooperative per-scenario timeout bound (`LiveLLMScenarioBounds.Timeout`)
+  enforced by the harness through linked cancellation, with its expiry classified as a `Timeout` execution failure —
+  a harness-internal deadline distinct from, and additive to, the host whole-fact budget.
+- Execution records every request and response, the supplied continuations and tool results, their ordering, and a
+  purpose label per entry (for example target, continuation, judge) into the scenario's evidence trace.
+- The experiment or test owns its `LiveLLMClientPair` for its complete lifetime. Execution and evaluation operations
+  borrow the pair's clients and must never dispose them; the owner disposes the pair exactly once on every path.
+- `LiveLLMEvaluation.EvaluateAsync` (`integration-tests/src/Support/AI/LiveLLMEvaluation.cs`) remains the single-shot
+  convenience composition: one text-only target request, immediate judge evaluation, fail-closed metric validation,
+  inclusive threshold comparison, and disposal of the pair delegated to it. Its single-request, text-only, and
+  pair-disposing restrictions are properties of this helper and of the fixtures that choose it — not harness-global
+  limits.
+
+### Tool-Bearing Exchanges
+
+- Scenario requests may carry tool definitions and request settings; the execution support must not fix request
+  options to null.
+- A response containing tool calls is captured as legitimate experimental output. Whether a tool call is expected,
+  permitted, or invalid is decided by scenario-specific checks — for example, a text-only fixture treats any
+  function call as a failure.
+- The harness never automatically executes model-selected functions. Tool results are scripted by the experiment or
+  produced by explicit bounded handlers, and every supplied tool result is labelled as a simulated result, never as
+  executed gameplay.
+
+### Judge Evaluation
+
 - Judge results are validated fail-closed before scoring: the evaluator declares exactly one metric; the metric is
   present and a `NumericMetric`; its value is finite and within the documented 1–5 rubric; its reason is non-empty;
   it carries no error-severity diagnostics; and its interpretation is not marked failed. The threshold comparison
   is inclusive.
+- Malformed judge output is an evaluation error and can never pass, whatever the aggregation rule.
 - Failure output carries metric name, score, interpretation rating, threshold, and bounded sanitised judge reasoning
   only. Raw provider exceptions, diagnostic collections, configuration records, and credential-shaped values are
   never serialised into assertion output.
-- The evaluation call owns and disposes the client pair on every path, and there is no retry-until-pass: a failed
-  evaluation is a failed test.
-- The representative fixture `integration-tests/src/Mind/AI/LiveRoleplayIntegrationTests.cs` is marked `[LiveLlm]`
-  and `[Headless]`; it asserts the real rendered prompt's committed lore facts before any network call, performs
-  the live target call, asserts response shape deterministically, then judges groundedness with an explicitly
-  passed `GroundednessEvaluatorContext` at threshold 5 — deliberately stricter than the evaluator's built-in
-  greater-than-or-equal-to-4 interpretation.
 - `Microsoft.Extensions.AI.Evaluation.Quality` (and its transitive evaluation core) is referenced only by
   `integration-tests/AlleyCat.IntegrationTests.csproj`, never by the game project.
 
-### Cost And Timing
+### Fixed-Batch Aggregation
 
-- Every permitted live test makes real, billable provider calls — one target request plus one judge request per
-  evaluation — and target and judge calls are serial within the test.
+- An experiment declares its trial count and aggregation rules before execution starts; neither may be adapted to the
+  results observed so far.
+- Every attempted trial is retained and reported in distinct categories: successful trials, valid but unsuccessful
+  trials (for example a below-threshold score), invalid evaluations (malformed judge output), and execution
+  failures.
+- A valid below-threshold score is recorded as an unsuccessful trial; it is not an immediate abort.
+- An incomplete batch cannot pass as a successful subset: trials that never ran count against the declared batch,
+  not as absent.
+- There is no retry-until-pass and no early stop once enough successes accumulate; a failed trial is a recorded
+  outcome, and the batch runs to its declared end or fails as incomplete.
+
+### Trace Artefacts
+
+- Every scenario produces a versioned, sanitised, inspectable evidence trace recording: requests, including tool
+  schemas and request settings; responses, including tool-call ids and arguments; supplied tool results with their
+  simulated labelling; ordering; purpose labels; and timing and usage data when the provider supplies them.
+- Partial traces are preserved when a trial fails or is interrupted mid-scenario.
+- Evidence traces are stored separately from evaluation results, so raw evidence survives independently of judge
+  outcomes.
+- Credentials, configuration or client objects, and raw provider exceptions are never serialised into traces or
+  assertion output; trace sanitisation matches the assertion-output rules above.
+- Raw trace artefacts live in `game/temp/live-traces`: `game/temp` is the project's designated git-ignored location
+  for persisted temporary files (the `# AI agents` ignore block), so no dedicated ignore entry is needed. Sanitised
+  summaries and findings may be committed to the repository; raw artefacts must not be.
+
+### Cost and Timing
+
+- Every permitted live test makes real, billable provider calls. Per trial, account for the declared target requests,
+  any continuation-generator requests, and the judge request. All provider work is serial within the fact.
 - Parameterless facts receive no runner cancellation token; `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` bounds the host's
-  whole-fact wait and must cover both calls. `AITest:Timeout` is only the per-request SDK network timeout. No new
-  timeout mechanism exists; raise the fact budget for slow providers rather than expecting cooperative
+  whole-fact wait and must cover the entire declared batch — every scenario request, continuation, evaluation, and
+  the aggregation. `AITest:Timeout` is only the per-request SDK network timeout. No new timeout mechanism exists;
+  raise the fact budget for slow providers or larger declared batches rather than expecting cooperative
   cancellation.
+- The representative fixture `integration-tests/src/Mind/AI/LiveRoleplayIntegrationTests.cs` is marked `[LiveLlm]`
+  and `[Headless]`; it asserts the real rendered prompt's committed lore facts before any network call, performs
+  the live target call through the single-shot helper, asserts response shape deterministically, then judges
+  groundedness with an explicitly passed `GroundednessEvaluatorContext` at threshold 5 — deliberately stricter than
+  the evaluator's built-in greater-than-or-equal-to-4 interpretation. Its text-only, single-request shape is a
+  fixture choice, not a harness limit.
 
 ## Supported CLI Options
 
@@ -399,9 +492,10 @@ all-empty list (for example `","`) is rejected during validation.
     non-empty value; a missing, `null`, empty, whitespace-only, or mismatched acknowledgement is a protocol/cleanup
     fault that forces termination within the cleanup timeout and never counts as clean shutdown. It also distinguishes
     `SessionReusable:false` from an absent property.
-14. The [Integration-Test Contributor Guide](contributor-guide.md) provides a linked, executable quick start; exact
-    selectors; windowed, Xvfb, headless, and XR guidance; outcome and session diagnostics; timeout mapping; and
-    actionable recovery for protocol, timeout, crash, non-reusable-session, import-cache, and preflight failures.
+14. Operational how-to guidance for running, filtering, choosing execution modes, configuring and authoring live
+    tests, reading results, and recovering from failures is carried by the `godot-integration-testing` and
+    `llm-experiment-driven-development` agent skills; this specification contains only contractual limits and no
+    contributor-operational instructions.
 15. Without `--live-llm`, live-marked tests are absent from discovery and execution — including under exact
     `--test-class`, `--test-method`, and MTP UID selection — producing no discovered, in-progress, or terminal node
     and no passed result; the default suite runs without `AITest` credentials.
@@ -413,8 +507,25 @@ all-empty list (for example `","`) is rejected during validation.
 19. Evaluation failures stay sanitised (metric name, score/rating, threshold, redacted bounded reasoning), the
     evaluation support layer is verifiable deterministically with fake clients, and no path retries a failed
     evaluation until it passes.
-20. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-19
-    additionally verify User Requirements 7-10 and Technical Requirements 17-22.
+20. A multi-request scenario with tool definitions executes entirely under the existing live gate: tool-call
+    responses are captured as evidence, model-selected functions are never automatically executed, supplied tool
+    results are labelled simulated, evaluation consumes the captured evidence without re-running the target
+    (verifiable with fake clients by counting requests), and the caller-owned pair is disposed exactly once by its
+    owner and never by execution or evaluation operations.
+21. Fixed-batch aggregation holds: the trial count and aggregation rules are declared before execution, every
+    attempted trial is reported in its category, a valid below-threshold score is recorded as an unsuccessful trial
+    rather than aborting, malformed judge output is an invalid evaluation that can never pass, an incomplete batch
+    cannot pass as a successful subset, and the batch neither retries failures nor stops early on accumulated
+    successes.
+22. Trace artefacts are versioned, sanitised, and inspectable: a failed or interrupted trial still yields its
+    partial trace; traces record requests with tool schemas and settings, responses with call ids and arguments,
+    supplied tool results, ordering, purpose labels, and timing/usage when available; raw artefacts live only in the
+    ignored `game/temp/live-traces` location; and no credentials, configuration or client objects, or raw provider
+    exceptions appear in traces or assertion output.
+23. The single-shot evaluation helper remains an actively-used composition of the execution, evaluation, and
+    aggregation contracts, and its single-request and text-only restrictions are documented as fixture-specific.
+24. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-23
+    additionally verify User Requirements 7-13 and Technical Requirements 17-28.
 
 ## References
 
@@ -430,5 +541,4 @@ all-empty list (for example `","`) is rejected during validation.
 - @integration-tests/src/Support/AI/LiveLLMEvaluation.cs
 - @integration-tests/src/Mind/AI/LiveRoleplayIntegrationTests.cs
 - @game/src/Testing/TestRuntimeRunner.cs
-- [Integration-Test Contributor Guide](contributor-guide.md)
 - @specs/index.md

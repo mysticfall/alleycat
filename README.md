@@ -45,8 +45,8 @@ Every commit then runs:
 
 ## 🧪 Integration Testing
 
-See the [Integration-Test Contributor Guide](specs/testing/001-test-framework/contributor-guide.md) for integration-test
-quick start, filtering, diagnostics, recovery, and execution-mode requirements.
+See the `godot-integration-testing` agent skill (`.opencode/skills/godot-integration-testing/SKILL.md`) for
+integration-test quick start, filtering, diagnostics, recovery, and execution-mode requirements.
 
 ## 🎮 Game CLI Options
 

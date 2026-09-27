@@ -235,13 +235,14 @@ public static class LiveLLMEvaluation
             return string.Empty;
         }
 
-        string bounded = text.Length <= MaximumReasonLength
-            ? text
-            : $"{text[..MaximumReasonLength]}[truncated]";
-        bounded = _credentialAssignmentPattern.Replace(bounded, "$1=[redacted]");
-        bounded = _credentialUrlPattern.Replace(bounded, "[redacted]://");
-        bounded = _opaqueTokenPattern.Replace(bounded, "[redacted]");
-        return bounded;
+        // Redact before truncating: truncating first could leave a split credential tail too short for the
+        // opaque-token pattern to match.
+        string redacted = _credentialAssignmentPattern.Replace(text, "$1=[redacted]");
+        redacted = _credentialUrlPattern.Replace(redacted, "[redacted]://");
+        redacted = _opaqueTokenPattern.Replace(redacted, "[redacted]");
+        return redacted.Length <= MaximumReasonLength
+            ? redacted
+            : $"{redacted[..MaximumReasonLength]}[truncated]";
     }
 
     private static string FormatScore(double score) => score.ToString(CultureInfo.InvariantCulture);
