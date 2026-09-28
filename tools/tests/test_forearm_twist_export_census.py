@@ -41,7 +41,7 @@ class ExportCensusTests(unittest.TestCase):
                             "original_physical_rows": [{"vertex": 0, "weights": {"zero": 0.0, "positive": .5}}]}]}
 
     def measure(self):
-        with patch.object(self.validator.forearm_twist_generator_run_ownership, "load_evidence", return_value=self.evidence), patch.object(self.validator, "validate_mesh", return_value={}):
+        with patch.object(self.validator.installed_mpfb_config, "resolve_config_dir", return_value=Path("mpfb-config")), patch.object(self.validator.forearm_twist_generator_run_ownership, "load_evidence", return_value=self.evidence), patch.object(self.validator, "validate_mesh", return_value={}):
             return self.validator.measure_variant("synthetic", Path("synthetic.blend"))
 
     def test_lost_zero_on_excluded_export_mesh_is_rejected(self):

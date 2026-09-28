@@ -179,9 +179,10 @@ class ForearmTwistBridgePrimitiveTests(unittest.TestCase):
         def calls(node: ast.AST) -> set[str]:
             return {ast.unparse(call.func) for call in ast.walk(node) if isinstance(call, ast.Call)}
 
-        self.assertEqual(7, ownership.SCHEMA_VERSION)
+        self.assertEqual(8, ownership.SCHEMA_VERSION)
         generator = function("tools/generate_character.py", "generate_character")
         stages = {ast.unparse(call.func): call for call in ast.walk(generator) if isinstance(call, ast.Call)}
+        self.assertIn("get_mpfb_installed_config_dir", calls(generator))
         self.assertLess(stages["export_copy"].lineno, stages["snapshot_export_physical_memberships"].lineno)
         for stage in ("delete_objects", "purge_orphans", "normalise_exported_object_names",
                       "rename_exported_character_prefix", "reparent_hands_onto_twist_helpers",
@@ -200,6 +201,10 @@ class ForearmTwistBridgePrimitiveTests(unittest.TestCase):
         self.assertLess(
             stages["capture_forearm_twist_generator_run_ownership"].lineno,
             stages["forearm_twist_generator_run_ownership.write_evidence"].lineno,
+        )
+        self.assertEqual(
+            ["installed_config_dir", "output_path", "preset"],
+            [ast.unparse(arg) for arg in stages["forearm_twist_generator_run_ownership.write_evidence"].args[:3]],
         )
         self.assertEqual(
             "skipped_export_meshes",

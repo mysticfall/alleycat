@@ -14,7 +14,7 @@ except ImportError:
     from forearm_twist_weights import assert_axial_ownership_contract, is_source_bilateral
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 SIDECAR_SUFFIX = ".forearm_twist_generator_run_ownership.json"
 PRODUCER = "tools/generate_character.py (generator-run authored axial reference)"
 
@@ -35,31 +35,30 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def source_asset_path(repository_root: Path, preset: str) -> Path:
-    """Resolve the checked-in MPFB preset asset associated with a generator run."""
+def source_asset_path(installed_config_dir: Path, preset: str) -> Path:
+    """Resolve the installed MPFB preset asset a generator run was built from."""
 
-    if not preset or any(part in {"", ".", ".."} for part in Path(preset).parts):
+    if not preset or preset in {".", ".."} or Path(preset).name != preset:
         raise ValueError(f"Invalid MPFB preset identifier {preset!r}")
-    path = repository_root / "tools" / "mpfb" / "config" / f"human.{preset}.json"
+    path = (Path(installed_config_dir) / f"human.{preset}.json").resolve()
     if not path.is_file():
-        raise ValueError(f"Missing checked-in MPFB source asset for preset {preset!r}: {path}")
+        raise ValueError(
+            f"Missing installed MPFB preset {preset!r}: {path}. Install the preset "
+            "into the MPFB user config directory before running the tool."
+        )
     return path
 
 
 def build_evidence(
-    repository_root: Path,
+    installed_config_dir: Path,
     output_path: Path,
     preset: str,
     meshes: Sequence[Mapping[str, object]],
     skipped_meshes: Sequence[Mapping[str, object]] = (),
 ) -> dict[str, object]:
-    """Bind export-local axial and original physical-key rows to output and source."""
+    """Bind export-local axial and original physical-key rows to output and installed source."""
 
-    source_path = source_asset_path(repository_root, preset)
-    try:
-        source_relative_path = source_path.relative_to(repository_root).as_posix()
-    except ValueError as exc:
-        raise ValueError(f"MPFB source asset is outside the repository: {source_path}") from exc
+    source_path = source_asset_path(installed_config_dir, preset)
     payload = json.dumps({"meshes": meshes, "skipped_meshes": skipped_meshes}, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return {
         "schema_version": SCHEMA_VERSION,
@@ -71,7 +70,7 @@ def build_evidence(
         },
         "source_asset": {
             "preset": preset,
-            "path": source_relative_path,
+            "path": source_path.as_posix(),
             "sha256": sha256_file(source_path),
         },
         "meshes": list(meshes),
@@ -80,7 +79,7 @@ def build_evidence(
 
 
 def write_evidence(
-    repository_root: Path,
+    installed_config_dir: Path,
     output_path: Path,
     preset: str,
     meshes: Sequence[Mapping[str, object]],
@@ -89,12 +88,12 @@ def write_evidence(
     """Persist finalised generator-run ownership evidence after the final blend save."""
 
     evidence_path = sidecar_path(output_path)
-    evidence = build_evidence(repository_root, output_path, preset, meshes, skipped_meshes)
+    evidence = build_evidence(installed_config_dir, output_path, preset, meshes, skipped_meshes)
     evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return evidence_path
 
 
-def load_evidence(repository_root: Path, output_path: Path) -> dict[str, object]:
+def load_evidence(installed_config_dir: Path, output_path: Path) -> dict[str, object]:
     """Load only evidence linked to the exact output and installed source asset."""
 
     evidence_path = sidecar_path(output_path)
@@ -118,24 +117,22 @@ def load_evidence(repository_root: Path, output_path: Path) -> dict[str, object]
         raise ValueError(f"Generator-run ownership validation output name mismatch: {evidence_path}")
     if generation.get("output_sha256") != sha256_file(output_path):
         raise ValueError(f"Stale generator-run ownership validation sidecar: {evidence_path}")
-    source_relative_path = source_asset.get("path")
+    source_recorded_path = source_asset.get("path")
     source_digest = source_asset.get("sha256")
     preset = source_asset.get("preset")
     if (
-        not isinstance(source_relative_path, str)
+        not isinstance(source_recorded_path, str)
+        or not source_recorded_path
         or not isinstance(source_digest, str)
         or not isinstance(preset, str)
     ):
         raise ValueError(f"Invalid generator-run ownership validation source linkage: {evidence_path}")
-    source_path = (repository_root / source_relative_path).resolve()
     try:
-        expected_source_path = source_asset_path(repository_root, preset).resolve()
+        source_path = source_asset_path(installed_config_dir, preset)
     except ValueError as exc:
         raise ValueError(f"Invalid generator-run ownership validation source asset: {evidence_path}") from exc
-    if source_path != expected_source_path:
+    if Path(source_recorded_path).name != source_path.name:
         raise ValueError(f"Generator-run ownership validation source asset mismatch: {evidence_path}")
-    if not source_path.is_relative_to(repository_root.resolve()) or not source_path.is_file():
-        raise ValueError(f"Missing generator-run ownership validation source asset: {evidence_path}")
     if source_digest != sha256_file(source_path):
         raise ValueError(f"Stale generator-run ownership validation source asset: {evidence_path}")
     if not isinstance(evidence.get("meshes"), list) or any(

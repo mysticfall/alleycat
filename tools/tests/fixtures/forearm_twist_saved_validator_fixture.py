@@ -8,6 +8,7 @@ import bpy
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools"))
 import forearm_twist_generator_run_ownership as ownership
+import installed_mpfb_config
 
 
 def make_mesh(name, armature, before, after, source_domain):
@@ -65,7 +66,9 @@ def build(path, scenario):
         records.append(make_mesh("Fixture.clothing", arm, garment, garment,
                                  scenario == "clothing_missing"))
     bpy.ops.wm.save_as_mainfile(filepath=str(path))
-    ownership.write_evidence(ROOT, path, "alleycat_female", records)
+    ownership.write_evidence(
+        installed_mpfb_config.resolve_config_dir(), path, "alleycat_female", records
+    )
 
 
 if __name__ == "__main__":

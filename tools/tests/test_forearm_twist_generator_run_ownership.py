@@ -221,69 +221,99 @@ class GeneratorRunOwnershipTests(unittest.TestCase):
 
     def test_missing_and_stale_sidecar_fail_closed(self) -> None:
         with TemporaryDirectory() as temporary_directory:
-            output_path = Path(temporary_directory) / "generated.blend"
+            root = Path(temporary_directory)
+            config_dir = root / "mpfb-config"
+            config_dir.mkdir()
+            (config_dir / "human.testpreset.json").write_text('{"preset": "testpreset"}', encoding="utf-8")
+            (config_dir / "human.other.json").write_text('{"preset": "other"}', encoding="utf-8")
+            output_path = root / "generated.blend"
             output_path.write_bytes(b"generated-output")
 
             with self.assertRaisesRegex(ValueError, "Missing generator-run ownership validation sidecar"):
-                ownership.load_evidence(REPO_ROOT, output_path)
+                ownership.load_evidence(config_dir, output_path)
+
+            for invalid_preset in ("", ".", "..", "nested/preset"):
+                with self.subTest(invalid_preset=invalid_preset):
+                    with self.assertRaisesRegex(ValueError, "Invalid MPFB preset identifier"):
+                        ownership.build_evidence(config_dir, output_path, invalid_preset, [])
+
+            absent_config_dir = root / "absent-config"
+            absent_config_dir.mkdir()
+            with self.assertRaisesRegex(ValueError, "Missing installed MPFB preset"):
+                ownership.build_evidence(absent_config_dir, output_path, "testpreset", [])
 
             evidence_path = ownership.sidecar_path(output_path)
-            evidence = ownership.build_evidence(REPO_ROOT, output_path, "alleycat_female", [])
+            evidence = ownership.build_evidence(config_dir, output_path, "testpreset", [])
             evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
-            self.assertEqual([], ownership.load_evidence(REPO_ROOT, output_path)["meshes"])
+            self.assertEqual([], ownership.load_evidence(config_dir, output_path)["meshes"])
 
-            for stale_schema in (4, 5, 6):
+            # The recorded path is machine-local; the digest is the portable
+            # binding, so a relocated install of the same preset still verifies.
+            relocated_config_dir = root / "relocated-mpfb-config"
+            relocated_config_dir.mkdir()
+            (relocated_config_dir / "human.testpreset.json").write_text('{"preset": "testpreset"}', encoding="utf-8")
+            self.assertEqual([], ownership.load_evidence(relocated_config_dir, output_path)["meshes"])
+
+            for stale_schema in (4, 5, 6, 7):
                 stale = json.loads(json.dumps(evidence))
                 stale["schema_version"] = stale_schema
                 evidence_path.write_text(json.dumps(stale), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "Unsupported generator-run ownership validation sidecar"):
-                    ownership.load_evidence(REPO_ROOT, output_path)
+                    ownership.load_evidence(config_dir, output_path)
 
-            census = ownership.build_evidence(REPO_ROOT, output_path, "alleycat_female", [],
+            census = ownership.build_evidence(config_dir, output_path, "testpreset", [],
                 [{"name": "prop", "vertex_count": 1, "group_indices": [[0, "zero"]],
                   "original_physical_rows": [{"vertex": 0, "weights": {"zero": 0.0}}]}])
             census["skipped_meshes"][0]["original_physical_rows"][0]["weights"].clear()
             evidence_path.write_text(json.dumps(census), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "generation mismatch"):
-                ownership.load_evidence(REPO_ROOT, output_path)
+                ownership.load_evidence(config_dir, output_path)
 
             malformed = json.loads(json.dumps(evidence))
             malformed["meshes"] = [{"name": "body"}]
             evidence_path.write_text(json.dumps(malformed), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Invalid generator-run ownership validation rows"):
-                ownership.load_evidence(REPO_ROOT, output_path)
-            missing_domain = ownership.build_evidence(REPO_ROOT, output_path, "alleycat_female",
+                ownership.load_evidence(config_dir, output_path)
+            missing_domain = ownership.build_evidence(config_dir, output_path, "testpreset",
                 [{"name": "body", "original_zero_rows": [], "original_positive_rows": []}])
             evidence_path.write_text(json.dumps(missing_domain), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Invalid generator-run ownership validation rows"):
-                ownership.load_evidence(REPO_ROOT, output_path)
-            legacy = ownership.build_evidence(REPO_ROOT, output_path, "alleycat_female",
+                ownership.load_evidence(config_dir, output_path)
+            legacy = ownership.build_evidence(config_dir, output_path, "testpreset",
                 [{"name": "body", "original_zero_rows": []}])
             evidence_path.write_text(json.dumps(legacy), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Invalid generator-run ownership validation rows"):
-                ownership.load_evidence(REPO_ROOT, output_path)
-            complete = ownership.build_evidence(REPO_ROOT, output_path, "alleycat_female",
+                ownership.load_evidence(config_dir, output_path)
+            complete = ownership.build_evidence(config_dir, output_path, "testpreset",
                 [{"name": "body", "original_zero_rows": [], "original_positive_rows": [], "source_domain": {}}])
             complete["meshes"][0]["original_positive_rows"] = [{"vertex": 0, "positives": ["ghost"]}]
             evidence_path.write_text(json.dumps(complete), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "generation mismatch"):
-                ownership.load_evidence(REPO_ROOT, output_path)
+                ownership.load_evidence(config_dir, output_path)
             mismatched = json.loads(json.dumps(evidence))
             mismatched["generation"]["id"] = "0" * 64
             evidence_path.write_text(json.dumps(mismatched), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "generation mismatch"):
-                ownership.load_evidence(REPO_ROOT, output_path)
+                ownership.load_evidence(config_dir, output_path)
 
-            forged_source = json.loads(json.dumps(evidence))
-            forged_source["source_asset"]["sha256"] = "0" * 64
-            evidence_path.write_text(json.dumps(forged_source), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Stale generator-run ownership validation source asset"):
-                ownership.load_evidence(REPO_ROOT, output_path)
+            for label, mutate in (
+                ("forged digest", lambda forged: forged["source_asset"].update(sha256="0" * 64)),
+                ("swapped preset", lambda forged: forged["source_asset"].update(
+                    preset="other", path=str(config_dir / "human.other.json"))),
+                ("forged path", lambda forged: forged["source_asset"].update(
+                    path="/elsewhere/human.other.json")),
+            ):
+                with self.subTest(label=label):
+                    forged_source = json.loads(json.dumps(evidence))
+                    mutate(forged_source)
+                    evidence_path.write_text(json.dumps(forged_source), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "source asset"):
+                        ownership.load_evidence(config_dir, output_path)
 
             evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
             output_path.write_bytes(b"altered-generated-output")
             with self.assertRaisesRegex(ValueError, "Stale generator-run ownership validation sidecar"):
-                ownership.load_evidence(REPO_ROOT, output_path)
+                ownership.load_evidence(config_dir, output_path)
 
 
 if __name__ == "__main__":

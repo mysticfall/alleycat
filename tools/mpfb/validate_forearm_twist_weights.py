@@ -20,6 +20,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import forearm_twist_weights
 import forearm_twist_generator_run_ownership
+import installed_mpfb_config
 
 
 EPSILON = 1.0e-5
@@ -304,11 +305,12 @@ def measure_variant(variant: str, output_path: Path) -> dict[str, object]:
         raise AssertionError(f"{variant}: expected one body mesh, found {len(body_meshes)}")
     body = body_meshes[0]
     try:
+        installed_config_dir = installed_mpfb_config.resolve_config_dir()
         ownership_evidence = forearm_twist_generator_run_ownership.load_evidence(
-            TOOLS_DIR.parent,
+            installed_config_dir,
             output_path,
         )
-    except ValueError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise AssertionError(f"{variant}: {exc}") from exc
     axial_meshes = evidence_meshes(ownership_evidence, variant)
     skipped_meshes = evidence_meshes({"meshes": ownership_evidence.get("skipped_meshes")}, variant)

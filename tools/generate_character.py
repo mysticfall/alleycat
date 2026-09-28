@@ -28,6 +28,7 @@ if str(TOOLS_DIR) not in sys.path:
 import generate_body_colliders
 import forearm_twist_generator_run_ownership
 import forearm_twist_weights
+import installed_mpfb_config
 import update_character_import_retarget_metadata
 from rigging.forearm_twist_bridge import (
     BEND_EVIDENCE_ASSERTIONS,
@@ -810,6 +811,15 @@ def get_mpfb_generate_operator():
             "MPFB operator bpy.ops.mpfb.human_from_presets is not available. "
             "Ensure the MPFB add-on is installed and enabled."
         ) from exc
+
+
+def get_mpfb_installed_config_dir() -> Path:
+    """Return the MPFB user config directory holding installed character presets."""
+
+    try:
+        return installed_mpfb_config.resolve_config_dir()
+    except RuntimeError as exc:
+        raise ScriptError(f"Generator-run provenance setup failed: {exc}") from exc
 
 
 def get_mpfb_export_operator():
@@ -3261,6 +3271,7 @@ def generate_character(config: CharacterConfig) -> Path:
     preset = config.preset
     character_name = config.name
     output_path = config.output_file_path
+    installed_config_dir = get_mpfb_installed_config_dir()
     scene = get_scene()
 
     require_scene_properties(scene, ["MPFB_FPR_available_presets"], "preset generation")
@@ -3434,7 +3445,7 @@ def generate_character(config: CharacterConfig) -> Path:
 
     bpy.ops.wm.save_as_mainfile(filepath=str(output_path), check_existing=False)
     generator_run_ownership_path = forearm_twist_generator_run_ownership.write_evidence(
-        TOOLS_DIR.parent,
+        installed_config_dir,
         output_path,
         preset,
         generator_run_ownership,

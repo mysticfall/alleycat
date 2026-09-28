@@ -39,6 +39,8 @@ EXPECTED_PRESETS = {
     },
 }
 
+MPFB_INSTALLED = (MPFB_EXTENSION_ROOT / "blender_manifest.toml").is_file()
+
 
 def load_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as source:
@@ -64,10 +66,13 @@ def assert_positive_side_support(test: unittest.TestCase, side: dict) -> None:
 
 
 class MpfbForearmTwistAssetTests(unittest.TestCase):
-    @unittest.skipUnless(shutil.which("blender"), "Blender is required for saved-output validation")
+    @unittest.skipUnless(
+        shutil.which("blender") and MPFB_INSTALLED,
+        "Blender with the MPFB extension is required for saved-output validation",
+    )
     def test_saved_validator_rejects_applicable_mesh_without_helper_support(self) -> None:
         # The complete observation window is a reopened, SHA-linked .blend and
-        # its schema-7 sidecar, through the ordinary validator CLI exit status.
+        # its ownership sidecar, through the ordinary validator CLI exit status.
         with tempfile.TemporaryDirectory(prefix="rig-002-c1-", dir=REPO_ROOT / "game/temp") as directory:
             generated = subprocess.run(
                 [shutil.which("blender"), "--background", "--python-exit-code", "1",
@@ -244,7 +249,7 @@ class MpfbForearmTwistAssetTests(unittest.TestCase):
                         self.assertGreaterEqual(lower_weight, helper_weight)
 
     @unittest.skipUnless(
-        shutil.which("blender") and (MPFB_EXTENSION_ROOT / "blender_manifest.toml").is_file(),
+        shutil.which("blender") and MPFB_INSTALLED,
         "Blender 5.2 with the MPFB extension is required for disposable spatial-weight validation.",
     )
     def test_ordinary_generator_proves_body_and_clothing_twist_weights(self) -> None:
