@@ -61,6 +61,32 @@ Custom game options are passed as user arguments after Godot's `--` separator, f
 | `-- --integration-test-session <args>` | Runs a persistent integration test session used by the test framework. |
 | `-- --integration-probe <args>` | Integration test assembly/type discovery probe used by the test framework. |
 
+
+## 🤖 Per-User Model Overrides
+
+Overriding models is optional, but contributors who want to optimise their token usage can run
+individual OpenCode agents on cheaper or faster models from the providers they use. Create
+`.opencode/opencode.json` and set per-agent models in `provider/model` format:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agents": {
+    "planner": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "reviewer": {
+      "model": "openai/gpt-6-astra"
+    },
+    "coder": {
+      "model": "zai-coding-plan/glm-5.3"
+    }
+  }
+}
+```
+
+Use the agent names found in `.opencode/agents/`; only the agents you list are overridden.
+
 ---
 
 ## 📜 Licence
