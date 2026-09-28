@@ -85,8 +85,8 @@ BEND_EVIDENCE_ASSERTIONS = {
         "rationale": "The pronated palm normal must actually face subject forward (runner parity).",
     },
     "palm_geometry_minimum_alignment": {
-        "value": 0.5,
-        "rationale": "Hand-rest +Z must agree with thumb/little finger geometry; relaxed stances tilt the thumb so the little finger carries the strict bound below.",
+        "value": 0.35,
+        "rationale": "Hand-rest +Z must agree with thumb geometry; measured alignment spans 0.4516 (Ayana) to 0.7467 (reference male; reference female 0.5399), symmetric across sides, while a wrong-axis or wrong-sign derivation measures near zero or negative. Relaxed stances tilt the thumb, so the little finger carries the strict bound below.",
     },
     "little_geometry_minimum_alignment": {
         "value": 0.8,

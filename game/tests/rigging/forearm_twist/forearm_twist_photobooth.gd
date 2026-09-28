@@ -61,7 +61,11 @@ const AXIAL_ALIGNMENT_TOLERANCE := 0.999
 const SUBJECT_FORWARD_MAXIMUM_UP_TILT := 0.15
 const SUBJECT_FORWARD_WORLD_ANCHOR_MINIMUM_DOT := 0.99
 const PALM_TARGET_MINIMUM_LENGTH := 0.00001
-const PALM_GEOMETRY_MINIMUM_ALIGNMENT := 0.8
+# Hand-rest +Z must agree with rest finger geometry. Measured thumb alignment spans 0.4516 (Ayana) to 0.7467
+# (reference male; reference female 0.5399), symmetric across sides, so the thumb bound only fails closed on
+# wrong-axis or wrong-sign derivations (near zero or negative); the little finger carries the strict bound.
+const THUMB_GEOMETRY_MINIMUM_ALIGNMENT := 0.35
+const LITTLE_GEOMETRY_MINIMUM_ALIGNMENT := 0.8
 const PALM_FORWARD_MINIMUM_DOT := 0.999
 const PRONATION_RECOVERY_TOLERANCE_RADIANS := 0.002
 const BEND_COMPONENT_TOLERANCE_RADIANS := 0.002
@@ -1252,7 +1256,6 @@ func _bend_frame_from_rest(skeleton: Skeleton3D, side_name: String) -> Dictionar
 	# The palm normal is the hand-rest +Z axis. This is verified against independent rest geometry rather
 	# than assumed: the cross products of the wrist->middle-finger direction with the wrist->thumb and
 	# wrist->little-finger directions identify the same palm-facing half-space on each mirrored side.
-	# (The previous session projected hand-rest +X as the palm facing; this check rejects that axis.)
 	var palm_rest := hand_rest.basis.z.normalized()
 	var fingers := (skeleton.get_bone_global_rest(middle_distal).origin - hand_rest.origin).normalized()
 	var thumb := skeleton.get_bone_global_rest(thumb_proximal).origin - hand_rest.origin
@@ -1264,7 +1267,7 @@ func _bend_frame_from_rest(skeleton: Skeleton3D, side_name: String) -> Dictionar
 	var palm_from_little := (little.cross(fingers).normalized()) * side_sign
 	var palm_thumb_alignment := palm_from_thumb.dot(palm_rest)
 	var palm_little_alignment := palm_from_little.dot(palm_rest)
-	if palm_thumb_alignment < PALM_GEOMETRY_MINIMUM_ALIGNMENT or palm_little_alignment < PALM_GEOMETRY_MINIMUM_ALIGNMENT:
+	if palm_thumb_alignment < THUMB_GEOMETRY_MINIMUM_ALIGNMENT or palm_little_alignment < LITTLE_GEOMETRY_MINIMUM_ALIGNMENT:
 		SceneUtils.fatal_error_and_quit(
 			"RIG-002 runner: %s hand-rest +Z is not the palm normal according to rest finger geometry (thumb_alignment=%.9f little_alignment=%.9f)" % [
 				side_name,

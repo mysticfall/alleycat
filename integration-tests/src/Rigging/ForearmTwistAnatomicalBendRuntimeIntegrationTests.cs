@@ -33,7 +33,11 @@ public sealed class ForearmTwistAnatomicalBendRuntimeIntegrationTests
     private const float FingerChainRotationToleranceRadians = 0.002f;
     private const float RestToleranceRadians = 0.001f;
     private const float PalmForwardMinimumDot = 0.999f;
-    private const float PalmGeometryMinimumAlignment = 0.5f;
+    // Hand-rest +Z must agree with rest finger geometry. Measured thumb alignment spans 0.4516 (Ayana) to
+    // 0.7467 (reference male; reference female 0.5399), symmetric across sides, so the thumb bound only fails
+    // closed on wrong-axis or wrong-sign derivations (near zero or negative); the little finger carries the
+    // strict bound.
+    private const float PalmGeometryMinimumAlignment = 0.35f;
     private const float LittleGeometryMinimumAlignment = 0.8f;
     private const float SubjectForwardMaximumUpTilt = 0.15f;
     private const float SubjectForwardWorldAnchorMinimumDot = 0.99f;
