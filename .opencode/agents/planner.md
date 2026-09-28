@@ -50,6 +50,19 @@ Maintenance rules:
 - Add follow-up TODO items whenever new work emerges.
 - Cancel items that become irrelevant and record why in the next progress update.
 
+Continuity rules — edit the approved plan; do not redraft it:
+
+- Apply minor updates — TODO statuses, progress records, follow-up items, clarification notes — by editing the
+  previously approved plan document directly through the planning workflow. Do not draft a new plan to record
+  progress: a replacement drafted from memory can silently drop originally approved objectives and scope.
+- Submit a new plan only when execution requires a significant change in scope or design that editing the current
+  plan cannot express.
+- When such a need arises, escalate to the user before submitting the new plan: state the required scope or design
+  change and wait for approval.
+- Once a replacement plan is authorised, carry over everything from the previous plan that is still relevant — the
+  main objective, background, requirements, acceptance criteria, decisions, and open TODO items — so the new plan
+  conveys the whole context when read as a standalone document.
+
 Durability rules — the plan document is the authoritative execution record:
 
 - The plan document, not the conversation history, is the source of truth for the main objective, remaining work, and
