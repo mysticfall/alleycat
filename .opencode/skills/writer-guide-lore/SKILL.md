@@ -6,7 +6,9 @@ description: Writer-only guide for delegated perspective lore writing.
 # Lore Writing Guide
 
 Use this guide when `loremaster` delegates perspective lore writing under `game/lore/` or
-`game/content/<content-id>/lore/`.
+`game/content/<content-id>/lore/`. The formatting conventions below apply equally to both roots; applying them
+within a content pack is that pack's authors' responsibility, and delegated lore edits do not retrofit existing
+pack content to conform.
 
 ## Source Of Truth
 
@@ -44,10 +46,10 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
      asides and no new concrete prompt-usable facts.
 4. Reference subjects by full ID, not by name, in prompt-facing lore. Full IDs (`[type]:[id]`, with types `char`,
    `loc`, and `item`) are identity trackers, not names:
-   - entry and subject identity live in the frontmatter `id` and `subject_id`; the display `title` never carries
-     identity,
-   - body prose references a subject entity by full ID where the name would appear; pronouns and purely descriptive
-     references ("the room", "the table") remain natural,
+   - entry and subject identity live in the frontmatter `id` and `subject_id`, which stay bare as parsed values; the
+     display `title` never carries identity,
+   - body prose references a subject entity by its full ID wrapped in backticks (for example `` `char:ally` ``) where
+     the name would appear; pronouns and purely descriptive references ("the room", "the table") remain natural,
    - a canonical entry states its subject's name once as an explicit fact (for example "His name is Vadim."),
    - a perspective entry either states a name by which the observer knows the subject, or states that the observer
      does not know the name.
@@ -92,8 +94,13 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
 13. Keep prose concise and perspective-safe: prefer direct statements the observer can use over meta-commentary about
     canon, tooling, or compilation.
 14. Start entry body content directly after the frontmatter: do not author a title H1 duplicating the frontmatter
-    `title`, and start authored sections at `#`. Hard-wrapping prose is fine; the prompt formatter reflows
-    paragraphs at render time.
+    `title`, and start authored sections at `#`. Author each paragraph on a single line, with no linebreaks inside
+    sentences and exactly one blank line between paragraphs; never hard-wrap prose.
+15. Reference another lore entry with a Markdown link whose target is the target entry's path relative to the lore
+    content root (for example `wiki/characters/vadim.md`, or `perspectives/char/vadim/world/charter.md` for a
+    perspective entry), and whose label is the display name followed by the target entry's frontmatter `id` in
+    backticks inside parentheses — for example ``[Vadim(`char:vadim`)](wiki/characters/vadim.md)``. Rendered prompts
+    keep only the label text, so link syntax never reaches the model.
 
 ## Examples
 
@@ -126,9 +133,11 @@ Display titles (frontmatter `title`, Title Case, independent of IDs):
 - Perspective entries read as the observer's first-person internal monologue on the subject and convey all
   observer-available information so the topic is understandable without the canonical `wiki/` entry, with no omniscient
   asides or new concrete prompt-usable facts.
-- Body prose references subjects by full ID where the name would appear; canonical entries state the subject's name
-  once as an explicit fact, and perspective entries state a known name or explicitly state that the observer does not
-  know it.
+- Body prose references subjects by full ID wrapped in backticks where the name would appear; canonical entries state
+  the subject's name once as an explicit fact, and perspective entries state a known name or explicitly state that
+  the observer does not know it.
+- Every ID written in prose, `description` values, or link labels is backticked, while frontmatter metadata values
+  (`id:`, `subject_id:`, `type:`) stay bare.
 - Entry titles are readable Title Case display labels independent of IDs — known names where observer knowledge
   supports them, otherwise observer-known descriptive labels — with no invented or leaked unknown names and no newly
   authored ID-shaped titles.
@@ -136,7 +145,9 @@ Display titles (frontmatter `title`, Title Case, independent of IDs):
   observer-safe, in the entry's voice, sentence case with an initial capital, with no fact summaries, when/why-only
   triggers, stage directions, behavioural absolutes, or unjustified scenario narrowing.
 - Entries start body content directly after frontmatter with no title H1 and authored sections starting at `#`;
-  hard-wrapped prose is acceptable because the prompt formatter reflows paragraphs at render time.
+  each paragraph is a single line with no linebreaks inside sentences, separated by exactly one blank line.
+- Cross-references to other lore entries use a Markdown link with the target path relative to the lore content root
+  and a label of display name plus the target entry's backticked `id` in parentheses.
 - Prompt-usable concrete facts are stated, scoped as unknown/unavailable/not prompt-relevant, or omitted.
 - The edit does not introduce canonical fallback, omniscient constraints, or unsupported graph/compiler workflow scope.
 

@@ -66,11 +66,21 @@ responsibility for lore context, source-of-truth decisions, sequencing, validati
 - Flag any perspective entry that would require the LLM to improvise unstated names, ages, dates, registrations,
   employment history, relationships, or other concrete facts.
 - Reference subjects by full ID rather than by name in prompt-facing lore: body prose uses the subject's full ID
-  (`[type]:[id]`, with types `char`, `loc`, and `item`) where the name would appear, while pronouns and purely
-  descriptive references remain natural. Frontmatter `title` values are readable Title Case display labels
-  independent of IDs — a known name such as `Ally` when the observer's knowledge supports it, otherwise an
-  observer-known descriptive label, never an invented name or a name the observer does not know. The lore formatter
-  renders titles as Markdown headings in prompts.
+  wrapped in backticks (for example `` `char:vadim` ``; `[type]:[id]`, with types `char`, `loc`, and `item`) where
+  the name would appear, while pronouns and purely descriptive references remain natural. Frontmatter `title` values
+  are readable Title Case display labels independent of IDs — a known name such as `Ally` when the observer's
+  knowledge supports it, otherwise an observer-known descriptive label, never an invented name or a name the
+  observer does not know. The lore formatter renders titles as Markdown headings in prompts.
+- Author prompt and lore text one paragraph per line: each paragraph sits on a single line with no linebreaks inside
+  sentences, and paragraphs are separated by exactly one blank line.
+- Wrap every ID written in prose, `description` values, or link labels in backticks, including lore entry IDs such as
+  `` `vadim.charter` ``; frontmatter metadata values (`id:`, `subject_id:`, `type:`) are parsed data and stay bare.
+- Reference another lore entry with a Markdown link whose target is the entry's path relative to the lore content
+  root and whose label is the display name followed by the target entry's backticked `id` in parentheses — for
+  example ``[Vadim(`char:vadim`)](wiki/characters/vadim.md)``; rendered prompts keep only the label text.
+- These formatting conventions apply equally to content-pack lore roots (`game/content/<content-id>/lore/`) as well
+  as `game/lore/`; applying them within a content pack is that pack's authors' responsibility, and lore tasks do not
+  retrofit existing pack content to conform.
 - Every perspective entry either states a name by which the observer knows the subject or states that the observer
   does not know the name; never invent a name the observer would not know.
 - Canonical subject-bound entries follow the same display-title convention and state the subject's name once as an
