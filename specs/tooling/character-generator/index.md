@@ -32,8 +32,8 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Generated characters keep the eye animation support required by runtime eye and face systems.
 - Generated characters with ready collider imports receive refreshed body collider wrapper/profile assets automatically.
 - When Godot has not created import sidecars yet, users receive a clear rerun workflow instead of fabricated data.
-- Contributors can manually install the generic MPFB forearm-twist source assets before ordinary character
-  regeneration.
+- Contributors manually install the MPFB presets the tool needs before ordinary character regeneration: generic
+  reference presets distributed by the repository, and character presets supplied by the content pack.
 - Regenerated characters carry the RIG-002 forearm-twist helper bones — one per side, with no second helper
   bone — and hand attachment bindings remain intact.
 - In an ordinarily regenerated character, selecting the left middle-finger group in Blender Edit Mode does not select
@@ -119,9 +119,13 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - delegate skeleton, animation, collider, and gameplay setup to module installers;
   - keep reusable topology visible in template scenes/assets for inspection and testing.
 - Forearm-twist source rig generation follows [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md):
-  generic source assets under `tools/mpfb/` target Blender 5.2, MPFB 2.0.17, and schema `110`; contributors install
-  them manually, then use ordinary regeneration without direct generated-`.blend` edits or an automatic installation
-  script.
+  the repository's generic reference sources under `tools/mpfb/` target Blender 5.2, MPFB 2.0.17, and schema
+  `110`; contributors install them manually, then use ordinary regeneration without direct generated-`.blend`
+  edits or an automatic installation script. Every generator run resolves the preset from the MPFB user config
+  directory through the enabled MPFB extension's public location service — the same installed file MPFB builds
+  the character from — and binds it via the generator-run ownership sidecar (schema version 8): preset name,
+  resolved installed path, and sha256 digest, with the digest as the portable binding. A missing installed
+  preset fails closed with guidance to install it first.
 - Helper-chain emission follows RIG-002: regenerated characters carry `LeftForearmTwist` and `RightForearmTwist`
   under the matching lower arms, with each matching hand re-parented to its twist helper, completing the per-side
   chain `LowerArm → ForearmTwist → Hand`. The generator emits no second helper bone. Helper rest placement is
@@ -177,7 +181,8 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Preserving and applying the CHAR-002 main character root import metadata for generated character `.blend` outputs.
 - Preserving and applying the modular character import-script sidecar contract for generated character `.blend` outputs.
 - Godot post-import generation of eye animation libraries and collider wrapper/profile companion assets.
-- Generic MPFB forearm-twist source assets under `tools/mpfb/`, their manual installation, and ordinary regeneration.
+- Generic MPFB forearm-twist source assets under `tools/mpfb/`, their manual installation, and ordinary
+  regeneration.
 - Twist-helper chain emission, exclusions, axial authoring and reference snapshot, and bone-binding index
   refresh for RIG-002.
 
@@ -194,7 +199,8 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Support for other character generation systems beyond MPFB/MakeHuman.
 - Real-time viewport rendering or interactive feedback during generation.
 - Defining character-specific gameplay attributes or abilities.
-- MPFB source assets beyond the generic forearm-twist sources required by RIG-002.
+- Project management of character presets (the content creator's responsibility, not the project's), and MPFB
+  source assets beyond the generic forearm-twist sources required by RIG-002.
 
 ## Acceptance Criteria
 - User Requirements:
@@ -231,7 +237,9 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Saved and reopened Blender characters retain pre-existing zero-weight group memberships outside eligible
         same-side helper promotion and independently attributed opposite-hand finger-ghost removal; calculated zeros
         introduce no selectable memberships.
-  - [ ] Forearm-twist generation uses the RIG-002 manual generic-asset and ordinary-regeneration workflow.
+  - [ ] Forearm-twist generation runs only with the needed presets installed in MPFB — generic reference presets
+        manually installed from the repository, character presets installed by the content creator — and then
+        uses the RIG-002 ordinary-regeneration workflow.
 - Technical Requirements:
   - [ ] Configuration schema validation requires exactly preset, name, outputFile, and amimations fields.
   - [ ] All file paths are resolved relative to the @game directory.
@@ -268,8 +276,10 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Blender/Python tooling does not serialise Godot scenes/resources or fabricate Godot UID, remap, dependency,
         import, or imported-scene metadata.
   - [ ] Godot installer-backed role scene generation is handled by CORE-005 workflows, not this Blender script.
-  - [ ] Generic forearm-twist sources target Blender 5.2, MPFB 2.0.17, and schema `110`; their installation is manual,
-        and the configuration schema remains exactly four fields.
+  - [ ] The generic forearm-twist sources target Blender 5.2, MPFB 2.0.17, and schema `110`, with manual
+        installation. Every generator run binds the installed MPFB preset's digest through the ownership sidecar
+        (schema version 8), and a missing installed preset fails closed with install guidance; the configuration
+        schema remains exactly four fields.
   - [ ] Regenerated reference characters carry exactly one twist helper per side under the matching lower arm,
         with each hand re-parented to its twist helper, completing the `LowerArm → ForearmTwist → Hand` chain and
         no second helper bone; a disposable-generation test proves the regenerated assets through the ordinary
