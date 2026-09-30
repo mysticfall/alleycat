@@ -20,6 +20,7 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Fluid.Core" Version="2.40.0" />
+        <PackageReference Include="Markdig" Version="1.4.0" />
         <PackageReference Include="Microsoft.Agents.AI" Version="1.22.0" />
         <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />

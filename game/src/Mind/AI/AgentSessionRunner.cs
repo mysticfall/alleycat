@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -25,15 +26,22 @@ namespace AlleyCat.Mind.AI;
 /// Thread safety: <see cref="InvalidateForFreshTurn()"/> and its overloads may be called from any thread; the
 /// accepted transcript itself is only touched by <see cref="RunAsync"/>.
 /// </para>
+/// <para>
+/// Transcript recording (AI-011 TR-5–TR-7) is an optional injected sink observing the request-cycle loop from
+/// outside: the runner stays character-agnostic and filesystem-free, the sink receives one capture per resolved
+/// cycle, and recording never changes validation, acceptance, disposal, watermark, scheduling, or cancellation
+/// semantics.
+/// </para>
 /// </remarks>
 internal sealed class AgentSessionRunner
 {
     /// <summary>
     /// Canonical cancellation result for every tool call that produced no natural result, keeping a retained or
     /// in-flight exchange protocol-valid (AI-002 TR-19). A disposed batch's canonical results are composed the same
-    /// way and then dropped with the whole exchange.
+    /// way and then dropped with the whole exchange. Internal so transcript tests assert the runner-generated value
+    /// rather than a hand-supplied string (AI-011 TR-6).
     /// </summary>
-    private const string CancelledActionResult = "The action was cancelled before it completed.";
+    internal const string CancelledActionResult = "The action was cancelled before it completed.";
 
     private static readonly TimeSpan[] _defaultRetryDelays =
     [
@@ -53,6 +61,9 @@ internal sealed class AgentSessionRunner
     private readonly int _maxTransportRetries;
     private readonly IInvalidResponseRecoveryPolicy _invalidResponseRecoveryPolicy;
     private readonly IAgentRequestContextSource _requestContextSource;
+    private readonly SessionScopedTranscriptSink _transcriptSink;
+    private readonly string _instructions;
+    private readonly MindTranscriptRequestOptions _transcriptRequestOptions;
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
     private readonly Lock _stateLock = new();
     private readonly List<ChatMessage> _acceptedTranscript = [];
@@ -71,7 +82,8 @@ internal sealed class AgentSessionRunner
         bool enableReasoningLogging = true,
         IReadOnlyList<TimeSpan>? retryDelays = null,
         IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null,
-        IAgentRequestContextSource? requestContextSource = null)
+        IAgentRequestContextSource? requestContextSource = null,
+        IAgentSessionTranscriptSink? transcriptSink = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _runInputMessages = runInputMessages ?? throw new ArgumentNullException(nameof(runInputMessages));
@@ -83,18 +95,27 @@ internal sealed class AgentSessionRunner
             InvalidResponseRecoveryPolicy.DefaultConsecutiveFailureBudget,
             InvalidResponseRecoveryPolicy.DefaultBackoffDelays);
         _requestContextSource = requestContextSource ?? EmptyAgentRequestContextSource.Instance;
+        // Recording is scoped to this runner's lifetime: the gate closes in RunAsync's finally, so an abandoned
+        // continuation can never reach the recorder after the session loop has exited (AI-011 TR-6/TR-7).
+        _transcriptSink = new SessionScopedTranscriptSink(transcriptSink ?? NullAgentSessionTranscriptSink.Instance);
         _functions = ResolveFunctions(productionTools);
         _exchangeDisposalToolNames = [.. _functions
             .Where(static function => DisposesExchange(function.Value))
             .Select(static function => function.Key)];
+        _instructions = instructions ?? throw new ArgumentNullException(nameof(instructions));
         _chatOptions = new ChatOptions
         {
-            Instructions = instructions ?? throw new ArgumentNullException(nameof(instructions)),
+            Instructions = _instructions,
             Tools = [.. _functions.Values],
             ToolMode = ChatToolMode.RequireAny,
             AllowMultipleToolCalls = allowMultipleToolCalls,
             ResponseFormat = null,
         };
+        _transcriptRequestOptions = new MindTranscriptRequestOptions(
+            _chatOptions.ModelId,
+            _chatOptions.ToolMode?.GetType().Name ?? "Auto",
+            allowMultipleToolCalls,
+            [.. _functions.Values.Select(static function => function.Name)]);
     }
 
     /// <summary>
@@ -326,6 +347,41 @@ internal sealed class AgentSessionRunner
 
         int requestCount = 0;
         int consecutiveInvalidResponseCount = 0;
+
+        // Resolves one cycle's transcript capture and reports it to the sink (AI-011 TR-6/TR-7). Recording is fully
+        // contained: a throwing sink — or a throwing warning logger — never propagates into the session loop and
+        // never replaces the cycle's own cancellation or error outcome.
+        void CompleteCycleTranscript(
+            MindSessionCycleTranscript completed,
+            Stopwatch stopwatch,
+            MindTranscriptCycleOutcome outcome,
+            string? detail = null)
+        {
+            completed.Latency = stopwatch.Elapsed;
+            completed.Outcome = outcome;
+            completed.OutcomeDetail = detail;
+            try
+            {
+                _transcriptSink.Record(completed);
+            }
+            catch (Exception exception)
+            {
+                TryLogTranscriptContainmentFailure(exception);
+            }
+        }
+
+        void TryLogTranscriptContainmentFailure(Exception exception)
+        {
+            try
+            {
+                _logger.LogWarning(exception, "Recording the agent session transcript failed.");
+            }
+            catch (Exception)
+            {
+                // Logging infrastructure failure stays contained with the recording failure (AI-011 TR-7).
+            }
+        }
+
         _logger.LogInformation("Agent session starting with {ToolCount} tool(s).", _functions.Count);
         try
         {
@@ -352,17 +408,42 @@ internal sealed class AgentSessionRunner
                     requestContext.PrefixMessages,
                     out long requestEpoch);
 
+                // Transcript capture (AI-011 TR-6) accompanies the cycle from its first provider interaction: a
+                // cycle that never reaches the provider is not recorded and does not consume a transcript turn
+                // number, and its outcome is only reported once the provider interaction actually started.
+                MindSessionCycleTranscript cycleTranscript = new()
+                {
+                    CycleIndex = requestCount,
+                    StartedAt = DateTimeOffset.Now,
+                    Instructions = _instructions,
+                    RequestMessages = requestTranscript,
+                    RequestOptions = _transcriptRequestOptions,
+                };
+                var cycleStopwatch = Stopwatch.StartNew();
+
                 ChatResponse? response;
                 try
                 {
                     response = await RequestWithTransportRetryAsync(
                         requestTranscript,
                         requestCount,
-                        lifetimeToken);
+                        lifetimeToken,
+                        cycleTranscript);
                 }
-                catch
+                catch (Exception exception)
                 {
                     _requestContextSource.Discard(requestContext.Confirmation);
+                    if (cycleTranscript.ProviderInteractionStarted)
+                    {
+                        CompleteCycleTranscript(
+                            cycleTranscript,
+                            cycleStopwatch,
+                            exception is OperationCanceledException
+                                ? MindTranscriptCycleOutcome.Interrupted
+                                : MindTranscriptCycleOutcome.Failed,
+                            exception.Message);
+                    }
+
                     throw;
                 }
                 if (response is null)
@@ -370,27 +451,82 @@ internal sealed class AgentSessionRunner
                     // Interrupted mid-generation — by fresh-turn invalidation or lifetime — so partial assistant
                     // output was discarded; a fresh request replays the accepted transcript (AI-002 TR-4/5).
                     _requestContextSource.Discard(requestContext.Confirmation);
+                    if (cycleTranscript.ProviderInteractionStarted)
+                    {
+                        bool staleCompletion = cycleTranscript.Response is not null;
+                        cycleTranscript.Annotate(
+                            MindTranscriptAnnotationKind.FreshTurnInvalidation,
+                            staleCompletion
+                                ? "A completed response returned after a fresh-turn invalidation was discarded "
+                                + "whole without validation."
+                                : "The request was superseded by a fresh-turn invalidation before a usable "
+                                + "response settled.");
+                        CompleteCycleTranscript(
+                            cycleTranscript,
+                            cycleStopwatch,
+                            staleCompletion
+                                ? MindTranscriptCycleOutcome.DiscardedStaleResponse
+                                : MindTranscriptCycleOutcome.DiscardedBeforeResponse);
+                    }
+
                     continue;
                 }
+                cycleTranscript.Response = response;
 
                 FunctionCallContent[] calls;
                 try
                 {
                     calls = ValidateResponse(response, requestCount);
                 }
-                catch (AgentSessionException)
+                catch (AgentSessionException exception)
                 {
                     _requestContextSource.Discard(requestContext.Confirmation);
                     int nextInvalidResponseCount = consecutiveInvalidResponseCount + 1;
-                    bool recoveryCompleted = await TryBackoffInvalidResponseRecoveryAsync(
-                        requestCount,
-                        nextInvalidResponseCount,
-                        lifetimeToken);
+                    cycleTranscript.Annotate(
+                        MindTranscriptAnnotationKind.InvalidResponseRecovery,
+                        $"Invalid response shape discarded ({exception.Message}); consecutive invalid responses "
+                        + $"{nextInvalidResponseCount}/{_invalidResponseRecoveryPolicy.ConsecutiveFailureBudget}.");
+                    bool recoveryCompleted;
+                    try
+                    {
+                        recoveryCompleted = await TryBackoffInvalidResponseRecoveryAsync(
+                            requestCount,
+                            nextInvalidResponseCount,
+                            lifetimeToken);
+                    }
+                    catch (Exception recoveryException)
+                    {
+                        CompleteCycleTranscript(
+                            cycleTranscript,
+                            cycleStopwatch,
+                            recoveryException is OperationCanceledException
+                                ? MindTranscriptCycleOutcome.Interrupted
+                                : MindTranscriptCycleOutcome.RecoveryExhausted,
+                            recoveryException.Message);
+                        throw;
+                    }
+
                     if (!recoveryCompleted)
                     {
+                        cycleTranscript.Annotate(
+                            MindTranscriptAnnotationKind.InvalidResponseRecovery,
+                            "Recovery was superseded by a fresh-turn invalidation; the invalid-response budget was "
+                            + "not consumed.");
+                        CompleteCycleTranscript(
+                            cycleTranscript,
+                            cycleStopwatch,
+                            MindTranscriptCycleOutcome.InvalidResponseRecoverySuperseded);
                         continue;
                     }
 
+                    cycleTranscript.Annotate(
+                        MindTranscriptAnnotationKind.InvalidResponseRecovery,
+                        $"Recovery backoff completed; a fresh request follows ({nextInvalidResponseCount}/"
+                        + $"{_invalidResponseRecoveryPolicy.ConsecutiveFailureBudget} consecutive invalid responses).");
+                    CompleteCycleTranscript(
+                        cycleTranscript,
+                        cycleStopwatch,
+                        MindTranscriptCycleOutcome.InvalidResponseRecoveryScheduled);
                     consecutiveInvalidResponseCount = nextInvalidResponseCount;
                     continue;
                 }
@@ -402,27 +538,88 @@ internal sealed class AgentSessionRunner
                     // Registration won while validation was running. The mutable turn remains available for its
                     // replacement request and the response never reaches accepted history (AI-002 TR-5).
                     _requestContextSource.Discard(requestContext.Confirmation);
+                    cycleTranscript.Annotate(
+                        MindTranscriptAnnotationKind.FreshTurnInvalidation,
+                        "A fresh-turn invalidation arrived while the response was being validated; the completed "
+                        + "stale response was discarded without acceptance.");
+                    CompleteCycleTranscript(
+                        cycleTranscript,
+                        cycleStopwatch,
+                        MindTranscriptCycleOutcome.DiscardedStaleResponse);
                     continue;
                 }
 
                 List<AIContent> results = new(calls.Length);
-                foreach (FunctionCallContent call in calls)
+                bool batchSkippedByInvalidation = false;
+                try
                 {
-                    lifetimeToken.ThrowIfCancellationRequested();
-                    if (Volatile.Read(ref _freshInvalidation) != 0)
+                    foreach (FunctionCallContent call in calls)
                     {
-                        // The originating response is stale (AI-002 TR-4/5): this and every remaining call is never
-                        // invoked, and each call ID without a natural result receives exactly one canonical
-                        // cancellation result so an appended exchange stays protocol-valid. Node lifetime is
-                        // checked first and stays terminal without synthetic results.
-                        _logger.LogDebug(
-                            "Agent session tool '{ToolName}' skipped: its response batch was invalidated.",
-                            call.Name);
-                        results.Add(new FunctionResultContent(call.CallId, CancelledActionResult));
-                        continue;
+                        lifetimeToken.ThrowIfCancellationRequested();
+                        if (Volatile.Read(ref _freshInvalidation) != 0)
+                        {
+                            // The originating response is stale (AI-002 TR-4/5): this and every remaining call is never
+                            // invoked, and each call ID without a natural result receives exactly one canonical
+                            // cancellation result so an appended exchange stays protocol-valid. Node lifetime is
+                            // checked first and stays terminal without synthetic results.
+                            _logger.LogDebug(
+                                "Agent session tool '{ToolName}' skipped: its response batch was invalidated.",
+                                call.Name);
+                            results.Add(new FunctionResultContent(call.CallId, CancelledActionResult));
+                            cycleTranscript.ToolInvocations.Add(new MindTranscriptToolInvocation(
+                                call.Name,
+                                call.CallId,
+                                call.Arguments)
+                            {
+                                Status = MindTranscriptToolInvocationStatus.SkippedByInvalidation,
+                                Result = CancelledActionResult,
+                            });
+                            batchSkippedByInvalidation = true;
+                            continue;
+                        }
+
+                        // The invocation is captured at start so an interruption still leaves a record whose terminal
+                        // status shows it never delivered a result (AI-011 TR-6).
+                        MindTranscriptToolInvocation invocation = new(call.Name, call.CallId, call.Arguments);
+                        cycleTranscript.ToolInvocations.Add(invocation);
+                        object? toolResult;
+                        try
+                        {
+                            toolResult = await InvokeToolAsync(call, lifetimeToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            invocation.Status = MindTranscriptToolInvocationStatus.Interrupted;
+                            throw;
+                        }
+
+                        invocation.Status = MindTranscriptToolInvocationStatus.Completed;
+                        invocation.Result = toolResult;
+                        results.Add(new FunctionResultContent(call.CallId, toolResult));
+                    }
+                }
+                catch (Exception exception)
+                {
+                    if (cycleTranscript.ProviderInteractionStarted)
+                    {
+                        CompleteCycleTranscript(
+                            cycleTranscript,
+                            cycleStopwatch,
+                            exception is OperationCanceledException
+                                ? MindTranscriptCycleOutcome.Interrupted
+                                : MindTranscriptCycleOutcome.Failed,
+                            exception.Message);
                     }
 
-                    results.Add(new FunctionResultContent(call.CallId, await InvokeToolAsync(call, lifetimeToken)));
+                    throw;
+                }
+
+                if (batchSkippedByInvalidation)
+                {
+                    cycleTranscript.Annotate(
+                        MindTranscriptAnnotationKind.FreshTurnInvalidation,
+                        "A fresh-turn invalidation skipped part of the validated tool batch; skipped calls received "
+                        + "the canonical cancellation result.");
                 }
 
                 // Exchange-disposal boundary (AI-002 TR-17): the batch has fully settled — every call executed or
@@ -453,6 +650,14 @@ internal sealed class AgentSessionRunner
                         + "outcome is delivered by fresh per-request context instead.",
                         requestCount);
                 }
+
+                cycleTranscript.ExchangeDisposal = disposeExchange switch
+                {
+                    true when disposed => MindTranscriptExchangeDisposal.Disposed,
+                    true => MindTranscriptExchangeDisposal.Retained,
+                    _ => MindTranscriptExchangeDisposal.NotApplicable,
+                };
+                CompleteCycleTranscript(cycleTranscript, cycleStopwatch, MindTranscriptCycleOutcome.Accepted);
             }
 
             _logger.LogInformation("Agent session ended after {RequestCount} request(s).", requestCount);
@@ -469,6 +674,10 @@ internal sealed class AgentSessionRunner
                 _ended = true;
                 _acceptedTranscript.Clear();
             }
+
+            // The session loop has exited: close the transcript gate so any later capture attempt from an
+            // abandoned continuation becomes a contained no-op (AI-011 TR-6/TR-7).
+            _transcriptSink.End();
         }
     }
 
@@ -536,9 +745,10 @@ internal sealed class AgentSessionRunner
     }
 
     private async Task<ChatResponse?> RequestWithTransportRetryAsync(
-        IReadOnlyList<ChatMessage> transcript,
+        IReadOnlyList<ChatMessage> requestTranscript,
         int requestCount,
-        CancellationToken lifetimeToken)
+        CancellationToken lifetimeToken,
+        MindSessionCycleTranscript cycleTranscript)
     {
         for (int attempt = 0; ; attempt++)
         {
@@ -565,7 +775,14 @@ internal sealed class AgentSessionRunner
             try
             {
                 _logger.LogDebug("Agent session request {RequestCount} starting.", requestCount);
-                ChatResponse response = await _chatClient.GetResponseAsync(transcript, _chatOptions, phaseCancellation.Token);
+                // The provider interaction gate (AI-011 TR-6): from the first issued provider call, the cycle's
+                // outcome resolves into a transcript record.
+                cycleTranscript.ProviderInteractionStarted = true;
+                ChatResponse response = await _chatClient.GetResponseAsync(requestTranscript, _chatOptions, phaseCancellation.Token);
+                // The returned response is retained for diagnostics immediately — before any cancellation or
+                // rejection check — so even a non-cooperative provider returning after node-lifetime cancellation
+                // leaves its contents on the transcript (AI-011 TR-6). Cancellation below stays terminal.
+                cycleTranscript.Response = response;
                 lifetimeToken.ThrowIfCancellationRequested();
                 if (phaseCancellation.IsCancellationRequested || Volatile.Read(ref _freshInvalidation) != 0)
                 {
@@ -598,6 +815,10 @@ internal sealed class AgentSessionRunner
                     "Agent session request {RequestCount} failed transiently; retrying in {RetryDelay}.",
                     requestCount,
                     delay);
+                cycleTranscript.Annotate(
+                    MindTranscriptAnnotationKind.TransportRetry,
+                    $"Transient transport failure on attempt {attempt + 1} of at most {_maxTransportRetries + 1} "
+                    + $"({exception.GetType().Name}: {exception.Message}); retrying in {delay}.");
                 var retryCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
                 var retryPhase = new ActivePhaseState(
                     AgentSessionPhaseKind.TransportRetryBackoff,

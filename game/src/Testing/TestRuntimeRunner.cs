@@ -4,6 +4,7 @@ using System.Runtime.Loader;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AlleyCat.Core.Logging;
+using AlleyCat.Mind.AI;
 using Godot;
 using Microsoft.Extensions.Logging;
 
@@ -223,6 +224,13 @@ public partial class TestRuntimeRunner : Node
             EmitSessionStartupFailure(validationError);
             return;
         }
+
+        // Transcript hermeticity (AI-011 TR-5/TR-12): the integration-test runtime disables session transcript
+        // logging process-wide, so every AgenticMind fixture in the loaded assembly inherits disabled logging by
+        // construction — regardless of any developer's user-configuration override — unless a test injects an
+        // explicit enabling loader through its own protected recorder scope. This is the single session-process
+        // entry every test command executes under, so the default is in place before any test runs.
+        AIDiagnosticsSettings.DisableSessionTranscriptsForTesting();
 
         SessionBaseline baseline = await CaptureSessionBaselineAsync();
 

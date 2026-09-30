@@ -52,10 +52,13 @@ accurately.
    uses, in order: the static system instruction; one user event-timeline message; one user current-scene message; and
    the bootstrap input plus retained accepted exchanges as applicable. When no exchange is retained, the tail is the
    bootstrap input alone (TR-21).
-3. The timeline message contains established event history and a `--- New Since Your Previous Response ---` tail. The
-   tail contains event-timeline entries beyond the watermark confirmed by the last locally valid accepted provider
-   response. Each selected event uses its observation-owned canonical text under AI-001 and AI-003. An empty timeline
-   still has a coherent watermark.
+3. The timeline message is one user message of two sections in the shared `PseudoXmlFormatter` block format
+   (`<SectionName>\ncontent\n</SectionName>`): `Established Event History` first, then
+   `New Since Your Previous Response`, with exactly one blank line between the two blocks. The second section carries
+   event-timeline entries beyond the watermark confirmed by the last locally valid accepted provider response, and
+   entries within each section are joined with exactly one newline (AI-003 TR-8). A part with no entries still emits
+   its section with the content `(none)`, so the model always sees both sections. Each selected event uses its
+   observation-owned canonical text under AI-001 and AI-003. An empty timeline still has a coherent watermark.
 4. A logical request materialises its complete context once. Exact transport retry reuses that materialisation; invalid
    response recovery and a fresh replacement request rematerialise it. Materialisation must not change session-fixed
    `ScenarioContext` or scenario.
@@ -170,9 +173,9 @@ accurately.
 
 ### User Requirements
 
-1. Acceptance shows each NPC request contains established history, a clearly headed new-history tail, and current scene
-   status. Selected events use observation-owned canonical text. Automatic delivery supplies no observation text through
-   `wait`, injected, or scheduling messages.
+1. Acceptance shows each NPC request contains established history and new history as the two labelled pseudo-XML
+   sections, and current scene status. Selected events use observation-owned canonical text. Automatic delivery
+   supplies no observation text through `wait`, injected, or scheduling messages.
 2. Acceptance shows fresh events win over pressure, attended-speaker completion, and timeout, while routine pressure
    does
    not interrupt an active request.
@@ -192,8 +195,10 @@ accurately.
 
 ### Technical Requirements
 
-1. Tests verify request order, coherent empty-history watermarks, and exactly-once context materialisation per logical
-   request, with exact retries reusing it and recovery or replacement rematerialising it.
+1. Tests verify request order, the two-section pseudo-XML timeline message — both sections always present, `(none)`
+   content when a part is empty, exactly one blank line between blocks, and entries joined with exactly one newline —
+   coherent empty-history watermarks, and exactly-once context materialisation per logical request, with exact retries
+   reusing it and recovery or replacement rematerialising it.
 2. Tests verify only locally valid accepted responses atomically confirm a snapshot watermark and clear outside-wait
    pressure; all failure, cancellation, stale, and invalid paths leave both unconfirmed.
 3. Tests verify `wait` returns only reason, elapsed time, and current time; wait reset never moves a timeline cursor.

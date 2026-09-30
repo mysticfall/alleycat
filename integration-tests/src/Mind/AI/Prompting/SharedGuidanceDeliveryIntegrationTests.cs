@@ -28,7 +28,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 public sealed partial class SharedGuidanceDeliveryIntegrationTests
 {
     private const string CurrentScenePromptPath = "res://assets/characters/prompts/current_scene.tres";
-    private const string NewHistoryTailMarker = "--- New Since Your Previous Response ---";
+    private const string NewHistorySectionOpen = "<New Since Your Previous Response>";
 
     /// <summary>
     /// A fresh player reply during held generation produces a replacement request whose options carry the rendered
@@ -89,11 +89,11 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
                 [ChatRole.User, ChatRole.User, ChatRole.User],
                 freshRequest.Messages.Select(static message => message.Role));
             string timeline = freshRequest.Messages[0].Text;
-            Assert.StartsWith("Established Event History:", timeline, StringComparison.Ordinal);
-            int tailStart = timeline.IndexOf(NewHistoryTailMarker, StringComparison.Ordinal);
-            Assert.True(tailStart >= 0, "The timeline message must carry the new-history tail marker.");
+            Assert.StartsWith("<Established Event History>", timeline, StringComparison.Ordinal);
+            int tailStart = timeline.IndexOf(NewHistorySectionOpen, StringComparison.Ordinal);
+            Assert.True(tailStart >= 0, "The timeline message must carry the new-history section.");
             string established = timeline[..tailStart];
-            string tail = timeline[(tailStart + NewHistoryTailMarker.Length)..];
+            string tail = timeline[(tailStart + NewHistorySectionOpen.Length)..];
             Assert.Contains(
                 "Heard char:fixture_player say: I am heading to the market now.",
                 tail,

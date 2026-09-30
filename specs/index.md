@@ -29,6 +29,7 @@
 - [AI-008: Scenario](ai/008-scenario/index.md)
 - [AI-009: Attention-Driven Head Orientation](ai/009-attention-head-orientation/index.md)
 - [AI-010: Agent Watches](ai/010-agent-watches/index.md)
+- [AI-011: Mind Session Transcripts](ai/011-mind-session-transcripts/index.md)
 
 ## Navigation
 

@@ -61,7 +61,7 @@ information it has already been supplied.
 
 8. Event-history rendering is separate from both prompt stacks. It projects the selected persistent event timeline,
    invokes each observation's canonical renderer with owner context, and joins entries with exactly one newline for
-   AI-002's per-request timeline message.
+   the sections of AI-002's per-request timeline message.
 9. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
    `TypeKey`-only base fallback, and shared timestamp suffix. No `event_history.md` asset, event-history parser,
    fragment catalogue, `EventHistoryPath`, or authored `TypeKey` dispatch exists.
@@ -78,9 +78,10 @@ information it has already been supplied.
     current-scene interpretation, action selection, available watch tools, and lore discovery/retrieval. These are
     mandatory content; exact prose stays tunable. Guidance must not contradict AI-002's automatic per-request delivery,
     payload-free wait semantics, or tool-exchange disposal (AI-002 TR-17–TR-22).
-13. Event-history guidance must match AI-002's timeline-message contract: established entries are prior context, the
-    new-history tail marks entries presented since the NPC's previous valid response, and neither label alone means a
-    conversational contribution has been answered or resolved.
+13. Event-history guidance must match AI-002's timeline-message contract: the `Established Event History` section
+    holds prior context, the `New Since Your Previous Response` section marks entries presented since the NPC's
+    previous valid response, and neither section alone means a conversational contribution has been answered or
+    resolved.
 14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
     absence, and historical events do not establish current positions. It must not contradict the common game clock or

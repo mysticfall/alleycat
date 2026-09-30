@@ -43,6 +43,8 @@ AI:
 Diagnostics:
     AI:
         EnableRequestResponseLogging: true
+        # Human-readable per-cycle Markdown transcripts under user://logs/mind/ (AI-011); disabled by default.
+        EnableSessionTranscriptLogging: false
 
 # Logging levels per category.
 Logging:

@@ -7,8 +7,10 @@ using AlleyCat.Scene;
 using AlleyCat.Templating;
 using AlleyCat.Vision;
 using Godot;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.AI;
@@ -96,6 +98,124 @@ public sealed class AgenticMindTests
         Assert.False(settings.EnableReasoningLogging);
         Assert.True(settings.EnableRequestResponseLogging);
     }
+
+    /// <summary>
+    /// Session transcript logging defaults to disabled in options and stays disabled when the diagnostics section is
+    /// absent, independently of the default-enabled request/response payload logging.
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_Load_WhenSectionMissing_DisablesSessionTranscriptLogging()
+    {
+        IConfiguration configuration = new ConfigurationBuilder().Build();
+
+        var settings = AIDiagnosticsSettings.Load(configuration);
+
+        Assert.False(new AIDiagnosticsOptions().EnableSessionTranscriptLogging);
+        Assert.False(settings.EnableSessionTranscriptLogging);
+        Assert.True(settings.EnableRequestResponseLogging);
+    }
+
+    /// <summary>
+    /// Enabling session transcript logging binds from <c>Diagnostics:AI</c> without enabling request/response
+    /// payload logging.
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_Load_WhenSessionTranscriptLoggingEnabled_KeepsRequestResponseLoggingDisabled()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Diagnostics:AI:EnableSessionTranscriptLogging"] = "true",
+                ["Diagnostics:AI:EnableRequestResponseLogging"] = "false",
+            })
+            .Build();
+
+        var settings = AIDiagnosticsSettings.Load(configuration);
+
+        Assert.True(settings.EnableSessionTranscriptLogging);
+        Assert.False(settings.EnableRequestResponseLogging);
+    }
+
+    /// <summary>
+    /// Enabling request/response payload logging never enables session transcript logging (AI-011 TR-1).
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_Load_WhenOnlyRequestResponseLoggingEnabled_KeepsSessionTranscriptsDisabled()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Diagnostics:AI:EnableRequestResponseLogging"] = "true",
+            })
+            .Build();
+
+        var settings = AIDiagnosticsSettings.Load(configuration);
+
+        Assert.True(settings.EnableRequestResponseLogging);
+        Assert.False(settings.EnableSessionTranscriptLogging);
+    }
+
+    /// <summary>
+    /// Without game configuration — for example in isolated tests — <c>LoadOrDefault</c> fails closed: session
+    /// transcript logging stays disabled (AI-011 TR-1).
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_LoadOrDefault_WithoutGameConfiguration_FailsClosedToDisabledTranscripts()
+    {
+        var settings = AIDiagnosticsSettings.LoadOrDefault();
+
+        Assert.False(settings.EnableSessionTranscriptLogging);
+        Assert.False(settings.EnableRequestResponseLogging);
+        Assert.True(settings.EnableReasoningLogging);
+    }
+
+    /// <summary>
+    /// A disabled toggle injects the null-object sink, which performs no file input or output (AI-011 TR-5).
+    /// </summary>
+    [Fact]
+    public void CreateTranscriptSink_WhenDisabled_ReturnsTheNullObjectSink()
+    {
+        AIDiagnosticsSettings settings = new(EnableRequestResponseLogging: true, EnableReasoningLogging: true);
+
+        IAgentSessionTranscriptSink sink = AgenticMind.CreateTranscriptSink(
+            settings,
+            "luna",
+            () => throw new InvalidOperationException("The disabled path must never resolve the transcript root."),
+            NullLogger.Instance);
+
+        Assert.Same(NullAgentSessionTranscriptSink.Instance, sink);
+        sink.Record(CreateTranscriptCycle());
+    }
+
+    /// <summary>
+    /// An enabled toggle injects the filesystem recorder for the owning character (AI-011 TR-5).
+    /// </summary>
+    [Fact]
+    public void CreateTranscriptSink_WhenEnabled_ReturnsTheFilesystemRecorder()
+    {
+        AIDiagnosticsSettings settings = new(
+            EnableRequestResponseLogging: false,
+            EnableReasoningLogging: true,
+            EnableSessionTranscriptLogging: true);
+
+        IAgentSessionTranscriptSink sink = AgenticMind.CreateTranscriptSink(
+            settings,
+            "luna",
+            () => "unused-root",
+            NullLogger.Instance);
+
+        _ = Assert.IsType<MindSessionTranscriptRecorder>(sink);
+    }
+
+    private static MindSessionCycleTranscript CreateTranscriptCycle()
+        => new()
+        {
+            CycleIndex = 1,
+            StartedAt = DateTimeOffset.Now,
+            Instructions = "<Identity>\nUnused.\n</Identity>\n",
+            RequestMessages = [new ChatMessage(ChatRole.User, "Begin.")],
+            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", false, []),
+        };
 
     /// <summary>
     /// AgenticMind must pass the AI-003 render context directly to system-instruction template rendering.

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Text;
 using AlleyCat.Character;
+using AlleyCat.Common;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
@@ -264,6 +266,11 @@ public partial class AgenticMind : MindBase
             clientProvider.CreateChatClient(),
             diagnosticsSettings,
             GameLoggerResolver.ResolveFactoryRequired);
+        IAgentSessionTranscriptSink transcriptSink = CreateTranscriptSink(
+            diagnosticsSettings,
+            character.Id,
+            ResolveSessionTranscriptRootPath,
+            GameLoggerResolver.ResolveRequired<MindSessionTranscriptRecorder>());
 
         return new AgentSession(
             sessionContext,
@@ -274,7 +281,8 @@ public partial class AgenticMind : MindBase
             diagnosticsSettings.EnableReasoningLogging,
             invalidResponseRecoveryPolicy,
             toolAdmission,
-            compiledCurrentSceneStatus);
+            compiledCurrentSceneStatus,
+            transcriptSink);
     }
 
     /// <summary>
@@ -291,7 +299,8 @@ public partial class AgenticMind : MindBase
             GameLoggerResolver.ResolveRequired<AgenticMind>(),
             session.EnableReasoningLogging,
             invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy,
-            requestContextSource: new MindRequestContextSource(this, session, _speechContinuations));
+            requestContextSource: new MindRequestContextSource(this, session, _speechContinuations),
+            transcriptSink: session.TranscriptSink);
         session.ToolAdmission.AttachRunner(runner);
         _activeRunner = runner;
         try
@@ -430,6 +439,27 @@ public partial class AgenticMind : MindBase
         EndWatchSession();
         base.OnNodeLifetimeEnding();
     }
+
+    /// <summary>
+    /// Creates the session's transcript sink (AI-011 TR-5): the filesystem recorder when session transcript logging
+    /// is enabled, or the null-object sink that performs no file input or output when disabled. The toggle is
+    /// independent of <c>EnableRequestResponseLogging</c>: enabling either never enables the other.
+    /// </summary>
+    internal static IAgentSessionTranscriptSink CreateTranscriptSink(
+        AIDiagnosticsSettings settings,
+        string characterId,
+        Func<string> rootPathResolver,
+        ILogger logger)
+        => settings.EnableSessionTranscriptLogging
+            ? new MindSessionTranscriptRecorder(characterId, rootPathResolver, logger)
+            : NullAgentSessionTranscriptSink.Instance;
+
+    /// <summary>
+    /// Resolves the transcript root's physical path through Godot project settings; kept behind an injectable
+    /// resolver so the recorder itself stays free of Godot types (AI-011 TR-5).
+    /// </summary>
+    private static string ResolveSessionTranscriptRootPath()
+        => ProjectSettings.GlobalizePath(MindSessionTranscriptRecorder.UserRootPath);
 
     internal static IReadOnlyDictionary<string, object?> CreateRenderContext(
         ICharacter character,
@@ -702,8 +732,18 @@ public partial class AgenticMind : MindBase
                 ? "(none)"
                 : await new ObservationHistoryRenderer(session.Context.Character).RenderAsync(entries, completeTimeline);
 
+        /// <summary>
+        /// Builds the per-request timeline message as one user message of two sections in the shared pseudo-XML
+        /// block format — the established history first, then the new events — with exactly one blank line between
+        /// the blocks and every part always emitting its section (AI-002 TR-3).
+        /// </summary>
         private static string BuildTimelineMessage(string established, string newlyObserved)
-            => $"Established Event History:\n{established}\n--- New Since Your Previous Response ---\n{newlyObserved}";
+        {
+            StringBuilder builder = new();
+            PseudoXmlFormatter.AppendBlock(builder, "Established Event History", established, "Timeline sections");
+            PseudoXmlFormatter.AppendBlock(builder, "New Since Your Previous Response", newlyObserved, "Timeline sections");
+            return builder.ToString().Trim();
+        }
 
         private readonly record struct Confirmation(long EventSequenceID, long SchedulingSequenceID);
     }
@@ -744,7 +784,8 @@ public partial class AgenticMind : MindBase
     /// <summary>
     /// Prepared session state captured once at session start (AI-002 TR-2): the trusted binding, the rendered
     /// system instruction, the session-owner bootstrap input message, the decorated chat client, the bound
-    /// tools, and the tool-admission carrier whose runner is attached at execution.
+    /// tools, the tool-admission carrier whose runner is attached at execution, and the session transcript sink
+    /// (AI-011 TR-5).
     /// </summary>
     internal sealed record AgentSession(
         ScenarioContext Context,
@@ -755,5 +796,6 @@ public partial class AgenticMind : MindBase
         bool EnableReasoningLogging,
         IInvalidResponseRecoveryPolicy InvalidResponseRecoveryPolicy,
         ToolAdmissionBroker ToolAdmission,
-        CompiledSceneStatusPrompt CurrentSceneStatus);
+        CompiledSceneStatusPrompt CurrentSceneStatus,
+        IAgentSessionTranscriptSink TranscriptSink);
 }

@@ -80,6 +80,305 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal([1], context.Discarded);
     }
 
+    /// <summary>
+    /// The transcript sink observes each resolved cycle without changing runner behaviour (AI-011 TR-6/TR-7): a
+    /// transport retry stays inside one cycle record with its annotation and tool result, and a lifetime-interrupted
+    /// cycle records its outcome.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_RecordsEachResolvedCycleThroughTheTranscriptSink()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        ScriptedSessionClient client = new(
+            FailStep(new HttpRequestException("reset")),
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            retryDelays: [TimeSpan.Zero],
+            transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(2, sink.Records.Count);
+        MindSessionCycleTranscript accepted = sink.Records[0];
+        Assert.Equal(MindTranscriptCycleOutcome.Accepted, accepted.Outcome);
+        Assert.Equal(1, accepted.CycleIndex);
+        Assert.Equal(["Bootstrap"], accepted.RequestMessages.Select(Text));
+        Assert.NotNull(accepted.Response);
+        MindTranscriptToolInvocation invocation = Assert.Single(accepted.ToolInvocations);
+        Assert.Equal(SpeakToolName, invocation.ToolName);
+        Assert.Equal(MindTranscriptToolInvocationStatus.Completed, invocation.Status);
+        Assert.NotNull(invocation.Result);
+        Assert.True(accepted.ProviderInteractionStarted);
+        Assert.Same(accepted.RequestOptions, sink.Records[1].RequestOptions);
+        Assert.Contains(
+            accepted.Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.TransportRetry
+                && annotation.Message.Contains("HttpRequestException", StringComparison.Ordinal));
+        MindSessionCycleTranscript interrupted = sink.Records[1];
+        Assert.Equal(MindTranscriptCycleOutcome.Interrupted, interrupted.Outcome);
+        Assert.Null(interrupted.Response);
+        Assert.True(interrupted.ProviderInteractionStarted);
+    }
+
+    /// <summary>
+    /// A throwing transcript sink is fully contained: every later cycle still executes — provider requests and tool
+    /// invocations alike — and the session ends through its normal quiet cancellation (AI-011 TR-7).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ThrowingTranscriptSink_NeverPropagatesAndExecutionContinues()
+    {
+        using CancellationTokenSource lifetime = new();
+        List<string> spoken = [];
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            Respond(CreateCall("speak-call-2", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Again" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(spoken.Add)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            transcriptSink: new ThrowingTranscriptSink());
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Equal(["Hello", "Again"], spoken);
+    }
+
+    /// <summary>
+    /// Containment holds even when warning emission itself fails: a sink that throws and a logger that throws on the
+    /// transcript-containment warning neither break the session loop nor replace its outcome (AI-011 TR-7).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ThrowingTranscriptSinkAndFailingWarningLogger_StayContained()
+    {
+        using CancellationTokenSource lifetime = new();
+        List<string> spoken = [];
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(spoken.Add)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            logger: new TranscriptWarningThrowingLogger(),
+            transcriptSink: new ThrowingTranscriptSink());
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(["Hello"], spoken);
+    }
+
+    /// <summary>
+    /// A completed response returned after a fresh-turn invalidation is retained on the transcript for diagnostics —
+    /// captured response contents and a stale-discard outcome — while the runtime still discards it whole: the stale
+    /// call is never executed and its context is never confirmed (AI-002 TR-5; AI-011 TR-6).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_LateInvalidatedResponse_IsRetainedForDiagnosticsAndDiscardedAtRuntime()
+    {
+        using CancellationTokenSource lifetime = new();
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        RecordingTranscriptSink sink = new();
+        List<string> spoken = [];
+        ScriptedSessionClient client = new(
+            HoldUntilReleasedStep(
+                started,
+                release,
+                CreateCall("late", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Never" })),
+            Respond(CreateCall("fresh", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(spoken.Add)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            transcriptSink: sink);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        runner.InvalidateForFreshTurn();
+        _ = release.TrySetResult();
+        await runTask;
+
+        Assert.Equal(3, sink.Records.Count);
+        MindSessionCycleTranscript discarded = sink.Records[0];
+        Assert.Equal(MindTranscriptCycleOutcome.DiscardedStaleResponse, discarded.Outcome);
+        Assert.True(discarded.ProviderInteractionStarted);
+        Assert.Contains(
+            discarded.Response!.Messages.SelectMany(static message => message.Contents),
+            content => content is FunctionCallContent call && call.CallId == "late");
+        Assert.Contains(
+            discarded.Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.FreshTurnInvalidation);
+        // The runtime effect is unchanged: the stale call never executed and the replacement request ran fresh.
+        Assert.DoesNotContain("Never", spoken);
+        Assert.Equal(MindTranscriptCycleOutcome.Accepted, sink.Records[1].Outcome);
+        Assert.Equal(["Hello"], spoken);
+        Assert.Equal(MindTranscriptCycleOutcome.Interrupted, sink.Records[2].Outcome);
+    }
+
+    /// <summary>
+    /// A completed response returned after node-lifetime cancellation is retained for diagnostics immediately —
+    /// before the terminal cancellation check — while cancellation stays terminal: the outcome is interrupted, the
+    /// stale call never executes, its context is never confirmed, and no replacement request is issued (AI-011
+    /// TR-6; AI-002 TR-5/TR-14).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_LateResponseAfterNodeLifetimeCancellation_IsRetainedForDiagnostics()
+    {
+        using CancellationTokenSource lifetime = new();
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var context = new RecordingContextSource();
+        RecordingTranscriptSink sink = new();
+        List<string> spoken = [];
+        ScriptedSessionClient client = new(
+            HoldUntilReleasedStep(
+                started,
+                release,
+                CreateCall("late", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Never" })));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(spoken.Add)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context,
+            transcriptSink: sink);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        lifetime.Cancel();
+        _ = release.TrySetResult();
+        await runTask;
+
+        MindSessionCycleTranscript interrupted = Assert.Single(sink.Records);
+        Assert.Equal(MindTranscriptCycleOutcome.Interrupted, interrupted.Outcome);
+        Assert.True(interrupted.ProviderInteractionStarted);
+        Assert.Contains(
+            interrupted.Response!.Messages.SelectMany(static message => message.Contents),
+            content => content is FunctionCallContent call && call.CallId == "late");
+        Assert.Empty(spoken);
+        _ = Assert.Single(client.Requests);
+        Assert.Empty(context.Confirmed);
+        Assert.Equal([0], context.Discarded);
+    }
+
+    /// <summary>
+    /// A tool interrupted by node-lifetime cancellation still records its invocation — captured at start, terminal
+    /// status interrupted, no invented delivered result — and the session ends quietly without further provider
+    /// requests (AI-011 TR-6; AI-002 TR-14).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NodeLifetimeDuringTool_RecordsInterruptedInvocationWithoutInventingResults()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        ControlledTool tool = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("controlled-call", ControlledTool.ToolName)));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [tool.Function],
+            [],
+            transcriptSink: sink);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await tool.Started.Task;
+        lifetime.Cancel();
+        await runTask;
+
+        MindSessionCycleTranscript interrupted = Assert.Single(sink.Records);
+        Assert.Equal(MindTranscriptCycleOutcome.Interrupted, interrupted.Outcome);
+        MindTranscriptToolInvocation invocation = Assert.Single(interrupted.ToolInvocations);
+        Assert.Equal(MindTranscriptToolInvocationStatus.Interrupted, invocation.Status);
+        Assert.Null(invocation.Result);
+        Assert.False(tool.Completed);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// A cycle cancelled after context materialisation but before the first provider call produces no transcript
+    /// record at all: TR-6 gates files on reaching provider interaction (AI-011 TR-6).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_CancellationBeforeProviderInteraction_ProducesNoTranscriptRecord()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        LifetimeCancellingContextSource contextSource = new(lifetime);
+        ScriptedSessionClient client = new();
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [],
+            requestContextSource: contextSource,
+            transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Empty(sink.Records);
+        Assert.Empty(client.Requests);
+    }
+
+    /// <summary>
+    /// An invalidated tool batch delivers runner-generated canonical cancellation results — captured as the completed
+    /// cancelled invocation's result and the skipped invocation's result — never hand-supplied strings (AI-002
+    /// TR-4/5, TR-19; AI-011 TR-6).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_InvalidatedToolBatch_DeliversRunnerGeneratedCanonicalCancellationResults()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        List<string> spoken = [];
+        ControlledTool tool = new();
+        ChatMessage batch = new(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent("first", ControlledTool.ToolName, new Dictionary<string, object?>()),
+                new FunctionCallContent(
+                    "second",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Hello" }),
+            ]);
+        ScriptedSessionClient client = new(
+            Respond(batch),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [tool.Function, CreateSpeakFunction(spoken.Add)],
+            [],
+            transcriptSink: sink);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await tool.Started.Task;
+        runner.InvalidateForFreshTurn();
+        await runTask;
+
+        Assert.Equal(2, sink.Records.Count);
+        MindSessionCycleTranscript accepted = sink.Records[0];
+        Assert.Equal(MindTranscriptCycleOutcome.Accepted, accepted.Outcome);
+        MindTranscriptToolInvocation cancelled = accepted.ToolInvocations[0];
+        Assert.Equal(ControlledTool.ToolName, cancelled.ToolName);
+        Assert.Equal(MindTranscriptToolInvocationStatus.Completed, cancelled.Status);
+        Assert.Equal(AgentSessionRunner.CancelledActionResult, cancelled.Result);
+        MindTranscriptToolInvocation skipped = accepted.ToolInvocations[1];
+        Assert.Equal(SpeakToolName, skipped.ToolName);
+        Assert.Equal(MindTranscriptToolInvocationStatus.SkippedByInvalidation, skipped.Status);
+        Assert.Equal(AgentSessionRunner.CancelledActionResult, skipped.Result);
+        Assert.Contains(
+            accepted.Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.FreshTurnInvalidation);
+        Assert.Empty(spoken);
+        Assert.Equal(MindTranscriptCycleOutcome.Interrupted, sink.Records[1].Outcome);
+    }
+
     /// <summary>Invalid responses discard their context snapshots before recovery rematerialises.</summary>
     [Fact]
     public async Task RunAsync_InvalidResponseRematerialisesAndNeverConfirmsTheInvalidSnapshot()
@@ -2368,7 +2667,8 @@ public sealed class AgentSessionRunnerTests
         bool enableReasoningLogging = true,
         IReadOnlyList<TimeSpan>? retryDelays = null,
         IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null,
-        IAgentRequestContextSource? requestContextSource = null)
+        IAgentRequestContextSource? requestContextSource = null,
+        IAgentSessionTranscriptSink? transcriptSink = null)
         => new(
             client,
             Instructions,
@@ -2379,7 +2679,8 @@ public sealed class AgentSessionRunnerTests
             enableReasoningLogging,
             retryDelays,
             invalidResponseRecoveryPolicy ?? _immediateInvalidResponseRecoveryPolicy,
-            requestContextSource);
+            requestContextSource,
+            transcriptSink);
 
     private static async Task WaitForAttemptsAsync(ScriptedSessionClient client, int attemptCount)
     {
@@ -2777,6 +3078,91 @@ public sealed class AgentSessionRunnerTests
                 throw;
             }
         }
+    }
+
+    /// <summary>Sink that always throws, proving recording containment (AI-011 TR-7).</summary>
+    private sealed class ThrowingTranscriptSink : IAgentSessionTranscriptSink
+    {
+        public void Record(MindSessionCycleTranscript cycle)
+            => throw new InvalidOperationException("The transcript sink failed.");
+    }
+
+    /// <summary>
+    /// Logger that fails exactly when the transcript-containment warning is emitted, proving containment survives
+    /// failing warning emission (AI-011 TR-7); every other log call is silently dropped.
+    /// </summary>
+    private sealed class TranscriptWarningThrowingLogger : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => false;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (formatter(state, exception).Contains("transcript", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("The warning emission failed.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Context source that cancels node lifetime while materialising, so the cycle is cancelled after
+    /// materialisation but before any provider call (AI-011 TR-6 provider-interaction gate).
+    /// </summary>
+    private sealed class LifetimeCancellingContextSource(CancellationTokenSource lifetime) : IAgentRequestContextSource
+    {
+        public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
+        {
+            lifetime.Cancel();
+            return ValueTask.FromResult(new AgentRequestContext([], confirmation: null));
+        }
+
+        public void Confirm(object? confirmation)
+        {
+        }
+
+        public void Discard(object? confirmation)
+        {
+        }
+    }
+
+    /// <summary>
+    /// The runner-scoped sink gate closes with the session: after <c>End</c>, a capture attempt from an abandoned
+    /// continuation is a contained no-op that never reaches the inner sink (AI-011 TR-6/TR-7).
+    /// </summary>
+    [Fact]
+    public void SessionScopedTranscriptSink_AfterEnd_ContainsLaterCapturesAsNoOps()
+    {
+        RecordingTranscriptSink inner = new();
+        SessionScopedTranscriptSink gate = new(inner);
+        MindSessionCycleTranscript cycle = new()
+        {
+            CycleIndex = 1,
+            StartedAt = DateTimeOffset.Now,
+            Instructions = string.Empty,
+            RequestMessages = [],
+            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", false, []),
+        };
+
+        gate.Record(cycle);
+        gate.End();
+        gate.Record(cycle);
+
+        MindSessionCycleTranscript recorded = Assert.Single(inner.Records);
+        Assert.Equal(1, recorded.CycleIndex);
+    }
+
+    private sealed class RecordingTranscriptSink : IAgentSessionTranscriptSink
+    {
+        public List<MindSessionCycleTranscript> Records { get; } = [];
+
+        public void Record(MindSessionCycleTranscript cycle) => Records.Add(cycle);
     }
 
     private sealed class RecordingContextSource : IAgentRequestContextSource
