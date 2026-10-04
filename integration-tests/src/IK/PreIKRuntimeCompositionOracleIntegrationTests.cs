@@ -1,3 +1,4 @@
+using AlleyCat.IK;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.TestFramework;
 using Godot;
@@ -13,8 +14,6 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
 {
     private const string NpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
     private const string PlayerScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
-    private const string NpcSustainedBlendParameter = "parameters/States/NPCTravel/Sustained/blend_position";
-    private const string NpcPlaybackRateParameter = "parameters/States/NPCTravel/Rate/scale";
 
     private static readonly PreIKUnavailableChannelEvidence _unavailableGraphChannels = new(
         new Dictionary<PreIKContinuityDimension, string>
@@ -205,7 +204,7 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
     [Headless]
     [Fact]
     public async Task RuntimeCompositionOracle_NpcGraphSamplesBeforeModifiers_RemainsBlockedWithoutAdmittedChannels()
-        => await AssertGraphCaptureBlockedAsync(NpcScenePath, "NPCTravel");
+        => await AssertGraphCaptureBlockedAsync(NpcScenePath, "NPCWalkF");
 
     /// <summary>Both player and NPC graph fixtures are sampled manually before every modifier and fail closed.</summary>
     [Headless]
@@ -233,11 +232,6 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
             AnimationNodeStateMachinePlayback playback = tree.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
                 ?? throw new Xunit.Sdk.XunitException($"Expected '{scenePath}' to expose state-machine playback.");
             playback.Start(stateName, reset: true);
-            if (stateName == "NPCTravel")
-            {
-                tree.Set(NpcSustainedBlendParameter, Vector2.Up);
-                tree.Set(NpcPlaybackRateParameter, 1f);
-            }
 
             AdvanceBeforeModifiers(tree, modifiers, 0d, "initial state evaluation");
             int rootBone = RequireBone(skeleton, "Root");
@@ -427,6 +421,13 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
         foreach (SkeletonModifier3D modifier in modifiers)
         {
             modifier.Active = false;
+        }
+
+        // CharacterIK is the sole actuator of leg-modifier activity (IK-003 TR2) and re-activates the leg solve
+        // whenever a foot provider applies, as NPC foot planting does every tick; stop it so modifiers stay disabled.
+        foreach (CharacterIK characterIK in root.FindChildren("*", nameof(Node3D), recursive: true, owned: false).OfType<CharacterIK>())
+        {
+            characterIK.Active = false;
         }
 
         AssertModifiersInactive(modifiers, "before fixture scene entry");

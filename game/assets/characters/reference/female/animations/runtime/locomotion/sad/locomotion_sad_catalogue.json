@@ -4967,36 +4967,6 @@
       }
     }
   ],
-  "contact_evidence": {
-    "diagnostic_provenance_non_runtime_authoritative": {
-      "input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/authored_per_foot_contacts_v1.json",
-      "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json"
-    },
-    "generation": "20260903-immutable-binding",
-    "identities": [
-      "loc_sad_al_l",
-      "loc_sad_al_r",
-      "loc_sad_ar_l",
-      "loc_sad_ar_r",
-      "loc_sad_b2i_l",
-      "loc_sad_b2i_r",
-      "loc_sad_f2i_l",
-      "loc_sad_f2i_r",
-      "loc_sad_i2b_l",
-      "loc_sad_i2b_r",
-      "loc_sad_i2f_l",
-      "loc_sad_i2f_r",
-      "loc_sad_wb",
-      "loc_sad_wf",
-      "loc_sad_xl_l",
-      "loc_sad_xl_r",
-      "loc_sad_xr_l",
-      "loc_sad_xr_r"
-    ],
-    "package_identity": "anim002-invariant-chain-20260903",
-    "path": "res://assets/characters/reference/female/animations/runtime/locomotion/sad/authored_per_foot_contacts_v1.json",
-    "schema_version": 1
-  },
   "godot_response_coordinates": {
     "actor_local_planar": "[right, forward] = [root.x, -root.z]",
     "root": "+X right, +Y up, -Z forward",
@@ -5004,5 +4974,5 @@
   },
   "package": "locomotion",
   "package_variant": "sad",
-  "schema_version": 3
+  "schema_version": 4
 }

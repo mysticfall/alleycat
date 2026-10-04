@@ -1,0 +1,1095 @@
+{
+  "character": "female",
+  "clips": [
+    {
+      "capability": "cyclic_arc_left_left_lane",
+      "duration_seconds": 1.16666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.005753,
+          "segments": [
+            {
+              "end_seconds": 0.541667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.808333,
+              "start_seconds": 0.541667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.16666666666667,
+              "start_seconds": 0.808333,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.005936,
+          "segments": [
+            {
+              "end_seconds": 0.275,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.075,
+              "start_seconds": 0.275,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.16666666666667,
+              "start_seconds": 1.075,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_al_l",
+      "looping": true,
+      "role": "al_l"
+    },
+    {
+      "capability": "cyclic_arc_left_right_lane",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.007437,
+          "segments": [
+            {
+              "end_seconds": 0.425,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.208333,
+              "start_seconds": 0.425,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 1.208333,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.006612,
+          "segments": [
+            {
+              "end_seconds": 0.558333,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.908333,
+              "start_seconds": 0.558333,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.908333,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_al_r",
+      "looping": true,
+      "role": "al_r"
+    },
+    {
+      "capability": "cyclic_arc_right_left_lane",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.00599,
+          "segments": [
+            {
+              "end_seconds": 0.558333,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.908333,
+              "start_seconds": 0.558333,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.908333,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.007792,
+          "segments": [
+            {
+              "end_seconds": 0.425,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.208333,
+              "start_seconds": 0.425,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 1.208333,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_ar_l",
+      "looping": true,
+      "role": "ar_l"
+    },
+    {
+      "capability": "cyclic_arc_right_right_lane",
+      "duration_seconds": 1.16666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.005403,
+          "segments": [
+            {
+              "end_seconds": 0.275,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.075,
+              "start_seconds": 0.275,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.16666666666667,
+              "start_seconds": 1.075,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.005932,
+          "segments": [
+            {
+              "end_seconds": 0.541667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.808333,
+              "start_seconds": 0.541667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.16666666666667,
+              "start_seconds": 0.808333,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_ar_r",
+      "looping": true,
+      "role": "ar_r"
+    },
+    {
+      "capability": "exit_backward_left",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.011037,
+          "segments": [
+            {
+              "end_seconds": 0.341667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.341667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.025029,
+          "segments": [
+            {
+              "end_seconds": 0.241667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.991667,
+              "start_seconds": 0.241667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.991667,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_b2i_l",
+      "looping": false,
+      "role": "b2i_l"
+    },
+    {
+      "capability": "exit_backward_right",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.02431,
+          "segments": [
+            {
+              "end_seconds": 0.241667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.991667,
+              "start_seconds": 0.241667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.991667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.011273,
+          "segments": [
+            {
+              "end_seconds": 0.341667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.341667,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_b2i_r",
+      "looping": false,
+      "role": "b2i_r"
+    },
+    {
+      "capability": "exit_forward_left",
+      "duration_seconds": 1.0,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.029711,
+          "segments": [
+            {
+              "end_seconds": 0.408333,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.408333,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.020546,
+          "segments": [
+            {
+              "end_seconds": 0.391667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.775,
+              "start_seconds": 0.391667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.775,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_f2i_l",
+      "looping": false,
+      "role": "f2i_l"
+    },
+    {
+      "capability": "exit_forward_right",
+      "duration_seconds": 1.0,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.020238,
+          "segments": [
+            {
+              "end_seconds": 0.391667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.775,
+              "start_seconds": 0.391667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.775,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.030249,
+          "segments": [
+            {
+              "end_seconds": 0.408333,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.408333,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_f2i_r",
+      "looping": false,
+      "role": "f2i_r"
+    },
+    {
+      "capability": "entry_backward_left",
+      "duration_seconds": 1.0,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.01256,
+          "segments": [
+            {
+              "end_seconds": 0.641667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.641667,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.003396,
+          "segments": [
+            {
+              "end_seconds": 0.241667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.625,
+              "start_seconds": 0.241667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.625,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_i2b_l",
+      "looping": false,
+      "role": "i2b_l"
+    },
+    {
+      "capability": "entry_backward_right",
+      "duration_seconds": 1.0,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.003087,
+          "segments": [
+            {
+              "end_seconds": 0.241667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.625,
+              "start_seconds": 0.241667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.625,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.013099,
+          "segments": [
+            {
+              "end_seconds": 0.641667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.0,
+              "start_seconds": 0.641667,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_i2b_r",
+      "looping": false,
+      "role": "i2b_r"
+    },
+    {
+      "capability": "entry_forward_left",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": -0.007687,
+          "segments": [
+            {
+              "end_seconds": 0.958333,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.958333,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.006305,
+          "segments": [
+            {
+              "end_seconds": 0.275,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.058333,
+              "start_seconds": 0.275,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 1.058333,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_i2f_l",
+      "looping": false,
+      "role": "i2f_l"
+    },
+    {
+      "capability": "entry_forward_right",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.005586,
+          "segments": [
+            {
+              "end_seconds": 0.275,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.075,
+              "start_seconds": 0.275,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 1.075,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": -0.007451,
+          "segments": [
+            {
+              "end_seconds": 0.958333,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.958333,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_i2f_r",
+      "looping": false,
+      "role": "i2f_r"
+    },
+    {
+      "capability": "confined_pivot_left",
+      "duration_seconds": 1.63333333333333,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.010035,
+          "segments": [
+            {
+              "end_seconds": 0.291667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.641667,
+              "start_seconds": 0.291667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.63333333333333,
+              "start_seconds": 0.641667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.005058,
+          "segments": [
+            {
+              "end_seconds": 0.991667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.241667,
+              "start_seconds": 0.991667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.63333333333333,
+              "start_seconds": 1.241667,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_pl45",
+      "looping": true,
+      "role": "pl45"
+    },
+    {
+      "capability": "confined_pivot_right",
+      "duration_seconds": 1.63333333333333,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.004634,
+          "segments": [
+            {
+              "end_seconds": 0.991667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.241667,
+              "start_seconds": 0.991667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.63333333333333,
+              "start_seconds": 1.241667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.01049,
+          "segments": [
+            {
+              "end_seconds": 0.291667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.641667,
+              "start_seconds": 0.291667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.63333333333333,
+              "start_seconds": 0.641667,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_pr45",
+      "looping": true,
+      "role": "pr45"
+    },
+    {
+      "capability": "confined_side_step_left",
+      "duration_seconds": 1.3,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": -0.001524,
+          "segments": [
+            {
+              "end_seconds": 0.341667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.275,
+              "start_seconds": 0.341667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.3,
+              "start_seconds": 1.275,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.007618,
+          "segments": [
+            {
+              "end_seconds": 0.341667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.725,
+              "start_seconds": 0.341667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.3,
+              "start_seconds": 0.725,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_sl",
+      "looping": true,
+      "role": "sl"
+    },
+    {
+      "capability": "confined_side_step_right",
+      "duration_seconds": 1.3,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": -0.001524,
+          "segments": [
+            {
+              "end_seconds": 0.041667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.991667,
+              "start_seconds": 0.041667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.3,
+              "start_seconds": 0.991667,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.007618,
+          "segments": [
+            {
+              "end_seconds": 0.591667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.991667,
+              "start_seconds": 0.591667,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.3,
+              "start_seconds": 0.991667,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_sr",
+      "looping": true,
+      "role": "sr"
+    },
+    {
+      "capability": "cyclic_backward_primary",
+      "duration_seconds": 1.5,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.01885,
+          "segments": [
+            {
+              "end_seconds": 0.125,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.191667,
+              "start_seconds": 0.125,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.5,
+              "start_seconds": 1.191667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.010718,
+          "segments": [
+            {
+              "end_seconds": 0.375,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.808333,
+              "start_seconds": 0.375,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.5,
+              "start_seconds": 0.808333,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_wb",
+      "looping": true,
+      "role": "wb"
+    },
+    {
+      "capability": "cyclic_forward_primary",
+      "duration_seconds": 1.26666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.010307,
+          "segments": [
+            {
+              "end_seconds": 0.375,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.191667,
+              "start_seconds": 0.375,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 1.191667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.008215,
+          "segments": [
+            {
+              "end_seconds": 0.558333,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 0.875,
+              "start_seconds": 0.558333,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.26666666666667,
+              "start_seconds": 0.875,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_wf",
+      "looping": true,
+      "role": "wf"
+    },
+    {
+      "capability": "cyclic_lateral_left_left_lane",
+      "duration_seconds": 1.4,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.028709,
+          "segments": [
+            {
+              "end_seconds": 0.375,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.908333,
+              "start_seconds": 0.375,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.4,
+              "start_seconds": 0.908333,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.01215,
+          "segments": [
+            {
+              "end_seconds": 0.291667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.041667,
+              "start_seconds": 0.291667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.4,
+              "start_seconds": 1.041667,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_xl_l",
+      "looping": true,
+      "role": "xl_l"
+    },
+    {
+      "capability": "cyclic_lateral_left_right_lane",
+      "duration_seconds": 1.5,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.028721,
+          "segments": [
+            {
+              "end_seconds": 0.341667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.291667,
+              "start_seconds": 0.341667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.5,
+              "start_seconds": 1.291667,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.007582,
+          "segments": [
+            {
+              "end_seconds": 0.475,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.025,
+              "start_seconds": 0.475,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.5,
+              "start_seconds": 1.025,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_xl_r",
+      "looping": true,
+      "role": "xl_r"
+    },
+    {
+      "capability": "cyclic_lateral_right_left_lane",
+      "duration_seconds": 1.4,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.012268,
+          "segments": [
+            {
+              "end_seconds": 0.291667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.041667,
+              "start_seconds": 0.291667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.4,
+              "start_seconds": 1.041667,
+              "state": "swing"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.029654,
+          "segments": [
+            {
+              "end_seconds": 0.375,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 0.891667,
+              "start_seconds": 0.375,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.4,
+              "start_seconds": 0.891667,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_xr_l",
+      "looping": true,
+      "role": "xr_l"
+    },
+    {
+      "capability": "cyclic_lateral_right_right_lane",
+      "duration_seconds": 1.5,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.007735,
+          "segments": [
+            {
+              "end_seconds": 0.475,
+              "start_seconds": 0.0,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.041667,
+              "start_seconds": 0.475,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.5,
+              "start_seconds": 1.041667,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.029816,
+          "segments": [
+            {
+              "end_seconds": 0.341667,
+              "start_seconds": 0.0,
+              "state": "swing"
+            },
+            {
+              "end_seconds": 1.291667,
+              "start_seconds": 0.341667,
+              "state": "planted"
+            },
+            {
+              "end_seconds": 1.5,
+              "start_seconds": 1.291667,
+              "state": "swing"
+            }
+          ]
+        }
+      },
+      "identity": "loc_sad_xr_r",
+      "looping": true,
+      "role": "xr_r"
+    }
+  ],
+  "contract": "anim002_per_foot_planted_intervals_v1",
+  "derivation": {
+    "ball_joints": {
+      "left": "LeftToes",
+      "right": "RightToes"
+    },
+    "ball_point": "toe_bone_rest_pose_origin_in_skeleton_space",
+    "baseline": {
+      "method": "per_clip_per_foot_low_percentile_ball_height",
+      "percentile": 0.05
+    },
+    "detection": {
+      "baseline_percentile": 0.05,
+      "height_enter_m": 0.025,
+      "height_exit_m": 0.03,
+      "planar_speed_enter_mps": 0.1,
+      "planar_speed_exit_mps": 0.2,
+      "speed_window_s": 0.033333
+    },
+    "policy": {
+      "identity": "planted_interval_role_policy_v1",
+      "sha256": "f96c39822e2c7aede52b91a8b88e30aa3f93698893da43bf890403b355ac2d49"
+    },
+    "runtime_library_sha256": "34050158c04e6eccdbbc14875cc13aba5e9e478b5f0a00e39b590c8474ddb6db",
+    "sampling_rate_hz": 60.0,
+    "skeleton": {
+      "motion_scale": 0.938770651817322,
+      "scene": "res://assets/characters/reference/female/animations/processed/locomotion/locomotion_sad.blend",
+      "skeleton": "GeneralSkeleton"
+    },
+    "structure_fit": {
+      "absorb_maximum_peak_height_m": 0.03,
+      "absorb_maximum_travel_m": 0.03,
+      "episode_peak_height_weight": 2.0,
+      "minimum_planted_gap_s": 0.1,
+      "minimum_step_score_m": 0.06,
+      "minimum_step_to_absorbed_score_ratio": 3.0
+    },
+    "tool": "derive_planted_intervals",
+    "tool_version": 3,
+    "verification": {
+      "arrival_window_s": 0.5,
+      "lift_window_s": 0.2,
+      "maximum_planted_planar_drift_m": 0.09,
+      "minimum_arrival_descent_m": 0.005,
+      "minimum_lift_leave_m": 0.03,
+      "minimum_lift_rise_m": 0.01
+    }
+  },
+  "package": "locomotion",
+  "schema_version": 1,
+  "variant": "sad"
+}

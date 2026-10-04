@@ -13,8 +13,6 @@ public sealed class BoneAttachmentEngineTranscriptIntegrationTests
 {
     private const string RunnerPath = "res://tests/ik/bone_attachment_role_transcript_runner.gd";
     private const string TranscriptRelativePath = "test-results/ik/bone-attachment-role-engine-transcript.log";
-    private const string NativePipelineRunnerPath = "res://tests/ik/contact_lock_native_pipeline_transcript_runner.gd";
-    private const string NativePipelineTranscriptRelativePath = "test-results/ik/contact-lock-native-pipeline-engine-transcript.log";
     private static readonly Regex[] _invalidBoneIndexPatterns =
     [
         new(@"p_bone\s*=\s*-1", RegexOptions.CultureInvariant),
@@ -48,23 +46,6 @@ public sealed class BoneAttachmentEngineTranscriptIntegrationTests
                 "roles-ready",
                 "initial-physics-frame-1",
                 "initial-physics-frame-2",
-                "complete",
-            ]);
-
-    /// <summary>
-    /// Verifies the minimal native-pipeline photobooth attaches each independent fixture role without unresolved
-    /// native bone-index diagnostics before controller configuration completes.
-    /// </summary>
-    [Fact]
-    public async Task ContactLockNativePipelinePhotobooth_MinimalRolesEmitNoInvalidBoneIndexEngineOutput()
-        => await AssertCleanEngineTranscriptAsync(
-            NativePipelineRunnerPath,
-            NativePipelineTranscriptRelativePath,
-            [
-                "photobooth-load-start",
-                "photobooth-load-complete",
-                "photobooth-attached",
-                "roles-configured",
                 "complete",
             ]);
 

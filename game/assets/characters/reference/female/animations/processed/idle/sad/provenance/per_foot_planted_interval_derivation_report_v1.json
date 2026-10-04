@@ -1,0 +1,78 @@
+{
+  "character": "female",
+  "clip_count": 1,
+  "clips": [
+    {
+      "capability": "idle_contact_free",
+      "diagnostics": {
+        "lead_foot": "left",
+        "left": {
+          "absorbed_episodes": [],
+          "boundaries": [],
+          "merged_planted_gaps": [],
+          "planted_intervals": [
+            {
+              "duration_seconds": 7.966667,
+              "maximum_planar_drift_m": 0.002907,
+              "start_seconds": 0.0
+            }
+          ],
+          "steps": []
+        },
+        "loop_intent": "looping",
+        "right": {
+          "absorbed_episodes": [],
+          "boundaries": [],
+          "merged_planted_gaps": [],
+          "planted_intervals": [
+            {
+              "duration_seconds": 7.966667,
+              "maximum_planar_drift_m": 0.002649,
+              "start_seconds": 0.0
+            }
+          ],
+          "steps": []
+        },
+        "structure": "idle"
+      },
+      "duration_seconds": 7.96666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.006106,
+          "segments": [
+            {
+              "end_seconds": 7.96666666666667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.011615,
+          "segments": [
+            {
+              "end_seconds": 7.96666666666667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "idle_sad",
+      "looping": true,
+      "refusals": [],
+      "role": "idle"
+    }
+  ],
+  "contract": "anim002_per_foot_planted_interval_derivation_report_v1",
+  "intervals_sha256": "87e682ff5a73d3b7cedd56df234f79d282643ee650910643308e81e94667fb3c",
+  "package": "idle",
+  "policy": {
+    "identity": "planted_interval_role_policy_v1",
+    "sha256": "f96c39822e2c7aede52b91a8b88e30aa3f93698893da43bf890403b355ac2d49"
+  },
+  "refused": [],
+  "runtime_library_sha256": "5ae387b13dcf3242ff9c9b5de2960596ecedf36d72b49d15450e8f85f8092af1",
+  "schema_version": 1,
+  "variant": "sad"
+}

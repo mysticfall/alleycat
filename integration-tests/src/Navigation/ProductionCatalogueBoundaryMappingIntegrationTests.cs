@@ -1,5 +1,5 @@
 using AlleyCat.Control.Locomotion;
-using AlleyCat.IK;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Navigation;
 using AlleyCat.TestFramework;
 using Xunit;
@@ -18,11 +18,13 @@ namespace AlleyCat.IntegrationTests.Navigation;
 [Headless]
 public sealed class ProductionCatalogueBoundaryMappingIntegrationTests
 {
+    private static string CataloguePath => ProductionContentBindings.ResolveReferenceFemaleLocomotionCataloguePath();
+
     /// <inheritdoc/>
     [Fact]
     public void ProductionPackage_ResolvesEveryNavigationEntryAndExitBoundaryMapping()
     {
-        string cataloguePath = ContactLockProductionComposition.DefaultCataloguePath;
+        string cataloguePath = CataloguePath;
         string json = Godot.FileAccess.GetFileAsString(cataloguePath);
         Assert.False(string.IsNullOrWhiteSpace(json), $"The delivered ANIM-002 runtime catalogue is unreadable: {cataloguePath}");
 

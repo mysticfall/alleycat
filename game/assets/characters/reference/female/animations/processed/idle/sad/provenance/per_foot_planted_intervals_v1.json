@@ -1,0 +1,86 @@
+{
+  "character": "female",
+  "clips": [
+    {
+      "capability": "idle_contact_free",
+      "duration_seconds": 7.96666666666667,
+      "feet": {
+        "left": {
+          "baseline_ball_height_m": 0.006106,
+          "segments": [
+            {
+              "end_seconds": 7.96666666666667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            }
+          ]
+        },
+        "right": {
+          "baseline_ball_height_m": 0.011615,
+          "segments": [
+            {
+              "end_seconds": 7.96666666666667,
+              "start_seconds": 0.0,
+              "state": "planted"
+            }
+          ]
+        }
+      },
+      "identity": "idle_sad",
+      "looping": true,
+      "role": "idle"
+    }
+  ],
+  "contract": "anim002_per_foot_planted_intervals_v1",
+  "derivation": {
+    "ball_joints": {
+      "left": "LeftToes",
+      "right": "RightToes"
+    },
+    "ball_point": "toe_bone_rest_pose_origin_in_skeleton_space",
+    "baseline": {
+      "method": "per_clip_per_foot_low_percentile_ball_height",
+      "percentile": 0.05
+    },
+    "detection": {
+      "baseline_percentile": 0.05,
+      "height_enter_m": 0.025,
+      "height_exit_m": 0.03,
+      "planar_speed_enter_mps": 0.1,
+      "planar_speed_exit_mps": 0.2,
+      "speed_window_s": 0.033333
+    },
+    "policy": {
+      "identity": "planted_interval_role_policy_v1",
+      "sha256": "f96c39822e2c7aede52b91a8b88e30aa3f93698893da43bf890403b355ac2d49"
+    },
+    "runtime_library_sha256": "5ae387b13dcf3242ff9c9b5de2960596ecedf36d72b49d15450e8f85f8092af1",
+    "sampling_rate_hz": 60.0,
+    "skeleton": {
+      "motion_scale": 0.938770651817322,
+      "scene": "res://assets/characters/reference/female/animations/processed/idle/idle_sad.blend",
+      "skeleton": "GeneralSkeleton"
+    },
+    "structure_fit": {
+      "absorb_maximum_peak_height_m": 0.03,
+      "absorb_maximum_travel_m": 0.03,
+      "episode_peak_height_weight": 2.0,
+      "minimum_planted_gap_s": 0.1,
+      "minimum_step_score_m": 0.06,
+      "minimum_step_to_absorbed_score_ratio": 3.0
+    },
+    "tool": "derive_planted_intervals",
+    "tool_version": 3,
+    "verification": {
+      "arrival_window_s": 0.5,
+      "lift_window_s": 0.2,
+      "maximum_planted_planar_drift_m": 0.09,
+      "minimum_arrival_descent_m": 0.005,
+      "minimum_lift_leave_m": 0.03,
+      "minimum_lift_rise_m": 0.01
+    }
+  },
+  "package": "idle",
+  "schema_version": 1,
+  "variant": "sad"
+}

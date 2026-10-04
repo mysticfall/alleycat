@@ -243,7 +243,6 @@ public sealed class CharacterCompositionIntegrationTests
             Assert.True(navigation.AwaitInstallerActivation);
             Assert.False(navigation.IsRuntimeBindingActive);
             Assert.False(navigation.IsPhysicsProcessing());
-            Assert.Equal(0, navigation.PhysicalStepCount);
             Assert.IsNotAssignableFrom<ILocomotive>(character);
             Assert.Empty(character.GetChildren().OfType<CharacterLocomotion>());
             _ = Assert.Single(character.GetChildren().OfType<NavigationBase>());

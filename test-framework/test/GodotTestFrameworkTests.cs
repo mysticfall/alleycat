@@ -82,25 +82,41 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
-    /// Ensures only parameterless <see cref="FactAttribute"/> methods are considered supported.
+    /// Ensures parameterless <see cref="FactAttribute"/> methods and data-driven <see cref="TheoryAttribute"/>
+    /// methods are supported, while methods without a test attribute are not.
     /// </summary>
     [Fact]
-    public void IsSupportedFactMethod_OnlyAcceptsParameterlessFactMethods()
+    public void IsSupportedTestMethod_AcceptsParameterlessFactsAndDataDrivenTheories()
     {
         MethodInfo supportedMethod = typeof(GodotTestFrameworkTests)
             .GetMethod(nameof(ResolveGodotBinaryPath_ReturnsDefault_WhenEnvironmentVariableIsUnset))!;
-        MethodInfo parameterisedFactMethod = typeof(GodotTestFrameworkTests)
+        MethodInfo theoryMethod = typeof(GodotTestFrameworkTests)
             .GetMethod(nameof(ResolveTimeout_UsesPositiveConfiguredValue_OtherwiseFallsBack))!;
         MethodInfo nonFactMethod = typeof(GodotTestFrameworkTests)
             .GetMethod(nameof(HelperMethodWithoutTestAttribute), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-        bool isSupported = InvokePrivateStatic<bool>("IsSupportedFactMethod", supportedMethod);
-        bool isParameterisedSupported = InvokePrivateStatic<bool>("IsSupportedFactMethod", parameterisedFactMethod);
-        bool isNonFactSupported = InvokePrivateStatic<bool>("IsSupportedFactMethod", nonFactMethod);
+        Assert.True(InvokePrivateStatic<bool>("IsSupportedTestMethod", supportedMethod));
+        Assert.True(InvokePrivateStatic<bool>("IsSupportedTestMethod", theoryMethod));
+        Assert.False(InvokePrivateStatic<bool>("IsSupportedTestMethod", nonFactMethod));
+    }
 
-        Assert.True(isSupported);
-        Assert.False(isParameterisedSupported);
-        Assert.False(isNonFactSupported);
+    /// <summary>
+    /// Ensures assembly discovery yields each data-driven theory exactly once alongside parameterless facts,
+    /// so theories are no longer silently dropped from integration runs.
+    /// </summary>
+    [Fact]
+    public void DiscoverTests_IncludesInlineDataTheoriesOnceEach()
+    {
+        object discovered = InvokePrivateStatic<object>("DiscoverTests", typeof(GodotTestFrameworkTests).Assembly);
+        List<MethodInfo> methods = [.. ((System.Collections.IEnumerable)discovered)
+            .Cast<ITuple>()
+            .Select(entry => (MethodInfo)entry[1]!)
+            .Where(method => method.DeclaringType == typeof(GodotTestFrameworkTests))];
+
+        _ = Assert.Single(methods, method => method.Name == nameof(ResolveTimeout_UsesPositiveConfiguredValue_OtherwiseFallsBack));
+        _ = Assert.Single(methods, method => method.Name == nameof(RunPreflightAsync_RunsImportBeforeProbe_WhenImportPreflightIsTruthy));
+        _ = Assert.Single(methods, method => method.Name == nameof(ResolveGodotBinaryPath_ReturnsDefault_WhenEnvironmentVariableIsUnset));
+        Assert.DoesNotContain(methods, method => method.Name == nameof(HelperMethodWithoutTestAttribute));
     }
 
     /// <summary>

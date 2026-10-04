@@ -866,7 +866,7 @@ def _validate_reshape_evidence(evidence: Mapping[str, Any]) -> None:
         raise SourceRepairError(f"interior reshape violates anatomical/contact guards: {failures}")
 
 
-def _precision_anatomy_contact_evidence(
+def _precision_anatomy_contact_check(
     before: Sequence[Mapping[str, Matrix]],
     after: Sequence[Mapping[str, Matrix]],
     character_scale: float,
@@ -1018,7 +1018,7 @@ def _adaptive_arc_repair(
             direct_safety_contract=True, rig=rig,
         )
         try:
-            anatomy_contact = _precision_anatomy_contact_evidence(
+            anatomy_contact = _precision_anatomy_contact_check(
                 rows, repaired, character_scale, rig_basis,
                 range(width, len(rows) - width), assessment,
                 maximum_foot_height_scale=0.11,
@@ -1156,7 +1156,7 @@ def _pivot_heading_projection(
     }
 
 
-def _pivot_contact_evidence(
+def _pivot_contact_check(
     before: Sequence[Mapping[str, Matrix]],
     after: Sequence[Mapping[str, Matrix]],
     character_scale: float,
@@ -1165,7 +1165,7 @@ def _pivot_contact_evidence(
     repair_evidence: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Measure pivot contact and anatomy in generated Root space."""
-    anatomy = _precision_anatomy_contact_evidence(
+    anatomy = _precision_anatomy_contact_check(
         before, after, character_scale, rig_basis, immutable, repair_evidence,
         maximum_foot_height_scale=0.05,
     )
@@ -1556,14 +1556,14 @@ def derive_repaired_action(
     if interior_error > 1e-12 or not assessment["both_windows_modified"]:
         raise SourceRepairError("source repair violated its symmetric immutable-interior contract")
     anatomy_contact = (
-        _pivot_contact_evidence(
+        _pivot_contact_check(
             original_rows, repaired_rows, scale, rig_basis, interior, assessment,
         )
         if family == "pivot"
         else
         adaptive_arc_anatomy
         if family == "arc" else
-        _precision_anatomy_contact_evidence(
+        _precision_anatomy_contact_check(
             original_rows, repaired_rows, scale, rig_basis, interior, assessment,
             maximum_foot_height_scale=0.05,
         )
@@ -1727,7 +1727,7 @@ def derive_repaired_action(
         "pre_repair_failed_materialisation_budgets": assessment["failures"],
         "natural_recurrence": natural_recurrence,
         "both_repair_windows_used": assessment["both_windows_modified"],
-        "phase_contact_evidence": {
+        "phase_contact_selection": {
             "role": semantic_source_role,
             "lead_foot": "Right" if family in {"precision_lateral", "pivot"} else ("Left" if semantic_source_role.endswith("_l") else "Right"),
             "source_release_frames": [] if family == "precision_lateral" else [start, end],
@@ -1860,7 +1860,7 @@ def _select_precision_step_candidate(
             post_repair_leg_silhouette["admission"] = "diagnostic_only"
             row["precision_leg_silhouette_post_repair"] = post_repair_leg_silhouette
             opening, closing = symmetric_window(len(frames))
-            anatomy_contact = _precision_anatomy_contact_evidence(
+            anatomy_contact = _precision_anatomy_contact_check(
                 original_rows, repaired_rows, scale, rig_basis,
                 range(opening, len(frames) - closing), assessment,
                 maximum_foot_height_scale=0.05,
@@ -2174,7 +2174,7 @@ def _select_pivot_candidate(
             repaired_rows, assessment = _repair_periodic_pose_rows(original_rows, scale)
             opening, closing = symmetric_window(len(frames))
             immutable = range(opening, len(frames) - closing)
-            contact = _pivot_contact_evidence(
+            contact = _pivot_contact_check(
                 original_rows, repaired_rows, scale, rig_basis, immutable, assessment,
             )
             translation_limit = MAXIMUM_SOURCE_TRANSLATION_SCALE * scale

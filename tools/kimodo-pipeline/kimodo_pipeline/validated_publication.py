@@ -12,8 +12,7 @@ from typing import Any
 from .bootstrap_paths import repository_root
 from .cross_package_publication import CrossRootPublicationTransaction, StagedPackage
 from .runtime_package_descriptor import (
-    CONTACT_EVIDENCED_LOCOMOTION,
-    CONTACT_FREE_IDLE,
+    PUBLICATION_MODES,
     PackageDescriptorError,
     build_descriptor,
     reject_additional_variants,
@@ -87,7 +86,7 @@ def load_manifest(path: Path) -> tuple[tuple[PublicationPlan, ...], tuple[Path, 
         raise ValueError("Publication manifest must declare both package plans.")
     if len({plan.name for plan in plans}) != len(plans):
         raise ValueError("Publication manifest package names must be unique.")
-    if {plan.mode for plan in plans} != {CONTACT_EVIDENCED_LOCOMOTION, CONTACT_FREE_IDLE}:
+    if {plan.mode for plan in plans} != set(PUBLICATION_MODES.values()):
         raise ValueError("Publication manifest must declare one locomotion and one idle package mode.")
     if not all(isinstance(root, str) and root for root in legacy_roots):
         raise ValueError("Publication manifest legacy roots must be non-empty paths.")
@@ -172,13 +171,10 @@ def _staged_package(plan: PublicationPlan) -> StagedPackage:
 
 def _validate_declaration_mode(declaration: Mapping[str, Any]) -> None:
     mode = declaration.get("publication_mode")
-    if mode == CONTACT_EVIDENCED_LOCOMOTION:
-        return
-    if mode == CONTACT_FREE_IDLE:
-        if declaration.get("contact_evidence") is not None or declaration.get("contact_evidence_required") is True:
-            raise PackageDescriptorError("A contact-free idle declaration must not declare or require contact evidence.")
-        return
-    raise PackageDescriptorError("Publication declaration has an unsupported mode.")
+    if mode not in PUBLICATION_MODES.values() or PUBLICATION_MODES.get(declaration.get("name")) != mode:
+        raise PackageDescriptorError("Publication declaration has an unsupported mode.")
+    if not isinstance(declaration.get("planted_intervals"), Mapping):
+        raise PackageDescriptorError("Publication declaration has no planted-interval declaration.")
 
 
 def main() -> None:

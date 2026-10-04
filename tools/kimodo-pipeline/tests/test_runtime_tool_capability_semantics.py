@@ -13,6 +13,7 @@ import pytest
 
 
 from kimodo_pipeline.bootstrap_paths import repository_root
+from planted_interval_fixture import planted_intervals, stage_runtime_library, write_planted_intervals
 
 
 ROOT = repository_root()
@@ -84,18 +85,29 @@ def capability_package() -> Iterator[dict[str, Path]]:
             "published_index": f"res://{index_path.relative_to(GAME)}",
             "blend": f"res://{(processed / f'capability_fixture_{FIXTURE_VARIANT}.blend').relative_to(GAME)}",
             "root": f"res://{runtime.relative_to(GAME)}",
-            "contact_evidence_required": False,
         }), encoding="utf-8")
 
         configured = run_godot(CONFIGURE, descriptor)
         assert configured.returncode == 0, configured.stdout + configured.stderr
         imported = import_project()
         assert imported.returncode == 0, imported.stdout + imported.stderr
-        with runtime_stage_root() as stage:
+        with runtime_stage_root() as library_stage, runtime_stage_root() as stage:
+            library = stage_runtime_library(descriptor, library_stage)
+            intervals = write_planted_intervals(variant_dir / "provenance", planted_intervals(
+                character="fixture_character", package="capability_fixture", variant=FIXTURE_VARIANT,
+                index=index, library=library,
+            ))
+            declaration = json.loads(descriptor.read_text(encoding="utf-8"))
+            declaration["planted_intervals"] = {
+                "input": f"res://{intervals.relative_to(GAME)}", "retained_input": f"res://{intervals.relative_to(GAME)}",
+                "storage": "package_file", "runtime_path": intervals.name,
+            }
+            descriptor.write_text(json.dumps(declaration), encoding="utf-8")
             packaged = run_godot(
                 PACKAGE,
                 descriptor,
                 "--stage-root=res://" + str(stage.relative_to(GAME)),
+                f"--runtime-library-source=res://{library.relative_to(GAME)}",
             )
             assert packaged.returncode == 0, packaged.stdout + packaged.stderr
             shutil.move(stage, runtime)
@@ -124,7 +136,7 @@ def test_all_three_tools_accept_renamed_reordered_declared_capabilities(
     assert clips["exit_backward_right"]["boundary_kind"] == "transition"
     assert all(clip["role"].startswith("slot_") for clip in catalogue["clips"])
     assert all(clip["identity"].startswith("ember_token_") for clip in catalogue["clips"])
-    assert catalogue["schema_version"] == 3
+    assert catalogue["schema_version"] == 4
     assert catalogue["animation_library"] == f"capability_fixture_{FIXTURE_VARIANT}.tres"
 
 

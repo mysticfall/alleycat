@@ -125,6 +125,86 @@ public sealed class PerTestLifecycleExecutorTests
         Assert.Equal([.. expectedSequence, .. expectedSequence, .. expectedSequence], LifecycleProbe.Events);
     }
 
+    /// <summary>
+    /// Verifies every InlineData row of a theory runs once, with a fresh instance and bound arguments,
+    /// including a trailing optional parameter omitted by the row.
+    /// </summary>
+    [Fact]
+    public async Task Theory_InlineDataRows_EachRunWithFreshInstanceAndArguments()
+    {
+        TheoryProbe.Reset();
+        MethodInfo method = typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.RecordInline))!;
+
+        PerTestLifecycleExecutionResult result = await PerTestLifecycleExecutor.ExecuteAsync(method);
+
+        Assert.True(result.Passed);
+        Assert.Equal(["a:1:7", "b:2:7", "c:3:9"], TheoryProbe.Calls);
+        Assert.Equal(3, TheoryProbe.Instances.Distinct().Count());
+        Assert.Equal(TheoryProbe.Instances, TheoryProbe.Invokers);
+        Assert.Equal(3, TheoryProbe.DisposeCount);
+    }
+
+    /// <summary>
+    /// Verifies MemberData rows are resolved and executed.
+    /// </summary>
+    [Fact]
+    public async Task Theory_MemberDataRows_AreExecuted()
+    {
+        TheoryProbe.Reset();
+        MethodInfo method = typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.RecordMember))!;
+
+        PerTestLifecycleExecutionResult result = await PerTestLifecycleExecutor.ExecuteAsync(method);
+
+        Assert.True(result.Passed);
+        Assert.Equal(["x:10:0", "y:20:0"], TheoryProbe.Calls);
+    }
+
+    /// <summary>
+    /// Verifies a failing row fails the theory while later rows still run, and the diagnostics name the row.
+    /// </summary>
+    [Fact]
+    public async Task Theory_FailingRow_IsAggregatedAndNamed()
+    {
+        TheoryProbe.Reset();
+        MethodInfo method = typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.FailOnTwo))!;
+
+        PerTestLifecycleExecutionResult result = await PerTestLifecycleExecutor.ExecuteAsync(method);
+        (string message, string? stackTrace) = PerTestLifecycleExecutor.BuildFailureDiagnostics(result);
+
+        _ = Assert.IsType<TheoryRowFailureException>(result.TestFailure);
+        Assert.Null(result.TeardownFailure);
+        Assert.Equal(["fail:1:0", "fail:2:0", "fail:3:0"], TheoryProbe.Calls);
+        Assert.StartsWith("1 of 3 theory rows", message, StringComparison.Ordinal);
+        Assert.Contains("[row 1] (2): Row two failed.", message, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(stackTrace));
+    }
+
+    /// <summary>
+    /// Verifies a skipped data row is not executed.
+    /// </summary>
+    [Fact]
+    public async Task Theory_SkippedRow_IsNotExecuted()
+    {
+        TheoryProbe.Reset();
+        MethodInfo method = typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.WithSkippedRow))!;
+
+        PerTestLifecycleExecutionResult result = await PerTestLifecycleExecutor.ExecuteAsync(method);
+
+        Assert.True(result.Passed);
+        Assert.Equal(["skip:1:0"], TheoryProbe.Calls);
+    }
+
+    /// <summary>
+    /// Verifies theory data detection distinguishes data-driven methods from plain parameterless methods.
+    /// </summary>
+    [Fact]
+    public void HasTheoryData_DetectsXunitDataAttributes()
+    {
+        Assert.True(PerTestLifecycleExecutor.HasTheoryData(typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.RecordInline))!));
+        Assert.True(PerTestLifecycleExecutor.HasTheoryData(typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.RecordMember))!));
+        Assert.False(PerTestLifecycleExecutor.HasTheoryData(typeof(LifecycleProbe).GetMethod(nameof(LifecycleProbe.Pass))!));
+    }
+
     private sealed class LifecycleProbe : IAsyncLifetime, IAsyncDisposable, IDisposable
     {
         public static List<string> Events { get; } = [];
@@ -265,4 +345,73 @@ public sealed class PerTestLifecycleExecutorTests
 
         public void Dispose() => DisposeCallCount++;
     }
+
+    // Probe methods carry data attributes without [Theory] so xUnit does not run them directly; only the
+    // lifecycle executor under test invokes them.
+#pragma warning disable xUnit1008
+    private sealed class TheoryProbe : IDisposable
+    {
+        public static List<string> Calls { get; } = [];
+
+        public static List<TheoryProbe> Instances { get; } = [];
+
+        public static int DisposeCount
+        {
+            get; private set;
+        }
+
+        public static IEnumerable<object[]> MemberRows =>
+        [
+            ["x", 10],
+            ["y", 20],
+        ];
+
+        public static List<TheoryProbe> Invokers { get; } = [];
+
+        public TheoryProbe()
+        {
+            Instances.Add(this);
+        }
+
+        public static void Reset()
+        {
+            Calls.Clear();
+            Instances.Clear();
+            Invokers.Clear();
+            DisposeCount = 0;
+        }
+
+        [InlineData("a", 1)]
+        [InlineData("b", 2)]
+        [InlineData("c", 3, 9)]
+        public void RecordInline(string label, int value, int extra = 7) => Record($"{label}:{value}:{extra}");
+
+        [MemberData(nameof(MemberRows))]
+        public void RecordMember(string label, int value) => Record($"{label}:{value}:0");
+
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        public void FailOnTwo(int value)
+        {
+            Record($"fail:{value}:0");
+            if (value == 2)
+            {
+                throw new InvalidOperationException("Row two failed.");
+            }
+        }
+
+        [InlineData(1)]
+        [InlineData(2, Skip = "Skipped row.")]
+        public void WithSkippedRow(int value) => Record($"skip:{value}:0");
+
+        public void Dispose() => DisposeCount++;
+
+        private void Record(string call)
+        {
+            Calls.Add(call);
+            Invokers.Add(this);
+        }
+    }
+#pragma warning restore xUnit1008
 }

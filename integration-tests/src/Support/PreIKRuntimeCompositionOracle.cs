@@ -18,7 +18,7 @@ public enum PreIKContinuityDimension
     RightContactTransition,
 }
 
-/// <summary>Authored contact lifecycle value as observed before any IK or contact-lock modifier runs.</summary>
+/// <summary>Authored contact lifecycle value as observed before any IK modifier runs.</summary>
 public enum PreIKContactTransition
 {
     Unknown,
@@ -280,7 +280,7 @@ public sealed record PreIKRuntimeCompositionResult(IReadOnlyList<PreIKRuntimeCom
 }
 
 /// <summary>
-/// Pure, fail-closed Stage 2 oracle for runtime animation composition before IK/contact-lock modifiers. It validates
+/// Pure, fail-closed Stage 2 oracle for runtime animation composition before IK modifiers. It validates
 /// supplied evidence only and has no dependency on ANIM package admission, final-output validation, NAV, or CTRL.
 /// </summary>
 public static class PreIKRuntimeCompositionOracle

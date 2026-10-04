@@ -1,7 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://src/Testing/Navigation/NAV001Stage4ManualPlaytestHarness.cs" uid="uid://cvaeohm3hq04d" id="1_fajfn"]
-
-[node name="NAV001Stage4ManualPlaytestHarness" type="Node" unique_id=209005910]
-script = ExtResource("1_fajfn")
-metadata/_custom_type_script = "uid://cvaeohm3hq04d"

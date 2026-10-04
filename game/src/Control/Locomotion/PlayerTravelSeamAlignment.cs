@@ -1,7 +1,7 @@
 namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
-/// Pure lane-seam arithmetic for the player sustained-travel blend spaces (ANIM-002 §7.7, CTRL-001 TR10).
+/// Pure lane-seam arithmetic for the player sustained-travel blend spaces (ANIM-002 §7.7).
 /// </summary>
 /// <remarks>
 /// The four player travel blend spaces share one cyclic clock (SYNC_MODE_CYCLIC_CONSTANT over the common
@@ -28,23 +28,6 @@ public static class PlayerTravelSeamAlignment
         double duration = Math.Max(clip.DurationSeconds, double.Epsilon);
         double cycle = float.IsFinite(commonCycleSeconds) && commonCycleSeconds > 0f ? commonCycleSeconds : duration;
         return (float)Math.Clamp(eventSeconds * cycle / duration, 0d, cycle);
-    }
-
-    /// <summary>Publishes the semantically selected catalogue event and its exact custom-timeline conversion.</summary>
-    public static PlayerTravelReleaseClockTransformV1 ResolveReleaseClockTransform(
-        StandingLocomotionClip clip,
-        bool rightLane,
-        float commonCycleSeconds)
-    {
-        StandingLocomotionPhaseEvent phaseEvent = ResolveCyclicEvent(clip, rightLane);
-        double eventSeconds = phaseEvent.TimeSeconds;
-
-        float startOffset = ResolveStartOffset(clip, rightLane, commonCycleSeconds);
-        return PlayerTravelReleaseClockTransformV1.Create(
-            eventSeconds,
-            clip.DurationSeconds,
-            commonCycleSeconds,
-            startOffset);
     }
 
     private static StandingLocomotionPhaseEvent ResolveCyclicEvent(StandingLocomotionClip clip, bool rightLane)

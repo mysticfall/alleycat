@@ -1,0 +1,157 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/templates/full_body_player_ik_5_cams.tscn" id="1_eae7t"]
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/camera_rig.tscn" id="2_h42l2"]
+[ext_resource type="Script" path="res://scripts/photobooth/camera_rig.gd" id="3_sliik"]
+[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" id="4_m8v0k"]
+[ext_resource type="Script" path="res://scripts/photobooth/debug_marker.gd" id="5_fl8tt"]
+[ext_resource type="Script" path="res://tests/locomotion_visual/LocomotionVisualDriver.cs" id="6_5wn21"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_13x1j"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+roughness = 0.95
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gfreg"]
+size = Vector3(24, 0.1, 24)
+
+[node name="" unique_id=406188165 instance=ExtResource("1_eae7t")]
+
+[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="5" unique_id=527893103]
+parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
+parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
+
+[node name="FrontCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=1495966327]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.95, -4.6)
+image_size = Vector2(640, 640)
+orthogonal_scale = 5.0
+
+[node name="RightCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=1341427355]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 4.6, 0.95, 0)
+image_size = Vector2(640, 640)
+orthogonal_scale = 5.0
+
+[node name="LeftCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="2" unique_id=417711527]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -4.6, 0.95, 0)
+image_size = Vector2(640, 640)
+orthogonal_scale = 5.0
+
+[node name="BackCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="3" unique_id=1935704102]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 4.6)
+image_size = Vector2(640, 640)
+orthogonal_scale = 5.0
+
+[node name="TopCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="4" unique_id=1344408557]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 5.4, 0)
+image_size = Vector2(768, 768)
+orthogonal_scale = 6.0
+
+[node name="GaitCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="5" unique_id=613334314 instance=ExtResource("2_h42l2")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -2.35, 0.52, 0)
+script = ExtResource("3_sliik")
+orthogonal_scale = 1.7
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="DirN" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=1247060835 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0.02, -2.35)
+script = ExtResource("5_fl8tt")
+label_text = "N (-Z)"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DirS" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=316181566 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0.02, 2.35)
+script = ExtResource("5_fl8tt")
+label_text = "S (+Z)"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DirE" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="2" unique_id=1204100264 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 2.35, 0.02, 0)
+script = ExtResource("5_fl8tt")
+label_text = "E (+X)"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DirW" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="3" unique_id=879691432 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, -2.35, 0.02, 0)
+script = ExtResource("5_fl8tt")
+label_text = "W (-X)"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="Origin" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="4" unique_id=1376143418 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(6, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0.02, 0)
+script = ExtResource("5_fl8tt")
+label_text = "O"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotN1" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="5" unique_id=1601982053 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0.02, -0.6)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotS1" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="6" unique_id=1919155597 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0.02, 0.6)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotE1" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="7" unique_id=778793100 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0.6, 0.02, 0)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotW1" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="8" unique_id=1427186129 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, -0.6, 0.02, 0)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotN2" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="9" unique_id=59149328 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0.02, -1.2)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotS2" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="10" unique_id=1758921787 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0.02, 1.2)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotE2" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="11" unique_id=1913135421 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 1.2, 0.02, 0)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotW2" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="12" unique_id=2105463154 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, -1.2, 0.02, 0)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotN3" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="13" unique_id=2001138328 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0.02, -1.8)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotS3" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="14" unique_id=899742935 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0.02, 1.8)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotE3" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="15" unique_id=415165884 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 1.8, 0.02, 0)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="DotW3" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="16" unique_id=67236615 instance=ExtResource("4_m8v0k")]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, -1.8, 0.02, 0)
+script = ExtResource("5_fl8tt")
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="Floor" parent="." index="3" unique_id=893667457]
+material_override = SubResource("StandardMaterial3D_13x1j")
+
+[node name="FloorCollision" type="StaticBody3D" parent="." index="5" unique_id=1049796259]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="FloorCollision" index="0" unique_id=873712479]
+shape = SubResource("BoxShape3D_gfreg")
+
+[node name="LocomotionVisualDriver" type="Node" parent="." index="6" unique_id=1031171280]
+script = ExtResource("6_5wn21")
+metadata/_custom_type_script = "uid://drups8w4nm8qk"
+
+[editable path="Subject/Female"]

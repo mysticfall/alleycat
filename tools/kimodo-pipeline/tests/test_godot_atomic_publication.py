@@ -22,6 +22,7 @@ GAME = ROOT / "game"
 TOOLS = ROOT / "tools"
 sys.path.insert(0, str(TOOLS / "kimodo-pipeline/tests"))
 
+from planted_interval_fixture import planted_intervals, stage_runtime_library, write_planted_intervals
 from synthetic_kimodo_blend import FIXTURE_SCHEMA, FIXTURE_VARIANT, SyntheticKimodoBlendBuilder
 
 
@@ -32,14 +33,23 @@ PACKAGE = GODOT_COMMANDS / "package_kimodo_runtime.gd"
 VALIDATE = GODOT_COMMANDS / "validate_kimodo_runtime_package.gd"
 STITCH_GRAPH_TEST = GODOT_TESTS / "stitch_graph_test.gd"
 SAMPLE_TRANSPORT_TEST = GODOT_TESTS / "sample_transport_test.gd"
+ANIMATION_POSE_SAMPLER_TEST = GODOT_TESTS / "animation_pose_sampler_test.gd"
+RUNTIME_PACKAGE_DESCRIPTOR_TEST = GODOT_TESTS / "runtime_package_descriptor_test.gd"
+PLANTED_INTERVAL_DERIVATION_TEST = GODOT_TESTS / "planted_interval_derivation_test.gd"
+DERIVE = GODOT_COMMANDS / "derive_planted_intervals.gd"
 RETARGET = TOOLS / "kimodo-pipeline/commands/retarget_animations.py"
-CONTACT_FILENAME = "authored_per_foot_" + "contacts_v1.json"
+INTERVALS_FILENAME = "per_foot_planted_intervals_v1.json"
+INTERVALS_FIELD = "per_foot_planted_intervals"
+REPORT_FILENAME = "per_foot_planted_interval_derivation_report_v1.json"
 LIBRARY_FILENAME = f"idle_{FIXTURE_VARIANT}.tres"
 CATALOGUE_FILENAME = f"idle_{FIXTURE_VARIANT}_catalogue.json"
 DURATION_TOLERANCE = 1e-6
 
 
 def run_godot(script: Path, descriptor: Path, *extra: str) -> subprocess.CompletedProcess[str]:
+    if script == PACKAGE and LIBRARY_SOURCE is not None and not any(item.startswith("--runtime-library-source=") for item in extra):
+        # Reuse the library the fixture intervals were bound to; a regenerated library gets new subresource IDs.
+        extra = (*extra, f"--runtime-library-source=res://{LIBRARY_SOURCE.relative_to(GAME)}")
     return subprocess.run(
         [
             "godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(script),
@@ -47,6 +57,9 @@ def run_godot(script: Path, descriptor: Path, *extra: str) -> subprocess.Complet
         ],
         cwd=ROOT, text=True, capture_output=True, check=False, timeout=180,
     )
+
+
+LIBRARY_SOURCE: Path | None = None
 
 
 def import_project() -> subprocess.CompletedProcess[str]:
@@ -63,6 +76,88 @@ def test_external_godot_helper_scripts_pass(script: Path) -> None:
         cwd=ROOT, text=True, capture_output=True, check=False, timeout=180,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_runtime_package_descriptor_uid_canonicalisation_matrix() -> None:
+    result = subprocess.run(
+        ["godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(RUNTIME_PACKAGE_DESCRIPTOR_TEST)],
+        cwd=ROOT, text=True, capture_output=True, check=False, timeout=180,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ANIM-002 runtime descriptor UID tests passed: 42" in result.stdout
+
+
+def test_planted_interval_derivation_fits_role_structure_and_refuses_each_failed_check() -> None:
+    result = subprocess.run(
+        ["godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(PLANTED_INTERVAL_DERIVATION_TEST)],
+        cwd=ROOT, text=True, capture_output=True, check=False, timeout=180,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ANIM002_PLANTED_INTERVAL_DERIVATION_CHECKS=passed passed=179 failed=0" in result.stdout
+
+
+def test_published_planted_intervals_rederive_from_the_published_packages() -> None:
+    """Real selected-content check: re-deriving each package reproduces its published intervals exactly, and its
+    retained derivation report byte for byte, bound to the retained interval bytes."""
+    animations = GAME / "assets/characters/reference/female/animations"
+    runtime = animations / "runtime"
+    published = {
+        "locomotion": json.loads((runtime / "locomotion/sad" / INTERVALS_FILENAME).read_text(encoding="utf-8")),
+        "idle": json.loads((runtime / "idle/sad/idle_sad_catalogue.json").read_text(encoding="utf-8"))[INTERVALS_FIELD],
+    }
+    for name, document in published.items():
+        provenance = animations / "processed" / name / document["variant"] / "provenance"
+        retained_report = (provenance / REPORT_FILENAME).read_bytes()
+        assert json.loads(retained_report)["intervals_sha256"] == hashlib.sha256((provenance / INTERVALS_FILENAME).read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory(prefix="kimodo-rederive-", dir=GAME / "temp") as directory:
+            output = Path(directory) / INTERVALS_FILENAME
+            report = Path(directory) / REPORT_FILENAME
+            result = subprocess.run(
+                [
+                    "godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(DERIVE), "--",
+                    f"--package={name}", f"--variant={document['variant']}", f"--character={document['character']}",
+                    f"--output=res://{output.relative_to(GAME)}", f"--report=res://{report.relative_to(GAME)}",
+                ],
+                cwd=ROOT, text=True, capture_output=True, check=False, timeout=300,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert "refused=0" in result.stdout
+            assert json.loads(output.read_text(encoding="utf-8")) == document
+            assert output.read_bytes() == (provenance / INTERVALS_FILENAME).read_bytes()
+            assert report.read_bytes() == retained_report
+
+
+def test_animation_pose_sampler_matches_engine_skeleton_and_falls_back_to_rest_pose() -> None:
+    result = subprocess.run(
+        ["godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(ANIMATION_POSE_SAMPLER_TEST)],
+        cwd=ROOT, text=True, capture_output=True, check=False, timeout=180,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ANIM002_POSE_SAMPLER_CHECKS=passed passed=26 failed=0" in result.stdout
+
+
+FILE_INTERVAL_CATALOGUE_KEYS = {
+    "schema_version", "package", "package_variant", "animation_library", "clip_count", "godot_response_coordinates", "clips",
+}
+EMBEDDED_INTERVAL_CATALOGUE_KEYS = FILE_INTERVAL_CATALOGUE_KEYS | {INTERVALS_FIELD}
+
+
+def assert_catalogue_rejects_unsupported_fields(catalogue_path: Path, descriptor: Path, expected_keys: set[str]) -> None:
+    """The published catalogue carries exactly the supported fields, and validation refuses any extra field."""
+    catalogue = json.loads(catalogue_path.read_text(encoding="utf-8"))
+    assert set(catalogue) == expected_keys
+    original = catalogue_path.read_bytes()
+    try:
+        catalogue["undeclared_contract"] = {"schema_version": 1}
+        catalogue_path.write_text(json.dumps(catalogue), encoding="utf-8")
+        rejected = run_godot(VALIDATE, descriptor)
+        assert rejected.returncode != 0
+        assert "Runtime catalogue declares an unsupported field: undeclared_contract" in (rejected.stdout + rejected.stderr)
+    finally:
+        catalogue_path.write_bytes(original)
 
 
 def tree_hashes(path: Path) -> dict[str, str]:
@@ -125,54 +220,9 @@ def synthetic_package() -> Iterator[dict[str, Any]]:
         descriptor = builder.runtime_descriptor(input_set, fixture / "runtime" / "idle" / FIXTURE_VARIANT, package_name="idle")
         descriptor_path = fixture / "descriptor.json"
         runtime_root = Path(descriptor["root"])
-        entry = index["actions"][0]
-        package_identity = "synthetic-contact-package-v1"
-        generation = "synthetic-contact-generation-v1"
-        contact_source = fixture / "declared_contacts.json"
-        contact_source.write_text(json.dumps({
-            "schema_version": 1,
-            "package_identity": package_identity,
-            "source_derived": {
-                "schema_version": 1,
-                "method": "synthetic_declared_source_geometry_v1",
-                "generation": generation,
-                "source_package": {"package": "synthetic", "variant": FIXTURE_VARIANT},
-                "paths_relative_to_processed_package": {"processed_index": "processed-index.json", "retargeted_blend": "declared.blend"},
-                "input_digests": {"processed_index_sha256": "fixture", "retargeted_blend_sha256": "fixture"},
-                "mapping": {"identity": "synthetic", "feet": {"left": "declared", "right": "declared"}},
-                "sample_rate_hz": 30.0,
-                "configuration": {"declared": True},
-                "clips": [{"identity": entry["external_identity"], "evidence_windows": {"left": [], "right": []}}],
-                "uncertainty_reasons": [],
-            },
-            "samples": [{
-                "schema_version": 1,
-                "role": entry["role"],
-                "foot": "left",
-                "lifecycle": "support",
-                "timing": [0.0, 1.0],
-                "validity": "valid",
-                "confidence": 1.0,
-                "provenance": "synthetic fixture upstream declaration",
-                "clip": entry["external_identity"],
-                "variant": index["variant"],
-                "reference": "synthetic declared fixture reference",
-                "identity": entry["external_identity"],
-                "generation": generation,
-            }],
-        }, indent=2) + "\n", encoding="utf-8")
-        descriptor["contact_evidence"] = {
-            "input": str(contact_source),
-            "runtime_path": CONTACT_FILENAME,
-            "package_identity": package_identity,
-            "generation": generation,
-        }
         descriptor_path.write_text(json.dumps({
-            **{key: "res://" + str(Path(value).relative_to(GAME)) if key in {"index", "blend", "root"} else value for key, value in descriptor.items() if key != "contact_evidence"},
-            "contact_evidence": {
-                **descriptor["contact_evidence"],
-                "input": "res://" + str(contact_source.relative_to(GAME)),
-            },
+            key: "res://" + str(Path(value).relative_to(GAME)) if key in {"index", "blend", "root"} else value
+            for key, value in descriptor.items()
         }), encoding="utf-8")
         first_import = import_project()
         assert first_import.returncode == 0, first_import.stdout + first_import.stderr
@@ -180,88 +230,83 @@ def synthetic_package() -> Iterator[dict[str, Any]]:
         assert configured.returncode == 0, configured.stdout + configured.stderr
         reimported = import_project()
         assert reimported.returncode == 0, reimported.stdout + reimported.stderr
-        yield {"fixture": fixture, "input": input_set, "descriptor": descriptor_path, "runtime": runtime_root, "index": index_path, "contacts": contact_source}
+        global LIBRARY_SOURCE
+        with runtime_stage_root("idle") as library_stage:
+            staged_library = stage_runtime_library(descriptor_path, library_stage)
+            LIBRARY_SOURCE = fixture / "library_source" / LIBRARY_FILENAME
+            LIBRARY_SOURCE.parent.mkdir()
+            shutil.copy2(staged_library, LIBRARY_SOURCE)
+        intervals = write_planted_intervals(input_set / FIXTURE_VARIANT / "provenance", planted_intervals(
+            character=descriptor["character"], package="idle", variant=FIXTURE_VARIANT, index=index, library=LIBRARY_SOURCE,
+        ))
+        declared = json.loads(descriptor_path.read_text(encoding="utf-8"))
+        declared["planted_intervals"] = {
+            "input": "res://" + str(intervals.relative_to(GAME)),
+            "retained_input": "res://" + str(intervals.relative_to(GAME)),
+            "storage": "catalogue_field",
+        }
+        descriptor_path.write_text(json.dumps(declared), encoding="utf-8")
+        try:
+            yield {"fixture": fixture, "input": input_set, "descriptor": descriptor_path, "runtime": runtime_root, "index": index_path, "intervals": intervals}
+        finally:
+            LIBRARY_SOURCE = None
+            shutil.rmtree(fixture, ignore_errors=True)
+
+
+def test_synthetic_package_fixture_cleanup_removes_its_publication_directory() -> None:
+    fixture = Path(tempfile.mkdtemp(prefix="kimodo-publication-cleanup-", dir=GAME / "assets/testing"))
+    (fixture / "expected-residue").mkdir()
+
+    shutil.rmtree(fixture, ignore_errors=True)
+
+    assert not fixture.exists()
 
 
 def seed_output(path: Path) -> None:
     (path / "clips").mkdir(parents=True)
     (path / "sentinel.bin").write_bytes(b"synthetic previous package")
     (path / "clips" / "obsolete.res").write_bytes(b"synthetic stale clip")
-    (path / CONTACT_FILENAME).write_text("synthetic stale contacts\n", encoding="utf-8")
+    (path / INTERVALS_FILENAME).write_text("synthetic stale intervals\n", encoding="utf-8")
     (path / f"{LIBRARY_FILENAME}.uid").write_text("uid://syntheticfixture\n", encoding="utf-8")
 
 
-def phase_seeded_source_derived(generation: str, legacy: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "schema_version": 5,
-        "method": "phase_seeded_relative_motion_segmentation_v2",
-        "generation": generation,
-        "publication_eligible": True,
-        "required_refusals": [],
-        "source_package": legacy["source_package"],
-        "paths_relative_to_processed_package": legacy["paths_relative_to_processed_package"],
-        "input_digests": legacy["input_digests"],
-        "phase_policy": {"identity": "fixture-policy", "digest": "fixture"},
-        "bone_mapping": {"identity": "fixture-mapping", "digest": "fixture"},
-        "input_contracts": [
-            "anim002_source_directional_phase_events_v1",
-            "anim002_event_derivation_v1",
-            "anim002_post_repair_directional_phase_events_v2",
-            "anim002_selected_loop_repair_provenance_v2",
-        ],
-        "phase_seed_policy": {
-            "detector_influence_samples": 4,
-            "two_release_sector": "cyclic_voronoi_midpoints",
-            "one_release_sector": "half_cycle_around_repeated_seed",
-            "absolute_world_slide_affects_eligibility": False,
-        },
-        "sampling": "native_fps",
-        "configuration": {"minimum_confidence": 0.8},
-        "configuration_digest": "fixture",
-        "confidence_weights": {
-            "semantic_event_anchor_agreement": 0.22,
-            "within_state_cohesion": 0.18,
-            "between_state_separation": 0.22,
-            "transition_persistence_sharpness": 0.16,
-            "contextual_opposite_consistency": 0.12,
-            "ambiguity_margin": 0.10,
-        },
-        "clips": legacy["clips"],
-        "role_contact_matrix": [],
-    }
-
-
-def test_godot_accepts_phase_seeded_schema_v5_and_rejects_stale_v4_contract(
+def test_packager_refuses_stale_or_mismatched_planted_intervals_before_staging(
     synthetic_package: dict[str, Any],
 ) -> None:
-    contacts = synthetic_package["contacts"]
+    intervals = synthetic_package["intervals"]
     output = synthetic_package["runtime"]
-    original = contacts.read_bytes()
+    original = intervals.read_bytes()
+    mutations = [
+        (lambda d: d.__setitem__("schema_version", 2), "schema version is unknown or mismatched"),
+        (lambda d: d["derivation"].__setitem__("tool_version", 99), "tool or version is unknown or mismatched"),
+        (lambda d: d["derivation"]["policy"].__setitem__("sha256", "0" * 64), "policy is stale or mismatched"),
+        (lambda d: d["derivation"].__setitem__("runtime_library_sha256", "0" * 64), "derived from a different runtime library"),
+        (lambda d: d["clips"][0]["feet"].pop("right"), "must cover exactly both feet"),
+        (lambda d: d["clips"][0]["feet"]["left"]["segments"][0].__setitem__("end_seconds", 0.01), "cover the whole clip"),
+        (lambda d: d["clips"][0].__setitem__("capability", "exit_forward_left"), "role, capability, or loop intent differs"),
+        (lambda d: d.__setitem__("clips", []), "does not cover every package clip"),
+    ]
     try:
-        document = json.loads(original)
-        document["source_derived"] = phase_seeded_source_derived(
-            document["source_derived"]["generation"], document["source_derived"],
-        )
-        contacts.write_text(json.dumps(document), encoding="utf-8")
-        shutil.rmtree(output, ignore_errors=True)
+        for mutate, diagnostic in mutations:
+            document = json.loads(original)
+            mutate(document)
+            intervals.write_text(json.dumps(document), encoding="utf-8")
+            shutil.rmtree(output, ignore_errors=True)
+            seed_output(output)
+            before = tree_hashes(output)
+            with runtime_stage_root("idle") as stage:
+                rejected = run_godot(PACKAGE, synthetic_package["descriptor"], stage_root_argument(stage))
+                assert rejected.returncode != 0
+                assert diagnostic in rejected.stdout + rejected.stderr
+                assert not stage.exists()
+            assert tree_hashes(output) == before
+        intervals.unlink()
         with runtime_stage_root("idle") as stage:
-            accepted = run_godot(PACKAGE, synthetic_package["descriptor"], stage_root_argument(stage))
-            assert accepted.returncode == 0, accepted.stdout + accepted.stderr
-            assert not output.exists()
-
-        stale = document["source_derived"]
-        stale["schema_version"] = 4
-        stale["method"] = "phase_guided_relative_motion_segmentation_v1"
-        stale["input_contracts"][2] = "anim002_post_repair_physical_events_v1"
-        stale["cyclic_boundary_policy"] = stale.pop("phase_seed_policy")
-        contacts.write_text(json.dumps(document), encoding="utf-8")
-        shutil.rmtree(output, ignore_errors=True)
-        with runtime_stage_root("idle") as stage:
-            rejected = run_godot(PACKAGE, synthetic_package["descriptor"], stage_root_argument(stage))
-            assert rejected.returncode != 0
-            assert "source-derived provenance is malformed" in rejected.stdout + rejected.stderr
+            missing = run_godot(PACKAGE, synthetic_package["descriptor"], stage_root_argument(stage))
+            assert missing.returncode != 0
+            assert "Planted-interval input is missing" in missing.stdout + missing.stderr
     finally:
-        contacts.write_bytes(original)
+        intervals.write_bytes(original)
 
 
 def test_actual_sidecar_configuration_reimport_and_generic_idle_catalogue(synthetic_package: dict[str, Any]) -> None:
@@ -276,7 +321,7 @@ def test_actual_sidecar_configuration_reimport_and_generic_idle_catalogue(synthe
     assert validated.returncode == 0, validated.stdout + validated.stderr
     document = json.loads((synthetic_package["runtime"] / CATALOGUE_FILENAME).read_text(encoding="utf-8"))
     index = json.loads(synthetic_package["index"].read_text(encoding="utf-8"))
-    assert document["schema_version"] == 3
+    assert document["schema_version"] == 4
     assert document["package"] == index["package"]
     assert document["package_variant"] == index["variant"]
     assert document["animation_library"] == LIBRARY_FILENAME
@@ -288,73 +333,91 @@ def test_actual_sidecar_configuration_reimport_and_generic_idle_catalogue(synthe
         expected_applicability = "inapplicable" if clip["boundary_kind"] == "confined_manoeuvre" else "applicable"
         assert clip["stitch_mappings"]["applicability"] == expected_applicability
     assert "Validated ANIM-002" in validated.stdout
-    assert (synthetic_package["runtime"] / CONTACT_FILENAME).read_bytes() == synthetic_package["contacts"].read_bytes()
-    assert document["contact_evidence"]["identities"] == [index["actions"][0]["external_identity"]]
+    assert not (synthetic_package["runtime"] / INTERVALS_FILENAME).exists()
+    assert document[INTERVALS_FIELD] == json.loads(synthetic_package["intervals"].read_text(encoding="utf-8"))
+    assert_catalogue_rejects_unsupported_fields(
+        synthetic_package["runtime"] / CATALOGUE_FILENAME, synthetic_package["descriptor"], EMBEDDED_INTERVAL_CATALOGUE_KEYS,
+    )
 
 
-def test_contact_evidenced_locomotion_mode_packages_and_validates_a_synthetic_stage(synthetic_package: dict[str, Any]) -> None:
+def test_locomotion_package_publishes_its_planted_intervals_as_a_package_file(synthetic_package: dict[str, Any]) -> None:
     descriptor = json.loads(synthetic_package["descriptor"].read_text(encoding="utf-8"))
     runtime_root = synthetic_package["fixture"] / "runtime" / "locomotion" / FIXTURE_VARIANT
-    contacts = json.loads(synthetic_package["contacts"].read_text(encoding="utf-8"))
-    assert all(sample["clip"] == sample["identity"] for sample in contacts["samples"])
-    contact_source = synthetic_package["fixture"] / "locomotion_contacts.json"
-    contact_source.write_text(json.dumps(contacts), encoding="utf-8")
+    document = json.loads(synthetic_package["intervals"].read_text(encoding="utf-8"))
+    document["package"] = "locomotion"
+    locomotion_intervals = write_planted_intervals(synthetic_package["fixture"] / "locomotion_intervals", document)
     descriptor["name"] = "locomotion"
     descriptor["root"] = "res://" + str(runtime_root.relative_to(GAME))
-    descriptor["publication_mode"] = "contact-evidenced-locomotion"
-    descriptor["contact_evidence_required"] = True
-    descriptor["contact_evidence"]["input"] = "res://" + str(contact_source.relative_to(GAME))
+    descriptor["publication_mode"] = "planted-interval-file-locomotion"
+    descriptor["planted_intervals"] = {
+        "input": "res://" + str(locomotion_intervals.relative_to(GAME)),
+        "retained_input": "res://" + str(locomotion_intervals.relative_to(GAME)),
+        "storage": "package_file",
+        "runtime_path": INTERVALS_FILENAME,
+    }
     locomotion_descriptor = synthetic_package["fixture"] / "locomotion_descriptor.json"
     locomotion_descriptor.write_text(json.dumps(descriptor), encoding="utf-8")
+    library_source = synthetic_package["fixture"] / "locomotion_library_source" / f"locomotion_{FIXTURE_VARIANT}.tres"
+    library_source.parent.mkdir(exist_ok=True)
+    shutil.copy2(LIBRARY_SOURCE, library_source)
 
     shutil.rmtree(runtime_root, ignore_errors=True)
     with runtime_stage_root("locomotion") as stage:
-        packaged = run_godot(PACKAGE, locomotion_descriptor, stage_root_argument(stage))
+        packaged = run_godot(
+            PACKAGE, locomotion_descriptor, stage_root_argument(stage),
+            f"--runtime-library-source=res://{library_source.relative_to(GAME)}",
+        )
         assert packaged.returncode == 0, packaged.stdout + packaged.stderr
         assert not runtime_root.exists()
         publish_disposable_fixture_stage(stage, runtime_root)
     validated = run_godot(VALIDATE, locomotion_descriptor)
     assert validated.returncode == 0, validated.stdout + validated.stderr
+    assert (runtime_root / INTERVALS_FILENAME).read_bytes() == locomotion_intervals.read_bytes()
+    assert_catalogue_rejects_unsupported_fields(
+        runtime_root / f"locomotion_{FIXTURE_VARIANT}_catalogue.json", locomotion_descriptor, FILE_INTERVAL_CATALOGUE_KEYS,
+    )
+    runtime_intervals = runtime_root / INTERVALS_FILENAME
+    original = runtime_intervals.read_bytes()
+    try:
+        runtime_intervals.write_bytes(original + b" ")
+        diverged = run_godot(VALIDATE, locomotion_descriptor)
+        assert diverged.returncode != 0
+        assert "Published planted intervals differ from the declared input" in diverged.stdout + diverged.stderr
+    finally:
+        runtime_intervals.write_bytes(original)
 
 
-def test_idle_descriptor_does_not_require_or_mutate_contacts_when_undeclared(synthetic_package: dict[str, Any]) -> None:
-    descriptor = json.loads(synthetic_package["descriptor"].read_text(encoding="utf-8"))
-    descriptor.pop("contact_evidence")
-    descriptor["publication_mode"] = "contact-free-idle"
-    alternate_descriptor = synthetic_package["fixture"] / "no_contacts_descriptor.json"
-    alternate_descriptor.write_text(json.dumps(descriptor), encoding="utf-8")
-    output = synthetic_package["runtime"]
-    shutil.rmtree(output, ignore_errors=True)
-    seed_output(output)
-    before = tree_hashes(output)
-    with runtime_stage_root("idle") as stage:
-        result = run_godot(PACKAGE, alternate_descriptor, stage_root_argument(stage))
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert tree_hashes(output) == before
-        publish_disposable_fixture_stage(stage, output)
-    validated = run_godot(VALIDATE, alternate_descriptor)
-    assert validated.returncode == 0, validated.stdout + validated.stderr
-    assert not (output / CONTACT_FILENAME).exists()
-
-
-@pytest.mark.parametrize("mutation", [
-    lambda descriptor: descriptor.__setitem__("contact_evidence_required", True),
-    lambda descriptor: descriptor.__setitem__("contact_evidence", {"input": "declared.json"}),
+@pytest.mark.parametrize("mutation, message", [
+    (lambda descriptor: descriptor["planted_intervals"].__setitem__("storage", "package_file"), "storage package_file is invalid for the idle package"),
+    (lambda descriptor: descriptor.pop("planted_intervals"), "requires an explicit planted-interval declaration"),
+    (lambda descriptor: descriptor["planted_intervals"].__setitem__("retained_input", "res://temp/intervals/" + INTERVALS_FILENAME), "durable retained_input"),
 ])
-def test_contact_free_idle_mode_refuses_declared_or_required_contact_evidence(
-    synthetic_package: dict[str, Any], mutation: Callable[[dict[str, Any]], None],
+def test_idle_package_refuses_an_invalid_planted_interval_declaration(
+    synthetic_package: dict[str, Any], mutation: Callable[[dict[str, Any]], None], message: str,
 ) -> None:
     descriptor = json.loads(synthetic_package["descriptor"].read_text(encoding="utf-8"))
-    descriptor.pop("contact_evidence")
-    descriptor["publication_mode"] = "contact-free-idle"
     mutation(descriptor)
-    rejected_descriptor = synthetic_package["fixture"] / "invalid_contact_free_idle_descriptor.json"
+    rejected_descriptor = synthetic_package["fixture"] / "invalid_idle_interval_descriptor.json"
+    rejected_descriptor.write_text(json.dumps(descriptor), encoding="utf-8")
+
+    with runtime_stage_root("idle") as stage:
+        rejected = run_godot(PACKAGE, rejected_descriptor, stage_root_argument(stage))
+
+    assert rejected.returncode != 0
+    assert message in rejected.stdout + rejected.stderr
+
+
+@pytest.mark.parametrize("mode", ["planted-interval-file-locomotion", "unsupported-idle-mode"])
+def test_validator_refuses_a_publication_mode_reserved_for_another_package(synthetic_package: dict[str, Any], mode: str) -> None:
+    descriptor = json.loads(synthetic_package["descriptor"].read_text(encoding="utf-8"))
+    descriptor["publication_mode"] = mode
+    rejected_descriptor = synthetic_package["fixture"] / "invalid_mode_descriptor.json"
     rejected_descriptor.write_text(json.dumps(descriptor), encoding="utf-8")
 
     rejected = run_godot(VALIDATE, rejected_descriptor)
 
     assert rejected.returncode != 0
-    assert "contact-free idle package must not declare or require contact evidence" in rejected.stdout + rejected.stderr
+    assert "publication mode" in (rejected.stdout + rejected.stderr).lower()
 
 
 @pytest.mark.parametrize("mutation, message", [
@@ -463,42 +526,6 @@ def test_packager_requires_a_safe_explicit_stage_and_preserves_the_production_ro
         assert tree_hashes(output) == before
     finally:
         shutil.rmtree(stage_parent, ignore_errors=True)
-
-
-@pytest.mark.parametrize("kind, message", [
-    ("mismatch", "Contact evidence identity is absent"),
-    ("malformed", "Contact evidence sample has unsupported fields"),
-    ("stale", "Contact evidence is stale"),
-    ("missing", "Contact-evidence input is missing"),
-    ("identity_clip", "Contact evidence clip is not the embedded library animation identity"),
-])
-def test_contact_preflight_rejection_preserves_previous_output(synthetic_package: dict[str, Any], kind: str, message: str) -> None:
-    output = synthetic_package["runtime"]
-    shutil.rmtree(output, ignore_errors=True)
-    seed_output(output)
-    original = synthetic_package["contacts"].read_bytes()
-    try:
-        if kind == "missing":
-            synthetic_package["contacts"].unlink()
-        else:
-            document = json.loads(original)
-            if kind == "mismatch":
-                document["samples"][0]["identity"] = "unmapped_fixture_identity"
-            elif kind == "malformed":
-                document["samples"][0].pop("provenance")
-            elif kind == "identity_clip":
-                document["samples"][0]["clip"] = "res://assets/testing/legacy/clips/idle.res"
-            else:
-                document["samples"][0]["validity"] = "stale"
-            synthetic_package["contacts"].write_text(json.dumps(document), encoding="utf-8")
-        before = tree_hashes(output)
-        with runtime_stage_root("idle") as stage:
-            result = run_godot(PACKAGE, synthetic_package["descriptor"], stage_root_argument(stage))
-            assert result.returncode != 0
-            assert message in result.stdout + result.stderr
-            assert tree_hashes(output) == before
-    finally:
-        synthetic_package["contacts"].write_bytes(original)
 
 
 def test_disabled_normalisation_rejects_before_publication(synthetic_package: dict[str, Any]) -> None:
@@ -622,7 +649,9 @@ def test_successful_replacement_removes_stale_files_and_transaction_remnants(syn
     assert not (output / "sentinel.bin").exists()
     assert not (output / "clips").exists()
     assert (output / f"{LIBRARY_FILENAME}.uid").read_text(encoding="utf-8") == "uid://syntheticfixture\n"
-    assert (output / CONTACT_FILENAME).read_bytes() == synthetic_package["contacts"].read_bytes()
+    assert not (output / INTERVALS_FILENAME).exists()
+    assert json.loads((output / CATALOGUE_FILENAME).read_text(encoding="utf-8"))[INTERVALS_FIELD] == json.loads(
+        synthetic_package["intervals"].read_text(encoding="utf-8"))
     assert not list(output.rglob("*.res"))
     assert not list(output.parent.glob(f".{output.name}.staging-*"))
     assert not list(output.parent.glob(f".{output.name}.backup-*"))
@@ -637,7 +666,7 @@ def test_embedded_only_stage_conforms_to_processed_index_frame_math(synthetic_pa
         publish_disposable_fixture_stage(stage, output)
     index = json.loads(synthetic_package["index"].read_text(encoding="utf-8"))
     document = json.loads((output / CATALOGUE_FILENAME).read_text(encoding="utf-8"))
-    expected_files = {LIBRARY_FILENAME, CATALOGUE_FILENAME, CONTACT_FILENAME}
+    expected_files = {LIBRARY_FILENAME, CATALOGUE_FILENAME}
     actual_files = {item.name for item in output.iterdir() if item.is_file()} - {f"{LIBRARY_FILENAME}.uid"}
     assert actual_files == expected_files
     assert not (output / "clips").exists()

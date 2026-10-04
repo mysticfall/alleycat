@@ -7,17 +7,18 @@ variant-scoped ``runtime/<set>/<variant>`` package root.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 import json
 from pathlib import Path
 from typing import Any
 
 from .bootstrap_paths import repository_root
 from .runtime_package_descriptor import (
-    CONTACT_EVIDENCED_LOCOMOTION,
-    CONTACT_FREE_IDLE,
+    PLANTED_INTERVALS_FILENAME,
+    PUBLICATION_MODES,
     PackageDescriptorError,
     blend_filename,
+    planted_interval_declaration,
     reject_additional_variants,
 )
 
@@ -25,6 +26,7 @@ from .runtime_package_descriptor import (
 ROOT = repository_root()
 GAME = ROOT / "game"
 STITCH_RELEASE_INTENT = Path("provenance/stitch-release-intent-v1.json")
+PLANTED_INTERVALS = Path("provenance") / PLANTED_INTERVALS_FILENAME
 
 
 class PublicationManifestError(ValueError):
@@ -43,8 +45,8 @@ def write_manifest(
     processed_root = processed_root.resolve()
     runtime_root = runtime_root.resolve()
     plans = [
-        _plan("locomotion", CONTACT_EVIDENCED_LOCOMOTION, stage_root, processed_root, runtime_root),
-        _plan("idle", CONTACT_FREE_IDLE, stage_root, processed_root, runtime_root),
+        _plan(name, PUBLICATION_MODES[name], stage_root, processed_root, runtime_root)
+        for name in ("locomotion", "idle")
     ]
     document = {
         "schema_version": 1,
@@ -70,6 +72,9 @@ def _plan(
         raise PublicationManifestError(f"Prepared {name} stage is incomplete.")
     blend = _single_blend(processed_stage, name, variant)
     stitch_edges = load_stitch_release_intent(processed_stage / variant)
+    staged_intervals = processed_stage / variant / PLANTED_INTERVALS
+    if not staged_intervals.is_file():
+        raise PublicationManifestError(f"Prepared {name} stage has no derived planted intervals: {staged_intervals}")
     final_processed = processed_root / name
     final_runtime = runtime_root / name / variant
     # Multi-variant publication is not ratified: refuse manifest preparation when
@@ -78,20 +83,17 @@ def _plan(
         reject_additional_variants(final_processed, runtime_root / name, variant)
     except PackageDescriptorError as error:
         raise PublicationManifestError(str(error)) from error
-    final = _declaration(name, mode, variant, processed_stage, runtime_stage, final_processed, final_runtime, blend.name, stitch_edges)
-    packaging = _declaration(name, mode, variant, processed_stage, runtime_stage, final_processed, final_runtime, blend.name, stitch_edges)
+    final = _declaration(name, mode, variant, final_processed, final_runtime, blend.name, stitch_edges)
+    packaging = _declaration(name, mode, variant, final_processed, final_runtime, blend.name, stitch_edges)
     packaging["index"] = _resource(processed_stage / variant / "processed-index.json")
     packaging["blend"] = _resource(blend)
-    preflight = _declaration(name, mode, variant, processed_stage, runtime_stage, final_processed, final_runtime, blend.name, stitch_edges)
+    packaging["planted_intervals"]["input"] = _resource(staged_intervals)
+    preflight = _declaration(name, mode, variant, final_processed, final_runtime, blend.name, stitch_edges)
     preflight["index"] = _resource(processed_stage / variant / "processed-index.json")
     preflight["blend"] = _resource(blend)
     preflight["root"] = _resource(runtime_stage)
     preflight["published_root"] = _resource(final_runtime)
-    if mode == CONTACT_EVIDENCED_LOCOMOTION:
-        contact = dict(_contact_declaration(processed_stage / variant))
-        contact["input"] = _resource(processed_stage / variant / "provenance" / "authored_per_foot_contacts_v1.json")
-        preflight["contact_evidence"] = contact
-        packaging["contact_evidence"] = contact
+    preflight["planted_intervals"]["input"] = _resource(staged_intervals)
     preflight_path = stage_root / f"{name}-preflight-descriptor.json"
     final_path = stage_root / f"{name}-final-descriptor.json"
     packaging_path = stage_root / f"{name}-packaging-descriptor.json"
@@ -123,8 +125,6 @@ def _declaration(
     name: str,
     mode: str,
     variant: str,
-    processed_stage: Path,
-    runtime_stage: Path,
     processed_root: Path,
     runtime_root: Path,
     blend_name: str,
@@ -141,11 +141,8 @@ def _declaration(
         "root": _resource(runtime_root),
         "stitch_edges": stitch_edges,
     }
-    if mode == CONTACT_EVIDENCED_LOCOMOTION:
-        declaration["contact_evidence_required"] = True
-        declaration["contact_evidence"] = _contact_declaration(processed_stage / variant)
-    else:
-        declaration["contact_evidence_required"] = False
+    retained = _resource(processed_root / variant / PLANTED_INTERVALS)
+    declaration["planted_intervals"] = {"input": retained, **planted_interval_declaration(name, retained)}
     return declaration
 
 
@@ -196,18 +193,6 @@ def load_stitch_release_intent(processed_variant_stage: Path) -> list[dict[str, 
         seen.add((source, destination))
         result.append({"from_role": source, "to_role": destination})
     return result
-
-
-def _contact_declaration(processed_variant_stage: Path) -> Mapping[str, Any]:
-    descriptor = processed_variant_stage / "provenance" / "authored_per_foot_contacts_descriptor_v1.json"
-    try:
-        document = json.loads(descriptor.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise PublicationManifestError(f"Contact descriptor is unreadable: {descriptor}") from error
-    contact = document.get("contact_evidence") if isinstance(document, dict) else None
-    if not isinstance(contact, Mapping):
-        raise PublicationManifestError("Contact descriptor has no contact-evidence declaration.")
-    return contact
 
 
 def _single_blend(processed_stage: Path, name: str, variant: str) -> Path:

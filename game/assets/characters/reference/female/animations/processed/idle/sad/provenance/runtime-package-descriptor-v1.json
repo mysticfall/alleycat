@@ -1,18 +1,21 @@
 {
   "binding": {
     "processed_index_sha256": "758dcbe12bbd0db57a3233adff9f2ab5c003f634c48d1ae1689b35e51cd2de88",
+    "retained_planted_intervals_sha256": "87e682ff5a73d3b7cedd56df234f79d282643ee650910643308e81e94667fb3c",
     "retargeted_blend_sha256": "f165ebca5f94fc0fb4b8650014ad96db8af4a73fa4d263fc21cd4efd64500549",
-    "runtime_catalogue_sha256": "24c9d2fba241c8fed1fabaea27138d7bd046bcb813fa082539deea196fe9811d",
-    "runtime_library_sha256": "d8531d16f3a71e5485e9f9947d36851f1af33301c6abaf78b48e7c26fc6cb507"
+    "runtime_catalogue_sha256": "e6a8989b62747c1a2a670796a760c4678c4440d2cbe955ea26e24a2310efea5e",
+    "runtime_library_sha256": "5ae387b13dcf3242ff9c9b5de2960596ecedf36d72b49d15450e8f85f8092af1"
   },
   "blend": "res://assets/characters/reference/female/animations/processed/idle/idle_sad.blend",
   "character": "female",
-  "contact_evidence": null,
-  "contact_evidence_required": false,
   "index": "res://assets/characters/reference/female/animations/processed/idle/sad/processed-index.json",
   "name": "idle",
+  "planted_intervals": {
+    "retained_input": "res://assets/characters/reference/female/animations/processed/idle/sad/provenance/per_foot_planted_intervals_v1.json",
+    "storage": "catalogue_field"
+  },
   "root": "res://assets/characters/reference/female/animations/runtime/idle/sad",
-  "schema_version": 2,
+  "schema_version": 3,
   "stitch_edges": [],
   "variant": "sad"
 }

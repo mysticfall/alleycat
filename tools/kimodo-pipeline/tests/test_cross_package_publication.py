@@ -17,9 +17,11 @@ from kimodo_pipeline.cross_package_publication import (
     StagedPackage,
 )
 from kimodo_pipeline.runtime_package_descriptor import (
-    CONTACT_EVIDENCED_LOCOMOTION,
-    CONTACT_FREE_IDLE,
+    CATALOGUE_PLANTED_INTERVAL_IDLE,
+    PLANTED_INTERVAL_FILE_LOCOMOTION,
+    PLANTED_INTERVALS_FILENAME,
     build_descriptor,
+    runtime_library_sha256,
     validate_descriptor,
 )
 from kimodo_pipeline.publication_manifest import (
@@ -113,22 +115,16 @@ def descriptor_mismatch_transaction(paths: dict[str, Path]) -> CrossRootPublicat
     (variant_stage / "provenance").mkdir(parents=True)
     (variant_stage / "processed-index.json").write_text("{}\n", encoding="utf-8")
     (processed / f"locomotion_{variant}.blend").write_bytes(b"synthetic locomotion blend")
-    evidence = {
-        "package_identity": "synthetic-locomotion",
-        "source_derived": {"generation": "synthetic-generation"},
-    }
-    evidence_text = json.dumps(evidence) + "\n"
-    (variant_stage / "provenance" / "contacts.json").write_text(evidence_text, encoding="utf-8")
-    (runtime / "contacts.json").write_text(evidence_text, encoding="utf-8")
     (runtime / f"locomotion_{variant}.tres").write_text("synthetic library\n", encoding="utf-8")
-    (runtime / f"locomotion_{variant}_catalogue.json").write_text(json.dumps({
-        "contact_evidence": {
-            "package_identity": "synthetic-locomotion",
-            "generation": "synthetic-generation",
-        },
-    }), encoding="utf-8")
+    intervals_text = json.dumps({
+        "schema_version": 1,
+        "derivation": {"runtime_library_sha256": runtime_library_sha256(runtime / f"locomotion_{variant}.tres")},
+    }) + "\n"
+    (variant_stage / "provenance" / PLANTED_INTERVALS_FILENAME).write_text(intervals_text, encoding="utf-8")
+    (runtime / PLANTED_INTERVALS_FILENAME).write_text(intervals_text, encoding="utf-8")
+    (runtime / f"locomotion_{variant}_catalogue.json").write_text("{}", encoding="utf-8")
     descriptor = build_descriptor({
-        "publication_mode": CONTACT_EVIDENCED_LOCOMOTION,
+        "publication_mode": PLANTED_INTERVAL_FILE_LOCOMOTION,
         "character": "fixture_character",
         "name": "locomotion",
         "variant": variant,
@@ -136,11 +132,8 @@ def descriptor_mismatch_transaction(paths: dict[str, Path]) -> CrossRootPublicat
         "published_index": f"res://assets/fixture/{variant}/processed-index.json",
         "blend": "res://staging/opaque.blend",
         "root": f"res://assets/fixture/runtime/locomotion/{variant}",
-        "contact_evidence": {
-            "retained_input": "res://assets/fixture/provenance/contacts.json",
-            "runtime_path": "contacts.json",
-            "package_identity": "synthetic-locomotion",
-            "generation": "synthetic-generation",
+        "planted_intervals": {
+            "retained_input": f"res://assets/fixture/{variant}/provenance/{PLANTED_INTERVALS_FILENAME}",
         },
         "stitch_edges": [],
     }, processed, runtime)
@@ -217,11 +210,23 @@ def test_locomotion_descriptor_mismatch_refuses_publication_without_mutating_any
     assert not remnants(transaction_paths)
 
 
-def test_old_root_removal_failure_restores_all_target_and_legacy_roots(transaction_paths: dict[str, Path]) -> None:
+@pytest.mark.parametrize("failure_point", [
+    "preflight",
+    "after_target_0_publication",
+    "after_target_1_publication",
+    "after_target_2_publication",
+    "after_target_3_publication",
+    "after_target_4_publication",
+    "before_old_root_removal",
+    "after_old_root_removal",
+])
+def test_every_injected_failure_point_restores_all_target_and_legacy_roots(
+    transaction_paths: dict[str, Path], failure_point: str,
+) -> None:
     before = root_snapshots(transaction_paths)
 
     with pytest.raises(CrossPackagePublicationError, match="all roots were restored"):
-        transaction(transaction_paths, failure_point="after_old_root_removal").publish()
+        transaction(transaction_paths, failure_point=failure_point).publish()
 
     for name, snapshot in before.items():
         assert tree_hashes(transaction_paths[name]) == snapshot
@@ -245,8 +250,8 @@ def test_publication_manifest_requires_the_two_declared_package_modes(tmp_path: 
     manifest.write_text(json.dumps({
         "schema_version": 1,
         "packages": [
-            plan("locomotion", CONTACT_EVIDENCED_LOCOMOTION),
-            plan("idle", CONTACT_FREE_IDLE),
+            plan("locomotion", PLANTED_INTERVAL_FILE_LOCOMOTION),
+            plan("idle", CATALOGUE_PLANTED_INTERVAL_IDLE),
         ],
         "legacy_roots": [str(tmp_path / "legacy")],
     }), encoding="utf-8")
@@ -254,8 +259,8 @@ def test_publication_manifest_requires_the_two_declared_package_modes(tmp_path: 
     plans, legacy_roots = load_manifest(manifest)
 
     assert {(plan.name, plan.mode) for plan in plans} == {
-        ("locomotion", CONTACT_EVIDENCED_LOCOMOTION),
-        ("idle", CONTACT_FREE_IDLE),
+        ("locomotion", PLANTED_INTERVAL_FILE_LOCOMOTION),
+        ("idle", CATALOGUE_PLANTED_INTERVAL_IDLE),
     }
     assert legacy_roots == ((tmp_path / "legacy").resolve(),)
 
@@ -277,7 +282,7 @@ def test_package_owned_stitch_release_intent_is_loaded_without_role_semantics(tm
     ]
 
 
-def test_contact_free_idle_stitch_release_intent_remains_empty(tmp_path: Path) -> None:
+def test_idle_stitch_release_intent_remains_empty(tmp_path: Path) -> None:
     path = tmp_path / STITCH_RELEASE_INTENT
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"schema_version": 1, "stitch_edges": []}), encoding="utf-8")
@@ -311,14 +316,7 @@ def test_manifest_transports_each_package_owned_stitch_release_intent(
             "schema_version": 1,
             "stitch_edges": expected[name],
         }), encoding="utf-8")
-    (stage / "processed" / "locomotion" / variant / "provenance" / "authored_per_foot_contacts_descriptor_v1.json").write_text(
-        json.dumps({"contact_evidence": {
-            "runtime_path": "contacts.json",
-            "package_identity": "fixture-package",
-            "generation": "fixture-generation",
-        }}),
-        encoding="utf-8",
-    )
+        (variant_stage / "provenance" / PLANTED_INTERVALS_FILENAME).write_text("{}\n", encoding="utf-8")
     monkeypatch.setattr(publication_manifest, "GAME", game)
 
     manifest = write_manifest(stage, processed_root, runtime_root, stage / "manifest.json", [game / "legacy"])
@@ -331,6 +329,32 @@ def test_manifest_transports_each_package_owned_stitch_release_intent(
         assert descriptor["stitch_edges"] == expected[plan["name"]]
         assert Path(plan["runtime_stage"]) == stage / "runtime" / plan["name"] / variant
         assert Path(plan["runtime_root"]) == runtime_root / plan["name"] / variant
+        retained = f"res://assets/characters/fixture_character/animations/processed/{plan['name']}/{variant}/provenance/{PLANTED_INTERVALS_FILENAME}"
+        staged = f"res://temp/stage/processed/{plan['name']}/{variant}/provenance/{PLANTED_INTERVALS_FILENAME}"
+        final = json.loads((stage / f"{plan['name']}-final-descriptor.json").read_text(encoding="utf-8"))
+        assert final["planted_intervals"]["input"] == final["planted_intervals"]["retained_input"] == retained
+        assert descriptor["planted_intervals"]["input"] == staged
+        assert descriptor["planted_intervals"]["storage"] == ("package_file" if plan["name"] == "locomotion" else "catalogue_field")
+
+
+def test_manifest_refuses_a_stage_without_derived_planted_intervals(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    game = tmp_path / "game"
+    stage = game / "temp" / "stage"
+    character_root = game / "assets" / "characters" / "fixture_character" / "animations"
+    for name in PACKAGE_NAMES:
+        variant_stage = stage / "processed" / name / "ember"
+        (variant_stage / "provenance").mkdir(parents=True)
+        (stage / "runtime" / name / "ember").mkdir(parents=True)
+        (stage / "processed" / name / f"{name}_ember.blend").write_bytes(b"fixture")
+        (variant_stage / "processed-index.json").write_text("{}\n", encoding="utf-8")
+        (variant_stage / STITCH_RELEASE_INTENT).write_text(json.dumps({"schema_version": 1, "stitch_edges": []}), encoding="utf-8")
+    monkeypatch.setattr(publication_manifest, "GAME", game)
+
+    with pytest.raises(PublicationManifestError, match="no derived planted intervals"):
+        write_manifest(stage, character_root / "processed", character_root / "runtime", stage / "manifest.json", [game / "legacy"])
 
 
 def test_manifest_rejects_a_second_variant_for_the_same_character_and_set(
@@ -355,14 +379,7 @@ def test_manifest_rejects_a_second_variant_for_the_same_character_and_set(
             "schema_version": 1,
             "stitch_edges": [],
         }), encoding="utf-8")
-    (stage / "processed" / "locomotion" / variant / "provenance" / "authored_per_foot_contacts_descriptor_v1.json").write_text(
-        json.dumps({"contact_evidence": {
-            "runtime_path": "contacts.json",
-            "package_identity": "fixture-package",
-            "generation": "fixture-generation",
-        }}),
-        encoding="utf-8",
-    )
+        (variant_stage / "provenance" / PLANTED_INTERVALS_FILENAME).write_text("{}\n", encoding="utf-8")
     monkeypatch.setattr(publication_manifest, "GAME", game)
 
     delivered_variant = processed_root / "locomotion" / "zephyr"

@@ -9,521 +9,232 @@ namespace AlleyCat.Tests.Control;
 public sealed class PlayerLocomotionControllerTests
 {
     [Fact]
-    public void MovementBout_WithoutAuthoritativeReleaseEvidence_HoldsTravelOnRelease()
+    public void MovementFromIdle_SchedulesAuthoredEntryForSelectedLane()
     {
-        PlayerLocomotionController controller = new();
+        var controller = new PlayerLocomotionController();
 
-        PlayerLocomotionOutput entry = Step(controller, new Vector2(0f, 1f));
-        PlayerLocomotionOutput heldEntry = Step(controller, new Vector2(0f, 1f));
-        PlayerLocomotionOutput travel = Step(controller, new Vector2(0f, 1f), completed: true);
-        PlayerLocomotionOutput sustained = Step(controller, new Vector2(0.05f, 0.9f));
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero);
-        PlayerLocomotionOutput heldRelease = Step(controller, Vector2.Zero);
+        PlayerLocomotionOutput output = Step(controller, new(0.4f, 0.8f));
 
-        Assert.Equal(PlayerLocomotionCommand.EnterForward, entry.Command);
-        Assert.Equal(PlayerLocomotionCommand.None, heldEntry.Command);
-        Assert.Equal(PlayerLocomotionCommand.Travel, travel.Command);
-        Assert.Equal(PlayerLocomotionCommand.None, sustained.Command);
-        Assert.Equal(PlayerLocomotionCommand.None, released.Command);
-        Assert.Equal(PlayerLocomotionState.TravellingForward, released.State);
-        Assert.Equal(PlayerLocomotionCommand.None, heldRelease.Command);
+        Assert.Equal(PlayerLocomotionState.EnteringForward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.EnterForward, output.Command);
+        Assert.Equal(PlayerLocomotionPhaseLane.Right, output.CommandLane);
     }
 
     [Fact]
-    public void MovingInputChanges_UpdateBlendWithoutEntryReselectionAndRetainPhaseLane()
+    public void NeutralDuringEntry_RequestsSharedExitOnFirstEligibleTick()
     {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0.2f, 1f));
-        PlayerLocomotionPhaseLane lane = controller.PhaseLane;
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, 1f));
 
-        PlayerLocomotionOutput changed = Step(controller, new Vector2(-0.1f, 0.8f), turn: 0.2f);
-        PlayerLocomotionOutput directional = Step(controller, new Vector2(0.8f, 0.2f));
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
 
-        Assert.Equal(PlayerLocomotionCommand.None, changed.Command);
-        Assert.Equal(new Vector2(-0.1f, 0.8f), changed.Blend);
-        Assert.Equal(PlayerLocomotionCommand.None, directional.Command);
-        Assert.Equal(PlayerLocomotionState.TravellingDirectional, directional.State);
-        Assert.Equal(lane, directional.PhaseLane);
-        Assert.DoesNotContain([changed.Command, directional.Command], command => command is PlayerLocomotionCommand.EnterForward or PlayerLocomotionCommand.EnterBackward);
+        Assert.Equal(PlayerLocomotionState.ExitingForward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitForward, output.Command);
     }
 
     [Fact]
-    public void ReleasedTravel_RepushResumesWithoutArbitraryExit()
+    public void LateralReleaseDuringForwardEntry_RoutesThroughTheNeutralStop()
     {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0f, 1f));
-        Assert.Equal(PlayerLocomotionCommand.None, Step(controller, Vector2.Zero).Command);
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(1f, 0f));
 
-        PlayerLocomotionOutput resumed = Step(controller, new Vector2(0f, -1f));
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
 
-        Assert.Equal(PlayerLocomotionState.TravellingDirectional, resumed.State);
-        Assert.Equal(PlayerLocomotionCommand.None, resumed.Command);
+        // A pure-lateral strafe enters through the forward entry clip, but its release still classifies on
+        // the bout intent: UR6/UR11 bind at any release point, including during an entry, so a
+        // lateral-dominant release never takes the forward stop clip's authored forward root.
+        Assert.Equal(PlayerLocomotionState.ExitingNeutral, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitNeutral, output.Command);
     }
 
     [Fact]
-    public void EarlyRelease_DuringForwardEntry_RejectsArbitraryExit()
+    public void LateralHeavyBackwardReleaseDuringBackwardEntry_RoutesThroughTheNeutralStop()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
+        var controller = new PlayerLocomotionController();
+        PlayerLocomotionOutput entry = Step(controller, new(0.8f, -0.3f));
+        Assert.Equal(PlayerLocomotionState.EnteringBackward, entry.State);
 
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero);
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
 
-        Assert.Equal(PlayerLocomotionState.EnteringForward, released.State);
-        Assert.Equal(PlayerLocomotionCommand.None, released.Command);
+        Assert.Equal(PlayerLocomotionState.ExitingNeutral, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitNeutral, output.Command);
     }
 
     [Fact]
-    public void EarlyRelease_DuringBackwardEntry_RejectsArbitraryExit()
+    public void BackwardReleaseDuringBackwardEntry_KeepsTheAuthoredBackwardStop()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, -1f));
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, -1f));
 
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero);
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
 
-        Assert.Equal(PlayerLocomotionState.EnteringBackward, released.State);
-        Assert.Equal(PlayerLocomotionCommand.None, released.Command);
+        Assert.Equal(PlayerLocomotionState.ExitingBackward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitBackward, output.Command);
     }
 
     [Fact]
-    public void ReleasedEntry_ContinuesToFailClosedTravelWhenItsFiniteEntryCompletes()
+    public void NeutralDuringTravel_RequestsSharedExitOnFirstEligibleTick()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, 1f));
+        _ = Step(controller, new(0f, 1f), completed: true);
+
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
+
+        Assert.Equal(PlayerLocomotionState.ExitingForward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitForward, output.Command);
+    }
+
+    [Fact]
+    public void LateralDominantRelease_RoutesThroughTheNeutralStop()
+    {
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(1f, 0f));
+        _ = Step(controller, new(1f, 0f), completed: true);
+
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
+
+        // A lateral-dominant release must not route through the forward stop clip (its authored forward
+        // root rotates the remaining motion into a forward glide): it takes the neutral stop policy.
+        Assert.Equal(PlayerLocomotionState.ExitingNeutral, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitNeutral, output.Command);
+    }
+
+    [Fact]
+    public void LateralHeavyBackwardDiagonalRelease_RoutesThroughTheNeutralStop()
+    {
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0.8f, -0.3f));
+        _ = Step(controller, new(0.8f, -0.3f), completed: true);
+
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
+
+        Assert.Equal(PlayerLocomotionState.ExitingNeutral, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitNeutral, output.Command);
+    }
+
+    [Fact]
+    public void EvenForwardDiagonalRelease_KeepsTheAuthoredForwardStop()
+    {
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0.7071f, 0.7071f));
+        _ = Step(controller, new(0.7071f, 0.7071f), completed: true);
+
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
+
+        Assert.Equal(PlayerLocomotionState.ExitingForward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitForward, output.Command);
+    }
+
+    [Fact]
+    public void BackwardDominantRelease_RoutesThroughTheAuthoredBackwardStop()
+    {
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, -1f));
+        _ = Step(controller, new(0f, -1f), completed: true);
+
+        PlayerLocomotionOutput output = Step(controller, Vector2.Zero);
+
+        Assert.Equal(PlayerLocomotionState.ExitingBackward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitBackward, output.Command);
+    }
+
+    [Fact]
+    public void NeutralStop_CompletesToIdleAndAcceptsFreshIntentWithoutInterlude()
+    {
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(1f, 0f));
+        _ = Step(controller, new(1f, 0f), completed: true);
         _ = Step(controller, Vector2.Zero);
 
-        PlayerLocomotionOutput completedEntry = Step(controller, Vector2.Zero, completed: true);
-        PlayerLocomotionOutput heldRelease = Step(controller, Vector2.Zero);
+        PlayerLocomotionOutput completed = Step(controller, Vector2.Zero, completed: true);
+        PlayerLocomotionOutput resumed = Step(controller, new(1f, 0f));
 
-        Assert.Equal(PlayerLocomotionState.TravellingForward, completedEntry.State);
-        Assert.Equal(PlayerLocomotionCommand.Travel, completedEntry.Command);
-        Assert.Equal(PlayerLocomotionState.TravellingForward, heldRelease.State);
-        Assert.Equal(PlayerLocomotionCommand.None, heldRelease.Command);
+        Assert.Equal(PlayerLocomotionState.Idle, completed.State);
+        Assert.Equal(PlayerLocomotionCommand.Idle, completed.Command);
+        Assert.Equal(PlayerLocomotionState.EnteringForward, resumed.State);
+        Assert.Equal(PlayerLocomotionCommand.EnterForward, resumed.Command);
     }
 
     [Fact]
-    public void EarlyRelease_DuringEntry_IgnoresPivotIntentWithoutSchedulingExit()
+    public void SameDirectionIntentDuringNeutralStop_InvalidatesItWithoutIdleInterlude()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(1f, 0f));
+        _ = Step(controller, new(1f, 0f), completed: true);
+        _ = Step(controller, Vector2.Zero);
 
-        // A held turn while releasing the entry is not a pivot: pivots only start from Idle, so the release
-        // remains the bout's single stop.
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero, turn: -1f);
+        PlayerLocomotionOutput output = Step(controller, new(1f, 0f));
 
-        Assert.Equal(PlayerLocomotionState.EnteringForward, released.State);
-        Assert.Equal(PlayerLocomotionCommand.None, released.Command);
+        Assert.Equal(PlayerLocomotionState.TravellingDirectional, output.State);
+        Assert.Equal(PlayerLocomotionCommand.Travel, output.Command);
     }
 
     [Fact]
-    public void HeldEntry_WithoutCompletion_StaysEnteringWithoutCommand()
+    public void ReversalDuringTravel_RoutesThroughAuthoredExitForBraking()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, 1f));
+        _ = Step(controller, new(0f, 1f), completed: true);
 
-        PlayerLocomotionOutput held = Step(controller, new Vector2(0f, 1f));
+        PlayerLocomotionOutput output = Step(controller, new(0f, -1f));
 
-        Assert.Equal(PlayerLocomotionState.EnteringForward, held.State);
-        Assert.Equal(PlayerLocomotionCommand.None, held.Command);
+        // CTRL-001 reversal cadence: the still-forward realised motion is braked by the authored exit —
+        // the opposite direction enters through the idle→entry path once the stop has played out, never
+        // by an instant full-rate opposite-gait retarget.
+        Assert.Equal(PlayerLocomotionState.ExitingForward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.ExitForward, output.Command);
     }
 
     [Fact]
-    public void PermissionLoss_DuringEntry_RejectsArbitraryExit()
+    public void OpposingIntentDuringExit_PlaysAuthoredStopOut()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, 1f));
+        _ = Step(controller, new(0f, 1f), completed: true);
+        _ = Step(controller, Vector2.Zero);
 
-        // Permission loss must not turn into a phase-derived exit while authoritative ANIM-002 release evidence
-        // is unavailable.
-        PlayerLocomotionOutput blocked = controller.Step(new Vector2(0f, 1f), 0f, LocomotionPermissions.RotationOnly, false, 0.75f, 1.2f);
+        PlayerLocomotionOutput output = Step(controller, new(0f, -1f));
 
-        Assert.Equal(PlayerLocomotionState.EnteringForward, blocked.State);
-        Assert.Equal(PlayerLocomotionCommand.None, blocked.Command);
-        Assert.False(blocked.MovementAllowed);
-    }
-
-    [Fact]
-    public void PermissionGates_AreIndependent()
-    {
-        PlayerLocomotionController rotationController = new();
-        PlayerLocomotionOutput rotationOnly = rotationController.Step(new Vector2(0f, 1f), 1f, LocomotionPermissions.RotationOnly, false, 0.75f, 1.2f);
-
-        PlayerLocomotionController movementController = new();
-        PlayerLocomotionOutput movementOnly = movementController.Step(new Vector2(0f, 1f), 1f, new(true, false), false, 0.75f, 1.2f);
-
-        // Blocked translation still leaves rotation available, so the held turn enters the standing pivot.
-        Assert.Equal(PlayerLocomotionState.PivotingRight, rotationOnly.State);
-        Assert.Equal(PlayerLocomotionCommand.PivotRight, rotationOnly.Command);
-        Assert.True(rotationOnly.Blend.IsZeroApprox());
-        Assert.False(rotationOnly.MovementAllowed);
-        Assert.True(rotationOnly.RotationAllowed);
-        Assert.Equal(PlayerLocomotionCommand.EnterForward, movementOnly.Command);
-        Assert.True(movementOnly.MovementAllowed);
-        Assert.False(movementOnly.RotationAllowed);
-    }
-
-    [Fact]
-    public void BlockedRotation_DoesNotPivot()
-    {
-        PlayerLocomotionController controller = new();
-        PlayerLocomotionOutput output = controller.Step(Vector2.Zero, 1f, LocomotionPermissions.Blocked, false, 0.75f, 1.2f);
-
-        Assert.Equal(PlayerLocomotionState.Idle, output.State);
+        // Fresh intent that OPPOSES the travelled direction does not invalidate the pending stop: the
+        // authored braking plays out first (same-direction resumes still replace it, below).
+        Assert.Equal(PlayerLocomotionState.ExitingForward, output.State);
         Assert.Equal(PlayerLocomotionCommand.None, output.Command);
     }
 
     [Fact]
-    public void StationaryTurn_EntersPivotBySign()
+    public void SameDirectionIntentDuringExit_InvalidatesStopWithoutIdleInterlude()
     {
-        PlayerLocomotionController rightController = new();
-        PlayerLocomotionOutput right = Step(rightController, Vector2.Zero, turn: 1f);
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, 1f));
+        _ = Step(controller, new(0f, 1f), completed: true);
+        _ = Step(controller, Vector2.Zero);
 
-        PlayerLocomotionController leftController = new();
-        PlayerLocomotionOutput left = Step(leftController, Vector2.Zero, turn: -1f);
+        PlayerLocomotionOutput output = Step(controller, new(0f, 1f));
 
-        // ANIM-002 response coordinates: +x requests actor-right (pr45); -x requests actor-left (pl45).
-        Assert.Equal(PlayerLocomotionState.PivotingRight, right.State);
-        Assert.Equal(PlayerLocomotionCommand.PivotRight, right.Command);
-        Assert.Equal(PlayerLocomotionState.PivotingLeft, left.State);
-        Assert.Equal(PlayerLocomotionCommand.PivotLeft, left.Command);
+        Assert.Equal(PlayerLocomotionState.TravellingForward, output.State);
+        Assert.Equal(PlayerLocomotionCommand.Travel, output.Command);
     }
 
     [Fact]
-    public void PivotHeld_ContinuesLoopingWithoutRetrigger()
+    public void PermissionLoss_FailsClosedAndEchoesPermissions()
     {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, Vector2.Zero, turn: -1f);
+        var controller = new PlayerLocomotionController();
+        _ = Step(controller, new(0f, 1f));
+        _ = Step(controller, new(0f, 1f), completed: true);
+        var denied = new LocomotionPermissions(false, false);
 
-        PlayerLocomotionOutput held = Step(controller, Vector2.Zero, turn: -1f);
-        PlayerLocomotionOutput heldFurther = Step(controller, Vector2.Zero, turn: -0.6f);
-
-        Assert.Equal(PlayerLocomotionState.PivotingLeft, held.State);
-        Assert.Equal(PlayerLocomotionCommand.None, held.Command);
-        Assert.Equal(PlayerLocomotionState.PivotingLeft, heldFurther.State);
-        Assert.Equal(PlayerLocomotionCommand.None, heldFurther.Command);
-    }
-
-    [Fact]
-    public void PivotReleased_ReturnsToIdle()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, Vector2.Zero, turn: 1f);
-
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero, turn: 0f);
-
-        Assert.Equal(PlayerLocomotionState.Idle, released.State);
-        Assert.Equal(PlayerLocomotionCommand.Idle, released.Command);
-    }
-
-    [Fact]
-    public void PivotSignFlip_SwapsPivotWithoutIdleInterlude()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, Vector2.Zero, turn: 1f);
-
-        PlayerLocomotionOutput flipped = Step(controller, Vector2.Zero, turn: -1f);
-
-        Assert.Equal(PlayerLocomotionState.PivotingLeft, flipped.State);
-        Assert.Equal(PlayerLocomotionCommand.PivotLeft, flipped.Command);
-    }
-
-    [Fact]
-    public void MovementDuringPivot_ReturnsToIdleBeforeEntry()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, Vector2.Zero, turn: 1f);
-
-        PlayerLocomotionOutput toIdle = Step(controller, new Vector2(0f, 1f), turn: 1f);
-        PlayerLocomotionOutput entry = Step(controller, new Vector2(0f, 1f), turn: 1f);
-
-        // The pivot→locomotion hand-off routes via Idle so each hop rides its single pre-authored graph edge
-        // (CTRL-001 TR11/TR26); the next frame's Idle-state logic then commands the entry.
-        Assert.Equal(PlayerLocomotionState.Idle, toIdle.State);
-        Assert.Equal(PlayerLocomotionCommand.Idle, toIdle.Command);
-        Assert.Equal(PlayerLocomotionState.EnteringForward, entry.State);
-        Assert.Equal(PlayerLocomotionCommand.EnterForward, entry.Command);
-    }
-
-    [Fact]
-    public void PivotIsNotSelected_WhileMoving()
-    {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0f, 1f));
-
-        PlayerLocomotionOutput turning = Step(controller, new Vector2(0f, 1f), turn: -0.8f);
-        PlayerLocomotionOutput directional = Step(controller, new Vector2(-0.9f, 0.1f), turn: -0.8f);
-
-        Assert.Equal(PlayerLocomotionState.TravellingForward, turning.State);
-        Assert.Equal(PlayerLocomotionCommand.None, turning.Command);
-        Assert.Equal(PlayerLocomotionState.TravellingDirectional, directional.State);
-        Assert.Equal(PlayerLocomotionCommand.None, directional.Command);
-    }
-
-    [Fact]
-    public void ForwardArcBlend_CarriesTurnWhileMoving()
-    {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0f, 1f));
-
-        PlayerLocomotionOutput right = Step(controller, new Vector2(0f, 1f), turn: 0.8f);
-        PlayerLocomotionOutput left = Step(controller, new Vector2(0f, 1f), turn: -0.8f);
-
-        Assert.InRange(right.ForwardArcBlend, 0.79f, 1f);
-        Assert.InRange(left.ForwardArcBlend, -1f, -0.79f);
-        Assert.True(right.ForwardArcBlend > left.ForwardArcBlend);
-    }
-
-    [Fact]
-    public void PivotStates_SuppressSyntheticResiduals()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, Vector2.Zero, turn: -1f);
-
-        Vector2 planar = controller.CalculatePlanarResidual(new Vector2(10f, 0f), Vector2.Zero, 1f, 1f, 0.1f, 0.3f, 0.2f, 100f, 0.5f);
-        float yaw = controller.CalculateYawResidual(10f, 0f, 1f, 1f, 1f, 0.1f, 0.5f, 0.25f, 100f, 0.5f);
-
-        Assert.True(planar.IsZeroApprox());
-        Assert.Equal(0f, yaw);
-    }
-
-    [Fact]
-    public void SubThresholdTurn_AtIdleKeepsBoundedResidualWithoutPivot()
-    {
-        PlayerLocomotionController controller = new();
-        PlayerLocomotionOutput output = controller.Step(Vector2.Zero, 0.05f, LocomotionPermissions.Allowed, false, 0.75f, 1.2f);
-        float yawRate = controller.CalculateYawResidual(0.125f, 0f, 1f, 0.05f, 1f, 0.1f, 0.5f, 0.25f, 100f, 0.5f);
+        PlayerLocomotionOutput output = controller.Step(new(0f, 1f), Vector2.Zero, 1f, denied, false);
 
         Assert.Equal(PlayerLocomotionState.Idle, output.State);
-        Assert.Equal(PlayerLocomotionCommand.None, output.Command);
-        Assert.InRange(yawRate, 0f, 0.50001f);
-    }
-
-    [Fact]
-    public void SyntheticResiduals_ObeyRateAndCumulativeSegmentBudgets()
-    {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0f, 1f));
-        float planarDistance = 0f;
-        float yawDistance = 0f;
-        for (int sample = 0; sample < 100; sample++)
-        {
-            Vector2 planar = controller.CalculatePlanarResidual(new Vector2(10f, 0f), Vector2.Zero, 1f, 1f, 0.1f, 0.3f, 0.2f, 100f, 0.5f);
-            float yaw = controller.CalculateYawResidual(10f, 0f, 1f, 1f, 1f, 0.1f, 0.5f, 0.25f, 100f, 0.5f);
-            Assert.InRange(planar.Length(), 0f, 0.30001f);
-            Assert.InRange(Mathf.Abs(yaw), 0f, 0.50001f);
-            planarDistance += planar.Length() * 0.1f;
-            yawDistance += Mathf.Abs(yaw) * 0.1f;
-        }
-        Assert.InRange(planarDistance, 0f, 0.20001f);
-        Assert.InRange(yawDistance, 0f, 0.25001f);
-    }
-
-    [Fact]
-    public void LateralDominantInput_FromIdle_EntersSideStepByDirection()
-    {
-        PlayerLocomotionController leftController = new();
-        PlayerLocomotionOutput left = Step(leftController, new Vector2(-1f, 0f));
-
-        PlayerLocomotionController rightController = new();
-        PlayerLocomotionOutput right = Step(rightController, new Vector2(1f, 0f));
-
-        // The lateral sign picks the confined sl/sr unit, mirroring the entry lane convention (−X left, +X right).
-        Assert.Equal(PlayerLocomotionState.SideSteppingLeft, left.State);
-        Assert.Equal(PlayerLocomotionCommand.SideStepLeft, left.Command);
-        Assert.Equal(PlayerLocomotionState.SideSteppingRight, right.State);
-        Assert.Equal(PlayerLocomotionCommand.SideStepRight, right.Command);
-    }
-
-    [Fact]
-    public void ForwardDominantDiagonal_FromIdle_DoesNotSideStep()
-    {
-        PlayerLocomotionController diagonal = new();
-        PlayerLocomotionOutput diagonalOutput = Step(diagonal, new Vector2(0.4f, 1f));
-
-        PlayerLocomotionController boundary = new();
-        PlayerLocomotionOutput boundaryOutput = Step(boundary, new Vector2(1f, 1f));
-
-        // Longitudinal intent at or beyond the diagonal boundary keeps the entry regime; only strict lateral
-        // dominance selects the confined side step (mirrors NPCSideStep.Select's mostly-lateral test).
-        Assert.Equal(PlayerLocomotionState.EnteringForward, diagonalOutput.State);
-        Assert.Equal(PlayerLocomotionCommand.EnterForward, diagonalOutput.Command);
-        Assert.Equal(PlayerLocomotionState.EnteringForward, boundaryOutput.State);
-        Assert.Equal(PlayerLocomotionCommand.EnterForward, boundaryOutput.Command);
-    }
-
-    [Fact]
-    public void SideStepHeld_ContinuesLoopingWithoutRetrigger()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(1f, 0f));
-
-        PlayerLocomotionOutput held = Step(controller, new Vector2(1f, 0f));
-        PlayerLocomotionOutput heldWeaker = Step(controller, new Vector2(0.6f, 0f));
-
-        Assert.Equal(PlayerLocomotionState.SideSteppingRight, held.State);
-        Assert.Equal(PlayerLocomotionCommand.None, held.Command);
-        Assert.Equal(PlayerLocomotionState.SideSteppingRight, heldWeaker.State);
-        Assert.Equal(PlayerLocomotionCommand.None, heldWeaker.Command);
-    }
-
-    [Fact]
-    public void SideStepReleased_ReturnsToIdleCommand()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(1f, 0f));
-
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero);
-
-        Assert.Equal(PlayerLocomotionState.Idle, released.State);
-        Assert.Equal(PlayerLocomotionCommand.Idle, released.Command);
-    }
-
-    [Fact]
-    public void SideStepSignFlip_SwapsSideStepWithoutIdleInterlude()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(1f, 0f));
-
-        PlayerLocomotionOutput flipped = Step(controller, new Vector2(-1f, 0f));
-
-        Assert.Equal(PlayerLocomotionState.SideSteppingLeft, flipped.State);
-        Assert.Equal(PlayerLocomotionCommand.SideStepLeft, flipped.Command);
-    }
-
-    [Fact]
-    public void ForwardDominanceDuringSideStep_ReturnsToIdleThenEntersNextFrame()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(1f, 0f));
-
-        PlayerLocomotionOutput toIdle = Step(controller, new Vector2(0f, 1f));
-        PlayerLocomotionOutput entry = Step(controller, new Vector2(0f, 1f));
-
-        // Longitudinal dominance ends the confined manoeuvre through Idle so the next frame's entry command rides
-        // the idle→entry crossfade as one smooth hop (NPC side-step→idle→entry flow).
-        Assert.Equal(PlayerLocomotionState.Idle, toIdle.State);
-        Assert.Equal(PlayerLocomotionCommand.Idle, toIdle.Command);
-        Assert.Equal(PlayerLocomotionState.EnteringForward, entry.State);
-        Assert.Equal(PlayerLocomotionCommand.EnterForward, entry.Command);
-    }
-
-    [Fact]
-    public void SideStepStates_SuppressSyntheticResiduals()
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(1f, 0f));
-
-        Vector2 planar = controller.CalculatePlanarResidual(new Vector2(10f, 0f), Vector2.Zero, 1f, 1f, 0.1f, 0.3f, 0.2f, 100f, 0.5f);
-        float yaw = controller.CalculateYawResidual(10f, 0f, 1f, 1f, 1f, 0.1f, 0.5f, 0.25f, 100f, 0.5f);
-
-        // The authored precision manoeuvre is the sole authority, exactly like the pivots.
-        Assert.True(planar.IsZeroApprox());
-        Assert.Equal(0f, yaw);
-    }
-
-    [Fact]
-    public void EntryResidualRamp_ScalesPlanarAssistanceWithAuthoredEntrySpeed()
-    {
-        // CTRL-001 UR9: the weight-shift portion of an i2* entry (authored speed ~0) gets no planar assistance;
-        // authority ramps linearly to the full budget at the ramp reference and saturates beyond it.
-        float still = MeasureEntryPlanarResidual(Vector2.Zero);
-        float partial = MeasureEntryPlanarResidual(new Vector2(0.25f, 0f));
-        float full = MeasureEntryPlanarResidual(new Vector2(0.5f, 0f));
-        float saturated = MeasureEntryPlanarResidual(new Vector2(2f, 0f));
-
-        Assert.True(Mathf.IsZeroApprox(still));
-        Assert.InRange(partial, 0.14f, 0.16f);
-        Assert.InRange(full, 0.29f, 0.31f);
-        Assert.InRange(saturated, 0.29f, 0.31f);
-    }
-
-    [Fact]
-    public void EntryResidualRamp_ScalesYawAssistanceWithAuthoredEntrySpeed()
-    {
-        float still = MeasureEntryYawResidual(0f);
-        float partial = MeasureEntryYawResidual(0.25f);
-        float full = MeasureEntryYawResidual(0.5f);
-
-        Assert.True(Mathf.IsZeroApprox(still));
-        Assert.InRange(Mathf.Abs(partial), 0.24f, 0.26f);
-        Assert.InRange(Mathf.Abs(full), 0.49f, 0.51f);
-    }
-
-    [Fact]
-    public void TravellingResiduals_KeepFullAuthorityDespiteEntryRamp()
-    {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0f, 1f));
-
-        // Authored speed is zero here, yet sustained travel keeps the full residual budget: the ramp only gates
-        // i2* entries, not the travelling regime.
-        Vector2 planar = controller.CalculatePlanarResidual(new Vector2(10f, 0f), Vector2.Zero, 1f, 1f, 0.1f, 0.3f, 0.2f, 100f, 0.5f);
-        float yaw = controller.CalculateYawResidual(10f, 0f, 0f, 1f, 1f, 0.1f, 0.5f, 0.25f, 100f, 0.5f);
-
-        Assert.InRange(planar.Length(), 0.29f, 0.31f);
-        Assert.InRange(Mathf.Abs(yaw), 0.49f, 0.51f);
-    }
-
-    private static float MeasureEntryPlanarResidual(Vector2 authoredVelocity)
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
-        return controller.CalculatePlanarResidual(new Vector2(10f, 0f), authoredVelocity, 1f, 1f, 0.1f, 0.3f, 0.2f, 100f, 0.5f).Length();
-    }
-
-    private static float MeasureEntryYawResidual(float authoredPlanarSpeed)
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, new Vector2(0f, 1f));
-        return controller.CalculateYawResidual(10f, 0f, authoredPlanarSpeed, 1f, 1f, 0.1f, 0.5f, 0.25f, 100f, 0.5f);
-    }
-
-    private static PlayerLocomotionController EnterTravel(Vector2 movement)
-    {
-        PlayerLocomotionController controller = new();
-        _ = Step(controller, movement);
-        _ = Step(controller, movement, completed: true);
-        return controller;
+        Assert.Equal(PlayerLocomotionCommand.Idle, output.Command);
+        Assert.False(output.MovementAllowed);
+        Assert.False(output.RotationAllowed);
     }
 
     private static PlayerLocomotionOutput Step(
         PlayerLocomotionController controller,
         Vector2 movement,
-        float turn = 0f,
         bool completed = false)
-        => controller.Step(movement, turn, LocomotionPermissions.Allowed, completed, 0.75f, 1.2f);
-
-    [Fact]
-    public void TravelRelease_RetainsPresentationAndDoesNotScheduleFiniteExit()
-    {
-        PlayerLocomotionController controller = EnterTravel(new Vector2(0.2f, 1f));
-
-        PlayerLocomotionOutput released = Step(controller, Vector2.Zero);
-        PlayerLocomotionOutput held = Step(controller, Vector2.Zero);
-
-        Assert.Equal(PlayerLocomotionState.TravellingForward, released.State);
-        Assert.Equal(PlayerLocomotionCommand.None, released.Command);
-        Assert.Equal(PlayerLocomotionCommand.None, held.Command);
-        Assert.Equal(new Vector2(0.2f, 1f), released.Blend);
-        Assert.Equal(new Vector2(0.2f, 1f), held.Blend);
-    }
-
-    [Fact]
-    public void ManualAndOptionalNavigationReleases_ShareTheFailClosedExitBoundary()
-    {
-        foreach (string source in new[] { "manual input", "optional navigation" })
-        {
-            PlayerLocomotionController controller = EnterTravel(new Vector2(0f, 1f));
-
-            PlayerLocomotionOutput released = Step(controller, Vector2.Zero);
-
-            Assert.True(released.State == PlayerLocomotionState.TravellingForward, $"{source} must retain travel without release evidence.");
-            Assert.True(released.Command == PlayerLocomotionCommand.None, $"{source} must not schedule an arbitrary exit.");
-            Assert.True(released.CommandLane == PlayerLocomotionPhaseLane.Left, $"{source} must not select a replacement exit lane.");
-        }
-    }
-
-    [Fact]
-    public void RetiredExitStrategiesAndPhaseGate_AreNotSelectable()
-    {
-        System.Reflection.Assembly assembly = typeof(PlayerLocomotionController).Assembly;
-
-        Assert.Null(assembly.GetType("AlleyCat.Control.Locomotion.PlayerTravelExitStrategy"));
-        Assert.Null(assembly.GetType("AlleyCat.Control.Locomotion.PlayerImmediateExitSlicer"));
-        Assert.Null(assembly.GetType("AlleyCat.Control.Locomotion.PlayerExitReleaseGate"));
-        Assert.Null(typeof(CharacterLocomotion).GetProperty("TravelExitStrategy"));
-    }
+        => controller.Step(movement, Vector2.Zero, 0f, LocomotionPermissions.Allowed, completed);
 }

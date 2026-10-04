@@ -17,7 +17,6 @@ SCANNED_ROOTS = (
 )
 FORBIDDEN_AUTHORED_EXPECTATIONS = (
     "locomotion_catalogue.json",
-    "authored_per_foot_contacts_v1.json",
     "loc_sad_",
     "locomotion.blend",
     "locomotion_template.blend",
@@ -51,21 +50,6 @@ ALLOWED_PYTHON_OCCURRENCES = {
         "animations/source/kimodo_retarget_setup.blend",
     ): "structural/path derivation",
     (
-        "tools/kimodo-pipeline/kimodo_pipeline/contact_evidence.py",
-        "<module>",
-        "provenance/authored_per_foot_contacts_v1.json",
-    ): "generator output contract",
-    (
-        "tools/kimodo-pipeline/kimodo_pipeline/contact_evidence.py",
-        "build_descriptor",
-        "authored_per_foot_contacts_v1.json",
-    ): "generator descriptor contract",
-    (
-        "tools/kimodo-pipeline/tests/test_cross_package_publication.py",
-        "test_contact_provenance_survives_in_the_published_processed_package",
-        "authored_per_foot_contacts_v1.json",
-    ): "synthetic publication/provenance fixture",
-    (
         "tools/kimodo-pipeline/tests/test_cross_package_publication.py",
         "descriptor_mismatch_transaction",
         "locomotion_catalogue.json",
@@ -75,11 +59,6 @@ ALLOWED_PYTHON_OCCURRENCES = {
         "<module>",
         "sad",
     ): "production tool fixture source variant (input staging, not an oracle)",
-    (
-        "tools/kimodo-pipeline/kimodo_pipeline/publication_manifest.py",
-        "_plan",
-        "authored_per_foot_contacts_v1.json",
-    ): "publication manifest contract",
     (
         "tools/kimodo-pipeline/tests/test_runtime_package_descriptor.py",
         "fixture_package",
@@ -100,6 +79,22 @@ ALLOWED_PYTHON_OCCURRENCES = {
         "<module>",
         "game/assets/characters/reference/female/animations/source/kimodo_retarget_setup.blend",
     ): "structural/immutability smoke",
+    # The two exact 'sad' literals below are the selected-variant identity of the read-only source-contract
+    # smoke, not motion-behaviour oracles (KIMODO-TAC-007/TAC-008; Kimodo TR23; ANIM-002 TR22): the
+    # module-level constant derives the repository-fixed canonical-source/neutral-template paths, and the
+    # bootstrap_manifest fixture passes the variant to a preflight that asserts the monolith's SHA-256 is
+    # unchanged before and after. Only these two (path, symbol, exact literal) tuples are exempt; every
+    # other literal or symbol of that file stays unclassified.
+    (
+        "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        "<module>",
+        "sad",
+    ): "structural/path derivation",
+    (
+        "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        "bootstrap_manifest",
+        "sad",
+    ): "structural/immutability bootstrap",
 }
 
 
@@ -245,12 +240,12 @@ def test_precise_synthetic_and_structural_classifications_are_accepted() -> None
     synthetic = _category_for(
         ROOT / "integration-tests/src/Support/SyntheticLocomotionRuntimeFixture.cs",
         "<text>",
-        "synthetic authored_per_foot_contacts_v1.json declaration",
+        "synthetic loc_sad_ declaration",
     )
-    generator = _category_for(
-        ROOT / "tools/kimodo-pipeline/kimodo_pipeline/contact_evidence.py",
-        "build_descriptor",
-        "authored_per_foot_contacts_v1.json",
+    path_derivation = _category_for(
+        ROOT / "tools/kimodo-pipeline/kimodo_pipeline/bootstrap_extraction.py",
+        "<module>",
+        "game/assets/characters/animations/source/locomotion/locomotion.blend",
     )
     structural = _category_for(
         ROOT / "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
@@ -258,9 +253,9 @@ def test_precise_synthetic_and_structural_classifications_are_accepted() -> None
         "game/assets/characters/animations/source/locomotion/locomotion.blend",
     )
     near_miss = _category_for(
-        ROOT / "tools/kimodo-pipeline/kimodo_pipeline/contact_evidence.py",
+        ROOT / "tools/kimodo-pipeline/kimodo_pipeline/bootstrap_extraction.py",
         "assert_behaviour",
-        "authored_per_foot_contacts_v1.json",
+        "game/assets/characters/animations/source/locomotion/locomotion.blend",
     )
     synthetic_assertion = _category_for(
         ROOT / "integration-tests/src/Support/SyntheticLocomotionRuntimeFixture.cs",
@@ -269,7 +264,54 @@ def test_precise_synthetic_and_structural_classifications_are_accepted() -> None
     )
 
     assert synthetic == "synthetic runtime fixture declaration"
-    assert generator == "generator descriptor contract"
+    assert path_derivation == "structural/path derivation"
     assert structural == "structural/immutability smoke"
     assert near_miss == "unclassified"
     assert synthetic_assertion == "unclassified"
+
+
+def test_core_asset_smoke_variant_identity_is_structural_not_behavioural() -> None:
+    """The smoke's two exact 'sad' variant-identity literals classify as structural checks."""
+    module_variant = _category_for(
+        ROOT / "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        "<module>",
+        "sad",
+    )
+    bootstrap_variant = _category_for(
+        ROOT / "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        "bootstrap_manifest",
+        "sad",
+    )
+
+    assert module_variant == "structural/path derivation"
+    assert bootstrap_variant == "structural/immutability bootstrap"
+
+
+def test_core_asset_smoke_variant_exemption_is_not_a_wildcard() -> None:
+    """Unlisted literals and unlisted neighbouring symbols of the smoke file stay unclassified."""
+    unlisted_literal = _category_for(
+        ROOT / "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        "<module>",
+        "loc_sad_",
+    )
+    unlisted_symbol = _category_for(
+        ROOT / "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        "test_some_behavioural_oracle",
+        "sad",
+    )
+
+    assert unlisted_literal == "unclassified"
+    assert unlisted_symbol == "unclassified"
+
+
+def test_variant_literal_matching_is_exact_not_substring() -> None:
+    """Only the exact value 'sad' is flagged; longer strings merely containing 'sad' are not."""
+    source = 'SADNESS = "sadness"\nEMBEDDED = "prefix sad suffix"\nEXACT = "sad"\n'
+    occurrences = _python_occurrences_from_source(
+        ROOT / "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
+        source,
+    )
+
+    assert len(occurrences) == 1
+    assert occurrences[0].symbol == "<module>"
+    assert occurrences[0].category == "structural/path derivation"

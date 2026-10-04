@@ -6,142 +6,111 @@ title: Leg-Feet IK Contract
 
 ## Requirement
 
-Define rig-neutral generic foot-target resolution, target actuation, knee-pole, and two-bone lower-limb solving beneath
-IK-003.
+Define rig-neutral foot-target resolution, target actuation, knee-pole prediction, and two-bone lower-limb solving
+beneath IK-003.
 
 ## Goal
 
-Resolve each leg's target deterministically and solve it without allowing providers or solvers to rewrite unrelated
-state or policy.
+Resolve each leg's target deterministically from the current tick's pose and solve it without letting providers or
+solvers rewrite unrelated state or policy.
 
 ## User Requirements
 
 1. Legs bend predictably and smoothly towards resolved foot targets on both reference rigs.
-2. An applicable foot provider takes control without visible conflict; a provider that cannot apply lets ordinary or
-   fallback behaviour continue.
+2. An applicable foot provider takes control without visible conflict; a provider that cannot apply lets ordinary
+   animation-following behaviour continue.
 3. Feet do not snap because a solver mutates an input target or a knee pole becomes degenerate.
-4. Each foot remains isolated from the other foot's invalid, stale, or inapplicable provider state.
+4. Each foot is isolated from the other foot's invalid or inapplicable provider state.
 
 ## Technical Requirements
 
-1. Each side has an upper-leg to lower-leg to foot `TwoBoneIK3D` solve and a preceding rig-neutral pole-target stage.
-2. Before resolving provider targets, target synchronisation reads the current animated foot transforms. It does not
-   mutate authored animation, contact evidence, or anchors.
-3. `CharacterIK` resolves the explicit provider before the fallback provider. Existing providers retain their default
-   semantics: a returned zero-influence intent is applicable and terminal, disabling that side's leg solve. A provider
-   may instead explicitly refuse applicability through the generic resolution API, allowing the next provider to run.
-4. An ordered generic composite queries providers in authored first-to-last order and selects the first applicable,
-   finite, value-only resolution. It uses no numeric priorities. Refusal, invalid providers, non-finite results, and
-   stale results are not selected; a result for one side must not be applied to the other side.
-5. Providers return values only and must not mutate targets, activity gates, modifiers, root, hips, or skeleton.
-   Only `CharacterIK` applies the selected target transform, activity gate, and modifier influence for that side.
-6. The generic modifier order is `sync → provider → hip reconciliation (when present) → lower-leg consumers`.
-   `CharacterIK` performs generic provider resolution and sole actuation, and repairs this order idempotently on
-   initialisation or retry. Phase 1 production wiring must preserve this generic order.
-7. The side-specific contact provider consumes ANIM-002 permission and an immutable authored per-foot sample. It returns
-   a typed applicable result or refusal without writing a target, refusing every member of the
-   [ANIM-002 Refusal Set](../../animation/002-locomotive-animation-set/index.md#canonical-contact-evidence).
-   The provider adds no contact-specific `CharacterIK` branch, downstream target writer, or locomotion policy.
-8. Pole prediction derives its primary direction from current animation geometry. If that direction is degenerate, a
-   deterministic, smooth fallback uses the resolved target orientation. The implementation keeps a rest-leg-derived
-   minimum pole-offset floor; its value remains tunable.
-9. The solver must not write a target's position, rotation, or scale. It may publish solve diagnostics only through the
-   post-IK validation path.
-10. The implementation contains no terrain probe, pelvis or whole-body adjustment, contact inference, or downstream
-    overwrite path.
-11. The [Contact-Lock Coordinator Contract](contact-lock-coordinator-contract.md) may supply a value-only explicit
-    provider result for NPC and player production composition. It owns anchors, lifecycle, feasibility, and correction
-    disposition; this contract preserves `CharacterIK` as the sole target, gate, and influence actuator and grants no
-    solver, provider, NAV, or CTRL contact-permission authority.
-12. Before activating native or runtime modifier groups, `CharacterIKSubsystemInstaller` sets the resolved runtime
-    `Skeleton3D.ModifierCallbackModeProcess` to `Physics`. On each physics tick, the native lower-leg path is
-    `sync → provider resolution → native lower-leg consumers`. `CharacterIK` remains the sole target, gate, and
-    influence actuator; providers and the coordinator return values only and assign no target or NAV policy. Live
-    diagnostics observe the post-modifier boundary so one tick can evidence both provider resolution and native output.
+1. Each side has an upper-leg → lower-leg → foot `TwoBoneIK3D` solve with a preceding rig-neutral pole-target stage.
+2. Target synchronisation is the first modifier stage. It sets both foot targets to the current animated foot poses
+   and does not mutate authored animation.
+3. `CharacterIK` resolves the explicit provider before the fallback provider. A returned zero-influence intent is
+   applicable and disables that side's leg solve. A provider may instead refuse, letting the next provider run.
+4. An ordered composite queries providers in authored order and selects the first applicable, finite, value-only
+   result. It uses no numeric priorities, and a result for one side is never applied to the other.
+5. Providers return values only and never mutate targets, activity gates, modifiers, root, hips, skeleton, or actor.
+   Only `CharacterIK` applies the selected target, gate, and influence for each side.
+6. The modifier order is `sync → provider → hip reconciliation (when present) → lower-leg consumers`. `CharacterIK`
+   repairs this order idempotently on initialisation or retry.
+7. Providers resolve from the same-tick animated pose: after the AnimationTree has applied the current tick and after
+   that tick's actor movement operation. A target resolved from an earlier tick's pose is never applied. When a tick
+   evaluates the AnimationTree more than once, only the final evaluation is used, and an intermediate evaluation
+   triggers no provider resolution or solve; see
+   [NAV-001 Animation Tree Use](../../nav/001-npc-navigation/index.md#animation-tree-use).
+8. `CharacterIKSubsystemInstaller` sets `Skeleton3D.ModifierCallbackModeProcess` to `Physics` before activating
+   modifier groups, and the AnimationTree applies before the modifier chain within each physics tick.
+9. Post-modification poses are observable only inside `Skeleton3D.SkeletonUpdated`. The engine applies modifier
+   output to the skin and then restores canonical bone poses, so reads at physics-timer time cannot observe IK output.
+   Diagnostics and test instruments capture post-IK output there, bound to the tick that produced it.
+10. Pole prediction derives its direction from current animation geometry and is resolved on every tick; a pole from
+    an earlier tick is never kept. When the knee plane is degenerate or ambiguous, a deterministic, smooth fallback
+    uses a forward reference projected perpendicular to the leg direction. The reference is the foot target's forward
+    direction, except that the avatar's forward direction is used when the leg reaches forward at full extension.
+    - **Degenerate plane** (the knee on the hip–foot line): the pole follows the projected reference. If the foot
+      target is tilted so that its forward direction is not usable, the pole follows the projected avatar forward.
+    - **Ambiguous plane:** the projected reference resolves the plane. If the foot target is tilted so that its
+      forward direction is not usable, the pole keeps the direction derived from the current animation geometry.
+
+    A tunable rest-leg-derived minimum pole offset applies.
+11. The solver never writes a target's position, rotation, or scale.
+12. Foot planting geometry uses the ball joint defined by [IK-003 Foot Planting](index.md#foot-planting): the
+    rest-pose origin of the toe bone in foot-local space. The foot bone origin is never treated as the pinned point.
+    Both toe bones are required rig data: if either is missing, foot-planting binding fails with a clear error, with
+    no degraded per-foot mode.
+    - A target whose rotation differs from the animated foot pose, such as the IK-003 planted facing hold, still
+      places the ball joint as [IK-003](index.md#foot-planting) defines: the rotation acts about the ball joint, not
+      the foot-bone origin. Ball-point placement and reach checks derived from a target use the composed position and
+      rotation in one consistent world frame, with no second application of any scale conversion.
+13. The path contains no terrain probe, pelvis or whole-body adjustment, or downstream target overwrite.
 
 ## In Scope
 
-- Animation target synchronisation, generic provider composition and actuation, read-only resolved targets, pole
-  prediction, two-bone solve, and Phase 1 contact-provider failure semantics.
-- Rig-neutral configuration needed to apply those responsibilities to both reference rigs.
-- Value-only coordinator integration at the generic provider boundary for NPC and player production composition.
+- Target synchronisation, provider composition and actuation, same-tick ordering, and post-IK observability.
+- Pole prediction, two-bone solving, and ball-joint resolution on both reference rigs.
 
 ## Out Of Scope
 
-- Contact permission and authored-track ownership, terrain adaptation, and movement policy.
-- Numeric pole thresholds and exact scene-node names, which remain rig configuration rather than shared contracts.
-- NAV/CTRL/ANIM policy and terrain or pelvis authority. Production contact composition remains normative in the
-  coordinator contract without transferring policy to this generic solve contract.
+- Foot-planting policy, which [IK-003](index.md#foot-planting) owns.
+- Numeric pole thresholds and scene-node names, which remain rig configuration.
+- Terrain adaptation and pelvis authority.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. Both reference rigs show stable knee direction and target following through supported poses and a degenerate-pole
-   case.
-2. Switching between synchronised, applicable-provider, and fallback-provider targets is visibly deterministic and free
-   from target conflict.
-3. A refusal under the ANIM-002 canonical set does not disturb the other foot or block a valid ordinary fallback.
+1. Both reference rigs show stable knee direction and target following, including a degenerate-pole case.
+2. Switching between synchronised, applicable-provider, and fallback targets is deterministic and conflict-free.
+3. A refusal or invalid result for one foot does not disturb the other foot.
 
 ### Technical Requirement Acceptance
 
-1. Gate A fixture checks prove each side has the stated two-bone solve and preceding rig-neutral pole-target stage on
-   both reference rigs.
-2. Gate A fixture checks prove synchronisation reads the current animated foot transform before provider resolution and
-   preserves authored animation, contact evidence, and anchors.
-3. Gate A fixture checks prove explicit-provider precedence over fallback, terminal zero-influence behaviour, and
-   explicit-refusal fallback for each side.
-4. Gate A fixture checks prove first-applicable finite, value-only composite selection in authored order and that one
-   side's result cannot affect the other. Accepted Gate B fixture checks prove pre-IK and post-IK rejection with
-   preserved native provenance; see the [test setup contract](test-setup-contract.md#gate-b-accepted-test-only).
-5. Gate A fixture checks prove providers do not mutate targets, gates, modifiers, root, hips, or skeleton, and that
-   only `CharacterIK` applies the selected target, gate, and influence for that side.
-6. Gate A fixture checks prove the generic modifier order, generic `CharacterIK` provider resolution and sole
-   actuation, and idempotent initialisation/retry repair. Phase 1 composition preserves this same order.
-7. Gate A fixture checks prove generic per-foot provider resolution without provider-specific `CharacterIK` logic. An
-   audit confirms the fixture does not establish production contact-provider, contact-lock, or scene-wiring policy.
-8. Gate A fixture checks prove animation-geometry pole prediction, deterministic smooth target-orientation fallback,
-   and a tunable rest-leg-derived minimum pole-offset floor.
-9. Gate A fixture checks prove the solver does not write target position, rotation, or scale and publishes diagnostics
-   only through post-IK validation.
-10. An audit confirms the Gate A test-only control contains no terrain probe, pelvis or whole-body adjustment, contact
-    inference, or downstream target overwrite path. Gate B's test-only acceptance does not alter this boundary.
-11. Phase 1 checks verify the contact provider consumes ANIM-002 permission and an immutable sample, returns only a
-      typed applicable result or refusal, and never writes a target. It refuses every member of the
-      [ANIM-002 Refusal Set](../../animation/002-locomotive-animation-set/index.md#canonical-contact-evidence).
-      Ordinary animation-synchronised fallback remains valid motion but is never contact acceptance.
-12. Focused NPC-playtest checks prove the coordinator result remains value-only through this boundary, no provider or
-       solver target write occurs, and only `CharacterIK` applies the selected target, gate, and influence.
-13. A focused real-NPC installer/runtime trace proves the resolved skeleton is set to `Physics` before modifier-group
-    activation. It captures same-tick synchronisation, provider resolution, and native lower-leg output at a
-    post-modifier boundary, and confirms that only `CharacterIK` actuates targets, gates, and influence.
-
-The [test setup contract](test-setup-contract.md) records accepted Gate A test-only native provider-pipeline control
-and visual evidence for this contract, plus accepted Gate B disposable fixture evidence. Neither acceptance establishes
-the Phase 1 contract; that contract is defined by IK-003 and ANIM-002. It does not authorise terrain or pelvis
-intervention, release-metadata contact inference, or ANIM/NAV/CTRL policy integration.
+1. Fixtures prove the two-bone solve and pole stage per side on both rigs.
+2. Fixtures prove synchronisation, explicit-provider precedence, zero-influence behaviour, refusal fallback, and
+   first-applicable composite selection with side isolation.
+3. Fixtures prove providers are value-only and `CharacterIK` is the sole actuator, with idempotent order repair.
+4. A real-NPC trace proves `Physics` callback mode, animation before modifiers, same-tick provider input, and post-IK
+   capture inside `Skeleton3D.SkeletonUpdated`.
+5. Fixtures prove pole fallback, the minimum pole offset, and that the solver never writes its target.
+6. Per-foot checks prove foot planting geometry uses the toe-bone ball joint, and a rig missing either toe bone fails
+   foot-planting binding with a clear error. They also prove a target rotated away from the animated pose keeps the
+   ball joint at its intended world position, with ball-point and reach computation using the composed target
+   transform in one consistent world frame.
+7. An audit confirms no terrain probe, pelvis adjustment, or downstream target overwrite exists.
 
 ### Acceptance Traceability
 
-- User Requirement 1 → User Requirement Acceptance 1.
-- User Requirement 2 → User Requirement Acceptance 2.
-- User Requirement 3 → User Requirement Acceptance 1–2.
-- User Requirement 4 → User Requirement Acceptance 3.
-- Technical Requirement 1 → Technical Requirement Acceptance 1.
-- Technical Requirement 2 → Technical Requirement Acceptance 2.
-- Technical Requirement 3 → Technical Requirement Acceptance 3.
-- Technical Requirement 4 → Technical Requirement Acceptance 4.
-- Technical Requirement 5 → Technical Requirement Acceptance 5.
-- Technical Requirement 6 → Technical Requirement Acceptance 6.
-- Technical Requirement 7 → Technical Requirement Acceptance 7, 11.
-- Technical Requirement 8 → Technical Requirement Acceptance 8.
-- Technical Requirement 9 → Technical Requirement Acceptance 9.
-- Technical Requirement 10 → Technical Requirement Acceptance 10.
-- Technical Requirement 11 → Technical Requirement Acceptance 12.
-- Technical Requirement 12 → Technical Requirement Acceptance 13.
+- User Requirements 1, 3 → User Requirement Acceptance 1, Technical Requirement Acceptance 1, 5.
+- User Requirements 2, 4 → User Requirement Acceptance 2–3, Technical Requirement Acceptance 2–3.
+- Technical Requirements 1–6 → Technical Requirement Acceptance 1–3.
+- Technical Requirements 7–9 → Technical Requirement Acceptance 4.
+- Technical Requirements 10–11 → Technical Requirement Acceptance 5.
+- Technical Requirement 12 → Technical Requirement Acceptance 6.
+- Technical Requirement 13 → Technical Requirement Acceptance 7.
 
 ## References
 
 - [IK-003 Overview](index.md)
-- [Contact-Lock Coordinator Contract](contact-lock-coordinator-contract.md)
-- [Leg-Feet IK Test Setup Contract](test-setup-contract.md)
+- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)

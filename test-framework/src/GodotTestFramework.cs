@@ -148,12 +148,22 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         }
 
         CancellationToken cancellationToken = GetContextCancellationToken(context);
-        Exception? preflightError = await RunPreflightAsync(cancellationToken);
+        Exception? preflightError = testsToRun.Any(test => GetSkipReason(test.Method) is null)
+            ? await RunPreflightAsync(cancellationToken)
+            : null;
 
         if (preflightError is not null)
         {
             foreach ((TestNodeUid uid, MethodInfo method) in testsToRun)
             {
+                string? skipReason = GetSkipReason(method);
+                if (skipReason is not null)
+                {
+                    TestNode skippedNode = CreateTestNode(uid, method, new SkippedTestNodeStateProperty(skipReason));
+                    await context.MessageBus.PublishAsync(this, new TestNodeUpdateMessage(request.Session.SessionUid, skippedNode));
+                    continue;
+                }
+
                 TestNode inProgressNode = CreateTestNode(uid, method, InProgressTestNodeStateProperty.CachedInstance);
                 await context.MessageBus.PublishAsync(this, new TestNodeUpdateMessage(request.Session.SessionUid, inProgressNode));
 
@@ -189,6 +199,13 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
             foreach ((TestNodeUid uid, MethodInfo method) in tests)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                string? skipReason = GetSkipReason(method);
+                if (skipReason is not null)
+                {
+                    await publishNodeAsync(CreateTestNode(uid, method, new SkippedTestNodeStateProperty(skipReason)), cancellationToken);
+                    continue;
+                }
 
                 TestNode inProgressNode = CreateTestNode(uid, method, InProgressTestNodeStateProperty.CachedInstance);
                 await publishNodeAsync(inProgressNode, cancellationToken);
@@ -319,7 +336,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         {
             foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
             {
-                if (!IsSupportedFactMethod(method))
+                if (!IsSupportedTestMethod(method))
                 {
                     continue;
                 }
@@ -329,9 +346,21 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         }
     }
 
-    private static bool IsSupportedFactMethod(MethodInfo method) =>
-        method.GetCustomAttribute<FactAttribute>() is not null
-        && method.GetParameters().Length == 0;
+    /// <summary>
+    /// Accepts parameterless <see cref="FactAttribute"/> methods and parameterised <see cref="TheoryAttribute"/>
+    /// methods that carry at least one xUnit data attribute. A theory is one test node; the Godot session runner
+    /// executes every data row and reports failing rows in the node's failure detail.
+    /// </summary>
+    private static bool IsSupportedTestMethod(MethodInfo method) =>
+        method.GetCustomAttribute<FactAttribute>() switch
+        {
+            null => false,
+            TheoryAttribute => method.GetParameters().Length == 0
+                || method.GetCustomAttributes<Xunit.Sdk.DataAttribute>().Any(),
+            _ => method.GetParameters().Length == 0,
+        };
+
+    private static string? GetSkipReason(MethodInfo method) => method.GetCustomAttribute<FactAttribute>()?.Skip;
 
     private static string GetDisplayName(MethodInfo method) => TestCaseUidFactory.GetFullyQualifiedMethodName(method);
 

@@ -19,6 +19,10 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     private Vector3[] _acceptedPath = [];
     private int _acceptedPathIndex;
     private Vector3 _pathTraversalStart;
+    private Vector3[] _viaPoints = [];
+    private bool[] _viaPointsPassed = [];
+    private bool[] _viaPointsMissed = [];
+    private float[] _viaRouteDistances = [];
     private long _destinationRequestGeneration;
     private long _routeRevision;
     private Transform3D _lastActorTransform = Transform3D.Identity;
@@ -146,6 +150,49 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     protected bool IsNavigationMapReady => NavigationServer3D.MapGetIterationId(GetNavigationMap()) != 0;
 
     /// <summary>
+    /// The via-point pass radius (NAV-001 TR18, a tuning value): a via counts as passed when the actor comes
+    /// within this planar radius of it. Default 0.5 m — roughly 3.3× the worst realised corner-tracking error
+    /// measured on the authored navigation scene (0.152 m at the second cylinder corner,
+    /// game/temp/nav001-corner-composed-containment/run-01/candidate/corner/), comfortably above straight-leg
+    /// walk tracking noise, while a factor of four below the Waypoint Route scenario's 2 m legs, so a
+    /// wrong-side or short-of-the-via pass still misses.
+    /// </summary>
+    [ExportGroup("Via-Points")]
+    [Export(PropertyHint.Range, "0.05,2,0.01,or_greater")]
+    public float ViaPointPassRadiusMetres
+    {
+        get;
+        set;
+    } = 0.5f;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<Vector3> ViaPoints => _viaPoints;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<bool> ViaPointsPassed => _viaPointsPassed;
+
+    /// <summary>
+    /// Diagnostics (TR17-style, report-only): which vias were passed by without coming within the pass radius
+    /// — a missed via is never backtracked or stopped for, only recorded.
+    /// </summary>
+    public IReadOnlyList<bool> ViaPointsMissed => _viaPointsMissed;
+
+    /// <summary>The count of vias passed within the radius so far this request (value-only diagnostics).</summary>
+    public int ViaPointsPassedCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (bool passed in _viaPointsPassed)
+            {
+                count += passed ? 1 : 0;
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
     /// Gets whether the latest poll used the synchronously accepted path while the agent path was unavailable.
     /// </summary>
     internal bool UsedAcceptedPathFallbackForLastPoll
@@ -178,9 +225,9 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     }
 
     /// <inheritdoc/>
-    public NavigationDestinationResult SetDestination(Transform3D destination)
+    public NavigationDestinationResult SetDestination(Transform3D destination, IReadOnlyList<Vector3>? viaPoints)
     {
-        if (!destination.IsFinite())
+        if (!destination.IsFinite() || viaPoints?.Any(via => !via.IsFinite()) == true)
         {
             return NavigationDestinationResult.Invalid;
         }
@@ -191,11 +238,74 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         }
 
         Vector3 navigationStartPosition = GetNavigationStartPosition();
-        if (!CanReach(navigationStartPosition, destination.Origin, out Vector3[] acceptedPath))
+        Vector3[] acceptedPath;
+        float[] viaRouteDistances;
+        if (viaPoints is { Count: > 0 } points)
         {
-            return NavigationDestinationResult.Unreachable;
+            // TR18: the route is the ordered chain start → via 1 → … → via N → destination, each segment
+            // validated exactly like a plain destination's path. Any unreachable segment refuses the whole
+            // request and leaves existing state unchanged.
+            float queryTolerance = Mathf.Max(DestinationReachedDistance, 0.0f);
+            var segments = new Vector3[points.Count + 1];
+            bool reachable = true;
+            Vector3 cursor = navigationStartPosition;
+            for (int index = 0; reachable && index < segments.Length; index++)
+            {
+                Vector3 target = index < points.Count ? points[index] : destination.Origin;
+                Vector3[] segment = NavigationServer3D.MapGetPath(
+                    GetNavigationMap(), cursor, target, optimize: true, NavigationLayers);
+                if (segment.Length == 0 || segment[^1].DistanceSquaredTo(target) > queryTolerance * queryTolerance)
+                {
+                    reachable = false;
+                    break;
+                }
+
+                segments[index] = cursor = segment[^1];
+            }
+
+            if (!reachable)
+            {
+                return NavigationDestinationResult.Unreachable;
+            }
+
+            (acceptedPath, viaRouteDistances) = NavigationViaChain.Build(
+                navigationStartPosition,
+                points,
+                destination.Origin,
+                (from, to) => NavigationServer3D.MapGetPath(GetNavigationMap(), from, to, optimize: true, NavigationLayers));
+        }
+        else
+        {
+            if (!CanReach(navigationStartPosition, destination.Origin, out acceptedPath))
+            {
+                return NavigationDestinationResult.Unreachable;
+            }
+
+            viaRouteDistances = [];
         }
 
+        NavigationDestinationResult accepted = AcceptDestination(destination, navigationStartPosition, acceptedPath);
+        if (accepted != NavigationDestinationResult.Accepted)
+        {
+            return accepted;
+        }
+
+        _viaPoints = [.. viaPoints ?? []];
+        _viaPointsPassed = new bool[_viaPoints.Length];
+        _viaPointsMissed = new bool[_viaPoints.Length];
+        _viaRouteDistances = viaRouteDistances;
+        return NavigationDestinationResult.Accepted;
+    }
+
+    /// <inheritdoc/>
+    public NavigationDestinationResult SetDestination(Transform3D destination)
+        => SetDestination(destination, viaPoints: null);
+
+    private NavigationDestinationResult AcceptDestination(
+        Transform3D destination,
+        Vector3 navigationStartPosition,
+        Vector3[] acceptedPath)
+    {
         Transform3D realisedTransform = ResolveLifecycleTransform(navigationStartPosition);
         NavigationTerminalContext? replacementContext = HasDestination
             ? CreateLifecycleTerminalContext(realisedTransform, NavigationTerminalReason.Replacement)
@@ -205,7 +315,6 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             ToOutcomeTransform(destination),
             NavigationRequestValidation.Accepted,
             nextRouteRevision,
-            clockGeneration: 0,
             Engine.GetPhysicsFrames(),
             replacementContext,
             Engine.GetPhysicsFrames());
@@ -253,10 +362,83 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         LastSampledPathIndex = 0;
         _acceptedPath = [];
         _acceptedPathIndex = 0;
+        _viaPoints = [];
+        _viaPointsPassed = [];
+        _viaPointsMissed = [];
+        _viaRouteDistances = [];
         CurrentRouteSnapshot = null;
         _intent = CompletedIntent(_destination.Origin);
         LastPollProducedValidSample = false;
         OnDestinationCleared();
+    }
+
+    /// <summary>
+    /// Tracks via pass/miss state for one poll (TR18–19): a via counts as passed the moment the actor comes
+    /// within the configured planar pass radius, in order; a via whose chain position the cursor has moved
+    /// beyond without ever coming within the radius is recorded as MISSED and never revisited — no
+    /// backtracking, no stopping, no arrival semantics attach to any via.
+    /// </summary>
+    private void TrackViaPoints(Vector3 actorPosition, int pathIndex)
+    {
+        float radius = Mathf.Max(ViaPointPassRadiusMetres, 0.0f);
+        for (int index = 0; index < _viaPoints.Length; index++)
+        {
+            if (_viaPointsPassed[index])
+            {
+                continue;
+            }
+
+            if (PlanarDistanceTo(actorPosition, _viaPoints[index]) <= radius)
+            {
+                _viaPointsPassed[index] = true;
+                continue;
+            }
+
+            // Missed: the cursor has advanced beyond this via's position on the chain (with one index of
+            // grace for the desired-distance advance) while the actor never came within the radius.
+            int viaChainIndex = ChainIndexOf(_viaPoints[index]);
+            if (viaChainIndex >= 0 && pathIndex > viaChainIndex + 1)
+            {
+                _viaPointsMissed[index] = true;
+            }
+        }
+    }
+
+    private int ChainIndexOf(Vector3 via)
+    {
+        for (int index = 0; index < _acceptedPath.Length; index++)
+        {
+            if (PlanarDistanceTo(_acceptedPath[index], via) <= NavigationViaChain.JunctionToleranceMetres)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static float PlanarDistanceTo(Vector3 from, Vector3 to)
+        => MathF.Sqrt(((to.X - from.X) * (to.X - from.X)) + ((to.Z - from.Z) * (to.Z - from.Z)));
+
+    /// <summary>
+    /// The route distances of the still-unvisited vias, in order (value-only): the caller's station clamp
+    /// keeps the next section from leapfrogging an unvisited via. Passed and missed vias no longer bind.
+    /// </summary>
+    internal IReadOnlyList<float> UnvisitedViaRouteDistances
+    {
+        get
+        {
+            List<float> distances = [];
+            for (int index = 0; index < _viaRouteDistances.Length; index++)
+            {
+                if (!_viaPointsPassed[index] && !_viaPointsMissed[index])
+                {
+                    distances.Add(_viaRouteDistances[index]);
+                }
+            }
+
+            return distances;
+        }
     }
 
     /// <inheritdoc/>
@@ -279,7 +461,11 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         int pathIndex = GetCurrentNavigationPathIndex();
         AdjustPathSample(ref nextPathPosition, ref path, ref pathIndex);
         UsedAcceptedPathFallbackForLastPoll = false;
-        if (path.Length == 0 && _acceptedPath.Length > 0)
+        // A via request's authoritative route is the ordered via chain itself (TR18): the agent's own
+        // re-queried path would shortcut the vias. The chain was validated at accept time exactly like any
+        // accepted path, so it drives the cursor and the snapshot until the request ends.
+        bool viaChainedRoute = _viaPoints.Length > 0;
+        if (viaChainedRoute || (path.Length == 0 && _acceptedPath.Length > 0))
         {
             UsedAcceptedPathFallbackForLastPoll = true;
             path = _acceptedPath;
@@ -301,6 +487,11 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
                 _pathTraversalStart,
                 Mathf.Max(PathDesiredDistance, 0.0f));
             nextPathPosition = path[pathIndex];
+        }
+
+        if (viaChainedRoute)
+        {
+            TrackViaPoints(actorTransform.Origin, pathIndex);
         }
         LastSampledPathIndex = pathIndex;
         float destinationTolerance = Mathf.Max(DestinationReachedDistance, 0.0f);
@@ -410,10 +601,6 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         NavigationTerminalContext context,
         ulong terminalPhysicsTick)
         => TryCommitAndClear(() => _requestLifecycle.TryCancel(source, context, terminalPhysicsTick));
-
-    /// <summary>Updates the retained clock generation without allocating a lifecycle record.</summary>
-    protected void SetActiveRequestClockGeneration(long clockGeneration)
-        => _requestLifecycle.SetClockGeneration(clockGeneration);
 
     /// <summary>Marks active work temporarily neutralised without committing a terminal result.</summary>
     protected void EnterActiveRequestNeutralisation() => _requestLifecycle.EnterTransientNeutralisation();

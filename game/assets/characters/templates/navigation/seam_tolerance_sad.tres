@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SeamToleranceConfig" format=3 uid="uid://ddba25ustrh8"]
+
+[ext_resource type="Script" uid="uid://m4ouvxutbqat" path="res://src/Navigation/Arrival/SeamToleranceConfig.cs" id="1_seamtol"]
+
+[resource]
+script = ExtResource("1_seamtol")
+PackageVariant = "sad"
+ToleranceMetres = 0.19
+AgreementStatus = 1
+AgreementRecord = "User agreed 2026-09-25: excluded unnecessary pairs (lateral cycles, wf↔lateral, turning-side-lane arc switches (al_l↔ar_r), wrong-lane arc entries); relaxed to admit all remaining 'sad' pairs on both rigs; planner prefers lowest-separation aligned seam; tighten later via config."

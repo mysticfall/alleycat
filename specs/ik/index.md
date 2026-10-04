@@ -18,18 +18,21 @@ validation boundaries.
 
 1. Players experience coherent full-body VR posing from available headset and controller input.
 2. NPC and player characters can share reusable IK foundations without forcing common movement policy.
-3. Lower-limb authored contacts can participate in the Phase 1 IK-003 provider boundary on both reference rigs.
+3. Feet plant through IK-003 foot planting on both reference rigs.
 
 ## Technical Requirements
 
 1. Reusable `CharacterIK` remains input-source agnostic; player XR integration is a complementary provider layer.
 2. Target-intent providers can control applicable limbs, with influence gating their corresponding IK behaviour.
-3. IK-003 is the rig-neutral lower-limb parent. It defines the side-specific, evidence-owning provider boundary;
-   the leg child owns generic target/provider/pole/two-bone solve, and its test child owns both-rig evidence topology.
-4. ANIM-002 remains the sole contact-permission authority. IK consumers do not infer or override permission.
+3. IK-003 is the rig-neutral lower-limb parent. It owns foot planting and both-rig validation; its leg child owns
+   generic target/provider/pole/two-bone solve.
+4. Foot planting takes when a foot is planted from ANIM-002 per-foot planted intervals and pins the ball joint (the
+   toe-bone rest-pose origin) horizontally, as defined by IK-003. The metadata grants nothing and authorises no actor
+   movement.
 5. IK-003's generic lower-limb order is `sync → provider → hip reconciliation (when present) → lower-leg consumers`.
-   `CharacterIK` performs generic provider resolution and sole actuation. Its provider and leg contracts supersede
-   lower-limb-only implementation-note guidance without changing unrelated spine or player-VRIK guidance.
+   `CharacterIK` performs generic provider resolution and sole actuation. Lower-limb guidance lives only in IK-003
+   and its leg contract; the [IK Implementation Notes](implementation-notes.md) carry no lower-limb guidance beyond
+   pointers to them, and unrelated spine or player-VRIK guidance is unchanged.
 
 ## In Scope
 
@@ -37,7 +40,7 @@ validation boundaries.
 
 ## Out Of Scope
 
-- Child solver configuration, navigation/player policy, terrain adaptation, and contact-permission ownership.
+- Child solver configuration, navigation/player policy, terrain adaptation, and planted-interval authoring (ANIM-002).
 
 ## Acceptance Criteria
 
@@ -58,10 +61,10 @@ intent, and delivery must degrade to Level 1.
 
 ### Technical Requirement Acceptance
 
-1. IK-003 ownership links identify unique permission, provider-boundary, solve, and evidence responsibilities.
+1. IK-003 ownership links identify unique planted-interval, foot-planting, solve, and evidence responsibilities.
 2. The navigation path does not imply terrain adaptation or a shared NPC/player movement controller.
-3. The IK-003 path identifies generic provider resolution before hip and lower-leg consumers, and quarantines
-   superseded lower-limb-only implementation-note guidance.
+3. The IK-003 path identifies generic provider resolution before hip and lower-leg consumers, and the implementation
+   notes contain no superseded lower-limb guidance.
 
 ## Runtime Integration Boundary
 
@@ -77,9 +80,7 @@ intent, and delivery must degrade to Level 1.
 - [IK Implementation Notes](implementation-notes.md)
 - [IK-001: Neck-Spine CCDIK Configuration](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)
-- [IK-003: Leg And Feet IK System](003-leg-feet-ik/index.md)
+- [IK-003: Leg and Feet IK System](003-leg-feet-ik/index.md)
   - [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md)
-  - [Contact-Lock Coordinator Contract](003-leg-feet-ik/contact-lock-coordinator-contract.md)
-  - [Leg-Feet IK Test Setup Contract](003-leg-feet-ik/test-setup-contract.md)
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](004-vrik-pose-state-machine/index.md)
 - [IK-005: Target Pipeline](005-target-pipeline/index.md)

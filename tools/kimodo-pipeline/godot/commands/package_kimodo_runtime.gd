@@ -9,14 +9,16 @@ var errors: Array[String] = []
 var _coordinate_contract: Dictionary = {}
 var transport: Script
 var coordinate_contract: Script
-var contact_evidence: Script
+var planted_intervals: Script
+var descriptor_helper: Script
 var stitch_graph_helper: Script
 var runtime_capability: Script
 
 func _init() -> void:
 	transport = _load_helper("sample_transport.gd")
 	coordinate_contract = _load_helper("coordinate_contract.gd")
-	contact_evidence = _load_helper("locomotion_contact_evidence.gd")
+	planted_intervals = _load_helper("planted_intervals.gd")
+	descriptor_helper = _load_helper("runtime_package_descriptor.gd")
 	stitch_graph_helper = _load_helper("stitch_graph.gd")
 	runtime_capability = _load_helper("runtime_capability.gd")
 	var descriptor := _descriptor()
@@ -34,11 +36,14 @@ func _descriptor() -> Dictionary:
 	if character.is_empty(): character = DEFAULT_CHARACTER
 	var set_directory := "res://assets/characters/reference/%s/animations/processed/%s" % [character, name]
 	var index := set_directory.path_join(variant).path_join("processed-index.json")
+	var retained := index.get_base_dir().path_join("provenance").path_join(planted_intervals.FILENAME)
+	var declaration := {"input": retained, "retained_input": retained, "storage": descriptor_helper.planted_interval_storage(name)}
+	if declaration["storage"] == descriptor_helper.PACKAGE_FILE: declaration["runtime_path"] = planted_intervals.FILENAME
 	return {
 		"name": name, "character": character, "variant": variant, "index": index,
 		"blend": set_directory.path_join("%s_%s.blend" % [name, variant]),
 		"root": "res://assets/characters/reference/%s/animations/runtime/%s/%s" % [character, name, variant],
-		"contact_evidence_required": name == "locomotion",
+		"planted_intervals": declaration,
 	}
 
 func _package(package: Dictionary) -> void:
@@ -58,11 +63,10 @@ func _package(package: Dictionary) -> void:
 	if root.get_file() != variant or root.get_base_dir().get_file() != name:
 		_fail("Runtime root must be the character-owned runtime/%s/%s package directory: %s" % [name, variant, root])
 		return
-	var contacts: Dictionary = contact_evidence.describe(package, index, root)
-	if contacts.has("error"):
-		_fail(String(contacts["error"]))
+	var intervals := {} if _library_only() else _planted_intervals(package, name)
+	if intervals.has("error"):
+		_fail(String(intervals["error"]))
 		return
-	contacts["index_path"] = String(package.get("published_index", package["index"]))
 	_validate_coordinate_contract(index)
 	_validate_import_configuration(package, actions)
 	_reject_second_variant(package)
@@ -110,7 +114,7 @@ func _package(package: Dictionary) -> void:
 	for entry in catalogue:
 		(entry as Dictionary)["stitch_mappings"] = stitch_declarations[String((entry as Dictionary)["role"])]
 	var document := {
-		"schema_version": 3,
+		"schema_version": 4,
 		"package": String(index.get("package", name)),
 		"package_variant": String(index.get("variant", variant)),
 		"animation_library": _library_filename(name, variant),
@@ -118,9 +122,7 @@ func _package(package: Dictionary) -> void:
 		"godot_response_coordinates": {"root": "+X right, +Y up, -Z forward", "actor_local_planar": "[right, forward] = [root.x, -root.z]", "yaw": "signed local-Y"},
 		"clips": catalogue,
 	}
-	if bool(contacts.get("declared", false)):
-		document["contact_evidence"] = contact_evidence.catalogue_declaration(contacts, String(package.get("published_index", package["index"])))
-	_stage_validate_publish(package, index, library, document, contacts)
+	_stage_validate_publish(package, index, library, document, intervals)
 
 func _library_filename(name: String, variant: String) -> String:
 	return "%s_%s.tres" % [name, variant]
@@ -150,7 +152,7 @@ func _catalogue_entry(package: Dictionary, index: Dictionary, entry: Dictionary,
 	}
 
 func _phase_events(entry: Dictionary, animation: Animation, capability: String) -> Dictionary:
-	if runtime_capability.is_contact_free(capability): return {"applicability": "inapplicable"}
+	if runtime_capability.is_idle(capability): return {"applicability": "inapplicable"}
 	var evidence = entry.get("post_repair_event_evidence", {})
 	if not evidence is Dictionary or String((evidence as Dictionary).get("contract", "")) != "anim002_post_repair_directional_phase_events_v2": return {"applicability": "inapplicable"}
 	var timeline: Dictionary = (evidence as Dictionary).get("timeline", {})
@@ -293,6 +295,8 @@ func _imported_library(path: String) -> AnimationLibrary:
 	if players.size() != 1: _fail("Imported blend must have exactly one AnimationPlayer: %s" % path); root.free(); return null
 	var player := players[0] as AnimationPlayer; var names := player.get_animation_library_list()
 	if names.size() != 1: _fail("Imported blend must have one animation library: %s" % path); root.free(); return null
+	var skeletons := root.find_children("*", "Skeleton3D", true, false)
+	if skeletons.size() != 1: _fail("Imported blend must have exactly one Skeleton3D: %s" % path); root.free(); return null
 	var library := player.get_animation_library(names[0]); root.free(); return library
 
 func _source_animation(library: AnimationLibrary, action: String) -> Animation:
@@ -300,26 +304,48 @@ func _source_animation(library: AnimationLibrary, action: String) -> Animation:
 		if library.has_animation(candidate): return library.get_animation(candidate)
 	return null
 
-func _stage_validate_publish(package: Dictionary, index: Dictionary, library: AnimationLibrary, document: Dictionary, contacts: Dictionary) -> void:
+func _stage_validate_publish(package: Dictionary, index: Dictionary, library: AnimationLibrary, document: Dictionary, intervals: Dictionary) -> void:
 	var root := String(package["root"])
 	var stage := _stage_root(root, String(package["name"]), String(package["variant"]))
 	if stage.is_empty(): return
 	var library_filename := _library_filename(String(package["name"]), String(package["variant"]))
 	_remove_tree(stage)
 	if DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(stage)) != OK: _fail("Could not create package staging directory"); return
-	if ResourceSaver.save(library, stage.path_join(library_filename)) != OK: _fail("Could not stage animation library"); _remove_tree(stage); return
+	var staged_library_path := stage.path_join(library_filename)
+	var library_source := _argument("--runtime-library-source=")
+	if "--preserve-runtime-library" in OS.get_cmdline_user_args() and library_source.is_empty():
+		library_source = root.path_join(library_filename)
+	if not library_source.is_empty():
+		# Byte-preserving reuse keeps planted intervals derived from this library bound to it.
+		if library_source.get_file() != library_filename or not FileAccess.file_exists(library_source) \
+			or DirAccess.copy_absolute(
+				ProjectSettings.globalize_path(library_source),
+				ProjectSettings.globalize_path(staged_library_path)) != OK:
+			_fail("Could not preserve the animation library: %s" % library_source); _remove_tree(stage); return
+	elif ResourceSaver.save(library, staged_library_path) != OK:
+		_fail("Could not stage animation library"); _remove_tree(stage); return
 	var library_uid := root.path_join("%s.uid" % library_filename)
 	if FileAccess.file_exists(library_uid):
 		var staged_uid := stage.path_join("%s.uid" % library_filename)
 		if DirAccess.copy_absolute(ProjectSettings.globalize_path(library_uid), ProjectSettings.globalize_path(staged_uid)) != OK:
 			_fail("Could not preserve animation-library UID"); _remove_tree(stage); return
+	if _library_only():
+		print("ANIM002_RUNTIME_LIBRARY_STAGED=" + JSON.stringify({"package": package["name"], "variant": package["variant"], "library": staged_library_path}))
+		return
+	var interval_error := _validate_planted_intervals(package, intervals["document"], document, staged_library_path)
+	if not interval_error.is_empty(): _fail(interval_error); _remove_tree(stage); return
+	if String(intervals["storage"]) == descriptor_helper.CATALOGUE_FIELD:
+		document[planted_intervals.CATALOGUE_FIELD] = intervals["document"]
 	if not _write_json(stage.path_join("%s_%s_catalogue.json" % [package["name"], package["variant"]]), document): _remove_tree(stage); return
-	var contact_error: String = contact_evidence.copy_to_stage(contacts, stage)
-	if not contact_error.is_empty(): _fail(contact_error); _remove_tree(stage); return
+	if String(intervals["storage"]) == descriptor_helper.PACKAGE_FILE:
+		var interval_file := FileAccess.open(stage.path_join(String(intervals["runtime_path"])), FileAccess.WRITE)
+		if interval_file == null: _fail("Could not stage planted intervals"); _remove_tree(stage); return
+		interval_file.store_string(String(intervals["text"]))
+		interval_file.close()
 	if "--inject-staged-validation-failure" in OS.get_cmdline_user_args():
 		var corrupt := FileAccess.open(stage.path_join(library_filename), FileAccess.WRITE)
 		if corrupt != null: corrupt.store_string("corrupt staged fixture")
-	if not _validate_stage(package, index, stage, library_filename, document, contacts): _remove_tree(stage); return
+	if not _validate_stage(package, index, stage, library_filename, document, intervals): _remove_tree(stage); return
 	print("ANIM002_RUNTIME_STAGE_PREPARED=" + JSON.stringify({"package": package["name"], "variant": package["variant"], "stage": stage}))
 
 func _stage_root(root: String, package_name: String, variant: String) -> String:
@@ -356,7 +382,7 @@ func _has_symbolic_link_component(path: String) -> bool:
 		if project_directory.is_link(ProjectSettings.globalize_path(current)): return true
 	return false
 
-func _validate_stage(package: Dictionary, index: Dictionary, stage: String, library_filename: String, document: Dictionary, contacts: Dictionary) -> bool:
+func _validate_stage(package: Dictionary, index: Dictionary, stage: String, library_filename: String, document: Dictionary, intervals: Dictionary) -> bool:
 	var before := errors.size()
 	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(stage.path_join("clips"))):
 		_fail("Staged package must not contain a standalone clips directory")
@@ -392,17 +418,67 @@ func _validate_stage(package: Dictionary, index: Dictionary, stage: String, libr
 				_fail("Staged library loop intent disagrees with the catalogue: %s" % identity)
 	var catalogue := _json(stage.path_join("%s_%s_catalogue.json" % [package["name"], package["variant"]]))
 	if catalogue != JSON.parse_string(JSON.stringify(document)): _fail("Staged catalogue differs after reload")
-	if int(catalogue.get("schema_version", 0)) != 3: _fail("Staged catalogue schema is invalid")
+	if int(catalogue.get("schema_version", 0)) != 4: _fail("Staged catalogue schema is invalid")
 	if String(catalogue.get("animation_library", "")) != library_filename: _fail("Staged catalogue library link is invalid")
 	for value in catalogue.get("clips", []):
 		if value is Dictionary and (value as Dictionary).has("clip"):
 			_fail("Staged catalogue carries a standalone-clip path field: %s" % (value as Dictionary).get("identity", ""))
-	if bool(contacts.get("declared", false)):
-		var staged_contacts := contacts.duplicate(true)
-		staged_contacts["runtime_file"] = stage.path_join(String(contacts["runtime_path"]))
-		var contact_error: String = contact_evidence.validate_published(staged_contacts, index, String(package["root"]), catalogue)
-		if not contact_error.is_empty(): _fail(contact_error)
+	var staged_intervals: Variant = catalogue.get(planted_intervals.CATALOGUE_FIELD)
+	if String(intervals["storage"]) == descriptor_helper.CATALOGUE_FIELD and staged_intervals != intervals["document"]:
+		_fail("Staged idle catalogue planted intervals differ from the declared input")
+	if String(intervals["storage"]) == descriptor_helper.PACKAGE_FILE:
+		var staged_path := stage.path_join(String(intervals["runtime_path"]))
+		if catalogue.has(planted_intervals.CATALOGUE_FIELD): _fail("Staged locomotion catalogue must not embed planted intervals")
+		if not FileAccess.file_exists(staged_path) or FileAccess.get_file_as_string(staged_path) != String(intervals["text"]):
+			_fail("Staged planted intervals differ from the declared input")
+		staged_intervals = JSON.parse_string(FileAccess.get_file_as_string(staged_path)) if FileAccess.file_exists(staged_path) else null
+	var staged_error := _validate_planted_intervals(package, staged_intervals, catalogue, stage.path_join(library_filename))
+	if not staged_error.is_empty(): _fail("Staged " + staged_error.substr(0, 1).to_lower() + staged_error.substr(1))
 	return errors.size() == before
+
+func _library_only() -> bool:
+	return "--stage-library-only" in OS.get_cmdline_user_args()
+
+func _planted_intervals(package: Dictionary, name: String) -> Dictionary:
+	var declaration: Variant = package.get("planted_intervals")
+	var storage: String = descriptor_helper.planted_interval_storage(name)
+	if not declaration is Dictionary:
+		return {"error": "Package descriptor requires an explicit planted-interval declaration"}
+	var value := declaration as Dictionary
+	var input := String(value.get("input", ""))
+	var retained := String(value.get("retained_input", ""))
+	var declared_storage := String(value.get("storage", ""))
+	if declared_storage not in [descriptor_helper.PACKAGE_FILE, descriptor_helper.CATALOGUE_FIELD] or (not storage.is_empty() and declared_storage != storage):
+		return {"error": "Planted-interval storage %s is invalid for the %s package" % [declared_storage, name]}
+	storage = declared_storage
+	if input.is_empty() or retained.is_empty() or retained.begins_with("res://temp/") or retained.begins_with("res://tests/"):
+		return {"error": "Planted-interval declaration requires an input and a durable retained_input"}
+	if input.get_file() != planted_intervals.FILENAME or retained.get_file() != planted_intervals.FILENAME:
+		return {"error": "Planted-interval input must be %s" % planted_intervals.FILENAME}
+	if storage == descriptor_helper.PACKAGE_FILE and String(value.get("runtime_path", "")) != planted_intervals.FILENAME:
+		return {"error": "Planted-interval runtime_path must be %s" % planted_intervals.FILENAME}
+	if not FileAccess.file_exists(input):
+		return {"error": "Planted-interval input is missing: %s" % input}
+	var text := FileAccess.get_file_as_string(input)
+	var parsed: Variant = JSON.parse_string(text)
+	if not parsed is Dictionary:
+		return {"error": "Planted-interval input is not a JSON object: %s" % input}
+	if storage == descriptor_helper.CATALOGUE_FIELD and JSON.parse_string(JSON.stringify(parsed)) != parsed:
+		# The catalogue re-serialises the embedded intervals, so they must survive a Godot JSON round trip unchanged.
+		return {"error": "Planted-interval input does not survive a Godot JSON round trip; re-derive it: %s" % input}
+	return {"input": input, "retained_input": retained, "storage": storage, "runtime_path": String(value.get("runtime_path", "")), "text": text, "document": parsed}
+
+func _validate_planted_intervals(package: Dictionary, value: Variant, catalogue: Dictionary, library_path: String) -> String:
+	var policy: Dictionary = planted_intervals.load_policy(_tool_root().path_join("config").path_join(planted_intervals.POLICY_FILENAME))
+	if policy.has("error"): return String(policy["error"])
+	return planted_intervals.validate_document(value, {
+		"character": String(package["character"]), "package": String(package["name"]), "variant": String(package["variant"]),
+		"clips": planted_intervals.catalogue_expectations(catalogue), "policy_sha256": String(policy["sha256"]),
+		"runtime_library_sha256": descriptor_helper.runtime_library_sha256(library_path),
+	})
+
+func _tool_root() -> String:
+	return String(get_script().resource_path).get_base_dir().get_base_dir().get_base_dir()
 
 func _index_frame_math(actions: Array) -> Dictionary:
 	var durations := {}

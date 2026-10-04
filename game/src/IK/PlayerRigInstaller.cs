@@ -132,9 +132,8 @@ public partial class PlayerRigInstaller : CharacterIKSubsystemInstaller
                 characterLocomotion.IdleAnimationStateName = StandingPoseState.DefaultAnimationStateName;
             }
 
-            AnimationTree animationTree = FindSingleDescendant<AnimationTree>(context.TargetRoot, required: false)
-                ?? throw new InvalidOperationException("Player rig installer requires the production AnimationTree for contact-lock composition.");
-            if (animationTree.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>() is AnimationNodeStateMachinePlayback playback)
+            if (FindSingleDescendant<AnimationTree>(context.TargetRoot, required: false)?.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
+                is AnimationNodeStateMachinePlayback playback)
             {
                 playback.Start(StandingPoseState.DefaultAnimationStateName, reset: true);
             }
@@ -145,56 +144,11 @@ public partial class PlayerRigInstaller : CharacterIKSubsystemInstaller
                 playerController.LocomotionNode ??= locomotion;
             }
 
-            if (context.TargetRoot is not Node3D actor || locomotion is not CharacterLocomotion playerLocomotion)
-            {
-                throw new InvalidOperationException("Player contact-lock composition requires a Node3D actor and CharacterLocomotion movement owner.");
-            }
-
-            PlayerContactLockComposition? existingComposition = context.TargetRoot.GetNodeOrNull<PlayerContactLockComposition>("PlayerContactLockComposition");
-            PlayerContactLockComposition composition = existingComposition
-                ?? new PlayerContactLockComposition { Name = "PlayerContactLockComposition" };
-            bool ownsProvisionalComposition = composition.GetParent() is null;
-            if (ownsProvisionalComposition)
-            {
-                context.TargetRoot.AddChild(composition);
-            }
-            try
-            {
-                composition.Configure(actor, playerVRIK, playerLocomotion, animationTree, context.Skeleton);
-            }
-            catch (Exception configurationError)
-            {
-                try
-                {
-                    if (ownsProvisionalComposition && IsInstanceValid(composition))
-                    {
-                        composition.GetParent()?.RemoveChild(composition);
-                        composition.QueueFree();
-                    }
-                }
-                catch (Exception cleanupError)
-                {
-                    throw new AggregateException(
-                        "Player contact-lock installation failed and provisional composition cleanup also reported an error.",
-                        configurationError,
-                        cleanupError);
-                }
-                throw;
-            }
-
             return SceneInstallationResult.Successful();
-        }
-        catch (AggregateException ex)
-        {
-            return SceneInstallationResult.Failed(ex.ToString());
         }
         catch (InvalidOperationException ex)
         {
             return SceneInstallationResult.Failed(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return SceneInstallationResult.Failed(ex.ToString());
         }
     }
 

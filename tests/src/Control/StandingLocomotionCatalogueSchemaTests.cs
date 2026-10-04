@@ -14,9 +14,9 @@ public sealed class StandingLocomotionCatalogueSchemaTests
 {
     private const string CataloguePath = "res://unit-fixtures/locomotion/fixture_catalogue.json";
 
-    private const string ValidV3Json = /*lang=json,strict*/ """
+    private const string ValidV4Json = /*lang=json,strict*/ """
         {
-          "schema_version": 3,
+          "schema_version": 4,
           "package": "unit_fixture",
           "package_variant": "fixture",
           "animation_library": "unit_library.tres",
@@ -73,22 +73,22 @@ public sealed class StandingLocomotionCatalogueSchemaTests
     public void Parse_RejectsStaleV2ClipPathCataloguesWithClearDiagnostic()
     {
         InvalidDataException error = Assert.Throws<InvalidDataException>(
-            () => StandingLocomotionCatalogue.Parse(ValidV3Json.Replace("\"schema_version\": 3", "\"schema_version\": 2"), CataloguePath));
+            () => StandingLocomotionCatalogue.Parse(ValidV4Json.Replace("\"schema_version\": 4", "\"schema_version\": 2"), CataloguePath));
 
         Assert.Contains("stale schema version 2", error.Message, StringComparison.Ordinal);
-        Assert.Contains("schema version 3", error.Message, StringComparison.Ordinal);
+        Assert.Contains("schema version 4", error.Message, StringComparison.Ordinal);
         Assert.Contains(CataloguePath, error.Message, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("\"schema_version\": 1")]
-    [InlineData("\"schema_version\": 4")]
+    [InlineData("\"schema_version\": 3")]
     public void Parse_RejectsUnsupportedSchemaVersions(string versionFragment)
     {
         InvalidDataException error = Assert.Throws<InvalidDataException>(
-            () => StandingLocomotionCatalogue.Parse(ValidV3Json.Replace("\"schema_version\": 3", versionFragment), CataloguePath));
+            () => StandingLocomotionCatalogue.Parse(ValidV4Json.Replace("\"schema_version\": 4", versionFragment), CataloguePath));
 
-        Assert.Contains("schema version 3", error.Message, StringComparison.Ordinal);
+        Assert.Contains("schema version 4", error.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -100,7 +100,7 @@ public sealed class StandingLocomotionCatalogueSchemaTests
     {
         InvalidDataException error = Assert.Throws<InvalidDataException>(
             () => StandingLocomotionCatalogue.Parse(
-                ValidV3Json.Replace("\"animation_library\": \"unit_library.tres\"", libraryFragment),
+                ValidV4Json.Replace("\"animation_library\": \"unit_library.tres\"", libraryFragment),
                 CataloguePath));
 
         Assert.Contains("co-located", error.Message, StringComparison.Ordinal);
@@ -111,7 +111,7 @@ public sealed class StandingLocomotionCatalogueSchemaTests
     {
         InvalidDataException error = Assert.Throws<InvalidDataException>(
             () => StandingLocomotionCatalogue.Parse(
-                ValidV3Json.Replace("\"identity\": \"unit_token_a\"", "\"clip\": \"res://clips/unit_token_a.res\", \"identity\": \"unit_token_a\""),
+                ValidV4Json.Replace("\"identity\": \"unit_token_a\"", "\"clip\": \"res://clips/unit_token_a.res\", \"identity\": \"unit_token_a\""),
                 CataloguePath));
 
         Assert.Contains("unknown or duplicate property", error.Message, StringComparison.Ordinal);
@@ -121,7 +121,7 @@ public sealed class StandingLocomotionCatalogueSchemaTests
     public void Parse_RejectsCataloguePathsWithoutDirectory()
     {
         InvalidDataException error = Assert.Throws<InvalidDataException>(
-            () => StandingLocomotionCatalogue.Parse(ValidV3Json, "bare_catalogue.json"));
+            () => StandingLocomotionCatalogue.Parse(ValidV4Json, "bare_catalogue.json"));
 
         Assert.Contains("directory-qualified", error.Message, StringComparison.Ordinal);
     }

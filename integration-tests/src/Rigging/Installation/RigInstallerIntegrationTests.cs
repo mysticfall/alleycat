@@ -680,12 +680,6 @@ public sealed class RigInstallerIntegrationTests
 
         Assert.Same(playerVRIK.GetNode("RightHandGrabProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.RightHandIKTargetIntentProvider)));
         Assert.Same(playerVRIK.GetNode("LeftHandGrabProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftHandIKTargetIntentProvider)));
-        PlayerContactLockComposition contactComposition = playerRoot.GetNode<PlayerContactLockComposition>("PlayerContactLockComposition");
-        Assert.True(contactComposition.IsInstalled);
-        _ = Assert.IsType<ContactLockFootTargetProvider>(GetPropertyValue(playerVRIK, nameof(CharacterIK.RightFootTargetIntentProvider)), exactMatch: false);
-        _ = Assert.IsType<ContactLockFootTargetProvider>(GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftFootTargetIntentProvider)), exactMatch: false);
-        Assert.Same(contactComposition.RightProvider, GetPropertyValue(playerVRIK, nameof(CharacterIK.RightFootTargetIntentProvider)));
-        Assert.Same(contactComposition.LeftProvider, GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftFootTargetIntentProvider)));
         Assert.Same(playerVRIK.GetNode("HeadFallbackIntentProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.HeadFallbackIntentProvider)));
         Assert.Same(playerVRIK.GetNode("RightHandFallbackIntentProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.RightHandFallbackIntentProvider)));
         Assert.Same(playerVRIK.GetNode("LeftHandFallbackIntentProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftHandFallbackIntentProvider)));
@@ -696,15 +690,6 @@ public sealed class RigInstallerIntegrationTests
         Assert.Same(playerRoot.GetNode("Female/GeneralSkeleton/Head/Viewpoint"), GetPropertyValue(playerVRIK.GetNode("HeadFallbackIntentProvider"), nameof(XRHeadTargetIntentProvider.Viewpoint)));
         Assert.Same(playerRoot.GetNode("IKTargets/RightFoot"), GetPropertyValue(playerVRIK.GetNode("RightFootFallbackIntentProvider"), nameof(AnimationSynchronizedFootTargetProvider.FootTarget)));
         Assert.Same(playerRoot.GetNode("IKTargets/LeftFoot"), GetPropertyValue(playerVRIK.GetNode("LeftFootFallbackIntentProvider"), nameof(AnimationSynchronizedFootTargetProvider.FootTarget)));
-
-        CharacterLocomotion characterLocomotion = Assert.IsType<CharacterLocomotion>(locomotion, exactMatch: false);
-        Assert.True(characterLocomotion.IsContactLockCoordinatorBound);
-        contactComposition.Enabled = false;
-        Assert.False(characterLocomotion.IsContactLockCoordinatorBound);
-        Assert.False(contactComposition.Coordinator!.StateSnapshot.Left.HasAnchor);
-        Assert.False(contactComposition.Coordinator.StateSnapshot.Right.HasAnchor);
-        contactComposition.Enabled = true;
-        Assert.True(characterLocomotion.IsContactLockCoordinatorBound);
     }
 
     /// <summary>

@@ -1,8 +1,5 @@
 using System.Text.Json;
 using AlleyCat.Control.Locomotion;
-using AlleyCat.IK;
-using AlleyCat.Navigation;
-using AlleyCat.Rigging;
 using Godot;
 
 #pragma warning disable IDE0048, IDE0072
@@ -12,7 +9,7 @@ namespace AlleyCat.IntegrationTests.Support;
 /// <summary>
 /// Test-owned, content-independent locomotion package used by runtime integration tests. The package models the
 /// ANIM-002 embedded-only contract: animations exist only as members of saved AnimationLibrary resources, and the
-/// schema version 3 catalogue resolves them by animation identity. No standalone clip resources are published.
+/// schema version 4 catalogue resolves them by animation identity. No standalone clip resources are published.
 /// </summary>
 internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
 {
@@ -20,7 +17,6 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
     private const string LocomotionLibraryFilename = "locomotion_library.tres";
     private const string IdleLibraryFilename = "idle_library.tres";
     private const string NavigationLibraryFilename = "navigation_library.tres";
-    private static readonly Basis _referenceRigBasis = new(Vector3.Up, Mathf.Pi);
     private readonly string _directory;
 
     private SyntheticLocomotionRuntimeFixture(string directory, SyntheticLocomotionDeclaration declaration)
@@ -60,14 +56,10 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
 
         LocomotionLibraryPath = JoinResourcePath(directory, LocomotionLibraryFilename);
         IdleLibraryPath = JoinResourcePath(directory, IdleLibraryFilename);
-        ContactTrackPath = JoinResourcePath(directory, "contacts.json");
-        NavigationContactTrackPath = JoinResourcePath(directory, "navigation_contacts.json");
         NavigationLibraryPath = JoinResourcePath(directory, NavigationLibraryFilename);
         NavigationCataloguePath = JoinResourcePath(directory, "navigation_catalogue.json");
         AssertSaved(LocomotionLibrary, LocomotionLibraryPath);
         AssertSaved(IdleLibrary, IdleLibraryPath);
-        WriteText(ContactTrackPath, CreateContactTrackJson());
-        WriteText(NavigationContactTrackPath, CreateNavigationContactTrackJson());
         EnsureOk(Player.AddAnimationLibrary("locomotion", LocomotionLibrary), "locomotion library");
         EnsureOk(Player.AddAnimationLibrary("idle", IdleLibrary), "idle library");
         CreateNavigationPackage();
@@ -110,14 +102,6 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         get;
     }
     public string IdleLibraryPath
-    {
-        get;
-    }
-    public string ContactTrackPath
-    {
-        get;
-    }
-    public string NavigationContactTrackPath
     {
         get;
     }
@@ -203,6 +187,7 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
             RootNode = new NodePath(".."),
             TreeRoot = machine,
             RootMotionTrack = new NodePath("SyntheticSkeleton:Root"),
+            RootMotionLocal = true,
             CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics,
         };
         Actor.AddChild(tree);
@@ -216,11 +201,19 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
     /// </summary>
     public SyntheticPlayerLocomotionRuntime CreatePlayerLocomotionRuntime()
     {
-        var rootMotionReference = new Node3D { Name = "RootMotionReference" };
+        var rootMotionReference = new Node3D
+        {
+            Name = "RootMotionReference",
+            Basis = Basis.FromEuler(new Vector3(0f, Mathf.Pi, 0f)),
+        };
         Actor.AddChild(rootMotionReference);
         rootMotionReference.Owner = Root;
 
         AnimationTree tree = CreatePlayerPlaybackTree();
+        // The player playback tree must be inside the scene graph: the AnimationTree only binds its AnimationPlayer
+        // and processes advances after entering the tree, so a detached tree silently never evaluates its graph.
+        Actor.AddChild(tree);
+        tree.Owner = Root;
         var locomotion = new CharacterLocomotion
         {
             Name = "Locomotion",
@@ -228,74 +221,21 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
             AnimationTree = tree,
             RootMotionReference = rootMotionReference,
             CataloguePath = NavigationCataloguePath,
-            ResidualSmoothingRate = 100f,
-            ResidualEntryRampReference = 0.01f,
         };
         Actor.AddChild(locomotion);
         locomotion.Owner = Root;
-        return new(Actor, rootMotionReference, Skeleton, Player, tree, locomotion, Declaration.NavigationManifest);
-    }
-
-    /// <summary>
-    /// Adds a bare NPC navigation composition owned entirely by this fixture. It includes only a navigation agent,
-    /// state machine, declared root tracks, and a declared catalogue; it has no production scene or library input.
-    /// </summary>
-    public SyntheticNavigationRuntime CreateNavigationRuntime()
-    {
-        var reference = new Node3D
-        {
-            Name = "NavigationRig",
-            Transform = new Transform3D(_referenceRigBasis, Vector3.Zero),
-        };
-        Skeleton3D skeleton = BuildNavigationSkeleton();
-        AnimationTree tree = CreateNavigationTree();
-        var navigation = new SyntheticNPCNavigation
-        {
-            Name = "Navigation",
-            Actor = Actor,
-            AnimationTree = tree,
-            RootMotionReference = reference,
-            CataloguePath = NavigationCataloguePath,
-            AwaitInstallerActivation = true,
-        };
-        Actor.AddChild(reference);
-        reference.Owner = Root;
-        reference.AddChild(skeleton);
-        skeleton.Owner = Root;
-        Actor.AddChild(tree);
-        tree.Owner = Root;
-        Actor.AddChild(navigation);
-        navigation.Owner = Root;
-        var physicsDriver = new SyntheticAnimationPhysicsDriver(tree)
-        {
-            Name = "AnimationPhysicsDriver",
-            ProcessPhysicsPriority = -99,
-        };
-        Actor.AddChild(physicsDriver);
-        physicsDriver.Owner = Root;
-        return new(Root, Actor, reference, skeleton, Player, tree, navigation, physicsDriver, Declaration.NavigationManifest);
+        return new(
+            Actor,
+            rootMotionReference,
+            Skeleton,
+            Player,
+            tree,
+            locomotion,
+            Declaration.NavigationManifest);
     }
 
     public Animation AnimationFor(string clipName)
         => Player.GetAnimation($"{(Declaration[clipName].IsIdle ? "idle" : "locomotion")}/{clipName}");
-
-    public AuthoredPerFootContactTrackV1 LoadContactTrack()
-        => AuthoredPerFootContactTrackV1.Load(File.ReadAllText(ProjectSettings.GlobalizePath(ContactTrackPath)));
-
-    public ContactLockLiveState Live(string clipName, float phase, ulong tick, string? identity = null)
-    {
-        SyntheticClipDeclaration clip = Declaration[clipName];
-        return new(
-            true,
-            clip.Name,
-            clip.Identity,
-            phase,
-            Declaration.Variant,
-            identity ?? clip.Identity,
-            Declaration.Generation,
-            tick,
-            1f / 60f);
-    }
 
     public void Dispose()
     {
@@ -320,7 +260,7 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         }
     }
 
-    private static Skeleton3D BuildSkeleton()
+    internal static Skeleton3D BuildSkeleton()
     {
         var skeleton = new Skeleton3D { Name = "SyntheticSkeleton" };
         EnsureBoneIndex(skeleton.AddBone("Root"), 0);
@@ -355,15 +295,6 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         return skeleton;
     }
 
-    private static Skeleton3D BuildNavigationSkeleton()
-    {
-        Skeleton3D skeleton = BuildSkeleton();
-        skeleton.Name = "GeneralSkeleton";
-        skeleton.UniqueNameInOwner = true;
-        skeleton.MotionScale = 1f;
-        return skeleton;
-    }
-
     private void CreateNavigationPackage()
     {
         foreach (SyntheticNavigationClipDeclaration clip in Declaration.NavigationManifest.Clips)
@@ -380,7 +311,7 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         AssertSaved(NavigationLibrary, NavigationLibraryPath);
         WriteText(
             NavigationCataloguePath,
-            Declaration.NavigationManifest.ToJson(NavigationLibraryFilename, NavigationContactTrackPath));
+            Declaration.NavigationManifest.ToJson(NavigationLibraryFilename));
     }
 
     private static Animation CreateNavigationAnimation(SyntheticNavigationClipDeclaration clip)
@@ -398,77 +329,21 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         animation.TrackSetPath(rootRotation, new NodePath("%GeneralSkeleton:Root"));
         EnsureKey(animation.RotationTrackInsertKey(rootRotation, 0f, Quaternion.Identity));
         EnsureKey(animation.RotationTrackInsertKey(rootRotation, clip.DurationSeconds, Quaternion.FromEuler(new Vector3(0f, clip.YawRadians, 0f))));
+        // The same fixture-owned library serves the minimal player rig. Mirror the declared Root onto that rig's
+        // path so player behavioural tests evaluate real authored root rather than accidentally proving a discarded
+        // or missing track. Production-content paths remain outside the fixture oracle.
+        int playerRootPosition = animation.AddTrack(Animation.TrackType.Position3D);
+        animation.TrackSetPath(playerRootPosition, new NodePath("SyntheticSkeleton:Root"));
+        EnsureKey(animation.PositionTrackInsertKey(playerRootPosition, 0f, Vector3.Zero));
+        EnsureKey(animation.PositionTrackInsertKey(playerRootPosition, clip.DurationSeconds, clip.SkeletonLocalRootResponse));
+        int playerRootRotation = animation.AddTrack(Animation.TrackType.Rotation3D);
+        animation.TrackSetPath(playerRootRotation, new NodePath("SyntheticSkeleton:Root"));
+        EnsureKey(animation.RotationTrackInsertKey(playerRootRotation, 0f, Quaternion.Identity));
+        EnsureKey(animation.RotationTrackInsertKey(playerRootRotation, clip.DurationSeconds, Quaternion.FromEuler(new Vector3(0f, clip.YawRadians, 0f))));
         return animation;
     }
 
-    private AnimationTree CreateNavigationTree()
-    {
-        var states = new AnimationNodeStateMachine();
-        states.AddNode("NPCIdle", new AnimationNodeAnimation { Animation = "idle/ember_idle" });
-        states.AddTransition("Start", "NPCIdle", new AnimationNodeStateMachineTransition
-        {
-            AdvanceMode = AnimationNodeStateMachineTransition.AdvanceModeEnum.Enabled,
-            XfadeTime = 0f,
-        });
-        AddFiniteState("NPCI2FL", "i2f_l");
-        AddFiniteState("NPCI2FR", "i2f_r");
-        AddFiniteState("NPCI2BL", "i2b_l");
-        AddFiniteState("NPCI2BR", "i2b_r");
-        AddFiniteState("NPCF2IL", "f2i_l");
-        AddFiniteState("NPCF2IR", "f2i_r");
-        AddFiniteState("NPCB2IL", "b2i_l");
-        AddFiniteState("NPCB2IR", "b2i_r");
-        AddFiniteState("NPCPivotL", "pl45");
-        AddFiniteState("NPCPivotR", "pr45");
-        AddFiniteState("NPCSideStepL", "sl");
-        AddFiniteState("NPCSideStepR", "sr");
-        AddFiniteState("NPCShortFL", "i2f_l");
-        AddFiniteState("NPCShortFLExit", "f2i_r");
-        AddFiniteState("NPCShortFR", "i2f_r");
-        AddFiniteState("NPCShortFRExit", "f2i_l");
-        AddFiniteState("NPCShortBL", "i2b_l");
-        AddFiniteState("NPCShortBLExit", "b2i_r");
-        AddFiniteState("NPCShortBR", "i2b_r");
-        AddFiniteState("NPCShortBRExit", "b2i_l");
-        states.AddNode("NPCTravel", CreateTravelTree());
-        foreach (StringName from in new[]
-                 {
-                     new StringName("NPCIdle"), new StringName("NPCI2FL"), new StringName("NPCI2FR"), new StringName("NPCI2BL"), new StringName("NPCI2BR"),
-                     new StringName("NPCTravel"), new StringName("NPCF2IL"), new StringName("NPCF2IR"), new StringName("NPCB2IL"), new StringName("NPCB2IR"),
-                     new StringName("NPCPivotL"), new StringName("NPCPivotR"), new StringName("NPCSideStepL"), new StringName("NPCSideStepR"),
-                     new StringName("NPCShortFL"), new StringName("NPCShortFLExit"), new StringName("NPCShortFR"), new StringName("NPCShortFRExit"),
-                     new StringName("NPCShortBL"), new StringName("NPCShortBLExit"), new StringName("NPCShortBR"), new StringName("NPCShortBRExit"),
-                 })
-        {
-            foreach (StringName to in new[] { new StringName("NPCIdle"), new StringName("NPCTravel"), new StringName("NPCF2IL"), new StringName("NPCF2IR"), new StringName("NPCB2IL"), new StringName("NPCB2IR") })
-            {
-                if (from != to)
-                {
-                    states.AddTransition(from, to, new AnimationNodeStateMachineTransition { AdvanceMode = AnimationNodeStateMachineTransition.AdvanceModeEnum.Enabled, XfadeTime = 0.1f });
-                }
-            }
-        }
-
-        var root = new AnimationNodeBlendTree();
-        root.AddNode("States", states);
-        root.ConnectNode("output", 0, "States");
-        return new AnimationTree
-        {
-            Name = "AnimationTree",
-            AnimPlayer = new NodePath("../AnimationPlayer"),
-            RootNode = new NodePath(".."),
-            RootMotionTrack = new NodePath("%GeneralSkeleton:Root"),
-            TreeRoot = root,
-            CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics,
-        };
-
-        void AddFiniteState(string state, string role)
-        {
-            states.AddNode(state, new AnimationNodeAnimation { Animation = $"locomotion/{Declaration.NavigationManifest[role].Identity}" });
-        }
-    }
-
-    private AnimationTree CreatePlayerPlaybackTree()
+    internal AnimationTree CreatePlayerPlaybackTree()
     {
         var states = new AnimationNodeStateMachine();
         states.AddNode(SyntheticPlayerLocomotionRuntime.IdleState, new AnimationNodeAnimation { Animation = "idle/ember_idle" });
@@ -476,37 +351,64 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         AddFiniteState(SyntheticPlayerLocomotionRuntime.EntryForwardRightState, "i2f_r");
         AddFiniteState(SyntheticPlayerLocomotionRuntime.EntryBackwardLeftState, "i2b_l");
         AddFiniteState(SyntheticPlayerLocomotionRuntime.EntryBackwardRightState, "i2b_r");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.ExitForwardLeftState, "f2i_l");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.ExitForwardRightState, "f2i_r");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState, "b2i_l");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.ExitBackwardRightState, "b2i_r");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.PivotLeftState, "pl45");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.PivotRightState, "pr45");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.SideStepLeftState, "sl");
-        AddFiniteState(SyntheticPlayerLocomotionRuntime.SideStepRightState, "sr");
+        AddStopState(SyntheticPlayerLocomotionRuntime.ExitForwardLeftState, "f2i_l");
+        AddStopState(SyntheticPlayerLocomotionRuntime.ExitForwardRightState, "f2i_r");
+        AddStopState(SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState, "b2i_l");
+        AddStopState(SyntheticPlayerLocomotionRuntime.ExitBackwardRightState, "b2i_r");
+        // Stationary turning (CTRL-001): the authored confined pivots present turn-in-place exactly like the
+        // production tree's new turn states (both pivot animations loop, so the presentation sustains while
+        // the stick is held; the yaw reaches the actor through the authored root rotation alone).
+        AddFiniteState(SyntheticPlayerLocomotionRuntime.TurnInPlaceLeftState, "pl45");
+        AddFiniteState(SyntheticPlayerLocomotionRuntime.TurnInPlaceRightState, "pr45");
         states.AddNode(SyntheticPlayerLocomotionRuntime.TravelState, CreatePlayerTravelTree());
 
         AddTransitions("Start", [SyntheticPlayerLocomotionRuntime.IdleState]);
         AddTransitions(SyntheticPlayerLocomotionRuntime.IdleState, [
             SyntheticPlayerLocomotionRuntime.EntryForwardLeftState, SyntheticPlayerLocomotionRuntime.EntryForwardRightState,
             SyntheticPlayerLocomotionRuntime.EntryBackwardLeftState, SyntheticPlayerLocomotionRuntime.EntryBackwardRightState,
-            SyntheticPlayerLocomotionRuntime.PivotLeftState, SyntheticPlayerLocomotionRuntime.PivotRightState,
-            SyntheticPlayerLocomotionRuntime.SideStepLeftState, SyntheticPlayerLocomotionRuntime.SideStepRightState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryForwardLeftState, [SyntheticPlayerLocomotionRuntime.TravelState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryForwardRightState, [SyntheticPlayerLocomotionRuntime.TravelState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryBackwardLeftState, [SyntheticPlayerLocomotionRuntime.TravelState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryBackwardRightState, [SyntheticPlayerLocomotionRuntime.TravelState]);
+            SyntheticPlayerLocomotionRuntime.TurnInPlaceLeftState, SyntheticPlayerLocomotionRuntime.TurnInPlaceRightState]);
+        // The turn states return to idle on release and hand straight off to a movement entry when movement
+        // begins during the turn (no idle interlude), mirroring the exit-state interruptions.
+        foreach (string turnState in new[]
+                 {
+                     SyntheticPlayerLocomotionRuntime.TurnInPlaceLeftState, SyntheticPlayerLocomotionRuntime.TurnInPlaceRightState,
+                 })
+        {
+            AddTransitions(turnState, [
+                SyntheticPlayerLocomotionRuntime.IdleState,
+                SyntheticPlayerLocomotionRuntime.EntryForwardLeftState, SyntheticPlayerLocomotionRuntime.EntryForwardRightState,
+                SyntheticPlayerLocomotionRuntime.EntryBackwardLeftState, SyntheticPlayerLocomotionRuntime.EntryBackwardRightState]);
+        }
+        // Entries can be interrupted straight into their compatible exit (release during an authored start),
+        // into sustained travel (completion or retarget), or into idle (a lateral-dominant release during
+        // the entry window takes the neutral stop policy with no idle interlude through a stop clip).
+        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryForwardLeftState,
+            [SyntheticPlayerLocomotionRuntime.TravelState, SyntheticPlayerLocomotionRuntime.ExitForwardLeftState,
+             SyntheticPlayerLocomotionRuntime.IdleState]);
+        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryForwardRightState,
+            [SyntheticPlayerLocomotionRuntime.TravelState, SyntheticPlayerLocomotionRuntime.ExitForwardRightState,
+             SyntheticPlayerLocomotionRuntime.IdleState]);
+        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryBackwardLeftState,
+            [SyntheticPlayerLocomotionRuntime.TravelState, SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState,
+             SyntheticPlayerLocomotionRuntime.IdleState]);
+        AddTransitions(SyntheticPlayerLocomotionRuntime.EntryBackwardRightState,
+            [SyntheticPlayerLocomotionRuntime.TravelState, SyntheticPlayerLocomotionRuntime.ExitBackwardRightState,
+             SyntheticPlayerLocomotionRuntime.IdleState]);
         AddTransitions(SyntheticPlayerLocomotionRuntime.TravelState, [
             SyntheticPlayerLocomotionRuntime.ExitForwardLeftState, SyntheticPlayerLocomotionRuntime.ExitForwardRightState,
-            SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState, SyntheticPlayerLocomotionRuntime.ExitBackwardRightState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitForwardLeftState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitForwardRightState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitBackwardRightState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.PivotLeftState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.PivotRightState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.SideStepLeftState, [SyntheticPlayerLocomotionRuntime.IdleState]);
-        AddTransitions(SyntheticPlayerLocomotionRuntime.SideStepRightState, [SyntheticPlayerLocomotionRuntime.IdleState]);
+            SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState, SyntheticPlayerLocomotionRuntime.ExitBackwardRightState,
+            // Direct fallback stop when authored exit content is unavailable (presentation degradation only).
+            SyntheticPlayerLocomotionRuntime.IdleState]);
+        // Exits accept interruption straight back into travel: fresh intent replaces a pending stop without an idle
+        // interlude.
+        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitForwardLeftState,
+            [SyntheticPlayerLocomotionRuntime.IdleState, SyntheticPlayerLocomotionRuntime.TravelState]);
+        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitForwardRightState,
+            [SyntheticPlayerLocomotionRuntime.IdleState, SyntheticPlayerLocomotionRuntime.TravelState]);
+        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitBackwardLeftState,
+            [SyntheticPlayerLocomotionRuntime.IdleState, SyntheticPlayerLocomotionRuntime.TravelState]);
+        AddTransitions(SyntheticPlayerLocomotionRuntime.ExitBackwardRightState,
+            [SyntheticPlayerLocomotionRuntime.IdleState, SyntheticPlayerLocomotionRuntime.TravelState]);
 
         var root = new AnimationNodeBlendTree();
         root.AddNode("States", states);
@@ -517,6 +419,7 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
             AnimPlayer = new NodePath("../AnimationPlayer"),
             RootNode = new NodePath(".."),
             RootMotionTrack = new NodePath("SyntheticSkeleton:Root"),
+            RootMotionLocal = true,
             TreeRoot = root,
             CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics,
             Active = true,
@@ -525,6 +428,18 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         void AddFiniteState(string state, string role)
         {
             states.AddNode(state, new AnimationNodeAnimation { Animation = $"locomotion/{Declaration.NavigationManifest[role].Identity}" });
+        }
+
+        // Stop states mirror the production topology after stop-rate governance: the stop clip sits inside a
+        // blend tree with a Rate timescale, so `parameters/States/<state>/Rate/scale` governs stop playback.
+        void AddStopState(string state, string role)
+        {
+            AnimationNodeBlendTree wrap = new();
+            wrap.AddNode("Anim", new AnimationNodeAnimation { Animation = $"locomotion/{Declaration.NavigationManifest[role].Identity}" });
+            wrap.AddNode("Rate", new AnimationNodeTimeScale());
+            wrap.ConnectNode("Rate", 0, "Anim");
+            wrap.ConnectNode("output", 0, "Rate");
+            states.AddNode(state, wrap);
         }
 
         void AddTransitions(string from, IEnumerable<string> targets)
@@ -542,10 +457,10 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
 
     private AnimationNodeBlendTree CreatePlayerTravelTree()
     {
-        AnimationNodeBlendSpace2D forwardLeft = CreateTravelSpace("wf", "xl_l", "xr_l");
-        AnimationNodeBlendSpace2D forwardRight = CreateTravelSpace("wf", "xl_r", "xr_r");
-        AnimationNodeBlendSpace2D directionalLeft = CreateTravelSpace("wf", "wb", "xl_l");
-        AnimationNodeBlendSpace2D directionalRight = CreateTravelSpace("wf", "wb", "xr_r");
+        AnimationNodeBlendSpace2D forwardLeft = CreateTravelSpace("wf", "al_l", "ar_l");
+        AnimationNodeBlendSpace2D forwardRight = CreateTravelSpace("wf", "al_r", "ar_r");
+        AnimationNodeBlendSpace2D directionalLeft = CreateDirectionalTravelSpace("xl_l", "xr_l");
+        AnimationNodeBlendSpace2D directionalRight = CreateDirectionalTravelSpace("xl_r", "xr_r");
         var tree = new AnimationNodeBlendTree();
         tree.AddNode("ForwardArcL", forwardLeft);
         tree.AddNode("ForwardArcR", forwardRight);
@@ -582,31 +497,18 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         return space;
     }
 
+    private AnimationNodeBlendSpace2D CreateDirectionalTravelSpace(string leftRole, string rightRole)
+    {
+        AnimationNodeBlendSpace2D space = CreateTravelSpace("wf", leftRole, rightRole);
+        space.AddBlendPoint(CreateAnimationNode("wb"), new Vector2(0f, -1f), -1, "wb");
+        return space;
+    }
+
     private AnimationNodeAnimation CreateAnimationNode(string role)
         => new()
         {
             Animation = $"locomotion/{Declaration.NavigationManifest[role].Identity}"
         };
-
-    private AnimationNodeBlendTree CreateTravelTree()
-    {
-        var space = new AnimationNodeBlendSpace2D { MinSpace = new Vector2(-1f, -1f), MaxSpace = new Vector2(1f, 1f), AutoTriangles = true, CyclicLength = 0.8f };
-        foreach ((string name, Vector2 position, string role) in new[]
-                 {
-                      ("wf", new Vector2(0f, 1f), "wf"),
-                      ("xl", new Vector2(-1f, 0f), "xl_l"),
-                      ("xr", new Vector2(1f, 0f), "xr_l"),
-                 })
-        {
-            space.AddBlendPoint(new AnimationNodeAnimation { Animation = $"locomotion/{Declaration.NavigationManifest[role].Identity}" }, position, -1, name);
-        }
-        var tree = new AnimationNodeBlendTree();
-        tree.AddNode("Sustained", space);
-        tree.AddNode("Rate", new AnimationNodeTimeScale());
-        tree.ConnectNode("Rate", 0, "Sustained");
-        tree.ConnectNode("output", 0, "Rate");
-        return tree;
-    }
 
     private static Animation CreateAnimation(SyntheticClipDeclaration clip)
     {
@@ -630,169 +532,6 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
         animation.TrackSetPath(track, new NodePath($"SyntheticSkeleton:{bone}"));
         EnsureKey(animation.PositionTrackInsertKey(track, 0f, start));
         EnsureKey(animation.PositionTrackInsertKey(track, duration, end));
-    }
-
-    private string CreateContactTrackJson()
-        => JsonSerializer.Serialize(new
-        {
-            schema_version = 1,
-            package_identity = Declaration.Package,
-            source_derived = new
-            {
-                schema_version = 3,
-                method = "phase_guided_relative_motion_segmentation_v1",
-                generation = Declaration.Generation,
-                source_package = new
-                {
-                    package = Declaration.Package,
-                    variant = Declaration.Variant
-                },
-                paths_relative_to_processed_package = new
-                {
-                    processed_index = "processed-index.json",
-                    retargeted_blend = "declared.blend"
-                },
-                input_digests = new
-                {
-                    processed_index_sha256 = "synthetic",
-                    retargeted_blend_sha256 = "synthetic"
-                },
-                phase_policy = new
-                {
-                    identity = "synthetic-phase-policy",
-                    digest = "synthetic"
-                },
-                bone_mapping = new
-                {
-                    identity = "synthetic-bone-mapping",
-                    digest = "synthetic",
-                    feet = new
-                    {
-                        left = "declared",
-                        right = "declared"
-                    }
-                },
-                sampling = "native_fps",
-                configuration = new
-                {
-                    declared = true
-                },
-                configuration_digest = "synthetic",
-                confidence_weights = new
-                {
-                    semantic_event_anchor_agreement = 0.22f,
-                    within_state_cohesion = 0.18f,
-                    between_state_separation = 0.22f,
-                    transition_persistence_sharpness = 0.16f,
-                    contextual_opposite_consistency = 0.12f,
-                    ambiguity_margin = 0.10f
-                },
-                publication_eligible = true,
-                required_refusals = Array.Empty<string>(),
-                clips = Declaration.Clips.Select(clip => new { identity = clip.Identity, paths = Array.Empty<object>() }),
-                role_contact_matrix = Array.Empty<object>(),
-            },
-            samples = Declaration.Clips.SelectMany(clip => clip.ContactWindows.Select(window => new
-            {
-                schema_version = 1,
-                role = clip.Name,
-                foot = window.Foot == LimbSide.Left ? "left" : "right",
-                lifecycle = window.Lifecycle,
-                timing = window.Timing,
-                validity = "valid",
-                confidence = 1f,
-                provenance = Declaration.Provenance,
-                clip = clip.Identity,
-                variant = Declaration.Variant,
-                reference = Declaration.Reference,
-                identity = clip.Identity,
-                generation = Declaration.Generation,
-            })),
-        });
-
-    private string CreateNavigationContactTrackJson()
-    {
-        SyntheticNavigationManifest manifest = Declaration.NavigationManifest;
-        var samples = manifest.Clips.SelectMany(clip => clip.ContactWindows.Select(window => new
-        {
-            schema_version = 1,
-            role = clip.Role,
-            foot = window.Foot == LimbSide.Left ? "left" : "right",
-            lifecycle = window.Lifecycle,
-            timing = window.Timing,
-            validity = "valid",
-            confidence = 1f,
-            provenance = Declaration.Provenance,
-            clip = clip.Identity,
-            variant = manifest.Variant,
-            reference = Declaration.Reference,
-            identity = clip.Identity,
-            generation = manifest.Generation,
-        }).ToArray()).ToArray();
-        var matrix = manifest.Clips.SelectMany(clip => new[] { LimbSide.Left, LimbSide.Right }.Select(foot => new
-        {
-            role = clip.Role,
-            foot = foot == LimbSide.Left ? "left" : "right",
-            identity = clip.Identity,
-            outcome = clip.ContactWindows.Any(window => window.Foot == foot) ? "emitted" : "fallback",
-        })).ToArray();
-        return JsonSerializer.Serialize(new
-        {
-            schema_version = 1,
-            package_identity = manifest.ContactPackageIdentity,
-            samples,
-            source_derived = new
-            {
-                schema_version = 5,
-                method = "phase_seeded_relative_motion_segmentation_v2",
-                generation = manifest.Generation,
-                publication_eligible = true,
-                required_refusals = Array.Empty<string>(),
-                source_package = new
-                {
-                    package = manifest.Package,
-                    variant = manifest.Variant,
-                    action_count = manifest.Clips.Count
-                },
-                paths_relative_to_processed_package = new
-                {
-                    processed_index = "processed-index.json",
-                    retargeted_blend = "declared.blend"
-                },
-                input_digests = new
-                {
-                    processed_index_sha256 = "synthetic",
-                    retargeted_blend_sha256 = "synthetic"
-                },
-                phase_policy = new
-                {
-                    identity = "synthetic_policy",
-                    digest = "synthetic"
-                },
-                bone_mapping = new
-                {
-                    identity = "synthetic_mapping",
-                    digest = "synthetic"
-                },
-                input_contracts = new[] { "synthetic_contract" },
-                phase_seed_policy = new
-                {
-                    sample_domain = "unique_runtime_samples"
-                },
-                sampling = "native_fps",
-                configuration = new
-                {
-                    declared = true
-                },
-                configuration_digest = "synthetic",
-                confidence_weights = new
-                {
-                    declared = 1f
-                },
-                clips = manifest.Clips.Select(clip => new { identity = clip.Identity, role = clip.Role }).ToArray(),
-                role_contact_matrix = matrix,
-            },
-        });
     }
 
     private static void AssertSaved(Resource resource, string path)
@@ -841,9 +580,6 @@ internal sealed class SyntheticLocomotionRuntimeFixture : IDisposable
 internal sealed record SyntheticLocomotionDeclaration(
     string Package,
     string Variant,
-    string Generation,
-    string Provenance,
-    string Reference,
     IReadOnlyList<SyntheticClipDeclaration> Clips)
 {
     public static SyntheticLocomotionDeclaration Default
@@ -852,22 +588,13 @@ internal sealed record SyntheticLocomotionDeclaration(
     } = new(
         "synthetic-locomotion",
         "fixture",
-        "fixture-generation-1",
-        "test declaration",
-        "test reference",
         [
             new("stride_loop", "ember_stride_loop", 0.8f, true, new Vector3(0f, 0f, -0.8f), 0f),
             new("reverse_loop", "ember_reverse_loop", 0.8f, true, new Vector3(0f, 0f, 0.6f), 0f),
             new("pivot_clockwise", "ember_pivot_clockwise", 0.5f, true, Vector3.Zero, -Mathf.Pi / 2f),
             new("pivot_counterclockwise", "ember_pivot_counterclockwise", 0.5f, true, Vector3.Zero, Mathf.Pi / 2f),
-            new("exit_alpha", "ember_exit_alpha", 0.6f, false, new Vector3(0f, 0f, -0.2f), 0f,
-                DeclaredContactWindows: [
-                    new(LimbSide.Right, "acquire", [0d]), new(LimbSide.Right, "support", [0d, 0.45d]), new(LimbSide.Right, "release", [0.45d]),
-                    new(LimbSide.Left, "acquire", [0.60d]), new(LimbSide.Left, "support", [0.60d, 1d]), new(LimbSide.Left, "release", [1d])]),
-            new("exit_beta", "ember_exit_beta", 0.6f, false, new Vector3(0.1f, 0f, -0.2f), 0f,
-                DeclaredContactWindows: [
-                    new(LimbSide.Left, "acquire", [0d]), new(LimbSide.Left, "support", [0d, 0.45d]), new(LimbSide.Left, "release", [0.45d]),
-                    new(LimbSide.Right, "acquire", [0.60d]), new(LimbSide.Right, "support", [0.60d, 1d]), new(LimbSide.Right, "release", [1d])]),
+            new("exit_alpha", "ember_exit_alpha", 0.6f, false, new Vector3(0f, 0f, -0.2f), 0f),
+            new("exit_beta", "ember_exit_beta", 0.6f, false, new Vector3(0.1f, 0f, -0.2f), 0f),
             new("idle", "ember_idle", 1f, true, Vector3.Zero, 0f, IsIdle: true),
         ]);
 
@@ -887,7 +614,6 @@ internal sealed record SyntheticClipDeclaration(
     Vector3? DeclaredLeftFootEnd = null,
     Vector3? DeclaredRightFootStart = null,
     Vector3? DeclaredRightFootEnd = null,
-    IReadOnlyList<SyntheticContactWindow>? DeclaredContactWindows = null,
     bool IsIdle = false)
 {
     public bool IsFinite => !Loops && !IsIdle;
@@ -895,20 +621,14 @@ internal sealed record SyntheticClipDeclaration(
     public Vector3 LeftFootEnd { get; } = DeclaredLeftFootEnd ?? new Vector3(-0.2f, -1f, -0.25f);
     public Vector3 RightFootStart { get; } = DeclaredRightFootStart ?? new Vector3(0.2f, -1f, 0f);
     public Vector3 RightFootEnd { get; } = DeclaredRightFootEnd ?? new Vector3(0.2f, -1f, -0.25f);
-    public IReadOnlyList<SyntheticContactWindow> ContactWindows { get; } = DeclaredContactWindows ?? [];
 }
-
-internal sealed record SyntheticContactWindow(LimbSide Foot, string Lifecycle, IReadOnlyList<double> Timing);
 
 /// <summary>Fixture-owned navigation roles and package contract. Values are deliberately arbitrary and generic.</summary>
 internal sealed record SyntheticNavigationManifest(
     IReadOnlyList<SyntheticNavigationClipDeclaration> Clips,
     IReadOnlyList<SyntheticNavigationMapping>? DeclaredMappings = null,
-    IReadOnlyList<StandingLocomotionShortBoutPair>? DeclaredShortBoutPairs = null,
     string Package = "locomotion",
-    string Variant = "ember",
-    string ContactPackageIdentity = "synthetic_contact_package",
-    string Generation = "synthetic_contact_generation")
+    string Variant = "ember")
 {
     private static readonly StandingLocomotionCapability[] _capabilities =
         [.. Enum.GetValues<StandingLocomotionCapability>().Reverse()];
@@ -924,47 +644,27 @@ internal sealed record SyntheticNavigationManifest(
     /// </summary>
     public static SyntheticNavigationManifest HealthyFiniteExit { get; } = CreateHealthyFiniteExit();
 
+    /// <summary>Finite player exits whose authored 0.12 m root remains inside the measured CTRL stop envelope.</summary>
+    public static SyntheticNavigationManifest ShortPlayerStop { get; } = CreateShortPlayerStop();
+
     public SyntheticNavigationClipDeclaration this[string semanticAlias]
         => Clips.Single(clip => clip.Capability == CapabilityForAlias(semanticAlias));
 
     public SyntheticNavigationClipDeclaration this[StandingLocomotionCapability capability]
         => Clips.Single(clip => clip.Capability == capability);
 
-    /// <summary>Serialises the fixture's embedded-only runtime catalogue (schema version 3).</summary>
-    public string ToJson(string animationLibraryFilename, string contactTrackPath)
+    /// <summary>Serialises the fixture's embedded-only runtime catalogue (schema version 4).</summary>
+    public string ToJson(string animationLibraryFilename)
     {
         IReadOnlyList<SyntheticNavigationMapping> mappings = DeclaredMappings ?? CreateMappings();
         var root = new Dictionary<string, object?>
         {
-            ["schema_version"] = 3,
+            ["schema_version"] = 4,
             ["package"] = Package,
             ["package_variant"] = Variant,
             ["animation_library"] = animationLibraryFilename,
             ["clip_count"] = Clips.Count,
             ["clips"] = Clips.Select(clip => CreateClipJson(clip, Clips, mappings)).ToArray(),
-            ["short_bout_splices"] = new Dictionary<string, object>
-            {
-                ["pairs"] = (DeclaredShortBoutPairs ?? CreateShortBoutPairs()).Select(pair => new
-                {
-                    entry_role = pair.EntryRole,
-                    entry_release_event = pair.EntryReleaseEvent,
-                    exit_role = pair.ExitRole,
-                    exit_release_event = pair.ExitReleaseEvent,
-                }).ToArray(),
-            },
-            ["contact_evidence"] = new Dictionary<string, object>
-            {
-                ["schema_version"] = 1,
-                ["path"] = contactTrackPath,
-                ["package_identity"] = ContactPackageIdentity,
-                ["generation"] = Generation,
-                ["identities"] = Clips.Where(clip => clip.ContactWindows.Count > 0).Select(clip => clip.Identity).ToArray(),
-                ["diagnostic_provenance_non_runtime_authoritative"] = new Dictionary<string, string>
-                {
-                    ["processed_index"] = "user://synthetic-locomotion-runtime/processed-index.json",
-                    ["input"] = "user://synthetic-locomotion-runtime/authored_per_foot_contacts_v1.json",
-                },
-            },
         };
         return JsonSerializer.Serialize(root, new JsonSerializerOptions
         {
@@ -1162,14 +862,24 @@ internal sealed record SyntheticNavigationManifest(
             StandingLocomotionCapability.ConfinedSideStepLeft => new(0.32f, 0f, 0f),
             StandingLocomotionCapability.ConfinedSideStepRight => new(-0.32f, 0f, 0f),
             StandingLocomotionCapability.ConfinedPivotLeft or StandingLocomotionCapability.ConfinedPivotRight => Vector3.Zero,
-            StandingLocomotionCapability.CyclicLateralLeftLeftLane or StandingLocomotionCapability.CyclicLateralLeftRightLane => new(0.28f, 0f, 0.46f),
-            StandingLocomotionCapability.CyclicLateralRightLeftLane or StandingLocomotionCapability.CyclicLateralRightRightLane => new(-0.28f, 0f, 0.46f),
+            // Lateral cycles are pure-lateral by fixture contract: their root response travels only along X
+            // with a zero forward component, so lateral travel stays measurable without a forward-drift
+            // oracle. The per-side sign convention (root −X = actor right) and the 0.8 s cyclic timing are
+            // test-owned declarations consumed by the V4 catalogue and seam-table tests.
+            StandingLocomotionCapability.CyclicLateralLeftLeftLane or StandingLocomotionCapability.CyclicLateralLeftRightLane => new(0.744f, 0f, 0f),
+            StandingLocomotionCapability.CyclicLateralRightLeftLane or StandingLocomotionCapability.CyclicLateralRightRightLane => new(-0.744f, 0f, 0f),
             StandingLocomotionCapability.CyclicArcLeftLeftLane or StandingLocomotionCapability.CyclicArcLeftRightLane => new(0.22f, 0f, 0.40f),
             StandingLocomotionCapability.CyclicArcRightLeftLane or StandingLocomotionCapability.CyclicArcRightRightLane => new(-0.22f, 0f, 0.40f),
             _ => Vector3.Zero,
         };
         float yaw = capability switch
         {
+            // Synthetic arc yaw: ±π/6 rad across the 0.8 s cycle (about 0.65 rad/s) is the fixture's own
+            // turn-rate scale for signed yaw-track resolution, not a direct actor rotation.
+            StandingLocomotionCapability.CyclicArcLeftLeftLane or StandingLocomotionCapability.CyclicArcLeftRightLane
+                => Mathf.Pi / 6f,
+            StandingLocomotionCapability.CyclicArcRightLeftLane or StandingLocomotionCapability.CyclicArcRightRightLane
+                => -Mathf.Pi / 6f,
             StandingLocomotionCapability.ConfinedPivotLeft => Mathf.Pi / 4f,
             StandingLocomotionCapability.ConfinedPivotRight => -Mathf.Pi / 4f,
             _ => 0f
@@ -1196,12 +906,6 @@ internal sealed record SyntheticNavigationManifest(
         clips[forwardIndex] = clips[forwardIndex] with
         {
             SkeletonLocalRootResponse = new Vector3(0f, 0f, 0.2857143f),
-            DeclaredContactWindows =
-            [
-                new(LimbSide.Left, "acquire", [0.45d]),
-                new(LimbSide.Left, "support", [0.45d, 1d]),
-                new(LimbSide.Left, "release", [1d]),
-            ],
         };
         foreach (StandingLocomotionCapability capability in new[]
                  {
@@ -1214,15 +918,6 @@ internal sealed record SyntheticNavigationManifest(
             {
                 DurationSeconds = 0.56f,
                 SkeletonLocalRootResponse = new Vector3(0f, 0f, 0.20f),
-                DeclaredContactWindows =
-                [
-                    new(capability == StandingLocomotionCapability.ExitForwardRight ? LimbSide.Left : LimbSide.Right,
-                        "acquire", [0d]),
-                    new(capability == StandingLocomotionCapability.ExitForwardRight ? LimbSide.Left : LimbSide.Right,
-                        "support", [0d, 1d]),
-                    new(capability == StandingLocomotionCapability.ExitForwardRight ? LimbSide.Left : LimbSide.Right,
-                        "release", [1d]),
-                ],
             };
         }
 
@@ -1233,6 +928,34 @@ internal sealed record SyntheticNavigationManifest(
         return manifest with
         {
             DeclaredMappings = manifest.CreateMappings(),
+        };
+    }
+
+    private static SyntheticNavigationManifest CreateShortPlayerStop()
+    {
+        SyntheticNavigationClipDeclaration[] clips = [.. Default.Clips];
+        foreach (StandingLocomotionCapability capability in new[]
+                 {
+                     StandingLocomotionCapability.ExitForwardLeft,
+                     StandingLocomotionCapability.ExitForwardRight,
+                     StandingLocomotionCapability.ExitBackwardLeft,
+                     StandingLocomotionCapability.ExitBackwardRight,
+                 })
+        {
+            int index = Array.FindIndex(clips, clip => clip.Capability == capability);
+            Vector3 root = capability is StandingLocomotionCapability.ExitForwardLeft
+                or StandingLocomotionCapability.ExitForwardRight
+                ? new(0f, 0f, 0.12f)
+                : new(0f, 0f, -0.12f);
+            clips[index] = clips[index] with
+            {
+                SkeletonLocalRootResponse = root
+            };
+        }
+        var manifest = new SyntheticNavigationManifest(clips, Package: "short_player_stop", Variant: "short_ember");
+        return manifest with
+        {
+            DeclaredMappings = manifest.CreateMappings()
         };
     }
 
@@ -1277,14 +1000,6 @@ internal sealed record SyntheticNavigationManifest(
         return [.. mappings];
     }
 
-    private StandingLocomotionShortBoutPair[] CreateShortBoutPairs() =>
-    [
-        new(this[StandingLocomotionCapability.EntryForwardRight].Role, "release_r", this[StandingLocomotionCapability.ExitForwardLeft].Role, "release_l"),
-        new(this[StandingLocomotionCapability.EntryForwardLeft].Role, "release_l", this[StandingLocomotionCapability.ExitForwardRight].Role, "release_r"),
-        new(this[StandingLocomotionCapability.EntryBackwardRight].Role, "release_r", this[StandingLocomotionCapability.ExitBackwardLeft].Role, "release_l"),
-        new(this[StandingLocomotionCapability.EntryBackwardLeft].Role, "release_l", this[StandingLocomotionCapability.ExitBackwardRight].Role, "release_r"),
-    ];
-
     private static SyntheticPhaseEvent[] EventsFor(StandingLocomotionCapability capability, float durationSeconds) => capability switch
     {
         StandingLocomotionCapability.CyclicForwardPrimary or StandingLocomotionCapability.CyclicBackwardPrimary
@@ -1325,14 +1040,6 @@ internal sealed record SyntheticNavigationFixtureProfile(
 
     public string ExpectedReleaseEvent => ExpectedExitMapping.ToEventID;
 
-    public NPCAnimationPhaseLane ExpectedLane => ExpectedExitEvent.Side switch
-    {
-        "Left" => NPCAnimationPhaseLane.Left,
-        "Right" => NPCAnimationPhaseLane.Right,
-        _ => throw new InvalidOperationException(
-            $"Profile '{Name}' selected exit role '{ExpectedExitRole}' has no declared left/right release mapping."),
-    };
-
     public Vector2 ExpectedExitEndpointResponse => ExpectedExitDeclaration.SemanticCatalogueRootResponse;
 
     public float ExpectedUncorrectedTerminalRemainderMetres => Destination.Origin.Length()
@@ -1361,9 +1068,6 @@ internal sealed record SyntheticNavigationFixtureProfile(
     private SyntheticNavigationMapping ExpectedExitMapping => (Manifest.DeclaredMappings
         ?? throw new InvalidOperationException($"Profile '{Name}' requires declared navigation mappings."))
         .Single(mapping => mapping.FromRole == Manifest["wf"].Role && mapping.ToRole == ExpectedExitRole);
-
-    private SyntheticPhaseEvent ExpectedExitEvent => (ExpectedExitDeclaration.DeclaredPhaseEvents ?? [])
-        .Single(@event => @event.ID == ExpectedReleaseEvent && @event.BoundaryContext == "start");
 }
 
 internal readonly record struct SyntheticPhaseEvent(string ID, float Time, string? BoundaryContext = null)
@@ -1380,26 +1084,13 @@ internal sealed record SyntheticNavigationClipDeclaration(
     Vector3 SkeletonLocalRootResponse,
     float YawRadians,
     string BoundaryKind,
-    IReadOnlyList<SyntheticContactWindow>? DeclaredContactWindows = null,
     IReadOnlyList<SyntheticPhaseEvent>? DeclaredPhaseEvents = null,
     StandingLocomotionCapability Capability = StandingLocomotionCapability.CyclicForwardPrimary)
 {
     public bool IsConfined => BoundaryKind == "confined_manoeuvre";
     public bool IsCyclic => BoundaryKind == "cyclic_travel";
     public Vector2 SemanticCatalogueRootResponse => SyntheticLocomotionRuntimeFixture.ToSemanticCatalogueResponse(SkeletonLocalRootResponse);
-    public IReadOnlyList<SyntheticContactWindow> ContactWindows => DeclaredContactWindows ?? [];
 }
-
-internal sealed record SyntheticNavigationRuntime(
-    Node3D Root,
-    CharacterBody3D Actor,
-    Node3D RootMotionReference,
-    Skeleton3D Skeleton,
-    AnimationPlayer Player,
-    AnimationTree AnimationTree,
-    NPCNavigation Navigation,
-    Node AnimationPhysicsDriver,
-    SyntheticNavigationManifest Manifest);
 
 /// <summary>Fixture-owned player composition and its declared controller state protocol.</summary>
 internal sealed record SyntheticPlayerLocomotionRuntime(
@@ -1421,10 +1112,8 @@ internal sealed record SyntheticPlayerLocomotionRuntime(
     public const string ExitForwardRightState = "PlayerF2IR";
     public const string ExitBackwardLeftState = "PlayerB2IL";
     public const string ExitBackwardRightState = "PlayerB2IR";
-    public const string PivotLeftState = "PlayerPivotL";
-    public const string PivotRightState = "PlayerPivotR";
-    public const string SideStepLeftState = "PlayerSideStepL";
-    public const string SideStepRightState = "PlayerSideStepR";
+    public const string TurnInPlaceLeftState = "PlayerTurnInPlaceL";
+    public const string TurnInPlaceRightState = "PlayerTurnInPlaceR";
 
     public static IReadOnlyList<string> FiniteExitStates
     {
@@ -1433,14 +1122,6 @@ internal sealed record SyntheticPlayerLocomotionRuntime(
     [
         ExitForwardLeftState, ExitForwardRightState, ExitBackwardLeftState, ExitBackwardRightState,
     ];
-}
-
-/// <summary>Fixture-only binding adapter; it retains the production activation pipeline while avoiding scene installers.</summary>
-internal sealed partial class SyntheticNPCNavigation : NPCNavigation
-{
-    protected override bool AreBindingsInTree() => true;
-
-    protected override bool IsAnimationTreeRootResolved() => true;
 }
 
 /// <summary>Fixture-owned deterministic producer scheduled immediately after the NPC navigation consumer.</summary>

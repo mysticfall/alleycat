@@ -47,7 +47,6 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
             active.Identity,
             active.RequestedTransform,
             active.Revision,
-            active.ClockGeneration,
             active.AcceptancePhysicsTick)
         : NavigationCurrentStatus.Inactive;
 
@@ -55,7 +54,6 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
         NavigationOutcomeTransform requestedTransform,
         NavigationRequestValidation validation,
         long revision,
-        long clockGeneration,
         ulong acceptancePhysicsTick,
         NavigationTerminalContext? replacementContext = null,
         ulong replacementTerminalPhysicsTick = 0)
@@ -90,7 +88,6 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
             successorIdentity,
             requestedTransform,
             revision,
-            clockGeneration,
             acceptancePhysicsTick,
             NavigationActivityPhase.Following);
 
@@ -114,15 +111,6 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
         active.Revision++;
         _activeRequest = active;
         return active.Revision;
-    }
-
-    public void SetClockGeneration(long clockGeneration)
-    {
-        if (_activeRequest is { } active)
-        {
-            active.ClockGeneration = clockGeneration;
-            _activeRequest = active;
-        }
     }
 
     public void EnterTransientNeutralisation() => SetActivityPhase(NavigationActivityPhase.Neutralised);
@@ -247,7 +235,6 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
             ++_nextTerminalSequence,
             active.Identity,
             active.Revision,
-            active.ClockGeneration,
             outcome,
             context.Reason,
             active.RequestedTransform,
@@ -258,7 +245,6 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
             active.AcceptancePhysicsTick,
             context.BoundaryPhysicsTick,
             terminalPhysicsTick,
-            context.Occurrence,
             context.Obstruction,
             cancellationSource,
             successorRequest);
@@ -284,14 +270,12 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
         NavigationRequestIdentity identity,
         NavigationOutcomeTransform requestedTransform,
         long revision,
-        long clockGeneration,
         ulong acceptancePhysicsTick,
         NavigationActivityPhase phase)
     {
         public NavigationRequestIdentity Identity = identity;
         public NavigationOutcomeTransform RequestedTransform = requestedTransform;
         public long Revision = revision;
-        public long ClockGeneration = clockGeneration;
         public ulong AcceptancePhysicsTick = acceptancePhysicsTick;
         public NavigationActivityPhase Phase = phase;
     }

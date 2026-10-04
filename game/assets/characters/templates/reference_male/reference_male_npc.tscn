@@ -21,6 +21,8 @@
 [ext_resource type="Script" uid="uid://c4auc3ftyuxiy" path="res://src/Mind/AI/Watch/WatchRegistry.cs" id="20_watch_registry"]
 [ext_resource type="Script" uid="uid://dmrfkirffuot1" path="res://src/Mind/AI/Watch/ProximityWatchTool.cs" id="21_proximity_watch_tool"]
 [ext_resource type="Script" uid="uid://cd3tvaw7tff12" path="res://src/Mind/AI/SceneStatus/WatchSceneStatusProjector.cs" id="22_watch_status_projector"]
+[ext_resource type="Script" uid="uid://bxe5ivsvmoey4" path="res://src/Control/Locomotion/AnimationGraphPlantedStateSource.cs" id="30_planted_state_source"]
+[ext_resource type="Script" uid="uid://dv0jd4ag3mh0d" path="res://src/IK/FootPlantingTargetProvider.cs" id="31_foot_planting"]
 
 [sub_resource type="Resource" id="ProximityWatchTool_default"]
 script = ExtResource("21_proximity_watch_tool")
@@ -37,6 +39,7 @@ AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Male")
 AwaitInstallerActivation = true
 metadata/_custom_type_script = "uid://bfalxt2riwwdb"
+CataloguePath = "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad_catalogue.json"
 
 [node name="Voice" type="Node3D" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1295007558 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424, 0.08069722)
@@ -57,12 +60,12 @@ InputStrength = 0.6
 ConstantNoise = true
 EyeRotationToBlendshapeScale = 0.15
 Skeleton = NodePath("../../..")
-AudioPlayer = NodePath("../AudioStreamPlayer3D")
+AudioPlayer = NodePath("../../AudioStreamPlayer3D")
 metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Male/GeneralSkeleton/Head" index="2" unique_id=1285733651]
 
-[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=980532221 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadTargetIntentProvider", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=980532221 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadTargetIntentProvider", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "RightFootTargetIntentProvider", "LeftFootTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("5_7cm3m")
 Viewpoint = NodePath("../Male/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
@@ -75,6 +78,8 @@ PhysicalRig = NodePath("../Male/GeneralSkeleton/DynamicPhysicalRig")
 HeadTargetIntentProvider = NodePath("../Mind/OrientingController")
 RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
 LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
+RightFootTargetIntentProvider = NodePath("RightFootPlanting")
+LeftFootTargetIntentProvider = NodePath("LeftFootPlanting")
 HeadModifierGroup = [NodePath("../Male/GeneralSkeleton/NeckSpineIK"), NodePath("../Male/GeneralSkeleton/HeadCopyRotation"), NodePath("../Male/GeneralSkeleton/NeckTwistDisperser")]
 RightHandModifierGroup = [NodePath("../Male/GeneralSkeleton/RightArmIKController"), NodePath("../Male/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Male/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Male/GeneralSkeleton/LeftArmIKController"), NodePath("../Male/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Male/GeneralSkeleton/LeftHandCopyRotation")]
@@ -89,6 +94,24 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 [node name="LeftHandGrabProvider" type="Node" parent="CharacterIK" index="1" unique_id=1193906899]
 script = ExtResource("6_dvj2u")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
+
+[node name="PlantedStateSource" type="Node" parent="CharacterIK" index="2" unique_id=1749410303 node_paths=PackedStringArray("AnimationTree")]
+script = ExtResource("30_planted_state_source")
+AnimationTree = NodePath("../../AnimationTree")
+metadata/_custom_type_script = "uid://bxe5ivsvmoey4"
+
+[node name="LeftFootPlanting" type="Node" parent="CharacterIK" index="3" unique_id=1195611591 node_paths=PackedStringArray("Skeleton", "PlantedStateSource")]
+script = ExtResource("31_foot_planting")
+Skeleton = NodePath("../../Male/GeneralSkeleton")
+PlantedStateSource = NodePath("../PlantedStateSource")
+metadata/_custom_type_script = "uid://dv0jd4ag3mh0d"
+
+[node name="RightFootPlanting" type="Node" parent="CharacterIK" index="4" unique_id=351830200 node_paths=PackedStringArray("Skeleton", "PlantedStateSource")]
+script = ExtResource("31_foot_planting")
+Side = 1
+Skeleton = NodePath("../../Male/GeneralSkeleton")
+PlantedStateSource = NodePath("../PlantedStateSource")
+metadata/_custom_type_script = "uid://dv0jd4ag3mh0d"
 
 [node name="Mind" type="Node" parent="." index="8" unique_id=2028818158]
 script = ExtResource("7_dvj2u")

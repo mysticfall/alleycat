@@ -63,15 +63,6 @@ public enum NavigationTerminalReason
     Cancellation,
     /// <summary>A successor request replaced this request.</summary>
     Replacement,
-    /// <summary>A required navigation contract failed.</summary>
-    ContractFailure,
-    /// <summary>The movement clock changed after terminal commitment began.</summary>
-    ClockGenerationChanged,
-    /// <summary>
-    /// The route was exhausted with no serviceable stopping candidate: the actor passed the stopping region
-    /// without any imminent release proving feasible, so the request can never reach a terminal transition.
-    /// </summary>
-    NoServiceableStoppingCandidate,
 }
 
 /// <summary>Source that cancelled an accepted request.</summary>
@@ -122,8 +113,7 @@ public readonly record struct NavigationTerminalContext
         NavigationTerminalTolerances tolerances,
         NavigationTerminalReason reason,
         NavigationObstructionDetails? obstruction = null,
-        ulong boundaryPhysicsTick = 0,
-        NPCReleaseOccurrence? occurrence = null)
+        ulong boundaryPhysicsTick = 0)
     {
         FinalTransform = finalTransform;
         Error = error;
@@ -132,7 +122,6 @@ public readonly record struct NavigationTerminalContext
         Reason = reason;
         Obstruction = obstruction;
         BoundaryPhysicsTick = boundaryPhysicsTick;
-        Occurrence = occurrence;
     }
 
     /// <summary>Gets the realised terminal transform.</summary>
@@ -177,14 +166,8 @@ public readonly record struct NavigationTerminalContext
         get;
     }
 
-    /// <summary>Gets the selected finite release occurrence when terminal movement used one.</summary>
-    public NPCReleaseOccurrence? Occurrence
-    {
-        get;
-    }
-
     internal NavigationTerminalContext WithReason(NavigationTerminalReason reason)
-        => new(FinalTransform, Error, Tolerances, reason, Obstruction, BoundaryPhysicsTick, Occurrence);
+        => new(FinalTransform, Error, Tolerances, reason, Obstruction, BoundaryPhysicsTick);
 }
 
 /// <summary>Validation completed before request identity or terminal capacity is reserved.</summary>
@@ -210,7 +193,6 @@ public readonly record struct NavigationCurrentStatus(
     NavigationRequestIdentity? ActiveRequest,
     NavigationOutcomeTransform? RequestedTransform,
     long Revision,
-    long ClockGeneration,
     ulong AcceptancePhysicsTick)
 {
     /// <summary>Gets whether this snapshot contains active accepted work.</summary>
@@ -223,7 +205,6 @@ public readonly record struct NavigationCurrentStatus(
         null,
         null,
         0,
-        0,
         0);
 }
 
@@ -232,7 +213,6 @@ public readonly record struct NavigationTerminalOutcomeRecord(
     long Sequence,
     NavigationRequestIdentity Request,
     long Revision,
-    long ClockGeneration,
     NavigationTerminalOutcome Outcome,
     NavigationTerminalReason Reason,
     NavigationOutcomeTransform RequestedTransform,
@@ -243,7 +223,6 @@ public readonly record struct NavigationTerminalOutcomeRecord(
     ulong AcceptancePhysicsTick,
     ulong BoundaryPhysicsTick,
     ulong TerminalPhysicsTick,
-    NPCReleaseOccurrence? Occurrence,
     NavigationObstructionDetails? Obstruction,
     NavigationCancellationSource? CancellationSource,
     NavigationRequestIdentity? SuccessorRequest);

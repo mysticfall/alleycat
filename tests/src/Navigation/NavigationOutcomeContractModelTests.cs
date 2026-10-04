@@ -33,14 +33,12 @@ public sealed class NavigationOutcomeContractModelTests
     {
         var lifecycle = new NavigationRequestLifecycle(1);
         NavigationDestinationAttempt accepted = Request(lifecycle, Requested(1), acceptanceTick: 10);
-        var occurrence = new NPCReleaseOccurrence(7, 2, 0.75f, NPCAnimationPhaseLane.Right, "release_r");
         NavigationTerminalContext context = new(
             Final(1.1f),
             new NavigationPlanarYawError(0.02f, 0.03f),
             _tolerances,
             NavigationTerminalReason.DestinationReached,
-            boundaryPhysicsTick: 12,
-            occurrence: occurrence);
+            boundaryPhysicsTick: 12);
 
         Assert.True(lifecycle.TryComplete(context, 14));
 
@@ -49,7 +47,6 @@ public sealed class NavigationOutcomeContractModelTests
         AssertMandatoryFields(record, accepted.Request!.Value, NavigationTerminalOutcome.Completed);
         Assert.Equal(accepted.Request, record.Request);
         Assert.Equal(1, record.Revision);
-        Assert.Equal(7, record.ClockGeneration);
         Assert.Equal(1, record.Sequence);
         Assert.Equal(NavigationTerminalOutcome.Completed, record.Outcome);
         Assert.Equal(NavigationTerminalReason.DestinationReached, record.Reason);
@@ -61,7 +58,6 @@ public sealed class NavigationOutcomeContractModelTests
         Assert.Equal(10UL, record.AcceptancePhysicsTick);
         Assert.Equal(12UL, record.BoundaryPhysicsTick);
         Assert.Equal(14UL, record.TerminalPhysicsTick);
-        Assert.Equal(occurrence, record.Occurrence);
         Assert.Null(record.Obstruction);
         Assert.Null(record.CancellationSource);
         Assert.Null(record.SuccessorRequest);
@@ -217,19 +213,17 @@ public sealed class NavigationOutcomeContractModelTests
 
     /// <inheritdoc/>
     [Fact]
-    public void RevisionAndClockGenerationMutationsUpdateActiveRecordWithoutChangingIdentity()
+    public void RevisionMutationUpdatesActiveRecordWithoutChangingIdentity()
     {
         var lifecycle = new NavigationRequestLifecycle(1);
         NavigationDestinationAttempt accepted = Request(lifecycle, Requested(1));
 
         Assert.Equal(2, lifecycle.AdvanceRevision());
-        lifecycle.SetClockGeneration(9);
-        Assert.True(lifecycle.TryFail(Context(1, reason: NavigationTerminalReason.ClockGenerationChanged), 20));
+        Assert.True(lifecycle.TryFail(Context(1, reason: NavigationTerminalReason.ConvergenceFailed), 20));
 
         NavigationTerminalOutcomeRecord record = Assert.Single(lifecycle.TerminalOutcomes);
         Assert.Equal(accepted.Request, record.Request);
         Assert.Equal(2, record.Revision);
-        Assert.Equal(9, record.ClockGeneration);
     }
 
     /// <inheritdoc/>
@@ -362,7 +356,6 @@ public sealed class NavigationOutcomeContractModelTests
             transform,
             validation ?? NavigationRequestValidation.Accepted,
             revision: 1,
-            clockGeneration: 7,
             acceptanceTick,
             replacementContext,
             replacementTerminalPhysicsTick: 11);
@@ -386,7 +379,6 @@ public sealed class NavigationOutcomeContractModelTests
     {
         Assert.Equal(request, record.Request);
         Assert.True(record.Revision > 0);
-        Assert.True(record.ClockGeneration > 0);
         Assert.True(record.Sequence > 0);
         Assert.Equal(outcome, record.Outcome);
         Assert.NotEqual(default, record.RequestedTransform);

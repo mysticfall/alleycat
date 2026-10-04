@@ -51,16 +51,9 @@ public sealed class RuntimeFixtureIsolationIntegrationTests
         string thisTestPath = Path.Combine(
             repositoryRoot,
             "integration-tests/src/AnimationCatalogue/RuntimeFixtureIsolationIntegrationTests.cs");
-        string manualHarnessPath = Path.Combine(
-            repositoryRoot,
-            "game/src/Testing/Navigation/NAV001Stage4ManualPlaytestHarness.cs");
         string[] manualTools =
         [
-            "nav001_stage4_manual_playtest.tscn",
-            "npc_navigation_photobooth",
             "navigation_playtest_photobooth",
-            "predictive_navigation_photobooth",
-            "npc_stop_sequence_photobooth",
         ];
         string[] automatedRoots =
         [
@@ -76,8 +69,7 @@ public sealed class RuntimeFixtureIsolationIntegrationTests
                          "*.cs",
                          SearchOption.AllDirectories))
             {
-                if (string.Equals(sourcePath, thisTestPath, StringComparison.Ordinal)
-                    || string.Equals(sourcePath, manualHarnessPath, StringComparison.Ordinal))
+                if (string.Equals(sourcePath, thisTestPath, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -99,11 +91,7 @@ public sealed class RuntimeFixtureIsolationIntegrationTests
         string[] migratedSources =
         [
             "game/src/Control/Locomotion/StandingLocomotionCatalogue.cs",
-            "game/src/IK/AuthoredPerFootContactTrackV1.cs",
-            "game/src/IK/AuthoredPerFootContactProvider.cs",
-            "game/src/IK/ContactLockProductionComposition.cs",
-            "game/src/IK/NPCContactLockPlaytestComposition.cs",
-            "game/src/IK/PlayerContactLockComposition.cs",
+            "game/src/Control/Locomotion/PerFootPlantedIntervals.cs",
         ];
         // The delivered Reference Female package default paths (ANIM-002 delivery contract TR4) legitimately name the
         // variant directory; configuration defaults are not authored-inventory oracles, so they are excluded from the
@@ -111,7 +99,6 @@ public sealed class RuntimeFixtureIsolationIntegrationTests
         string[] sanctionedDefaultPaths =
         [
             "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad_catalogue.json",
-            "res://assets/characters/reference/female/animations/runtime/locomotion/sad/authored_per_foot_contacts_v1.json",
         ];
         string[] forbiddenAuthoredTerms = ["sad", "loc_sad_", "f2i_l", "f2i_r"];
         string[] forbiddenRoleInventory = ["wf", "wb", "xl_l", "xr_l", "i2f_l", "i2b_l", "b2i_l"];

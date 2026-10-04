@@ -162,6 +162,47 @@ public sealed class GodotSessionTests
     // Outcome publication and correlation
     // ---------------------------------------------------------------------------------------------
 
+    /// <summary>Skipped facts publish a skip without a run command; neighbouring failures remain failures.</summary>
+    [Fact]
+    public async Task RunTests_SkipsAttributedFact_AndStillReportsUnrelatedFailureAndPass()
+    {
+        (TestNodeUid uid, MethodInfo method) skipped = CreateTest(typeof(SkipSessionFixture), nameof(SkipSessionFixture.SkippedTest));
+        (TestNodeUid uid, MethodInfo method) failed = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.FirstTest));
+        (TestNodeUid uid, MethodInfo method) passed = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.SecondTest));
+        var session = FakeGodotProcess.CreateSession(commandStages:
+        [
+            new FakeSessionStage(OutputEvents:
+            [
+                new FakeOutputEvent(TimeSpan.Zero, FakeOutputStream.StdOut,
+                    ResultLine(failed.uid.Value, "failed", message: "Genuine assertion failure.")),
+            ]),
+            ResultStage(passed.uid, "passed"),
+        ]);
+        var factory = new FakeGodotProcessFactory(session);
+        GodotTestFramework framework = CreateFramework(factory);
+        List<TestNode> published = [];
+
+        await framework.RunSelectedTestsAsync(
+            [skipped, failed, passed],
+            (node, _) =>
+            {
+                published.Add(node);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.Equal([failed.uid.Value, passed.uid.Value],
+            ParseCommands(session.WrittenLines, "run").Select(command => command.GetProperty("RequestId").GetString()));
+        Assert.Equal(5, published.Count);
+        AssertNode(published[0], skipped.uid, state =>
+            Assert.Equal("Archived diagnostic", Assert.IsType<SkippedTestNodeStateProperty>(state).Explanation));
+        AssertNode(published[1], failed.uid, IsInProgress);
+        AssertNode(published[2], failed.uid, state =>
+            Assert.Contains("Genuine assertion failure", Assert.IsType<FailedTestNodeStateProperty>(state).Exception!.Message));
+        AssertNode(published[3], passed.uid, IsInProgress);
+        AssertNode(published[4], passed.uid, IsPassed);
+    }
+
     /// <summary>
     /// Ensures a failed test publishes its failure diagnostics and the following test runs in the same session.
     /// </summary>
@@ -1172,6 +1213,14 @@ public sealed class GodotSessionTests
         public static void SecondTest()
         {
         }
+    }
+
+    /// <summary>Methods selected by the runner orchestration test.</summary>
+    public sealed class SkipSessionFixture
+    {
+        /// <summary>Intentionally uncallable diagnostic.</summary>
+        [Fact(Skip = "Archived diagnostic")]
+        public static void SkippedTest() => throw new InvalidOperationException("Skip body must not run");
     }
 
     [Headless]

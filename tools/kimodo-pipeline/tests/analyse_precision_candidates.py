@@ -34,7 +34,7 @@ from kimodo_pipeline.source_repair import (
     MAXIMUM_SOURCE_ROTATION_RADIANS,
     MAXIMUM_SOURCE_TRANSLATION_SCALE,
     PROVENANCE_PROPERTY,
-    _precision_anatomy_contact_evidence,
+    _precision_anatomy_contact_check,
     _precision_foot_order_from_rows,
     _precision_leg_silhouette_from_rows,
     _sample_window,
@@ -120,7 +120,7 @@ def main() -> None:
                     "threshold": MAXIMUM_SOURCE_ROTATION_RADIANS,
                 }
             opening, closing = symmetric_window(len(frames))
-            row["anatomy_contact"] = _precision_anatomy_contact_evidence(
+            row["anatomy_contact"] = _precision_anatomy_contact_check(
                 original, repaired, scale, basis, range(opening, len(frames) - closing), assessment,
             )
             row["repair_failures"] = failures

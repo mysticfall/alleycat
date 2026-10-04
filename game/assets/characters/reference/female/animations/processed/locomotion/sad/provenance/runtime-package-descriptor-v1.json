@@ -1,26 +1,23 @@
 {
   "binding": {
     "processed_index_sha256": "d15aac5f920c9bec7f76b204d6af47da73aa530857564cbc20bf0887788d4be8",
-    "retained_contact_evidence_sha256": "72ac1bce9b2d0da047b0dcfaef6ff8c1d799bd3a824d868820ad454510f1ee11",
+    "retained_planted_intervals_sha256": "aeb1055932f12778c4513f2d346fd24f911f074c47ee77ca68833cf54c858050",
     "retargeted_blend_sha256": "a0f88c73bfd8b07779605b4978d8e8d12b902ea0edc42dbdc09bb0efaea49130",
-    "runtime_catalogue_sha256": "437880f940a7aa7b9c82c38da2407ccb731a85a7fb96cd97cc8a7143595a1924",
-    "runtime_contact_evidence_sha256": "72ac1bce9b2d0da047b0dcfaef6ff8c1d799bd3a824d868820ad454510f1ee11",
-    "runtime_library_sha256": "56f5002f160860553c7eb45194daff5755621d4ad577ce1bd1791db03ed2fd10"
+    "runtime_catalogue_sha256": "887c86820f69245313026877fb4dc7227130f94041d8fb4cbbc2430c737ea2b8",
+    "runtime_library_sha256": "34050158c04e6eccdbbc14875cc13aba5e9e478b5f0a00e39b590c8474ddb6db",
+    "runtime_planted_intervals_sha256": "aeb1055932f12778c4513f2d346fd24f911f074c47ee77ca68833cf54c858050"
   },
   "blend": "res://assets/characters/reference/female/animations/processed/locomotion/locomotion_sad.blend",
   "character": "female",
-  "contact_evidence": {
-    "generation": "20260903-immutable-binding",
-    "input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/authored_per_foot_contacts_v1.json",
-    "package_identity": "anim002-invariant-chain-20260903",
-    "retained_input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/authored_per_foot_contacts_v1.json",
-    "runtime_path": "authored_per_foot_contacts_v1.json"
-  },
-  "contact_evidence_required": true,
   "index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
   "name": "locomotion",
+  "planted_intervals": {
+    "retained_input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/per_foot_planted_intervals_v1.json",
+    "runtime_path": "per_foot_planted_intervals_v1.json",
+    "storage": "package_file"
+  },
   "root": "res://assets/characters/reference/female/animations/runtime/locomotion/sad",
-  "schema_version": 2,
+  "schema_version": 3,
   "stitch_edges": [
     {
       "from_role": "wf",

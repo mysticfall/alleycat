@@ -7,18 +7,21 @@ const DEFAULT_BONE_MAP := "res://assets/characters/reference/skeleton_profiles/b
 const DEFAULT_CHARACTER := "female"
 const DEFAULT_VARIANT := "sad"
 const DURATION_TOLERANCE := 0.000001
+const LOCOMOTION_MODE := "planted-interval-file-locomotion"
+const IDLE_MODE := "catalogue-planted-interval-idle"
+const CATALOGUE_KEYS := ["schema_version", "package", "package_variant", "animation_library", "clip_count", "godot_response_coordinates", "clips"]
 var errors: Array[String] = []
 var _coordinate_contract: Dictionary = {}
 var transport: Script
 var coordinate_contract: Script
-var contact_evidence: Script
+var planted_intervals: Script
 var runtime_package_descriptor: Script
 var runtime_capability: Script
 
 func _init() -> void:
 	transport = _load_helper("sample_transport.gd")
 	coordinate_contract = _load_helper("coordinate_contract.gd")
-	contact_evidence = _load_helper("locomotion_contact_evidence.gd")
+	planted_intervals = _load_helper("planted_intervals.gd")
 	runtime_package_descriptor = _load_helper("runtime_package_descriptor.gd")
 	runtime_capability = _load_helper("runtime_capability.gd")
 	call_deferred("_run")
@@ -48,15 +51,8 @@ func _descriptor() -> Dictionary:
 			_expect(false, descriptor_error)
 			return {}
 		return descriptor
-	if name == "locomotion":
-		_expect(false, "Production package descriptor is missing: %s" % durable_descriptor)
-		return {}
-	return {
-		"name": name, "character": character, "variant": variant, "index": index,
-		"blend": set_directory.path_join("%s_%s.blend" % [name, variant]),
-		"root": "res://assets/characters/reference/%s/animations/runtime/%s/%s" % [character, name, variant],
-		"contact_evidence_required": name == "locomotion",
-	}
+	_expect(false, "Production package descriptor is missing: %s" % durable_descriptor)
+	return {}
 
 func _validate_package(package: Dictionary) -> void:
 	var name := String(package.get("name", "")); var index := _json(String(package.get("index", "")))
@@ -74,14 +70,8 @@ func _validate_package(package: Dictionary) -> void:
 	var expected := _expected_actions(index, String(package["index"]))
 	var runtime_root := String(package.get("root", ""))
 	_expect(runtime_root.get_file() == variant and runtime_root.get_base_dir().get_file() == name, "Runtime root must be the character-owned runtime/%s/%s package directory: %s" % [name, variant, runtime_root])
-	var published_root := String(package.get("published_root", runtime_root))
-	var contact_package := package.duplicate(true)
-	contact_package["root"] = published_root
-	var contacts: Dictionary = contact_evidence.describe(contact_package, index, published_root)
-	contacts["index_path"] = String(package.get("published_index", package["index"]))
-	contacts["runtime_file"] = runtime_root.path_join(String(contacts.get("runtime_path", "")))
-	_expect(not contacts.has("error"), String(contacts.get("error", "")))
-	if contacts.has("error"): return
+	var intervals := _planted_intervals(package, name)
+	if intervals.is_empty(): return
 	_validate_import_configuration(package, expected)
 	var imported := _imported_library_and_skeleton(String(package.get("blend", "")))
 	var library_filename := "%s_%s.tres" % [name, variant]
@@ -92,18 +82,9 @@ func _validate_package(package: Dictionary) -> void:
 	_validate_library_bijection(name, expected, runtime)
 	_validate_source_correspondence(name, expected, imported.get("library"), runtime)
 	_reject_clip_directory(package)
-	_validate_catalogue(package, index, expected, runtime, library_filename, published_root)
-	if String(package.get("publication_mode", "")) == "contact-free-idle":
-		_expect(not bool(contacts.get("declared", false)), "A contact-free idle package must not declare contact evidence")
-		var contact_free_catalogue := _json(runtime_root.path_join("%s_%s_catalogue.json" % [name, variant]))
-		_expect(not contact_free_catalogue.has("contact_evidence"), "A contact-free idle catalogue must not declare contact evidence")
-	if bool(contacts.get("declared", false)):
-		var catalogue_path := runtime_root.path_join("%s_%s_catalogue.json" % [name, variant])
-		var catalogue := _json(catalogue_path)
-		contacts["index_path"] = String(package.get("published_index", package["index"]))
-		var contact_error: String = contact_evidence.validate_published(contacts, index, published_root, catalogue)
-		_expect(contact_error.is_empty(), contact_error)
 	var skeleton = imported.get("skeleton") as Skeleton3D
+	_validate_catalogue(package, index, expected, runtime, library_filename)
+	_validate_published_intervals(package, intervals, runtime_root.path_join("%s_%s_catalogue.json" % [name, variant]), library_path)
 	if skeleton != null:
 		var skeleton_error: String = coordinate_contract.validate_skeleton(_coordinate_contract, skeleton)
 		_expect(skeleton_error.is_empty(), "Imported skeleton violates coordinate contract: %s" % skeleton_error)
@@ -114,15 +95,61 @@ func _validate_declared_mode(package: Dictionary) -> String:
 	var mode := String(package.get("publication_mode", ""))
 	if mode.is_empty(): return ""
 	var name := String(package.get("name", ""))
-	if mode == "contact-evidenced-locomotion":
-		if name != "locomotion" or not bool(package.get("contact_evidence_required", false)) or not package.get("contact_evidence") is Dictionary:
-			return "A contact-evidenced locomotion package requires declared contact evidence"
-		return ""
-	if mode == "contact-free-idle":
-		if name != "idle" or bool(package.get("contact_evidence_required", false)) or package.has("contact_evidence"):
-			return "A contact-free idle package must not declare or require contact evidence"
-		return ""
-	return "Package descriptor has an unsupported publication mode"
+	var expected_mode: String = {"locomotion": LOCOMOTION_MODE, "idle": IDLE_MODE}.get(name, "")
+	if mode != LOCOMOTION_MODE and mode != IDLE_MODE:
+		return "Package descriptor has an unsupported publication mode"
+	if mode != expected_mode:
+		return "Publication mode %s is reserved for the %s package" % [mode, "locomotion" if mode == LOCOMOTION_MODE else "idle"]
+	return ""
+
+func _planted_intervals(package: Dictionary, name: String) -> Dictionary:
+	var declaration: Variant = package.get("planted_intervals")
+	var owned: String = runtime_package_descriptor.planted_interval_storage(name)
+	var storage := String((declaration as Dictionary).get("storage", "")) if declaration is Dictionary else ""
+	if storage not in [runtime_package_descriptor.PACKAGE_FILE, runtime_package_descriptor.CATALOGUE_FIELD] or (not owned.is_empty() and storage != owned):
+		_expect(false, "Package descriptor requires a valid planted-interval declaration for the %s package" % name)
+		return {}
+	var value := declaration as Dictionary
+	var retained := String(value.get("retained_input", ""))
+	var input := String(value.get("input", retained))
+	if storage == runtime_package_descriptor.PACKAGE_FILE and String(value.get("runtime_path", "")) != planted_intervals.FILENAME:
+		_expect(false, "Planted-interval runtime_path must be %s" % planted_intervals.FILENAME)
+		return {}
+	if retained.get_file() != planted_intervals.FILENAME or input.get_file() != planted_intervals.FILENAME or not FileAccess.file_exists(input):
+		_expect(false, "Planted-interval input is missing or misnamed: %s" % input)
+		return {}
+	var text := FileAccess.get_file_as_string(input)
+	var parsed: Variant = JSON.parse_string(text)
+	if not parsed is Dictionary:
+		_expect(false, "Planted-interval input is not a JSON object: %s" % input)
+		return {}
+	return {"storage": storage, "runtime_path": String(value.get("runtime_path", "")), "text": text, "document": parsed}
+
+func _validate_published_intervals(package: Dictionary, intervals: Dictionary, catalogue_path: String, library_path: String) -> void:
+	var catalogue := _json(catalogue_path)
+	var published: Variant = null
+	if String(intervals["storage"]) == runtime_package_descriptor.PACKAGE_FILE:
+		_expect(not catalogue.has(planted_intervals.CATALOGUE_FIELD), "A locomotion catalogue must not embed planted intervals")
+		var runtime_file := String(package["root"]).path_join(String(intervals["runtime_path"]))
+		_expect(FileAccess.file_exists(runtime_file), "Published planted intervals are missing: %s" % runtime_file)
+		if not FileAccess.file_exists(runtime_file): return
+		_expect(FileAccess.get_file_as_string(runtime_file) == String(intervals["text"]), "Published planted intervals differ from the declared input")
+		published = JSON.parse_string(FileAccess.get_file_as_string(runtime_file))
+	else:
+		published = catalogue.get(planted_intervals.CATALOGUE_FIELD)
+		_expect(published == intervals["document"], "Idle catalogue planted intervals differ from the declared input")
+	var policy: Dictionary = planted_intervals.load_policy(_tool_root().path_join("config").path_join(planted_intervals.POLICY_FILENAME))
+	_expect(not policy.has("error"), String(policy.get("error", "")))
+	if policy.has("error"): return
+	var error: String = planted_intervals.validate_document(published, {
+		"character": String(package.get("character", "")), "package": String(package["name"]), "variant": String(package.get("variant", "")),
+		"clips": planted_intervals.catalogue_expectations(catalogue), "policy_sha256": String(policy["sha256"]),
+		"runtime_library_sha256": runtime_package_descriptor.runtime_library_sha256(library_path),
+	})
+	_expect(error.is_empty(), error)
+
+func _tool_root() -> String:
+	return String(get_script().resource_path).get_base_dir().get_base_dir().get_base_dir()
 
 func _expected_actions(index: Dictionary, index_path: String) -> Dictionary:
 	var expected := {}
@@ -242,10 +269,17 @@ func _reject_clip_directory(package: Dictionary) -> void:
 	for file in directory.get_files():
 		_expect(not file.ends_with(".res"), "Runtime package must not contain standalone clip resources: %s" % file)
 
-func _validate_catalogue(package: Dictionary, index: Dictionary, expected: Dictionary, library: AnimationLibrary, library_filename: String, published_root: String) -> void:
+func _validate_catalogue(package: Dictionary, index: Dictionary, expected: Dictionary, library: AnimationLibrary, library_filename: String) -> void:
 	var name := String(package["name"]); var variant := String(package.get("variant", index.get("variant", "")))
 	var path := String(package["root"]).path_join("%s_%s_catalogue.json" % [name, variant]); var catalogue := _json(path)
-	_expect(int(catalogue.get("schema_version", 0)) == 3, "Runtime catalogue schema is unsupported; embedded-library packages require schema v3 (a stale clip-path catalogue must be regenerated): %s" % path)
+	_expect(int(catalogue.get("schema_version", 0)) == 4, "Runtime catalogue schema is unsupported; packages require schema v4 (a stale catalogue must be regenerated): %s" % path)
+	var allowed_keys := CATALOGUE_KEYS.duplicate()
+	var declaration: Variant = package.get("planted_intervals")
+	if declaration is Dictionary and String((declaration as Dictionary).get("storage", "")) == runtime_package_descriptor.CATALOGUE_FIELD:
+		allowed_keys.append(planted_intervals.CATALOGUE_FIELD)
+		_expect(catalogue.has(planted_intervals.CATALOGUE_FIELD), "Runtime idle catalogue must declare %s" % planted_intervals.CATALOGUE_FIELD)
+	for key in catalogue.keys():
+		_expect(String(key) in allowed_keys, "Runtime catalogue declares an unsupported field: %s" % key)
 	_expect(String(catalogue.get("package", "")) == String(index.get("package", name)), "Runtime catalogue package differs from index")
 	_expect(String(catalogue.get("package_variant", "")) == String(index.get("variant", "")), "Runtime catalogue variant differs from index")
 	_expect(String(catalogue.get("animation_library", "")) == library_filename, "Runtime catalogue library link is invalid: %s" % catalogue.get("animation_library", ""))
@@ -293,7 +327,7 @@ func _validate_runtime_metadata(clip: Dictionary, animation: Animation, looping:
 
 func _validate_events_and_mappings(clip: Dictionary, expected: Dictionary, capability: String) -> void:
 	var events = clip.get("phase_events", {}); var mappings = clip.get("stitch_mappings", {}); var ids := {}
-	var expected_applicability := "inapplicable" if runtime_capability.is_contact_free(capability) else "applicable"
+	var expected_applicability := "inapplicable" if runtime_capability.is_idle(capability) else "applicable"
 	_expect(events is Dictionary and String((events as Dictionary).get("applicability", "")) == expected_applicability, "Event applicability is incompatible with capability: %s" % capability)
 	if events is Dictionary and String((events as Dictionary).get("applicability", "")) == "applicable":
 		for item in (events as Dictionary).get("events", []):

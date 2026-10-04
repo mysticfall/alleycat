@@ -574,8 +574,16 @@ public sealed class OpticalGrabPhotoboothIntegrationTests
                 samples.Add(fixture.CaptureTemporalSample(fixture.Ball));
             }
 
-            await HoldControllerWristAtNodePoseAsync(sceneTree, fixture, relay, heldEnd, frames: 20);
-            samples.Add(fixture.CaptureTemporalSample(fixture.Ball));
+            // Keep the continuity trace adjacent while the held pose settles. A single sample after an
+            // unobserved multi-frame hold would incorrectly classify all accumulated movement as one-frame
+            // discontinuity and make the assertion depend on frame pacing.
+            for (int frame = 0; frame < 20; frame++)
+            {
+                relay.HandPositionNode.GlobalTransform = heldEnd;
+                await WaitForPhysicsFramesAsync(sceneTree, 1);
+                await WaitForNextFrameAsync(sceneTree);
+                samples.Add(fixture.CaptureTemporalSample(fixture.Ball));
+            }
             Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
 
             float heldBallDisplacement = stationaryBall.Origin.DistanceTo(fixture.Ball.GlobalTransform.Origin);
@@ -1503,7 +1511,9 @@ public sealed class OpticalGrabPhotoboothIntegrationTests
                 && handDistance <= positionToleranceMetres
                 && handAngle <= orientationToleranceDegrees,
                 $"{context} discontinuity at sample {index}: item={itemDistance:F5} m/{itemAngle:F3}°, "
-                + $"hand={handDistance:F5} m/{handAngle:F3}°.");
+                + $"hand={handDistance:F5} m/{handAngle:F3}°; "
+                + $"lifecycle={previous.Lifecycle}->{current.Lifecycle}, "
+                + $"frames={previous.ProcessFrame}/{previous.PhysicsTick}->{current.ProcessFrame}/{current.PhysicsTick}.");
         }
     }
 

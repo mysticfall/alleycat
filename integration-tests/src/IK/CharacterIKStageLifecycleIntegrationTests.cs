@@ -74,10 +74,11 @@ public sealed class CharacterIKStageLifecycleIntegrationTests
             fixture.CharacterIK.RightHandIKTargetIntentProvider = handProvider;
             fixture.CharacterIK.LeftHandIKTargetIntentProvider = handProvider;
             fixture.CharacterIK.SampleHandAuthorities();
-            Assert.True(fixture.CharacterIK.PrepareFootTargetsForMovement(123UL, StepSeconds));
-            Assert.True(fixture.CharacterIK.GetFootActuationTrace(LimbSide.Left).Observed);
-            Assert.True(fixture.CharacterIK.GetFootActuationTrace(LimbSide.Right).Observed);
+            // The provider call counter is the current in-chain foot-resolution observable; the superseded
+            // preparation/trace APIs no longer exist in the restored product.
+            int preResetFootResolutions = fixture.FootProvider.Calls;
             await AdvanceAsync(oldRig.Skeleton);
+            Assert.True(fixture.FootProvider.Calls > preResetFootResolutions);
             Assert.Equal(ForearmTwistAuthorityKind.IKProvider, oldRig.Twist!.GetLastAuthoritySample(LimbSide.Right).AuthorityKind);
 
             SkeletonModifier3D[] oldStages = OwnedStages(oldRig.Skeleton);
@@ -91,9 +92,9 @@ public sealed class CharacterIKStageLifecycleIntegrationTests
             {
                 Assert.Null(CachedField(fixture.CharacterIK, fieldName));
             }
-            Assert.Equal(0UL, CachedField(fixture.CharacterIK, "_preparedFootProviderTick"));
-            Assert.Equal(default, fixture.CharacterIK.GetFootActuationTrace(LimbSide.Left));
-            Assert.Equal(default, fixture.CharacterIK.GetFootActuationTrace(LimbSide.Right));
+            Assert.All(
+                ["_footSyncStages", "_hipReconciliationModifiers", "_lowerLegConsumers"],
+                fieldName => Assert.Empty((System.Collections.IEnumerable)CachedField(fixture.CharacterIK, fieldName)!));
             AssertAnimationAuthorityReset(fixture.CharacterIK, "_leftHandAuthority", 1UL);
             AssertAnimationAuthorityReset(fixture.CharacterIK, "_rightHandAuthority", 2UL);
 
@@ -113,10 +114,11 @@ public sealed class CharacterIKStageLifecycleIntegrationTests
             }
             Assert.Equal(oldSample, oldRig.Twist.GetLastAuthoritySample(LimbSide.Right));
             await AdvanceAsync(oldRig.Skeleton);
+            // The unchanged provider call count proves the detached old stages and severed callbacks resolve
+            // nothing after reset, replacing the removed actuation-trace observation.
             Assert.Equal(beginCount, fixture.CharacterIK.BeginCount);
             Assert.Equal(endCount, fixture.CharacterIK.EndCount);
             Assert.Equal(providerCalls, fixture.FootProvider.Calls);
-            Assert.False(fixture.CharacterIK.GetFootActuationTrace(LimbSide.Right).Observed);
 
             SkeletonFixture newRig = fixture.AddRig("ReboundRig", includeTwist: true);
             fixture.Bind(newRig);
@@ -202,7 +204,7 @@ public sealed class CharacterIKStageLifecycleIntegrationTests
 
     /// <summary>Four explicit engine passes publish current hand-copy poses even at zero arm influence.</summary>
     [Fact]
-    public async Task ManualPass_PublishesCurrentCanonicalHandsImmediatelyBeforeTwistAfterFootPreparation()
+    public async Task ManualPass_PublishesCurrentCanonicalHandsImmediatelyBeforeTwistAfterInChainFootResolution()
     {
         StageFixture fixture = await StageFixture.CreateAsync();
         try
@@ -226,7 +228,10 @@ public sealed class CharacterIKStageLifecycleIntegrationTests
             try
             {
                 AssertPipeline(rig);
-                Assert.True(fixture.CharacterIK.PrepareFootTargetsForMovement(Engine.GetPhysicsFrames(), StepSeconds));
+                // The foot provider now resolves only inside the skeleton modifier chain: each pass's traversal
+                // assertion proves the provider stage ran in-chain immediately before the hand copies, and the
+                // call counter below proves genuine evaluation during the same four-pass window.
+                int footResolutionsBeforePasses = fixture.FootProvider.Calls;
                 ulong previousToken = 0UL;
                 for (int pass = 0; pass < 4; pass++)
                 {
@@ -249,6 +254,8 @@ public sealed class CharacterIKStageLifecycleIntegrationTests
                     Assert.Equal(subscriptions.Select(subscription => subscription.Modifier.Name.ToString()), traversal);
                     previousToken = right.ModificationPassToken;
                 }
+
+                Assert.True(fixture.FootProvider.Calls > footResolutionsBeforePasses);
             }
             finally
             {

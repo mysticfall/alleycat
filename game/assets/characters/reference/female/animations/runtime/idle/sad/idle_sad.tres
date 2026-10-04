@@ -1,6 +1,6 @@
-[gd_resource type="AnimationLibrary" format=3]
+[gd_resource type="AnimationLibrary" format=3 uid="uid://ccol2816n7hg4"]
 
-[sub_resource type="Animation" id="Animation_dq5t4"]
+[sub_resource type="Animation" id="Animation_a2kbe"]
 resource_name = "idle_sad"
 length = 7.966666666666667
 loop_mode = 1
@@ -805,5 +805,5 @@ tracks/113/keys = PackedFloat32Array(0, 1, 0.99999994, 1.0000002, 0.99999964)
 
 [resource]
 _data = {
-&"idle_sad": SubResource("Animation_dq5t4")
+&"idle_sad": SubResource("Animation_a2kbe")
 }

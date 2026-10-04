@@ -17,23 +17,24 @@ Implementation guidance for `planner`, `coder`, and `reviewer`; the linked featu
 - Upper-body motion and authority follow [IK-001](001-neck-spine-ik/index.md#user-requirements),
   [IK-002](002-arm-shoulder-ik/index.md#user-requirements), [IK-005](005-target-pipeline/index.md#user-requirements),
   and [RIG-002](../rigging/002-forearm-twist/index.md#user-requirements).
-- Both roles' lower-limb outcomes follow [IK-003](003-leg-feet-ik/index.md#user-requirements) and its leg-feet and
-  coordinator contracts.
+- Rig-neutral lower-limb outcomes follow [IK-003](003-leg-feet-ik/index.md#user-requirements) and the
+  [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md#user-requirements), within
+  [IK-003's adoption scope](003-leg-feet-ik/index.md#out-of-scope).
 
 ## Technical Requirements
 
-Apply the [IK technical requirements](index.md#technical-requirements), including TR5: IK-003 child contracts supersede
-lower-limb-only notes without changing unrelated spine or player-VRIK guidance. Normative dependencies are:
+Apply the [IK technical requirements](index.md#technical-requirements), including TR5: lower-limb guidance lives only
+in IK-003 and its leg contract; these notes provide pointers without changing unrelated spine or player-VRIK guidance.
+Normative dependencies are:
 
 - [IK-001 local neck-spine authoring](001-neck-spine-ik/index.md#technical-requirements), including per-template
   skeleton bindings and verification without a shared CCDIK scene.
 - [IK-002 arm/shoulder contracts](002-arm-shoulder-ik/index.md#technical-requirements),
   [IK-005 hand authority](005-target-pipeline/index.md#technical-requirements), and
   [RIG-002 forearm twist](../rigging/002-forearm-twist/index.md#technical-requirements).
-- [IK-003 production composition](003-leg-feet-ik/index.md#technical-requirements), including TR7–10, with generic
-  resolution and sole actuation in the [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md), and role-neutral
-  production coordination in the
-  [Contact-Lock Coordinator Contract](003-leg-feet-ik/contact-lock-coordinator-contract.md).
+- Lower-limb delivery follows the [IK-003 technical requirements](003-leg-feet-ik/index.md#technical-requirements)
+  and [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements), within
+  [IK-003's delivery scope](003-leg-feet-ik/index.md#in-scope).
 
 Required implementation, production integration, and validation remain mandatory under these contracts.
 
@@ -64,13 +65,11 @@ Required implementation, production integration, and validation remain mandatory
   [RIG-002: Forearm Twist](../rigging/002-forearm-twist/index.md).
 - The [IK-005 authority adapter](005-target-pipeline/index.md#technical-requirements) submits same-pass hand authority
   after canonical hand/copy/animation work and immediately before forearm twist (TR23–26).
-- For IK-003 lower limbs, the specific [leg-feet ordering](003-leg-feet-ik/leg-feet-ik-contract.md) supersedes
-  lower-limb-only guidance: `sync → provider → hip reconciliation (when present) → lower-leg consumers`. `CharacterIK`
-  performs generic provider resolution and sole actuation.
-- These are relative dependencies, not a contiguous lower-limb block. Preserve authored neck/arm/hand-copy order and
-  relative leg-consumer order. Sync precedes the pre-IK/provider stage; provider resolution precedes participating
-  hip/leg consumers. Twist precedes leg consumers; the end/compensation stage follows solve/twist and precedes optical
+- Preserve authored neck/arm/hand-copy order. The end/compensation stage follows solve/twist and precedes optical
   finger retargeting, which remains last.
+- Lower-limb ordering and cross-body integration follow the normative
+  [IK-003](003-leg-feet-ik/index.md#ownership-and-solve) and
+  [Leg-Feet IK](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements) contracts.
 
 The IK-005 TR26 versus RIG-002 TR7 hand-fallback disagreement remains subject to the
 [RIG-002 evidence boundary](../rigging/002-forearm-twist/index.md#verification-and-evidence). This ordering guidance
@@ -78,18 +77,9 @@ does not choose a stale/invalid-hand fallback interpretation.
 
 ## Lower-Limb Convention Alignment
 
-- IK-003 must follow IK-002 naming and role conventions: per-side
-  `SkeletonModifier3D` controller instances before per-side solver instances.
-- For lower-limb photobooth verification, use
-  `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn` as the test-scene
-  basis.
-- The legacy lower-limb `BoneAttachment3D` hips-override harness, required pose matrix,
-  and C# scene-loading integration test remain mandatory, fixture-only deferred
-  verification artefacts; see [Deferred And Unaccepted
-  Requirements](003-leg-feet-ik/test-setup-contract.md#deferred-and-unaccepted-requirements).
-  IK-003 prohibits production lower-limb pelvis or body intervention. Do not use or
-  recreate this harness in production implementation; deliver it only in its deferred
-  verification fixture.
+- Lower-limb configuration follows the
+  [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements).
+- Lower-limb validation is defined only by the [IK-003 validation requirements](003-leg-feet-ik/index.md#validation).
 
 ## Character IK Architecture
 
@@ -185,9 +175,8 @@ does not choose a stale/invalid-hand fallback interpretation.
 4. `XRHandPoseTargetProvider` exposes a `LimbSide` property and resolves the corresponding
    runtime hand-pose source through XR services instead of receiving controller nodes
    from `PlayerVRIK`.
-5. For upper-body XR target following, `ally_player.tscn` may wire head and hand fallback providers to the appropriate
-   character IK properties and assigns each provider side explicitly. Lower-limb production wiring follows the
-   [IK-003 child contracts](003-leg-feet-ik/index.md#technical-requirements).
+5. The `ally_player.tscn` scene may wire head and hand fallback providers to the appropriate character IK properties
+   and assigns each provider side explicitly. It does not require foot-planting provider scene wiring.
 6. Generic fallback-provider selection is owned by `CharacterIK`; `PlayerVRIK` does not
    distribute XR runtime or `XRManager` to XR fallback providers.
 7. **XR target providers resolve required XR services themselves** via the global service
@@ -216,17 +205,19 @@ does not choose a stale/invalid-hand fallback interpretation.
   effects must be disabled.
 - **XR fallback:** With head or hand fallback providers wired in `ally_player.tscn`, the system behaves as if the
   relevant XR source (controller by default; optical per XR-002) is active when no custom provider overrides it.
-- **Scene wiring (upper-body XR):** `ally_player.tscn` may populate head and hand modifier groups so provider influence
-  gates direct solvers and side-effect modifiers without duplicate per-limb exports. Required player and NPC lower-limb
-  composition and validation follow the [IK-003 production contracts](003-leg-feet-ik/index.md#technical-requirements).
+- **Scene wiring:** `ally_player.tscn` may populate head and hand modifier groups so provider influence gates direct
+  solvers and side-effect modifiers without duplicate per-limb exports. Lower-limb foot planting is defined by
+  [IK-003](003-leg-feet-ik/index.md#foot-planting), using ANIM-002 per-foot planted intervals, rather than by this
+  player upper-body wiring note.
 - **Side resolution:** XR fallback providers must prove left/right controller selection from
   their own `LimbSide` setting rather than a manually assigned source node.
 - **No self-follow:** Confirm that target bodies never use themselves as follow sources;
   the fallback provider must be the final source in all normal cases.
 
-## Generic Provider Resolution and Lower-Limb Ordering
+## Generic Provider Resolution
 
-`CharacterIK` is a generic provider resolver and target/modifier actuator, not a locomotion or contact-policy owner.
+`CharacterIK` is a generic provider resolver and target/modifier actuator, not a locomotion or foot-planting policy
+owner.
 
 - `CharacterIK` resolves the explicit provider before the fallback provider. Existing providers retain terminal
   zero-influence semantics by default. A provider that cannot apply explicitly refuses through the generic resolution
@@ -235,16 +226,12 @@ does not choose a stale/invalid-hand fallback interpretation.
   numeric priorities are not used.
 - Providers do not mutate targets, gates, modifiers, root, hips, or skeleton. Only `CharacterIK` applies the selected
   target transform, activity gate, and modifier influence.
-- The Phase 1 side-specific, evidence-owning provider is a per-foot provider. Invalid, non-finite, stale, cross-side,
-  or missing evidence must refuse rather than invoke special `CharacterIK` behaviour.
-- `CharacterIK` repairs the lower-limb modifier order idempotently on initialisation or retry.
-- Gate A test-only native provider-pipeline control and visual evidence are accepted. Gate B has passed only as
-  disposable, test-only fixture evidence; neither establishes production delivery.
-- Production lower-limb provider resolution, coordination, composition, integration, and validation follow the
-  [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md) and
-  [Contact-Lock Coordinator Contract](003-leg-feet-ik/contact-lock-coordinator-contract.md), under IK-003 TR7–10.
-  These role-neutral contracts apply to player and NPC compositions without transferring contact or locomotion policy
-  to `CharacterIK` or introducing terrain/pelvis authority.
+- Per-side isolation and idempotent order repair follow the
+  [Leg-Feet IK technical requirements](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements).
+- The lower-limb foot-planting provider is an ordinary value-only per-foot provider. When a foot is planted follows
+  [ANIM-002 per-foot planted intervals](../animation/002-locomotive-animation-set/index.md#motion-metadata) and its
+  [Planted Combination Rule](../animation/002-locomotive-animation-set/index.md#planted-combination-rule); its normative
+  contract is [IK-003 Foot Planting](003-leg-feet-ik/index.md#foot-planting).
 
 ## Acceptance Criteria
 
@@ -256,12 +243,10 @@ Acceptance must cover user-visible outcomes and technical delivery at the linked
   [RIG-002 acceptance](../rigging/002-forearm-twist/index.md#acceptance-criteria).
 - **Lower limbs:** IK-003 [user acceptance](003-leg-feet-ik/index.md#user-requirement-acceptance) and
   [technical acceptance](003-leg-feet-ik/index.md#technical-requirement-acceptance), with
-  [leg-feet traceability](003-leg-feet-ik/leg-feet-ik-contract.md#acceptance-traceability) and
-  [coordinator traceability](003-leg-feet-ik/contact-lock-coordinator-contract.md#acceptance-traceability).
-- **Evidence scope:** [Gate A/B evidence](003-leg-feet-ik/test-setup-contract.md#evidence-status) remains fixture-only;
-  [deferred verification requirements](003-leg-feet-ik/test-setup-contract.md#deferred-and-unaccepted-requirements)
-  stay mandatory and unaccepted until their own criteria are met. Fixture acceptance does not substitute for production
-  acceptance.
+  [leg-feet traceability](003-leg-feet-ik/leg-feet-ik-contract.md#acceptance-traceability).
+- **Lower-limb evidence:** [IK-003 validation](003-leg-feet-ik/index.md#validation) and
+  [acceptance traceability](003-leg-feet-ik/index.md#acceptance-traceability) define required evidence within its stated
+  adoption scope.
 
 ## References
 

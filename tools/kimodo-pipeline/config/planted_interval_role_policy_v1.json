@@ -1,0 +1,93 @@
+{
+  "schema_version": 3,
+  "identity": "planted_interval_role_policy_v1",
+  "ball_joints": {
+    "left": "LeftToes",
+    "right": "RightToes"
+  },
+  "sampling_rate_hz": 60.0,
+  "detection": {
+    "baseline_percentile": 0.05,
+    "height_enter_m": 0.025,
+    "height_exit_m": 0.03,
+    "planar_speed_enter_mps": 0.1,
+    "planar_speed_exit_mps": 0.2,
+    "speed_window_s": 0.033333
+  },
+  "structure_fit": {
+    "minimum_planted_gap_s": 0.1,
+    "episode_peak_height_weight": 2.0,
+    "absorb_maximum_travel_m": 0.03,
+    "absorb_maximum_peak_height_m": 0.03,
+    "minimum_step_score_m": 0.06,
+    "minimum_step_to_absorbed_score_ratio": 3.0
+  },
+  "verification": {
+    "maximum_planted_planar_drift_m": 0.09,
+    "arrival_window_s": 0.5,
+    "minimum_arrival_descent_m": 0.005,
+    "lift_window_s": 0.2,
+    "minimum_lift_rise_m": 0.01,
+    "minimum_lift_leave_m": 0.03
+  },
+  "structures": {
+    "cyclic_travel": {
+      "sequences": {
+        "looping": {"lead": ["planted", "swing"], "trail": ["planted", "swing"]}
+      },
+      "planted_phase_offset_range": [0.3, 0.5]
+    },
+    "confined_manoeuvre": {
+      "sequences": {
+        "looping": {"lead": ["planted", "swing"], "trail": ["planted", "swing"]},
+        "finite": {"lead": ["planted", "swing", "planted"], "trail": ["planted", "swing", "planted"]}
+      },
+      "first_swing": "lead",
+      "maximum_swing_overlap_s": 0.05
+    },
+    "entry": {
+      "sequences": {
+        "finite": {"lead": ["planted", "swing"], "trail": ["planted", "swing", "planted"]}
+      },
+      "locomotion_boundary": "end",
+      "first_swing": "trail"
+    },
+    "exit": {
+      "sequences": {
+        "finite": {"lead": ["swing", "planted"], "trail": ["planted", "swing", "planted"]}
+      },
+      "locomotion_boundary": "start",
+      "first_swing": "lead"
+    },
+    "idle": {
+      "sequences": {
+        "looping": {"lead": ["planted"], "trail": ["planted"]}
+      }
+    }
+  },
+  "capabilities": {
+    "cyclic_forward_primary": {"structure": "cyclic_travel"},
+    "cyclic_backward_primary": {"structure": "cyclic_travel"},
+    "cyclic_lateral_left_left_lane": {"structure": "cyclic_travel"},
+    "cyclic_lateral_left_right_lane": {"structure": "cyclic_travel"},
+    "cyclic_lateral_right_left_lane": {"structure": "cyclic_travel"},
+    "cyclic_lateral_right_right_lane": {"structure": "cyclic_travel"},
+    "cyclic_arc_left_left_lane": {"structure": "cyclic_travel"},
+    "cyclic_arc_left_right_lane": {"structure": "cyclic_travel"},
+    "cyclic_arc_right_left_lane": {"structure": "cyclic_travel"},
+    "cyclic_arc_right_right_lane": {"structure": "cyclic_travel"},
+    "confined_side_step_left": {"structure": "confined_manoeuvre", "lead_foot": "left"},
+    "confined_side_step_right": {"structure": "confined_manoeuvre", "lead_foot": "right"},
+    "confined_pivot_left": {"structure": "confined_manoeuvre", "lead_foot": "left"},
+    "confined_pivot_right": {"structure": "confined_manoeuvre", "lead_foot": "right"},
+    "entry_forward_left": {"structure": "entry", "lead_foot": "left"},
+    "entry_forward_right": {"structure": "entry", "lead_foot": "right"},
+    "entry_backward_left": {"structure": "entry", "lead_foot": "left"},
+    "entry_backward_right": {"structure": "entry", "lead_foot": "right"},
+    "exit_forward_left": {"structure": "exit", "lead_foot": "left"},
+    "exit_forward_right": {"structure": "exit", "lead_foot": "right"},
+    "exit_backward_left": {"structure": "exit", "lead_foot": "left"},
+    "exit_backward_right": {"structure": "exit", "lead_foot": "right"},
+    "idle_contact_free": {"structure": "idle"}
+  }
+}

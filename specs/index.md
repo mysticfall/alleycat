@@ -38,7 +38,7 @@
 ## Animation
 
 - [ANIM: Animation](animation/index.md)
-   - [ANIM-002: Locomotive Animation Set](animation/002-locomotive-animation-set/index.md)
+  - [ANIM-002: Locomotive Animation Set](animation/002-locomotive-animation-set/index.md)
 
 ## Scene
 
@@ -64,6 +64,7 @@
 
 - [CTRL: Player Character Control System](ctrl/index.md)
   - [CTRL-001: Locomotion](ctrl/001-locomotion/index.md)
+    - [Current Implementation and Acceptance Gaps][ctrl-locomotion-status]
   - [CTRL-002: Hand Grab Input](ctrl/002-hand-grab-input/index.md)
 
 ## IK
@@ -75,10 +76,8 @@
     - [Arm IK Contract](ik/002-arm-shoulder-ik/arm-ik-contract.md)
     - [Shoulder Correction Contract](ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
     - [Hand-Rotation Elbow Correction Contract](ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
-  - [IK-003: Leg And Feet IK System](ik/003-leg-feet-ik/index.md)
+  - [IK-003: Leg and Feet IK System](ik/003-leg-feet-ik/index.md)
     - [Leg-Feet IK Contract](ik/003-leg-feet-ik/leg-feet-ik-contract.md)
-    - [Contact-Lock Coordinator Contract](ik/003-leg-feet-ik/contact-lock-coordinator-contract.md)
-    - [Leg-Feet IK Test Setup Contract](ik/003-leg-feet-ik/test-setup-contract.md)
   - [IK-004: VRIK Pose State Machine And Hip Reconciliation](ik/004-vrik-pose-state-machine/index.md)
     - [Pose State Machine Contract](ik/004-vrik-pose-state-machine/pose-state-machine-contract.md)
     - [Hip Reconciliation Contract](ik/004-vrik-pose-state-machine/hip-reconciliation-contract.md)
@@ -136,3 +135,5 @@
 - [Character Generator](tooling/character-generator/index.md)
 - [Kimodo Locomotive Animation-Set Pipeline](tooling/kimodo-pipeline/locomotive-animation-set.md)
 - [GDScript API Documentation Generator](tooling/gdscript-api-doc-generator/index.md)
+
+[ctrl-locomotion-status]: ctrl/001-locomotion/index.md#current-implementation-and-acceptance-gaps

@@ -1,6 +1,6 @@
-[gd_resource type="AnimationLibrary" format=3]
+[gd_resource type="AnimationLibrary" format=3 uid="uid://5fmhnu8v3xm5"]
 
-[sub_resource type="Animation" id="Animation_j5jo6"]
+[sub_resource type="Animation" id="Animation_ge4rk"]
 resource_name = "loc_sad_al_l"
 length = 1.1666666666666667
 loop_mode = 1
@@ -803,7 +803,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999999, 0.9999999, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_8si47"]
+[sub_resource type="Animation" id="Animation_uohoi"]
 resource_name = "loc_sad_al_r"
 length = 1.2666666666666666
 loop_mode = 1
@@ -1606,7 +1606,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999998, 1, 0.9999995)
 
-[sub_resource type="Animation" id="Animation_14e64"]
+[sub_resource type="Animation" id="Animation_xwnf3"]
 resource_name = "loc_sad_ar_l"
 length = 1.2666666666666666
 loop_mode = 1
@@ -2409,7 +2409,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 1, 0.99999994, 0.99999976)
 
-[sub_resource type="Animation" id="Animation_3f677"]
+[sub_resource type="Animation" id="Animation_hy2dp"]
 resource_name = "loc_sad_ar_r"
 length = 1.1666666666666667
 loop_mode = 1
@@ -3212,7 +3212,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999994, 0.9999999, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_iu7dd"]
+[sub_resource type="Animation" id="Animation_jf1gg"]
 resource_name = "loc_sad_b2i_l"
 length = 1.2666666666666666
 tracks/0/type = "position_3d"
@@ -4014,7 +4014,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999946, 0.99999917, 0.99999917)
 
-[sub_resource type="Animation" id="Animation_rb7ly"]
+[sub_resource type="Animation" id="Animation_yiswi"]
 resource_name = "loc_sad_b2i_r"
 length = 1.2666666666666666
 tracks/0/type = "position_3d"
@@ -4816,7 +4816,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999994, 0.99999934, 0.99999917)
 
-[sub_resource type="Animation" id="Animation_f4upb"]
+[sub_resource type="Animation" id="Animation_2uvun"]
 resource_name = "loc_sad_f2i_l"
 tracks/0/type = "position_3d"
 tracks/0/imported = true
@@ -5617,7 +5617,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999994, 0.9999996, 0.9999992)
 
-[sub_resource type="Animation" id="Animation_ipmyc"]
+[sub_resource type="Animation" id="Animation_03iuf"]
 resource_name = "loc_sad_f2i_r"
 tracks/0/type = "position_3d"
 tracks/0/imported = true
@@ -6418,7 +6418,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999996, 0.99999964, 0.99999934)
 
-[sub_resource type="Animation" id="Animation_uhbn2"]
+[sub_resource type="Animation" id="Animation_6k3to"]
 resource_name = "loc_sad_i2b_l"
 tracks/0/type = "position_3d"
 tracks/0/imported = true
@@ -7219,7 +7219,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999946, 0.99999917, 0.99999917)
 
-[sub_resource type="Animation" id="Animation_g6q74"]
+[sub_resource type="Animation" id="Animation_8s80d"]
 resource_name = "loc_sad_i2b_r"
 tracks/0/type = "position_3d"
 tracks/0/imported = true
@@ -8020,7 +8020,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999934, 0.9999993, 0.9999991)
 
-[sub_resource type="Animation" id="Animation_qihtf"]
+[sub_resource type="Animation" id="Animation_34nqn"]
 resource_name = "loc_sad_i2f_l"
 length = 1.2666666666666666
 tracks/0/type = "position_3d"
@@ -8822,7 +8822,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999997, 0.9999997, 0.99999934)
 
-[sub_resource type="Animation" id="Animation_c816l"]
+[sub_resource type="Animation" id="Animation_awfyp"]
 resource_name = "loc_sad_i2f_r"
 length = 1.2666666666666666
 tracks/0/type = "position_3d"
@@ -9624,7 +9624,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = false
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999997, 0.9999997, 0.99999946)
 
-[sub_resource type="Animation" id="Animation_7aqmf"]
+[sub_resource type="Animation" id="Animation_ojxox"]
 resource_name = "loc_sad_pl45"
 length = 1.6333333333333333
 loop_mode = 1
@@ -10427,7 +10427,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999976, 1.0000002, 0.99999946)
 
-[sub_resource type="Animation" id="Animation_1xmrh"]
+[sub_resource type="Animation" id="Animation_cbwgm"]
 resource_name = "loc_sad_pr45"
 length = 1.6333333333333333
 loop_mode = 1
@@ -11230,7 +11230,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.9999999, 1, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_36weo"]
+[sub_resource type="Animation" id="Animation_4nfl8"]
 resource_name = "loc_sad_sl"
 length = 1.3
 loop_mode = 1
@@ -12033,7 +12033,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 1, 0.9999999, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_s1yq8"]
+[sub_resource type="Animation" id="Animation_i8de6"]
 resource_name = "loc_sad_sr"
 length = 1.3
 loop_mode = 1
@@ -12836,7 +12836,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999994, 0.99999994, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_s2w32"]
+[sub_resource type="Animation" id="Animation_b1y1c"]
 resource_name = "loc_sad_wb"
 length = 1.5
 loop_mode = 1
@@ -13639,7 +13639,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999994, 0.99999994, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_2jjtp"]
+[sub_resource type="Animation" id="Animation_uhlvw"]
 resource_name = "loc_sad_wf"
 length = 1.2666666666666666
 loop_mode = 1
@@ -14442,7 +14442,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 1, 1.0000002, 0.9999998)
 
-[sub_resource type="Animation" id="Animation_j3anc"]
+[sub_resource type="Animation" id="Animation_ut2dt"]
 resource_name = "loc_sad_xl_l"
 length = 1.4
 loop_mode = 1
@@ -15245,7 +15245,7 @@ tracks/113/interp = 1
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 1, 0.99999994, 0.99999976)
 
-[sub_resource type="Animation" id="Animation_hvuht"]
+[sub_resource type="Animation" id="Animation_ohih4"]
 resource_name = "loc_sad_xl_r"
 length = 1.5
 loop_mode = 1
@@ -16048,7 +16048,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 1, 1, 0.9999998)
 
-[sub_resource type="Animation" id="Animation_4l8tt"]
+[sub_resource type="Animation" id="Animation_172mu"]
 resource_name = "loc_sad_xr_l"
 length = 1.4
 loop_mode = 1
@@ -16851,7 +16851,7 @@ tracks/113/interp = 0
 tracks/113/loop_wrap = true
 tracks/113/keys = PackedFloat32Array(0, 1, 0.99999994, 0.99999994, 0.99999964)
 
-[sub_resource type="Animation" id="Animation_h3s3b"]
+[sub_resource type="Animation" id="Animation_cywoa"]
 resource_name = "loc_sad_xr_r"
 length = 1.5
 loop_mode = 1
@@ -17656,26 +17656,26 @@ tracks/113/keys = PackedFloat32Array(0, 1, 0.9999999, 1, 0.99999964)
 
 [resource]
 _data = {
-&"loc_sad_al_l": SubResource("Animation_j5jo6"),
-&"loc_sad_al_r": SubResource("Animation_8si47"),
-&"loc_sad_ar_l": SubResource("Animation_14e64"),
-&"loc_sad_ar_r": SubResource("Animation_3f677"),
-&"loc_sad_b2i_l": SubResource("Animation_iu7dd"),
-&"loc_sad_b2i_r": SubResource("Animation_rb7ly"),
-&"loc_sad_f2i_l": SubResource("Animation_f4upb"),
-&"loc_sad_f2i_r": SubResource("Animation_ipmyc"),
-&"loc_sad_i2b_l": SubResource("Animation_uhbn2"),
-&"loc_sad_i2b_r": SubResource("Animation_g6q74"),
-&"loc_sad_i2f_l": SubResource("Animation_qihtf"),
-&"loc_sad_i2f_r": SubResource("Animation_c816l"),
-&"loc_sad_pl45": SubResource("Animation_7aqmf"),
-&"loc_sad_pr45": SubResource("Animation_1xmrh"),
-&"loc_sad_sl": SubResource("Animation_36weo"),
-&"loc_sad_sr": SubResource("Animation_s1yq8"),
-&"loc_sad_wb": SubResource("Animation_s2w32"),
-&"loc_sad_wf": SubResource("Animation_2jjtp"),
-&"loc_sad_xl_l": SubResource("Animation_j3anc"),
-&"loc_sad_xl_r": SubResource("Animation_hvuht"),
-&"loc_sad_xr_l": SubResource("Animation_4l8tt"),
-&"loc_sad_xr_r": SubResource("Animation_h3s3b")
+&"loc_sad_al_l": SubResource("Animation_ge4rk"),
+&"loc_sad_al_r": SubResource("Animation_uohoi"),
+&"loc_sad_ar_l": SubResource("Animation_xwnf3"),
+&"loc_sad_ar_r": SubResource("Animation_hy2dp"),
+&"loc_sad_b2i_l": SubResource("Animation_jf1gg"),
+&"loc_sad_b2i_r": SubResource("Animation_yiswi"),
+&"loc_sad_f2i_l": SubResource("Animation_2uvun"),
+&"loc_sad_f2i_r": SubResource("Animation_03iuf"),
+&"loc_sad_i2b_l": SubResource("Animation_6k3to"),
+&"loc_sad_i2b_r": SubResource("Animation_8s80d"),
+&"loc_sad_i2f_l": SubResource("Animation_34nqn"),
+&"loc_sad_i2f_r": SubResource("Animation_awfyp"),
+&"loc_sad_pl45": SubResource("Animation_ojxox"),
+&"loc_sad_pr45": SubResource("Animation_cbwgm"),
+&"loc_sad_sl": SubResource("Animation_4nfl8"),
+&"loc_sad_sr": SubResource("Animation_i8de6"),
+&"loc_sad_wb": SubResource("Animation_b1y1c"),
+&"loc_sad_wf": SubResource("Animation_uhlvw"),
+&"loc_sad_xl_l": SubResource("Animation_ut2dt"),
+&"loc_sad_xl_r": SubResource("Animation_ohih4"),
+&"loc_sad_xr_l": SubResource("Animation_172mu"),
+&"loc_sad_xr_r": SubResource("Animation_cywoa")
 }

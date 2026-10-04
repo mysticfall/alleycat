@@ -13,13 +13,6 @@ public enum NavigationPlaytestCharacterVariant
     ReferenceMale,
 }
 
-internal readonly record struct NavigationPlaytestCameraState(
-    Vector3 OrbitOrigin,
-    float Distance,
-    float Yaw,
-    float Pitch,
-    bool IsInitialised);
-
 /// <summary>
 /// Minimal non-XR click-to-move controller for an explicitly bound navigation actor.
 /// </summary>
@@ -59,6 +52,10 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     private int _pendingDestinationPlacementPressRequestId;
     private int _pendingDestinationPlacementReleaseRequestId;
     private int _activeDestinationPlacementRequestId;
+    private bool _hasPendingViaPlacementPress;
+    private Vector2 _pendingViaPlacementPressPosition;
+    private readonly List<Vector3> _queuedViaPoints = [];
+    private readonly List<Node3D> _viaMarkerNodes = [];
     private ILogger<DirectTransformNavigationPlaytestController>? _logger;
 
     /// <summary>
@@ -68,12 +65,6 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     [ExportGroup("Character Variant")]
     [Export]
     public NavigationPlaytestCharacterVariant CharacterVariant { get; set; } = NavigationPlaytestCharacterVariant.ReferenceFemale;
-
-    /// <summary>
-    /// Gets or sets whether ordinary left-button input may submit destinations. Programmatic placement remains available
-    /// for exact diagnostic routes. The production playtest default remains enabled.
-    /// </summary>
-    public bool ManualDestinationPlacementEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the camera used to project mouse clicks into the playtest world.
@@ -225,19 +216,6 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
     internal Vector3 LastCameraOrbitPosition => _lastCameraOrbitPosition;
 
-    internal NavigationPlaytestCameraState CaptureCameraState()
-        => new(_cameraOrbitOrigin, _cameraDistance, _cameraYaw, _cameraPitch, _isCameraOrbitInitialised);
-
-    internal void RestoreCameraState(in NavigationPlaytestCameraState state)
-    {
-        _cameraOrbitOrigin = state.OrbitOrigin;
-        _cameraDistance = Mathf.Clamp(state.Distance, MinCameraDistance, MaxCameraDistance);
-        _cameraYaw = state.Yaw;
-        _cameraPitch = state.Pitch;
-        _isCameraOrbitInitialised = state.IsInitialised;
-        UpdateCameraTransform();
-    }
-
     internal bool HasPendingDestinationPlacementRequest
         => _hasPendingDestinationPlacementPress || _hasPendingDestinationPlacementRelease;
 
@@ -291,6 +269,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     /// <inheritdoc/>
     public override void _PhysicsProcess(double delta)
     {
+        ResolveQueuedViaPlacement();
         ResolveQueuedDestinationPlacement();
 
         if (!_hasMousePosition)
@@ -328,10 +307,19 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
         if (mouseButton.ButtonIndex == MouseButton.Left)
         {
-            if (!ManualDestinationPlacementEnabled)
+            if (mouseButton.Pressed && mouseButton.ShiftPressed)
             {
-                CancelQueuedDestinationPlacement();
+                // TR20: shift-click queues a visible waypoint marker and its via-point; only a normal click
+                // ever issues a request, so a shift press never begins destination placement.
+                _hasPendingViaPlacementPress = true;
+                _pendingViaPlacementPressPosition = mouseButton.Position;
                 return;
+            }
+
+            if (_hasPendingViaPlacementPress)
+            {
+                // A superseding non-shift press drops the unresolved shift press.
+                _hasPendingViaPlacementPress = false;
             }
 
             if (mouseButton.Pressed)
@@ -428,6 +416,77 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         float panScale = CameraPanSensitivity * _cameraDistance;
         _cameraOrbitOrigin += ((-cameraRight * relativeMotion.X) + (cameraForward * relativeMotion.Y)) * panScale;
         UpdateCameraTransform();
+    }
+
+    /// <summary>The queued via-points awaiting the next normal click's request (TR20; value data, in order).</summary>
+    internal IReadOnlyList<Vector3> QueuedViaPoints => _queuedViaPoints;
+
+    /// <summary>The live via marker nodes (visual only; one per queued via, in order).</summary>
+    internal IReadOnlyList<Node3D> ViaMarkerNodes => _viaMarkerNodes;
+
+    /// <summary>Test/authoring hook: queues one via at a ground position and shows its marker, exactly as a
+    /// shift-click on that point would.</summary>
+    internal void QueueViaPointAt(Vector3 hitPosition)
+    {
+        _queuedViaPoints.Add(hitPosition);
+        SpawnViaMarker(hitPosition);
+        ResolveLogger()?.LogInformation(
+            "Queued via-point {Index} at ({X:0.###}, {Z:0.###}); {Count} queued.",
+            _queuedViaPoints.Count, hitPosition.X, hitPosition.Z, _queuedViaPoints.Count);
+    }
+
+    /// <summary>Test/authoring hook: simulates a shift+press at a mouse position (deferred ground projection,
+    /// mirroring the destination press path).</summary>
+    internal void BeginViaPlacementAt(Vector2 mousePosition)
+    {
+        _pendingViaPlacementPressPosition = mousePosition;
+        _hasPendingViaPlacementPress = true;
+    }
+
+    private void ResolveQueuedViaPlacement()
+    {
+        if (!_hasPendingViaPlacementPress)
+        {
+            return;
+        }
+
+        _hasPendingViaPlacementPress = false;
+        if (TryProjectMouseToGround(_pendingViaPlacementPressPosition, out Vector3 hitPosition))
+        {
+            QueueViaPointAt(hitPosition);
+        }
+    }
+
+    private void SpawnViaMarker(Vector3 hitPosition)
+    {
+        // Visuals only (TR20): the via marker reuses the authored destination marker as its template — a plain
+        // runtime duplicate placed on the ground; it never participates in navigation or request state.
+        if (DestinationMarker is not { } template)
+        {
+            return;
+        }
+
+        Node3D marker = template.Duplicate() as Node3D
+            ?? new Node3D { Name = $"ViaMarker{_viaMarkerNodes.Count + 1}" };
+        marker.Name = $"ViaMarker{_viaMarkerNodes.Count + 1}";
+        marker.GlobalPosition = hitPosition;
+        AddChild(marker);
+        _viaMarkerNodes.Add(marker);
+        marker.SetVisible(true);
+    }
+
+    private void ClearQueuedViaPoints()
+    {
+        _queuedViaPoints.Clear();
+        foreach (Node3D marker in _viaMarkerNodes)
+        {
+            if (IsInstanceValid(marker))
+            {
+                marker.QueueFree();
+            }
+        }
+
+        _viaMarkerNodes.Clear();
     }
 
     private void BeginDestinationPlacement(Vector2 mousePosition)
@@ -538,6 +597,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         _hasPendingDestinationPlacementPress = false;
         _hasPendingDestinationPlacementRelease = false;
         _isDestinationPlacementActive = false;
+        _hasPendingViaPlacementPress = false;
     }
 
     private void CompleteDestinationPlacement()
@@ -547,9 +607,13 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         {
             Basis destinationBasis = BuildFacingBasis(navigation, _lockedDestinationPosition, _previewHitPosition);
             var destination = new Transform3D(destinationBasis, _lockedDestinationPosition);
-            NavigationDestinationResult result = navigation.SetDestination(destination);
+            NavigationDestinationResult result = navigation.SetDestination(destination, _queuedViaPoints.Count > 0 ? _queuedViaPoints : null);
             LogDestinationRequest(_activeDestinationPlacementRequestId, result, destination);
         }
+
+        // TR20: issuing the route executes the queued vias and starts a new route — the previous via markers
+        // and queue clear, so the next authored route starts from a clean slate.
+        ClearQueuedViaPoints();
 
         _isDestinationPlacementActive = false;
         UpdateDestinationMarker(_hasPreviewHit ? _previewHitPosition : _lockedDestinationPosition);
@@ -743,7 +807,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     }
 
     /// <summary>
-    /// Resolves the structured logger used by playtest destination diagnostics.
+    /// Resolves the structured logger used for playtest destination request logging.
     /// </summary>
     protected virtual ILogger<DirectTransformNavigationPlaytestController> ResolveLogger()
         => GameLoggerResolver.ResolveRequired<DirectTransformNavigationPlaytestController>();

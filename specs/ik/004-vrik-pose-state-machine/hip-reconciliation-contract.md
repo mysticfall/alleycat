@@ -261,4 +261,4 @@ calibration semantics, without freezing tuning values.
 - [Standing Pose State](standing-pose-state.md)
 - [Kneeling Pose State](kneeling-pose-state.md)
 - [AllFours Pose State](all-fours-pose-state.md)
-- [IK-003: Leg And Feet IK System](../003-leg-feet-ik/index.md)
+- [IK-003: Leg and Feet IK System](../003-leg-feet-ik/index.md)

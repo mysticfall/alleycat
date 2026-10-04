@@ -40,9 +40,6 @@ public partial class CharacterIK : Node3D
     private IKTargetActivityGate? _rightFootTargetActivityGate;
     private IKTargetActivityGate? _leftFootTargetActivityGate;
     private FootTargetSyncController? _footTargetSyncStage;
-    private ulong _preparedFootProviderTick;
-    private CharacterIKFootActuationTrace _leftFootActuationTrace;
-    private CharacterIKFootActuationTrace _rightFootActuationTrace;
 
     private Transform3D _viewpointLocalTransform = Transform3D.Identity;
     /// <summary>
@@ -413,9 +410,6 @@ public partial class CharacterIK : Node3D
         _rightHandAuthority = HandAuthorityState.Animation(LimbSide.Right);
         _leftHandAuthority = HandAuthorityState.Animation(LimbSide.Left);
         _footTargetSyncStage = null;
-        _preparedFootProviderTick = 0;
-        _leftFootActuationTrace = default;
-        _rightFootActuationTrace = default;
         ResolvedViewpoint = null;
         ResolvedHeadIKTarget = null;
         ResolvedHeadIKSolveTarget = null;
@@ -427,60 +421,6 @@ public partial class CharacterIK : Node3D
         _viewpointLocalTransform = Transform3D.Identity;
         ViewpointLocalInverseTransform = Transform3D.Identity;
     }
-
-    /// <summary>
-    /// Runs the generic synchronisation and provider-resolution stages before a movement owner consumes an already
-    /// authorised contribution. CharacterIK remains the sole target, gate, and influence actuator.
-    /// </summary>
-    public bool PrepareFootTargetsForMovement(ulong physicsTick, double delta)
-    {
-        if (physicsTick == 0 || delta <= 0d || !double.IsFinite(delta))
-        {
-            return false;
-        }
-
-        if (_skeleton is null && !TryInitialiseRuntimeBindings())
-        {
-            return false;
-        }
-
-        if (_preparedFootProviderTick == physicsTick)
-        {
-            return true;
-        }
-
-        FootTargetSyncController? sync = _footTargetSyncStage;
-        if (sync is null)
-        {
-            foreach (Node child in GetResolvedSkeleton().GetChildren())
-            {
-                if (child is FootTargetSyncController candidate && IsFootTargetSyncStageForThisCharacter(candidate))
-                {
-                    sync = candidate;
-                    _footTargetSyncStage = candidate;
-                    break;
-                }
-            }
-        }
-        if (sync is null || !IsInstanceValid(sync))
-        {
-            return false;
-        }
-
-        sync._ProcessModificationWithDelta(delta);
-        if (!Active || !CanProcessProviderTargets)
-        {
-            return false;
-        }
-
-        ApplyFootTargetProviders(physicsTick);
-        _preparedFootProviderTick = physicsTick;
-        return true;
-    }
-
-    /// <summary>Returns the immutable signal-time result produced by this actuator for one foot.</summary>
-    public CharacterIKFootActuationTrace GetFootActuationTrace(LimbSide side)
-        => side == LimbSide.Left ? _leftFootActuationTrace : _rightFootActuationTrace;
 
     /// <summary>
     /// Last debug snapshot for the right-hand target pipeline.
@@ -1055,16 +995,13 @@ public partial class CharacterIK : Node3D
     private void OnFootProviderStage(double delta)
     {
         _ = delta;
-        if (_preparedFootProviderTick != 0UL && _preparedFootProviderTick == Engine.GetPhysicsFrames())
-        {
-            return;
-        }
         if (!Active || !CanProcessProviderTargets)
         {
             return;
         }
 
-        ApplyFootTargetProviders(Engine.GetPhysicsFrames());
+        using FootTargetResolutionStage.Scope stage = FootTargetResolutionStage.Enter(GetResolvedSkeleton());
+        ApplyFootTargetProviders();
     }
 
     private void OnEndStage(double delta)
@@ -1415,19 +1352,15 @@ public partial class CharacterIK : Node3D
            && (ReferenceEquals(target, ResolvedLeftFootIKTarget)
                || ReferenceEquals(target, ResolvedRightFootIKTarget));
 
-    private void ApplyFootTargetProviders(ulong physicsTick)
+    private void ApplyFootTargetProviders()
     {
-        _rightFootActuationTrace = ApplyFootTargetProvider(
-            physicsTick,
-            LimbSide.Right,
+        ApplyFootTargetProvider(
             RightFootTargetIntentProvider,
             RightFootFallbackIntentProvider,
             SelectValidTarget(ResolvedRightFootIKTarget, RightFootIKTarget),
             RightFootModifierGroup,
             _rightFootTargetActivityGate);
-        _leftFootActuationTrace = ApplyFootTargetProvider(
-            physicsTick,
-            LimbSide.Left,
+        ApplyFootTargetProvider(
             LeftFootTargetIntentProvider,
             LeftFootFallbackIntentProvider,
             SelectValidTarget(ResolvedLeftFootIKTarget, LeftFootIKTarget),
@@ -1438,90 +1371,32 @@ public partial class CharacterIK : Node3D
     private static Node3D? SelectValidTarget(Node3D? resolvedTarget, Node3D? exportedTarget)
         => resolvedTarget is not null && IsInstanceValid(resolvedTarget) ? resolvedTarget : exportedTarget;
 
-    private static CharacterIKFootActuationTrace ApplyFootTargetProvider(
-        ulong physicsTick,
-        LimbSide side,
+    private static void ApplyFootTargetProvider(
         IKTargetIntentProvider? provider,
         IKTargetIntentProvider? fallbackProvider,
         Node3D? target,
         SkeletonModifier3D[] modifierGroup,
         IKTargetActivityGate? targetActivityGate)
     {
-        if (!TryResolveFootTargetIntent(
-            provider,
-            fallbackProvider,
-            out IKTargetIntentResolution resolution,
-            out IKTargetIntentProvider? selectedProvider,
-            out string providerSelection))
+        if (!TryGetValidTargetIntent(provider, out IKTargetIntentResolution resolution)
+            && !TryGetValidTargetIntent(fallbackProvider, out resolution))
         {
-            float inactiveInfluence = ApplyFootModifierInfluence(
+            _ = ApplyFootModifierInfluence(
                 new IKTargetIntent(target?.GlobalTransform ?? Transform3D.Identity, 0.0f),
                 modifierGroup);
             targetActivityGate?.Apply(active: false);
-            return new(
-                true,
-                physicsTick,
-                side,
-                "none",
-                "none",
-                target?.GlobalTransform ?? Transform3D.Identity,
-                false,
-                inactiveInfluence,
-                false);
+            return;
         }
 
         IKTargetIntent intent = resolution.Intent;
         float influence = ApplyFootModifierInfluence(intent, modifierGroup);
         bool targetGate = influence > 0.0f;
         targetActivityGate?.Apply(targetGate);
-        bool appliedTarget = target is not null && targetGate && resolution.ShouldApplyTargetTransform;
-        if (appliedTarget)
+        if (target is not null && targetGate && resolution.ShouldApplyTargetTransform)
         {
-            SetWorldTransform(target!, intent.WorldTransform);
+            SetWorldTransform(target, intent.WorldTransform);
         }
-
-        return new(
-            true,
-            physicsTick,
-            side,
-            providerSelection,
-            selectedProvider is null ? "none" : DescribeProvider(selectedProvider),
-            intent.WorldTransform,
-            targetGate,
-            influence,
-            appliedTarget);
     }
-
-    private static bool TryResolveFootTargetIntent(
-        IKTargetIntentProvider? provider,
-        IKTargetIntentProvider? fallbackProvider,
-        out IKTargetIntentResolution resolution,
-        out IKTargetIntentProvider? selectedProvider,
-        out string providerSelection)
-    {
-        if (TryGetValidTargetIntent(provider, out resolution))
-        {
-            selectedProvider = provider;
-            providerSelection = "primary";
-            return true;
-        }
-        if (TryGetValidTargetIntent(fallbackProvider, out resolution))
-        {
-            selectedProvider = fallbackProvider;
-            providerSelection = "fallback";
-            return true;
-        }
-
-        resolution = default;
-        selectedProvider = null;
-        providerSelection = "none";
-        return false;
-    }
-
-    private static string DescribeProvider(IKTargetIntentProvider provider)
-        => provider.IsInsideTree()
-            ? $"{provider.GetType().Name}:{provider.GetPath()}"
-            : $"{provider.GetType().Name}:detached";
 
     private static bool TryGetValidTargetIntent(
         IKTargetIntentProvider? provider,
@@ -1982,15 +1857,3 @@ public partial class CharacterIK : Node3D
         modifier.Active = active;
     }
 }
-
-/// <summary>Immutable observation emitted by CharacterIK's sole per-foot target actuator.</summary>
-public readonly record struct CharacterIKFootActuationTrace(
-    bool Observed,
-    ulong PhysicsTick,
-    LimbSide Side,
-    string ProviderSelection,
-    string ProviderIdentity,
-    Transform3D SelectedTarget,
-    bool TargetGate,
-    float ModifierInfluence,
-    bool TargetTransformApplied);

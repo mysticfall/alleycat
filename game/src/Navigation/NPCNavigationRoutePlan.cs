@@ -11,11 +11,43 @@ public sealed record NPCNavigationRouteConfiguration
     public static NPCNavigationRouteConfiguration Default { get; } = new();
     public float CornerAnticipationDistance { get; init; } = 0.8f;
     public float ForwardAcceleration { get; init; } = 1.8f;
-    public float StoppingMargin
-    {
-        get; init;
-    }
-    public float EndpointCorrectionDistance { get; init; } = 0.65f;
+
+    /// <summary>Lookahead of one nonterminal route section along the compiled route, in metres (about one walk
+    /// cycle plus margin, so quantised walk/arc redirects re-aim at least once per cycle).</summary>
+    public float SectionHorizonMetres { get; init; } = 1.6f;
+
+    /// <summary>Remaining route distance at or below which a route with no significant corner ahead is planned as
+    /// one terminal plan from a standing (Idle) start, in metres (the arrival families' natural reach).</summary>
+    public float StraightTerminalMaxMetres { get; init; } = 8f;
+
+    /// <summary>Remaining route distance at or below which a route with no significant corner ahead is planned as
+    /// the terminal approach from a travelling start, in metres: short enough that a straight walk tail plus the
+    /// exit lands the arrival within tolerance without stopping.</summary>
+    public float TravellingStraightTerminalMetres { get; init; } = 1.8f;
+
+    /// <summary>Distance before a significant corner at which a section ends, in metres, so the next section
+    /// redirects through — and clears the outside of — the corner instead of inside it.</summary>
+    public float CornerLeadMetres { get; init; } = 0.55f;
+
+    /// <summary>Outward offset applied to the station that precedes a significant corner, in metres: a native arc
+    /// of the turn's fixed radius cuts inside the corner vertex, so the actor is guided wide of it to keep the
+    /// turn's inside on navigable ground.</summary>
+    public float CornerOutsideOffsetMetres { get; init; } = 0.25f;
+
+    /// <summary>Distance past a significant corner at which the through-corner section's station lands on the
+    /// outgoing leg, in metres, so the corner is turned while travelling rather than crawled under.</summary>
+    public float CornerExitMetres { get; init; } = 0.35f;
+
+    /// <summary>Smallest advance of one section's station beyond the realised route position, in metres.</summary>
+    public float MinSectionAdvanceMetres { get; init; } = 0.4f;
+
+    /// <summary>Compiled-route corner turn magnitude at or above which the corner is significant for section
+    /// placement, in radians (string-pulled portal jinks stay far below it).</summary>
+    public float SignificantCornerRadians { get; init; } = 0.08726646f;
+
+    /// <summary>Most consecutive holding sections (no coherent route sample) before the request ends through a
+    /// natural stop.</summary>
+    public int MaxHoldingSections { get; init; } = 3;
 }
 
 /// <summary>
@@ -54,8 +86,6 @@ public sealed class NPCNavigationRoutePlan
         Vector3 endpoint,
         float totalLength,
         float terminalYaw,
-        float brakingDistance,
-        bool usesShortEndpointCorrection,
         long destinationRequestGeneration,
         long routeRevision)
     {
@@ -66,8 +96,6 @@ public sealed class NPCNavigationRoutePlan
         Endpoint = endpoint;
         TotalLength = totalLength;
         TerminalYaw = terminalYaw;
-        BrakingDistance = brakingDistance;
-        UsesShortEndpointCorrection = usesShortEndpointCorrection;
         DestinationRequestGeneration = destinationRequestGeneration;
         RouteRevision = routeRevision;
     }
@@ -97,18 +125,6 @@ public sealed class NPCNavigationRoutePlan
     }
 
     /// <summary>Gets the full-speed planned braking distance in metres.</summary>
-    public float BrakingDistance
-    {
-        get;
-    }
-
-    /// <summary>Gets whether this route permits side-step endpoint correction.</summary>
-    public bool UsesShortEndpointCorrection
-    {
-        get;
-    }
-
-    /// <summary>Gets the accepted destination generation from the coherent sample.</summary>
     public long DestinationRequestGeneration
     {
         get;
@@ -194,15 +210,8 @@ public sealed class NPCNavigationRoutePlan
             corners.Add(new NPCNavigationRouteCorner(cornerDistance, angle, cornerDistance - lead, cornerDistance + exit));
         }
 
-        float acceleration = SafePositive(configuration.ForwardAcceleration, 1.8f);
-        const float forwardSpeed = 0.93f;
-        float continuousBrakingDistance = forwardSpeed * forwardSpeed / (2.0f * acceleration);
-        float authoredReleaseDistance = SafeNonNegative(authoredExitDistance, 0.0f);
-        float brakingDistance = (authoredReleaseDistance > 0.0f
-            ? authoredReleaseDistance
-            : continuousBrakingDistance)
-            + SafeNonNegative(configuration.StoppingMargin, 0.0f);
-        float terminalYaw = ExtractYaw(destination.Basis);
+        _ = authoredExitDistance;
+        float terminalYaw = YawOf(destination.Basis);
 
         return new NPCNavigationRoutePlan(
             [.. segments],
@@ -210,8 +219,6 @@ public sealed class NPCNavigationRoutePlan
             endpoint,
             distance,
             terminalYaw,
-            brakingDistance,
-            distance <= SafePositive(configuration.EndpointCorrectionDistance, 0.65f),
             destinationRequestGeneration,
             routeRevision);
     }
@@ -292,32 +299,6 @@ public sealed class NPCNavigationRoutePlan
     /// Resolves signed endpoint errors in the terminal route frame. Positive longitudinal error is short of the endpoint;
     /// positive cross-route error places the actor to the route's right.
     /// </summary>
-    internal Vector2 TerminalError(Vector3 position)
-    {
-        Vector3 direction = LastDirection();
-        Vector3 actorOffset = Horizontal(position) - Endpoint;
-        float longitudinal = -actorOffset.Dot(direction);
-        float crossRoute = (direction.X * actorOffset.Z) - (direction.Z * actorOffset.X);
-        return new Vector2(crossRoute, longitudinal);
-    }
-
-    /// <summary>Gets the final route-segment direction in world space.</summary>
-    internal Vector3 TerminalDirection => LastDirection();
-
-    internal float TargetSpeed(float remainingDistance, float maximumSpeed, float acceleration)
-    {
-        if (remainingDistance <= 0.0f || maximumSpeed <= 0.0f || acceleration <= 0.0f)
-        {
-            return 0.0f;
-        }
-
-        float continuousBrakingDistance = maximumSpeed * maximumSpeed / (2.0f * acceleration);
-        float available = Math.Max(
-            remainingDistance - Math.Max(BrakingDistance - continuousBrakingDistance, 0.0f),
-            0.0f);
-        return Math.Min(maximumSpeed, Mathf.Sqrt(2.0f * acceleration * available));
-    }
-
     internal static float YawFromDirection(Vector3 direction)
         => direction.IsFinite() && new Vector2(direction.X, direction.Z).LengthSquared() > MinimumSegmentLength * MinimumSegmentLength
             ? Mathf.Atan2(-direction.X, -direction.Z)
@@ -332,12 +313,11 @@ public sealed class NPCNavigationRoutePlan
     private static float SignedAngle(Vector3 from, Vector3 to)
         => Mathf.Atan2((from.Z * to.X) - (from.X * to.Z), Mathf.Clamp(from.Dot(to), -1.0f, 1.0f));
 
-    private static float ExtractYaw(Basis basis)
+    /// <summary>Yaw of a basis's forward (-Z) about +Y, in the same convention as <see cref="YawFromDirection"/>.</summary>
+    internal static float YawOf(Basis basis)
         => basis.IsFinite() ? YawFromDirection(basis.Orthonormalized() * Vector3.Forward) : 0.0f;
 
     private static float SafePositive(float value, float fallback) => float.IsFinite(value) && value > 0.0f ? value : fallback;
-
-    private static float SafeNonNegative(float value, float fallback) => float.IsFinite(value) && value >= 0.0f ? value : fallback;
 }
 
 internal readonly record struct RouteProjection(
@@ -345,3 +325,109 @@ internal readonly record struct RouteProjection(
     Vector3 Point,
     Vector3 Direction,
     float CrossTrackDistance);
+
+/// <summary>The leg decision for one route-following replan event (NAV-001 User Requirement 8): a nonterminal
+/// section toward a tracking station, or the single terminal approach that owns the final facing, stop and
+/// completion.</summary>
+/// <param name="Terminal">Whether the terminal approach owns the remainder.</param>
+/// <param name="StationDistance">Route arc length of the section's station.</param>
+/// <param name="StationYawRadians">Route heading at the station.</param>
+/// <param name="StationOutwardOffset">World XZ offset applied to the station point, wide of an upcoming corner.</param>
+/// <param name="SignificantCornersAhead">Significant compiled-route corners ahead of the realised distance.</param>
+/// <param name="BindingCorner">The first significant corner ahead, when one binds this leg.</param>
+internal readonly record struct NPCNavigationLegDecision(
+    bool Terminal,
+    float StationDistance,
+    float StationYawRadians,
+    Vector2 StationOutwardOffset,
+    int SignificantCornersAhead,
+    NPCNavigationRouteCorner? BindingCorner = null);
+
+/// <summary>
+/// Pure sectioning of a compiled route from the realised route distance: nothing here touches the actor, the
+/// animation tree or the planner. Every significant corner is turned by a nonterminal section (a native arc), so
+/// the terminal approach — the only plan allowed to stop, return to Idle and apply final facing — begins when no
+/// significant corner remains and the straight remainder is within one terminal plan's reach (long from a
+/// standing start, short from a travelling one). Otherwise the next station sits one section horizon ahead,
+/// pulled back before the next significant corner and offset to the turn's outside, so the following section
+/// redirects through the corner with its inside on navigable ground.
+/// </summary>
+internal static class NPCNavigationRouteSections
+{
+    internal static NPCNavigationLegDecision Decide(
+        NPCNavigationRoutePlan route,
+        float realisedDistance,
+        NPCNavigationRouteConfiguration configuration,
+        bool travellingStart)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(configuration);
+        float remaining = route.TotalLength - realisedDistance;
+        float terminalReach = travellingStart
+            ? configuration.TravellingStraightTerminalMetres
+            : configuration.StraightTerminalMaxMetres;
+        int significant = 0;
+        NPCNavigationRouteCorner? binding = null;
+        foreach (NPCNavigationRouteCorner corner in route.Corners)
+        {
+            if (corner.Distance > realisedDistance && MathF.Abs(corner.SignedAngle) >= configuration.SignificantCornerRadians)
+            {
+                significant++;
+                binding ??= corner;
+            }
+        }
+
+        if ((significant == 0 && remaining <= terminalReach) || route.TotalLength <= 0f)
+        {
+            return new NPCNavigationLegDecision(true, route.TotalLength, route.TerminalYaw, Vector2.Zero, significant);
+        }
+
+        float station = MathF.Min(realisedDistance + configuration.SectionHorizonMetres, route.TotalLength);
+        if (binding is { } ahead)
+        {
+            // Stations stop CornerLead before the corner so the redirect arc starts there; once the actor has
+            // REACHED that point, the next station lands on the outgoing leg past the corner, so the section
+            // turns through the corner instead of crawling forward under it with a near-straight bearing.
+            float before = ahead.Distance - configuration.CornerLeadMetres;
+            station = realisedDistance >= before - 0.0001f
+                ? MathF.Max(station, ahead.Distance + configuration.CornerExitMetres)
+                : MathF.Min(station, before);
+        }
+
+        station = Mathf.Clamp(station, realisedDistance + configuration.MinSectionAdvanceMetres, route.TotalLength);
+
+        // The station before a significant corner is offset to the turn's outside: a native arc of the turn's
+        // fixed radius cuts inside the corner vertex, and the wide station keeps that inside on navigable ground.
+        Vector2 outward = Vector2.Zero;
+        if (binding is { } turn && station < turn.Distance)
+        {
+            _ = route.Sample(station, out Vector3 towards);
+            outward = OutsideOffset(towards, turn, configuration);
+        }
+
+        return new NPCNavigationLegDecision(false, station, route.DesiredRouteYaw(station), outward, significant, binding);
+    }
+
+    /// <summary>
+    /// The world XZ offset that places a station wide of a significant turn's inside, along the route heading at
+    /// the station: the fixed-radius redirect arcs cut inside the corner vertex, so a station on the turn's
+    /// outside keeps that inside sweep on navigable ground. Shared by the before-corner stations and the
+    /// corner-anchored section fallback (CORNER-07).
+    /// </summary>
+    internal static Vector2 OutsideOffset(Vector3 towards, NPCNavigationRouteCorner turn, NPCNavigationRouteConfiguration configuration)
+    {
+        if (configuration.CornerOutsideOffsetMetres <= 0f)
+        {
+            return Vector2.Zero;
+        }
+
+        var heading = new Vector2(towards.X, towards.Z);
+        if (heading.LengthSquared() <= 0.000001f)
+        {
+            return Vector2.Zero;
+        }
+
+        var left = new Vector2(heading.Y, -heading.X);
+        return -MathF.Sign(turn.SignedAngle) * configuration.CornerOutsideOffsetMetres * left.Normalized();
+    }
+}

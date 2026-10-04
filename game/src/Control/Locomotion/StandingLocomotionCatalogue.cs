@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Godot;
@@ -8,7 +9,7 @@ using Godot;
 namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
-/// Immutable, scheduling-only projection of the standing locomotion catalogue. Schema version 3 resolves every clip
+/// Immutable, scheduling-only projection of the standing locomotion catalogue. Schema version 4 resolves every clip
 /// through its package's co-located <see cref="AnimationLibrary" /> by animation identity; no standalone clip
 /// resources participate in the runtime contract.
 /// </summary>
@@ -22,9 +23,7 @@ public sealed class StandingLocomotionCatalogue
         string animationLibraryPath,
         ImmutableDictionary<string, StandingLocomotionClip> clips,
         ImmutableDictionary<StandingLocomotionCapability, StandingLocomotionClip> capabilities,
-        ImmutableHashSet<StandingLocomotionStitch> mappings,
-        ImmutableDictionary<string, StandingLocomotionShortBoutPair> shortBoutPairs,
-        StandingLocomotionContactEvidence? contactEvidence)
+        ImmutableHashSet<StandingLocomotionStitch> mappings)
     {
         Package = package;
         PackageVariant = packageVariant;
@@ -33,8 +32,6 @@ public sealed class StandingLocomotionCatalogue
         ClipsByIdentity = clips.Values.ToImmutableDictionary(clip => clip.Identity, StringComparer.Ordinal);
         Capabilities = capabilities;
         Mappings = mappings;
-        ShortBoutPairs = shortBoutPairs;
-        ContactEvidence = contactEvidence;
     }
 
     public string Package { get; }
@@ -48,16 +45,11 @@ public sealed class StandingLocomotionCatalogue
     private ImmutableDictionary<string, StandingLocomotionClip> ClipsByIdentity { get; }
     private ImmutableHashSet<StandingLocomotionStitch> Mappings { get; }
 
-    /// <summary>Package-approved terminal-only, opposite-release short-bout pairs.</summary>
-    public ImmutableDictionary<string, StandingLocomotionShortBoutPair> ShortBoutPairs { get; }
-
-    public StandingLocomotionContactEvidence? ContactEvidence { get; }
-
     public StandingLocomotionClip this[string role] => Clips[role];
     public StandingLocomotionClip this[StandingLocomotionCapability capability] => Capabilities[capability];
 
     /// <summary>
-    /// Parses one embedded-only runtime catalogue (schema version 3). The package library is resolved as the
+    /// Parses one embedded-only runtime catalogue (schema version 4). The package library is resolved as the
     /// co-located file named by <c>animation_library</c>, and every entry is validated against that library's
     /// animation membership.
     /// </summary>
@@ -71,17 +63,17 @@ public sealed class StandingLocomotionCatalogue
             root,
             "root",
             ["schema_version", "package", "package_variant", "animation_library", "clip_count", "clips"],
-            ["godot_response_coordinates", "phase_event_evidence", "edge_graph", "short_bout_splices", "contact_evidence"]);
+            ["godot_response_coordinates", "phase_event_evidence", "edge_graph"]);
         int schemaVersion = GetInt(root, "schema_version");
-        if (schemaVersion == 2)
+        if (schemaVersion is 2 or 3)
         {
             throw new InvalidDataException(
-                $"ANIM-002 scheduling catalogue '{cataloguePath}' uses stale schema version 2, which declares per-clip "
-                + "resource paths; republish the character-owned package as an embedded-only schema version 3 catalogue.");
+                $"ANIM-002 scheduling catalogue '{cataloguePath}' uses stale schema version {schemaVersion}; republish the "
+                + "character-owned package as an embedded-only schema version 4 catalogue.");
         }
-        if (schemaVersion != 3)
+        if (schemaVersion != 4)
         {
-            throw new InvalidDataException($"ANIM-002 scheduling catalogue '{cataloguePath}' must use schema version 3.");
+            throw new InvalidDataException($"ANIM-002 scheduling catalogue '{cataloguePath}' must use schema version 4.");
         }
         string package = GetIdentifier(root, "package", "package");
         string packageVariant = GetIdentifier(root, "package_variant", "package variant");
@@ -116,11 +108,6 @@ public sealed class StandingLocomotionCatalogue
             }
         }
         ValidateLibraryCorrespondence(animationLibraryPath, parsedClips);
-        StandingLocomotionContactEvidence? parsedContactEvidence = null;
-        if (root.TryGetProperty("contact_evidence", out JsonElement contactEvidence))
-        {
-            parsedContactEvidence = ParseContactEvidence(contactEvidence, parsedClips);
-        }
 
         StandingLocomotionCatalogue catalogue = new(
             package,
@@ -128,11 +115,7 @@ public sealed class StandingLocomotionCatalogue
             animationLibraryPath,
             parsedClips,
             capabilities.ToImmutable(),
-            ProjectMappings(parsedClips),
-            root.TryGetProperty("short_bout_splices", out JsonElement shortBoutSplices)
-                ? ParseShortBoutPairs(shortBoutSplices, parsedClips)
-                : [],
-            parsedContactEvidence);
+            ProjectMappings(parsedClips));
         catalogue.Validate();
         return catalogue;
     }
@@ -203,9 +186,6 @@ public sealed class StandingLocomotionCatalogue
     public double GetNormalisedEventPhase(string role, string eventID)
         => GetEventTime(role, eventID) / Clips[role].DurationSeconds;
 
-    public bool TryGetShortBoutPair(string entryRole, out StandingLocomotionShortBoutPair pair)
-        => ShortBoutPairs.TryGetValue(entryRole, out pair!);
-
     /// <summary>Fails explicitly when a consumer's own semantic contract is not supplied by this generic package.</summary>
     public void RequireCapabilities(
         string consumer,
@@ -228,17 +208,6 @@ public sealed class StandingLocomotionCatalogue
 
     public bool TryGetClipByIdentity(string identity, out StandingLocomotionClip? clip)
         => ClipsByIdentity.TryGetValue(identity, out clip);
-
-    public Vector2 GetCommonDurationResponse(string role, double commonDuration)
-    {
-        if (!double.IsFinite(commonDuration) || commonDuration <= 0d)
-        {
-            throw new ArgumentOutOfRangeException(nameof(commonDuration));
-        }
-
-        Vector3 endpoint = Clips[role].EndpointRootDisplacement;
-        return new Vector2(endpoint.X / (float)commonDuration, -endpoint.Z / (float)commonDuration);
-    }
 
     private void Validate()
     {
@@ -278,21 +247,6 @@ public sealed class StandingLocomotionCatalogue
                 previousResponseTime = sample.TimeSeconds;
             }
         }
-
-        foreach (StandingLocomotionShortBoutPair pair in ShortBoutPairs.Values)
-        {
-            if (!Clips.TryGetValue(pair.EntryRole, out StandingLocomotionClip? entry)
-                || !Clips.TryGetValue(pair.ExitRole, out StandingLocomotionClip? exit)
-                || !entry.Events.ContainsKey(pair.EntryReleaseEvent)
-                || !exit.Events.ContainsKey(pair.ExitReleaseEvent)
-                || entry.BoundaryKind != StandingLocomotionBoundaryKind.Transition
-                || exit.BoundaryKind != StandingLocomotionBoundaryKind.Transition
-                || pair.EntryRole == pair.ExitRole
-                || pair.EntryReleaseEvent == pair.ExitReleaseEvent)
-            {
-                throw new InvalidDataException("Short-bout pairs must be package-approved, opposite-release transition pairs.");
-            }
-        }
     }
 
     private StandingLocomotionBoundaryMapping? CreateBoundaryMapping(
@@ -321,30 +275,6 @@ public sealed class StandingLocomotionCatalogue
             && target.BoundaryContext == expectedTarget
                 ? new(mapping, source, target)
                 : null;
-    }
-
-    private static ImmutableDictionary<string, StandingLocomotionShortBoutPair> ParseShortBoutPairs(
-        JsonElement declaration,
-        ImmutableDictionary<string, StandingLocomotionClip> clips)
-    {
-        RequireProperties(declaration, "short_bout_splices", ["pairs"], []);
-        ImmutableDictionary<string, StandingLocomotionShortBoutPair>.Builder pairs =
-            ImmutableDictionary.CreateBuilder<string, StandingLocomotionShortBoutPair>(StringComparer.Ordinal);
-        foreach (JsonElement item in GetArray(declaration, "pairs"))
-        {
-            RequireProperties(item, "short-bout pair", ["entry_role", "entry_release_event", "exit_role", "exit_release_event"], []);
-            StandingLocomotionShortBoutPair pair = new(
-                GetString(item, "entry_role"),
-                GetString(item, "entry_release_event"),
-                GetString(item, "exit_role"),
-                GetString(item, "exit_release_event"));
-            if (!clips.ContainsKey(pair.EntryRole) || !pairs.TryAdd(pair.EntryRole, pair))
-            {
-                throw new InvalidDataException("Short-bout pair entries must be unique known transition roles.");
-            }
-        }
-
-        return pairs.ToImmutable();
     }
 
     private static ImmutableHashSet<StandingLocomotionStitch> ProjectMappings(ImmutableDictionary<string, StandingLocomotionClip> clips)
@@ -626,50 +556,6 @@ public sealed class StandingLocomotionCatalogue
         }
     }
 
-    private static StandingLocomotionContactEvidence ParseContactEvidence(
-        JsonElement declaration,
-        ImmutableDictionary<string, StandingLocomotionClip> clips)
-    {
-        RequireProperties(
-            declaration,
-            "contact_evidence",
-            ["schema_version", "path", "package_identity", "generation", "identities", "diagnostic_provenance_non_runtime_authoritative"],
-            []);
-        if (GetInt(declaration, "schema_version") != 1)
-        {
-            throw new InvalidDataException("Contact evidence declaration is invalid.");
-        }
-        string path = GetDeclaredResourcePath(declaration, "path", ".json");
-        string packageIdentity = GetNonEmptyString(declaration, "package_identity");
-        string generation = GetNonEmptyString(declaration, "generation");
-
-        RequireProperties(
-            declaration.GetProperty("diagnostic_provenance_non_runtime_authoritative"),
-            "contact evidence diagnostic provenance",
-            ["processed_index", "input"],
-            []);
-        if (string.IsNullOrWhiteSpace(GetString(declaration.GetProperty("diagnostic_provenance_non_runtime_authoritative"), "processed_index"))
-            || string.IsNullOrWhiteSpace(GetString(declaration.GetProperty("diagnostic_provenance_non_runtime_authoritative"), "input")))
-        {
-            throw new InvalidDataException("Contact evidence diagnostic provenance is invalid.");
-        }
-
-        var identities = new HashSet<string>(StringComparer.Ordinal);
-        var clipIdentities = clips.Values.Select(clip => clip.Identity).ToHashSet(StringComparer.Ordinal);
-        foreach (JsonElement identity in GetArray(declaration, "identities"))
-        {
-            if (identity.ValueKind != JsonValueKind.String
-                || string.IsNullOrWhiteSpace(identity.GetString())
-                || !identities.Add(identity.GetString()!)
-                || !clipIdentities.Contains(identity.GetString()!))
-            {
-                throw new InvalidDataException("Contact evidence identities must be unique declared clip identities.");
-            }
-        }
-
-        return new(path, packageIdentity, generation, identities.ToImmutableHashSet(StringComparer.Ordinal));
-    }
-
     /// <summary>
     /// Validates catalogue entries against the embedded animations of the package's co-located library: identity
     /// bijection, duration agreement (tolerance 1e-6), and loop intent. Standalone clip resources are not part of
@@ -854,7 +740,13 @@ public sealed class StandingLocomotionCatalogue
             ? (int)value
             : throw new InvalidDataException($"Catalogue {property} must be a finite integer.");
     }
-    private static double GetDouble(JsonElement element, string property) => element.GetProperty(property).GetDouble();
+    private static double GetDouble(JsonElement element, string property)
+    {
+        JsonElement value = element.GetProperty(property);
+        return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out double number)
+            ? number
+            : throw new InvalidDataException($"Catalogue {property} must be a number.");
+    }
 
     private static JsonDocument ParseDocument(string json)
     {
@@ -883,7 +775,28 @@ public sealed class StandingLocomotionCatalogue
         }
     }
 
-    private static StandingLocomotionCapability ParseCapability(string value) => value switch
+    /// <summary>Canonical ANIM-002 capability identifier of a parsed capability (the inverse of parsing).</summary>
+    internal static string CapabilityIdentifier(StandingLocomotionCapability capability)
+    {
+        string name = capability.ToString();
+        StringBuilder identifier = new(name.Length + 8);
+        for (int index = 0; index < name.Length; index++)
+        {
+            if (char.IsUpper(name[index]) && index > 0)
+            {
+                _ = identifier.Append('_');
+            }
+
+            _ = identifier.Append(char.ToLowerInvariant(name[index]));
+        }
+
+        string result = identifier.ToString();
+        return ParseCapability(result) == capability
+            ? result
+            : throw new InvalidOperationException($"Capability {capability} has no canonical identifier.");
+    }
+
+    internal static StandingLocomotionCapability ParseCapability(string value) => value switch
     {
         "cyclic_forward_primary" => StandingLocomotionCapability.CyclicForwardPrimary,
         "cyclic_backward_primary" => StandingLocomotionCapability.CyclicBackwardPrimary,
@@ -947,17 +860,6 @@ public sealed class StandingLocomotionCatalogue
             ? $"{cataloguePath[..(separator + 1)]}{libraryFilename}"
             : throw new InvalidDataException(
                 $"Catalogue path '{cataloguePath}' must be a directory-qualified Godot resource path.");
-    }
-
-    private static string GetDeclaredResourcePath(JsonElement element, string property, string extension)
-    {
-        string value = GetNonEmptyString(element, property);
-        bool absolute = value.StartsWith("res://", StringComparison.Ordinal) || value.StartsWith("user://", StringComparison.Ordinal);
-        bool relative = !value.Contains("://", StringComparison.Ordinal) && !value.StartsWith("/", StringComparison.Ordinal);
-        return (absolute || relative) && value.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
-            && !value.Split('/').Contains("..", StringComparer.Ordinal)
-            ? value
-            : throw new InvalidDataException($"Catalogue {property} must be a safe Godot resource path ending in '{extension}'.");
     }
 
     private static void RequireProperties(
@@ -1095,42 +997,6 @@ public sealed record StandingLocomotionClip(
     /// <summary>Semantic event declarations retained from the authoritative package.</summary>
     public ImmutableDictionary<string, StandingLocomotionPhaseEvent> PhaseEvents { get; init; }
         = [];
-
-    public Vector2 AveragePlanarVelocity => new(
-        EndpointRootDisplacement.X / (float)DurationSeconds,
-        -EndpointRootDisplacement.Z / (float)DurationSeconds);
-
-    public float AverageYawRate => EndpointYaw / (float)DurationSeconds;
-
-    public StandingLocomotionResponseSample SampleResponse(double timeSeconds)
-    {
-        if (ResponseSamples.IsDefaultOrEmpty)
-        {
-            return new(0d, Vector2.Zero, 0f, AveragePlanarVelocity, AverageYawRate);
-        }
-
-        double time = Math.Clamp(timeSeconds, 0d, DurationSeconds);
-        for (int index = 1; index < ResponseSamples.Length; index++)
-        {
-            StandingLocomotionResponseSample next = ResponseSamples[index];
-            if (time > next.TimeSeconds)
-            {
-                continue;
-            }
-
-            StandingLocomotionResponseSample previous = ResponseSamples[index - 1];
-            double range = Math.Max(next.TimeSeconds - previous.TimeSeconds, double.Epsilon);
-            float weight = (float)Math.Clamp((time - previous.TimeSeconds) / range, 0d, 1d);
-            return new(
-                time,
-                previous.CumulativeLocalPlanar.Lerp(next.CumulativeLocalPlanar, weight),
-                Mathf.Lerp(previous.Yaw, next.Yaw, weight),
-                previous.PlanarVelocity.Lerp(next.PlanarVelocity, weight),
-                Mathf.Lerp(previous.YawRate, next.YawRate, weight));
-        }
-
-        return ResponseSamples[^1];
-    }
 }
 public readonly record struct StandingLocomotionResponseSample(
     double TimeSeconds,
@@ -1149,13 +1015,3 @@ public readonly record struct StandingLocomotionBoundaryMapping(
     StandingLocomotionStitch Stitch,
     StandingLocomotionPhaseEvent Source,
     StandingLocomotionPhaseEvent Target);
-public sealed record StandingLocomotionShortBoutPair(
-    string EntryRole,
-    string EntryReleaseEvent,
-    string ExitRole,
-    string ExitReleaseEvent);
-public sealed record StandingLocomotionContactEvidence(
-    string Path,
-    string PackageIdentity,
-    string Generation,
-    ImmutableHashSet<string> Identities);

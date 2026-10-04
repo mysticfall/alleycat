@@ -51,7 +51,10 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 
 ## Technical Requirements
 
-1. The framework must support deterministic discovery and execution of Godot-backed parameterless `[Fact]` tests.
+1. The framework must support deterministic discovery and execution of Godot-backed parameterless `[Fact]` tests
+   and parameterised `[Theory]` tests fed by xUnit data attributes (for example `[InlineData]` and `[MemberData]`).
+   Each theory method is one test node; the session executes every non-skipped data row with a fresh test instance
+   and full lifecycle within the one request, and a failure names every failing row and its arguments.
 2. Headless and windowed execution controls must be explicit and overrideable via attribute and CLI policy, and the
    effective headless mode must route each test to its session.
 3. The host must lazily maintain at most one reusable headless session and one reusable windowed session, each a

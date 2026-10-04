@@ -119,14 +119,22 @@ public partial class LegIKController : SkeletonModifier3D
         Vector3 o2 = (upperLegPosition + currentFootPosition) * 0.5f;
 
         Vector3 animationPoleDirectionRaw = lowerLegPosition - o2;
+        Vector3 legDirection = desiredFootPosition - upperLegPosition;
+        bool hasLegDirection = TryNormalise(legDirection, out Vector3 normalisedLegDirection);
+        bool useDesiredFootPoleOrigin = false;
         if (!TryNormalise(animationPoleDirectionRaw, out Vector3 poleDirection))
         {
-            return;
-        }
+            // Degenerate animation geometry (the knee on the hip-foot line): the pole must not keep whatever it held
+            // before, so it falls back deterministically to the same target-orientation frame the ambiguous-plane
+            // resolution converges to, keeping the degenerate and near-degenerate poles continuous.
+            if (!hasLegDirection || !TryResolveDegeneratePole(normalisedLegDirection, out poleDirection))
+            {
+                return;
+            }
 
-        Vector3 legDirection = desiredFootPosition - upperLegPosition;
-        bool useDesiredFootPoleOrigin = false;
-        if (TryNormalise(legDirection, out Vector3 normalisedLegDirection))
+            useDesiredFootPoleOrigin = true;
+        }
+        else if (hasLegDirection)
         {
             useDesiredFootPoleOrigin = TryResolveAmbiguousPolePlane(
                 poleDirection,
@@ -143,6 +151,20 @@ public partial class LegIKController : SkeletonModifier3D
         offset = Mathf.Max(offset, floorOffset);
         Vector3 poleOrigin = useDesiredFootPoleOrigin ? o1 : o2;
         PoleTarget.GlobalPosition = poleOrigin + (poleDirection * offset);
+    }
+
+    private bool TryResolveDegeneratePole(Vector3 legDirection, out Vector3 poleDirection)
+    {
+        // A zero candidate is never a stable pole and has no plane preference, so the ambiguous-plane resolution
+        // returns its preferred forward reference directly: avatar forward near forward extension, otherwise the foot
+        // target's forward. A foot target tilted off the skeleton's up axis falls back to projected avatar forward.
+        if (TryResolveAmbiguousPolePlane(Vector3.Zero, legDirection, out poleDirection))
+        {
+            return true;
+        }
+
+        Vector3 avatarForward = (_skeleton!.GlobalTransform.Basis.Orthonormalized() * Vector3.Back).Normalized();
+        return TryProjectAndNormalise(avatarForward, legDirection, out poleDirection);
     }
 
     private bool TryResolveAmbiguousPolePlane(Vector3 poleDirection, Vector3 legDirection, out Vector3 resolvedPoleDirection)

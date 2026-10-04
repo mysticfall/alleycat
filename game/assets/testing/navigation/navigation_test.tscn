@@ -5,8 +5,6 @@
 [ext_resource type="PackedScene" path="res://assets/testing/test_environment.tscn" id="3_l83gb"]
 [ext_resource type="Script" path="res://src/Character/Character.cs" id="3_xvcmc"]
 [ext_resource type="Texture2D" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="5_1fai4"]
-[ext_resource type="Script" path="res://src/IK/IK003NavigationPlaytestDiagnostics.cs" id="6_1fai4"]
-[ext_resource type="Script" path="res://src/IK/NPCContactLockPlaytestComposition.cs" id="7_hns3o"]
 [ext_resource type="Script" path="res://tests/navigation/navigation_map_startup_gate.gd" id="8_fwf5n"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_preview"]
@@ -200,16 +198,6 @@ mesh = SubResource("CylinderMesh_dest_disc")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.045, -0.36)
 material_override = SubResource("StandardMaterial3D_dest_forward")
 mesh = SubResource("BoxMesh_dest_forward")
-
-[node name="IK003NavigationPlaytestDiagnostics" type="Node" parent="." unique_id=253036079 node_paths=PackedStringArray("NPC")]
-script = ExtResource("6_1fai4")
-NPC = NodePath("../NavigationTestNpc")
-metadata/_custom_type_script = "uid://brrsnetcc5421"
-
-[node name="NPCContactLockPlaytestComposition" type="Node" parent="." unique_id=1895163697 node_paths=PackedStringArray("NPC")]
-script = ExtResource("7_hns3o")
-NPC = NodePath("../NavigationTestNpc")
-metadata/_custom_type_script = "uid://d4q6w2l9p3a8b"
 
 [node name="NavigationMapStartupGate" type="Node" parent="." unique_id=746550509 node_paths=PackedStringArray("controller", "navigation_region", "actor")]
 script = ExtResource("8_fwf5n")

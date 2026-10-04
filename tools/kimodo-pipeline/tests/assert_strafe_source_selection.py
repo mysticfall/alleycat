@@ -35,7 +35,7 @@ def main() -> None:
         assert provenance["semantic_source_role"] == "xr_r"
         assert provenance["roles"] == ["xr_r"]
         assert provenance["derived_range"] == selected["selected_source_range"]
-        assert provenance["phase_contact_evidence"]["source_release_frames"] == selected["selected_source_range"]
+        assert provenance["phase_contact_selection"]["source_release_frames"] == selected["selected_source_range"]
 
     candidate = next(
         row for row in selected["candidates"]

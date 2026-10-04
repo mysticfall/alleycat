@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using AlleyCat.Control.Locomotion;
 using Godot;
 
 #pragma warning disable CS1591
@@ -7,8 +8,10 @@ using Godot;
 namespace AlleyCat.IntegrationTests.Support;
 
 /// <summary>
-/// One recorded physics-tick observation of the player locomotion fluidity harness: the sampled foot and body
-/// world positions, the animation graph node reported by the state machine playback, and the elapsed bout time.
+/// One recorded physics-tick observation of the player locomotion harness: the sampled foot and body world
+/// positions, the animation graph node reported by the state machine playback, the elapsed bout time, and the
+/// controller-owned response state recorded by scripted scenario runs. The optional fields default to null so
+/// hand-built contact-oracle samples remain source-compatible.
 /// </summary>
 public sealed record FluiditySample(
     float TimeSeconds,
@@ -16,7 +19,17 @@ public sealed record FluiditySample(
     Vector3 LeftFootWorld,
     Vector3 RightFootWorld,
     Vector3 BodyWorld,
-    FluidityContactFrame? Contacts = null);
+    FluidityContactFrame? Contacts = null,
+    Vector2? ResponseVelocity = null,
+    float? ResponseYawRate = null,
+    Vector2? ActorPlanarVelocity = null,
+    float? ActorYawRadians = null,
+    Vector2 OrdinaryTravelDemand = default,
+    PlayerLocomotionState? PlayerState = null,
+    ulong MovementOperationCount = 0,
+    Vector3 AuthoredRootDelta = default,
+    Vector3 RequestedMovement = default,
+    Vector3 RealisedMovement = default);
 
 /// <summary>
 /// One animation graph node segment observed during a bout. <see cref="ExitTimeSeconds"/> of the final segment is
@@ -26,9 +39,9 @@ public sealed record FluidityNodeSegment(string NodeName, float EnterTimeSeconds
 
 /// <summary>
 /// An accepted crossfade-seam window whose samples are excluded from the per-sample fluidity metrics. CTRL-001
-/// TR27 accepts a brief bounded idle→entry crossfade slide, so the default calibration excludes the first
-/// fraction of a second after the graph enters a <c>PlayerI2*</c> node. A node change away from the matched node
-/// ends the window early even when the full duration has not elapsed.
+/// TR4 accepts a brief bounded idle→entry crossfade slide as presentation seam-smoothing, so the default
+/// calibration excludes the first fraction of a second after the graph enters a <c>PlayerI2*</c> node. A node
+/// change away from the matched node ends the window early even when the full duration has not elapsed.
 /// </summary>
 public sealed record FluidityExclusionWindow(string NodeNamePrefix, float DurationSeconds);
 
@@ -122,7 +135,7 @@ public sealed record FluidityGateThresholds(
         // Measured: the clean control's worst single-tick foot-speed step is 100.8-101.0 m/s² across runs
         // (the authored i2f→PlayerTravel boundary, including the one-tick pose freeze every state-machine
         // switch shows); the calmest abort splice reaches a run-stable 108.955 m/s² and stays accepted, while
-        // travel-release sweeps measure 144.3-224.3 m/s². 125 m/s² sits between the measured populations
+        // release-during-travel sweeps measure 144.3-224.3 m/s². 125 m/s² sits between the measured populations
         // [108.955 .. 144.3] with ~15% margin on both sides.
         MaximumSpeedDiscontinuity: 125f,
         // Measured: travel phase locks within the first cycle; 1.0 s (≈0.94 cycles) skips the entry→travel
@@ -133,9 +146,9 @@ public sealed record FluidityGateThresholds(
         MinimumTravelStepIntervalSeconds: 0.80f,
         // Measured: same 1.067 s clean baseline; 1.40 s (1.31 cycles) bounds hesitation.
         MaximumTravelStepIntervalSeconds: 1.40f,
-        // CTRL-001 TR27: the idle→entry crossfade slide is accepted behaviour, so the first 0.25 s after the
-        // graph enters an i2* node is excluded; seam defects at the exit splice and the travel handoff happen on
-        // other nodes and stay fully in scope.
+        // CTRL-001 TR4: a brief bounded idle→entry crossfade slide is accepted presentation seam-smoothing, so
+        // the first 0.25 s after the graph enters an i2* node is excluded; seam defects at the exit splice and
+        // the travel handoff happen on other nodes and stay fully in scope.
         ExclusionWindows:
         [
             new FluidityExclusionWindow("PlayerI2F", 0.25f),

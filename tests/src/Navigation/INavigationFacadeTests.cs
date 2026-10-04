@@ -42,10 +42,11 @@ public sealed class INavigationFacadeTests
         Assert.NotNull(navigationType.GetProperty(nameof(INavigation.Destination)));
         Assert.NotNull(navigationType.GetProperty(nameof(INavigation.HasDestination)));
         Assert.NotNull(navigationType.GetProperty(nameof(INavigation.DestinationReachedDistance)));
-        Assert.NotNull(navigationType.GetMethod(nameof(INavigation.SetDestination)));
-        Assert.NotNull(navigationType.GetMethod(nameof(INavigation.ClearDestination)));
-        Assert.NotNull(navigationType.GetMethod(nameof(INavigation.Poll)));
-        Assert.Null(navigationType.GetMethod("GetNextPathPosition"));
+        // By-name lookup across overloads: the via-point overload (TR18) makes SetDestination multi-method.
+        Assert.Contains(navigationType.GetMethods(), method => method.Name == nameof(INavigation.SetDestination));
+        Assert.Contains(navigationType.GetMethods(), method => method.Name == nameof(INavigation.ClearDestination));
+        Assert.Contains(navigationType.GetMethods(), method => method.Name == nameof(INavigation.Poll));
+        Assert.DoesNotContain(navigationType.GetMethods(), method => method.Name == "GetNextPathPosition");
     }
 
     /// <summary>

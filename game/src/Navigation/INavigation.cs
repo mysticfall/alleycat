@@ -167,6 +167,21 @@ public interface INavigation : IComponent, INavigationOutcomeSource
     NavigationDestinationResult SetDestination(Transform3D destination);
 
     /// <summary>
+    /// Requests navigation toward the supplied transform intent through the ordered via-points (NAV-001 TR18–19):
+    /// the route passes each via within the configured pass radius, in order, without stopping there, and arrival
+    /// rules apply only at the final destination. A null or empty list behaves exactly like
+    /// <see cref="SetDestination(Transform3D)"/>.
+    /// </summary>
+    /// <param name="destination">Destination and final-orientation intent.</param>
+    /// <param name="viaPoints">Ordered via points in world space (value data), or null/empty for none.</param>
+    /// <returns>
+    /// The destination request result. Invalid, unreachable, and map-not-ready results leave existing request state
+    /// unchanged.
+    /// </returns>
+    NavigationDestinationResult SetDestination(Transform3D destination, IReadOnlyList<Vector3>? viaPoints)
+        => SetDestination(destination);
+
+    /// <summary>
     /// Clears the requested destination from this facade.
     /// </summary>
     void ClearDestination();

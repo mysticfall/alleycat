@@ -1,10 +1,11 @@
 class_name RuntimeCapability
 extends RefCounted
 
-const IDLE_CONTACT_FREE := "idle_contact_free"
+# The idle capability identifier is persisted in processed indexes and catalogues.
+const IDLE := "idle_contact_free"
 
 const BOUNDARY_BY_CAPABILITY := {
-	IDLE_CONTACT_FREE: "confined_manoeuvre",
+	IDLE: "confined_manoeuvre",
 	"cyclic_forward_primary": "cyclic_travel",
 	"cyclic_backward_primary": "cyclic_travel",
 	"cyclic_lateral_left_left_lane": "cyclic_travel",
@@ -60,9 +61,9 @@ static func validate_processed_action(entry: Dictionary) -> String:
 	if bool(entry.get("is_loop", false)) != expected_loop:
 		return "Processed action capability/loop intent is incompatible: %s" % capability
 	var output = entry.get("post_repair_event_evidence")
-	if is_contact_free(capability):
+	if is_idle(capability):
 		if entry.has("source_directional_event_evidence") or entry.has("event_derivation_evidence") or output != null or entry.has("loop_repair_evidence"):
-			return "Processed contact-free capability has directional provenance: %s" % capability
+			return "Processed idle capability has directional provenance: %s" % capability
 	elif output is Dictionary:
 		var events = (output as Dictionary).get("events", [])
 		if not events is Array:
@@ -79,8 +80,8 @@ static func boundary_kind(capability: String) -> String:
 	return String(BOUNDARY_BY_CAPABILITY.get(capability, ""))
 
 
-static func is_contact_free(capability: String) -> bool:
-	return capability == IDLE_CONTACT_FREE
+static func is_idle(capability: String) -> bool:
+	return capability == IDLE
 
 
 static func is_confined(capability: String) -> bool:
@@ -88,7 +89,7 @@ static func is_confined(capability: String) -> bool:
 
 
 static func requires_directional_event_provenance(capability: String) -> bool:
-	return not is_contact_free(capability)
+	return not is_idle(capability)
 
 
 static func requires_loop_repair(capability: String) -> bool:

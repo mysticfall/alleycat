@@ -485,18 +485,14 @@ public partial class TestRuntimeRunner : Node
                 return;
             }
 
-            MethodInfo? method = type.GetMethod(methodName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance,
-                binder: null,
-                types: Type.EmptyTypes,
-                modifiers: null);
+            MethodInfo? method = ResolveTestMethod(type, methodName, out string? resolutionError);
 
             if (method is null)
             {
                 EmitSessionResult(
                     requestId,
                     SessionErrorOutcome,
-                    $"Method '{typeName}.{methodName}()' was not found.",
+                    resolutionError ?? $"Method '{typeName}.{methodName}()' was not found.",
                     stack: null,
                     sessionReusable: true);
                 return;
@@ -548,6 +544,37 @@ public partial class TestRuntimeRunner : Node
         if (!sessionReusable)
         {
             GetTree().Quit(1);
+        }
+    }
+
+    /// <summary>
+    /// Resolves a parameterless test method, or otherwise the single parameterised overload carrying xUnit
+    /// theory data, so the host can address facts and theories by declaring type and method name alone.
+    /// </summary>
+    private static MethodInfo? ResolveTestMethod(Type type, string methodName, out string? error)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+        error = null;
+
+        MethodInfo? parameterless = type.GetMethod(methodName, flags, binder: null, types: Type.EmptyTypes, modifiers: null);
+        if (parameterless is not null)
+        {
+            return parameterless;
+        }
+
+        MethodInfo[] theories = [.. type.GetMethods(flags)
+            .Where(candidate => string.Equals(candidate.Name, methodName, StringComparison.Ordinal)
+                && PerTestLifecycleExecutor.HasTheoryData(candidate))];
+        switch (theories.Length)
+        {
+            case 1:
+                return theories[0];
+            case 0:
+                error = $"Method '{type.FullName}.{methodName}()' was not found.";
+                return null;
+            default:
+                error = $"Theory '{type.FullName}.{methodName}' is ambiguous across {theories.Length} overloads.";
+                return null;
         }
     }
 

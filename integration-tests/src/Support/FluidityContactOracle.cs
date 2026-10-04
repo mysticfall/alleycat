@@ -4,7 +4,7 @@ using Godot;
 
 namespace AlleyCat.IntegrationTests.Support;
 
-/// <summary>Confidence supplied by the authored/contact-lock evidence path, never inferred from pose height.</summary>
+/// <summary>Confidence supplied by the authored contact evidence path, never inferred from pose height.</summary>
 public enum FluidityContactConfidence
 {
     Unknown,
@@ -60,7 +60,7 @@ public sealed record FluidityContactFrame(
 
 /// <summary>
 /// A declared interval in which the named foot must remain in authoritative full support. It is test input, not
-/// a production contact-lock policy or a role-specific correction cap.
+/// a production foot-planting policy or a role-specific correction cap.
 /// </summary>
 public sealed record FluidityExpectedSupportInterval(string Foot, float StartTimeSeconds, float EndTimeSeconds, int Generation);
 

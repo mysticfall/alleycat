@@ -1,5 +1,4 @@
 using AlleyCat.Core.Logging;
-using AlleyCat.IK;
 using AlleyCat.Interaction.Hands;
 using Godot;
 using Microsoft.Extensions.Logging;
@@ -13,9 +12,19 @@ namespace AlleyCat.Control.Locomotion;
 public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcceptance
 {
     private const int RootMotionConsumptionPhysicsPriority = 100;
+    /// <summary>
+    /// Time reserved when gating the stop cut for the authored stop-to-idle crossfade (0.2 s in the player
+    /// tree) plus the completion handshake ticks, so the measured release-to-stop time stays inside the
+    /// target even when the cut — not the natural completion — ends the stop.
+    /// </summary>
+    private const float StopIdleCrossfadeReserveSeconds = 0.25f;
+    /// <summary>Playback rate that freezes a presentation without a pose discontinuity or further root motion.</summary>
+    private const float StopPresentationFreezeRate = 0f;
     private static readonly StringName _playbackParameter = HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter();
     private static readonly StringName _startState = new("Start");
     private static readonly StringName _walkingState = new("PlayerTravel");
+    private const string TurnInPlaceLeftStateName = "PlayerTurnInPlaceL";
+    private const string TurnInPlaceRightStateName = "PlayerTurnInPlaceR";
     private static readonly StringName _statesNodeName = new("States");
     private static readonly StringName _forwardLeftBlendParameter = new("parameters/States/PlayerTravel/ForwardArcL/blend_position");
     private static readonly StringName _forwardRightBlendParameter = new("parameters/States/PlayerTravel/ForwardArcR/blend_position");
@@ -30,8 +39,6 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         ("ForwardArcL", false), ("ForwardArcR", true), ("DirectionalL", false), ("DirectionalR", true),
     ];
     private readonly PlayerLocomotionController _controller = new();
-    private readonly PlayerTravelEntryHandoff _entryHandoff = new();
-    private readonly PlayerTravelReleaseGate _travelReleaseGate = new();
     private CharacterBody3D? _targetBody;
     private AnimationTree? _animationTree;
     private Node3D? _rootMotionReference;
@@ -39,18 +46,20 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
     private Vector2 _rotationInput;
     private bool _transitionObserved;
     private bool _travelSeamAlignmentApplied;
-    private float _lastAuthoredPlanarSpeed;
+    private float _retainedTravelPlaybackRate = 1f;
     private StringName _observedTransitionStateName = new();
     private StandingLocomotionCatalogue? _catalogue;
     private bool _catalogueLoadFailed;
-    private bool _hasTravelPhase;
-    private double _previousTravelPhase;
-    private long _travelEvaluationTick;
-    private string _travelSourceIdentity = string.Empty;
-    private ContactLockCoordinator? _contactLockCoordinator;
-    private PlayerContactLockComposition? _contactLockComposition;
-    private ulong _contactLockEvaluationTick;
-    private long _contactLockClockGeneration;
+    private bool _stopCutPending;
+    private float _stopDisplacementAccumulatedMetres;
+    private float _stopElapsedSeconds;
+    private float _stopReleaseSpeed;
+    private StringName _activeStopRateParameter = new();
+    private float _boundSkeletonMotionScale = 1f;
+    private bool _stopMotionScaleResolved;
+
+    /// <summary>One-time-per-session guard for the stationary-turn presentation limitation diagnostic.</summary>
+    private static bool _stationaryTurnLimitationReported;
 
     public CharacterLocomotion()
     {
@@ -84,7 +93,6 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
             ResolveRuntimeReferences();
         }
     }
-
     /// <summary>Default animated idle state retained by the player pose graph.</summary>
     [Export] public StringName IdleAnimationStateName { get; set; } = new("StandingCrouching");
 
@@ -97,47 +105,54 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
     [Export(PropertyHint.Range, "0,1,0.01")]
     public float InputDeadzone { get; set; } = 0.15f;
 
+    /// <summary>Lowest authored playback rate selected by non-zero movement demand.</summary>
     [ExportGroup("Sustained Blend")]
-    [Export(PropertyHint.Range, "0.1,2,0.01")]
-    public float MinimumPlaybackRate { get; set; } = 0.75f;
+    [Export(PropertyHint.Range, "0.01,2,0.01")]
+    public float MinimumPlaybackRate { get; set; } = 0.05f;
 
+    /// <summary>Highest playback rate sustained travel may present at while cadence-tracking the realised body speed.</summary>
     [Export(PropertyHint.Range, "0.1,2,0.01")]
     public float MaximumPlaybackRate { get; set; } = 1f;
 
     /// <summary>
-    /// Duration the entry-to-travel rate handoff holds its speed-matched rate before ramping toward the
-    /// stick-demanded rate: the 0.12 s entry-to-travel crossfade plus a two-frame margin, mirroring the NPC
-    /// entry-handoff publication window (CTRL-001 TR10: bounded playback-rate changes).
+    /// Maximum release-to-stop seconds for one stop lane (responsiveness target). The authored stop clip's
+    /// playback rate is resolved so its natural completion lands inside this budget, and an in-flight stop is
+    /// cut into the authored idle return before the budget expires.
     /// </summary>
-    [Export(PropertyHint.Range, "0,1,0.01")]
-    public float TravelEntryHandoffHoldSeconds { get; set; } = 0.15f;
-
-    [ExportGroup("Residual Correction")]
-    [Export(PropertyHint.Range, "0,2,0.01")]
-    public float MaximumPlanarResidualRate { get; set; } = 0.35f;
-
-    [Export(PropertyHint.Range, "0,1,0.01")]
-    public float MaximumPlanarResidualPerBout { get; set; } = 0.2f;
-
-    [Export(PropertyHint.Range, "0,3.14,0.01")]
-    public float MaximumYawResidualRate { get; set; } = 0.7f;
-
-    [Export(PropertyHint.Range, "0,1.57,0.01")]
-    public float MaximumYawResidualPerBout { get; set; } = 0.35f;
-
-    [Export(PropertyHint.Range, "0,30,0.1")]
-    public float ResidualSmoothingRate { get; set; } = 10f;
+    [ExportGroup("Stop Responsiveness")]
+    [Export(PropertyHint.Range, "0.05,2,0.01,or_greater")]
+    public float StopTargetSeconds { get; set; } = 0.4f;
 
     /// <summary>
-    /// Authored planar speed at which i2* entry residual assistance reaches full authority (CTRL-001 UR9): the
-    /// weight-shift portion of an entry below this speed keeps proportionally less synthetic correction so the
-    /// planted foot cannot skate.
+    /// Maximum post-release planar displacement metres for one stop lane. The stop-rate policy resolves the
+    /// clip rate from this budget where it is tighter than the time budget, and an in-flight stop is cut once
+    /// the accumulated displacement approaches it.
     /// </summary>
-    [Export(PropertyHint.Range, "0.1,2,0.01")]
-    public float ResidualEntryRampReference { get; set; } = 0.5f;
+    [Export(PropertyHint.Range, "0.01,2,0.005,or_greater")]
+    public float StopTargetDisplacementMetres { get; set; } = 0.2f;
 
-    [Export(PropertyHint.Range, "0,3,0.01")]
-    public float DesiredPlanarSpeed { get; set; } = 1f;
+    /// <summary>Lowest playback rate an authored stop clip may be governed to — stops never play slower than authored.</summary>
+    [Export(PropertyHint.Range, "0.01,8,0.01")]
+    public float MinimumStopPlaybackRate { get; set; } = 1f;
+
+    /// <summary>Highest playback rate an authored stop clip may be governed to.</summary>
+    [Export(PropertyHint.Range, "0.1,8,0.01")]
+    public float MaximumStopPlaybackRate { get; set; } = 4f;
+
+    /// <summary>
+    /// Displacement headroom reserved when gating the stop cut, covering per-tick overshoot at the governed
+    /// rate and the completion handshake tick before the freeze applies.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,0.2,0.005")]
+    public float StopCutSafetyMarginMetres { get; set; } = 0.04f;
+
+    /// <summary>
+    /// Speed headroom above the release-tick body speed that an in-flight stop may present before the
+    /// no-rise gate cuts it: a rate-scaled stop clip's early authored root (authored to continue walk
+    /// cadence) can transiently exceed the release speed, and the stop must never accelerate the body.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float StopNoRiseToleranceMetresPerSecond { get; set; } = 0.05f;
 
     [ExportGroup("Locomotive Animation Catalogue")]
     [Export(PropertyHint.File, "*.json")]
@@ -155,40 +170,53 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
             _catalogue = null;
             _catalogueLoadFailed = false;
             _travelSeamAlignmentApplied = false;
-            _travelReleaseGate.Cancel();
-            _hasTravelPhase = false;
         }
-    } =
-        "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad_catalogue.json";
+    } = "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad_catalogue.json";
 
     /// <summary>Current player lifecycle state for focused runtime verification.</summary>
     public PlayerLocomotionState PlayerState => _controller.State;
 
+    /// <summary>Ordinary permitted travel demand submitted on the latest physics tick.</summary>
+    public Vector2 LastOrdinaryTravelDemand
+    {
+        get; private set;
+    }
+
     /// <summary>Retained anatomical lane for the current movement bout.</summary>
     public PlayerLocomotionPhaseLane PhaseLane => _controller.PhaseLane;
 
-    public override void _Ready()
+    /// <summary>Last evaluated authored-root planar velocity in actor-semantic coordinates.</summary>
+    public Vector2 AuthoredPlanarVelocity
     {
-        base._Ready();
-        ResolveRuntimeReferences();
-        _travelSourceIdentity = $"{GetPath()}#{GetInstanceId()}";
-        if (_rootMotionReference is null)
-        {
-            throw new InvalidOperationException(
-                $"{GetType().Name} '{Name}' requires exported {nameof(RootMotionReference)} to be assigned; assign the player root-motion reference or install a character module that binds it.");
-        }
+        get; private set;
     }
 
-    public override void Move(Vector2 input) => _movementInput = ManualTranslationAcceptance.ApplyRadialDeadzone(input, InputDeadzone);
+    /// <summary>Last evaluated authored-root local-Y yaw rate.</summary>
+    public float AuthoredYawRate
+    {
+        get; private set;
+    }
 
-    public override void Rotate(Vector2 input) => _rotationInput = ManualTranslationAcceptance.ApplyRadialDeadzone(input, InputDeadzone);
+    /// <summary>Whether the last evaluated authored-root interval produced no planar or yaw motion.</summary>
+    public bool AuthoredRootSettled => AuthoredPlanarVelocity.IsZeroApprox() && Mathf.IsZeroApprox(AuthoredYawRate);
 
-    /// <inheritdoc />
-    public bool IsManualTranslationAccepted(Vector2 input)
-        => ManualTranslationAcceptance.IsAccepted(input, InputDeadzone, GetCurrentLocomotionPermissions());
+    /// <summary>Last requested evaluated authored-root world displacement.</summary>
+    public Vector3 LastAuthoredRootWorldDelta
+    {
+        get; private set;
+    }
 
-    /// <summary>Reports whether the production movement owner currently accepts contact-lock contributions.</summary>
-    public bool IsContactLockCoordinatorBound => _contactLockCoordinator is not null;
+    /// <summary>Last collision-realised world displacement; this is measured from the body transform.</summary>
+    public Vector3 LastRealisedWorldDelta
+    {
+        get; private set;
+    }
+
+    /// <summary>Last complete planar movement requested from the single collision operation.</summary>
+    public Vector3 LastRequestedWorldDelta
+    {
+        get; private set;
+    }
 
     /// <summary>Number of coherent movement operations executed by this locomotion owner.</summary>
     public ulong MovementOperationCount
@@ -196,36 +224,26 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         get; private set;
     }
 
-    /// <summary>Last immutable contact correction consumption observed inside the coherent movement operation.</summary>
-    public ContactLockMovementConsumptionTrace LastContactLockConsumption
+    public override void _Ready()
     {
-        get; private set;
-    }
-    public PlayerTravelReleaseOccurrenceV1? LastTravelReleaseOccurrence
-    {
-        get; private set;
-    }
-
-    /// <summary>Binds or clears the post-installer player contact-lock correction source.</summary>
-    public void SetContactLockCoordinator(
-        ContactLockCoordinator? coordinator,
-        PlayerContactLockComposition? composition = null)
-    {
-        _contactLockCoordinator = coordinator;
-        _contactLockComposition = coordinator is null ? null : composition;
-        if (coordinator is null)
+        base._Ready();
+        ResolveRuntimeReferences();
+        if (_rootMotionReference is null)
         {
-            _contactLockEvaluationTick = 0;
-            _contactLockClockGeneration = 0;
+            throw new InvalidOperationException(
+                $"{GetType().Name} '{Name}' requires exported {nameof(RootMotionReference)} to be assigned; assign the player root-motion reference or install a character module that binds it.");
         }
     }
 
-    /// <summary>Publishes the same-tick evaluated clock identity used for exact-once correction consumption.</summary>
-    public void PublishContactLockEvaluation(ulong physicsTick, long clockGeneration)
-    {
-        _contactLockEvaluationTick = physicsTick;
-        _contactLockClockGeneration = clockGeneration;
-    }
+    public override void Move(Vector2 input)
+        => _movementInput = ManualTranslationAcceptance.ApplyRadialDeadzone(input, InputDeadzone);
+
+    public override void Rotate(Vector2 input)
+        => _rotationInput = ManualTranslationAcceptance.ApplyRadialDeadzone(input, InputDeadzone);
+
+    /// <inheritdoc />
+    public bool IsManualTranslationAccepted(Vector2 input)
+        => ManualTranslationAcceptance.IsAccepted(input, InputDeadzone, GetCurrentLocomotionPermissions());
 
     public override void _PhysicsProcess(double delta)
     {
@@ -245,48 +263,33 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         }
 
         AnimationNodeStateMachinePlayback playback = ResolvePlayback();
-        bool transitionCompleted = ObserveFiniteTransitionCompletion(playback);
-        PlayerTravelReleaseOccurrenceV1? releaseOccurrence = ObserveTravelRelease(playback, frameDelta);
-        PlayerTravelReleasePermitV1? releasePermit = null;
-        if (_movementInput.IsZeroApprox()
-            && releaseOccurrence is { } occurrence
-            && _travelReleaseGate.TryConsume(
-                occurrence,
-                _travelEvaluationTick,
-                ToReleaseSide(_controller.PhaseLane),
-                out PlayerTravelReleasePermitV1 permit))
-        {
-            releasePermit = permit;
-        }
+        PlayerLocomotionState previousState = _controller.State;
+        // The pending stop cut completes exactly one lifecycle handshake: consume it here so a later
+        // finite transition (for example the entry a fresh intent just started) cannot fire on the
+        // previous stop's completion.
+        bool stopCutPending = _stopCutPending;
+        _stopCutPending = false;
+        bool transitionCompleted = ObserveFiniteTransitionCompletion(playback)
+            || stopCutPending
+            || ObserveNeutralExitCompletion(playback);
         float turn = permissions.RotationAllowed
             ? Mathf.Clamp(_rotationInput.X * RotationSpeedMultiplier * SmoothTurnSensitivity, -1f, 1f)
             : 0f;
+
+        Vector2 permittedMovement = permissions.MovementAllowed ? _movementInput : Vector2.Zero;
+        LastOrdinaryTravelDemand = permittedMovement;
         PlayerLocomotionOutput output = _controller.Step(
             _movementInput,
+            AuthoredPlanarVelocity,
             turn,
             permissions,
-            transitionCompleted,
-            MinimumPlaybackRate,
-            MaximumPlaybackRate,
-            releasePermit);
-
-        ApplyLifecycleCommand(playback, output.Command, output.CommandLane);
-        if (output.Command == PlayerLocomotionCommand.Travel)
-        {
-            BeginTravelEntryHandoff(output);
-        }
-        else if (output.Command != PlayerLocomotionCommand.None)
-        {
-            // Any lifecycle hop away from sustained travel (exit, idle, pivot, side step) returns rate
-            // authority to the destination state immediately.
-            _entryHandoff.Cancel();
-        }
-
-        float playbackRate = _entryHandoff.Active
-            ? _entryHandoff.Step(output.PlaybackRate, frameDelta)
-            : output.PlaybackRate;
-        PublishSustainedBlend(output, playbackRate);
-        ApplyMotionOnce(frameDelta, permissions, output);
+            transitionCompleted);
+        ApplyLifecycleCommand(playback, output.Command, output.CommandLane, previousState);
+        PublishSustainedBlend(output, ResolveTravelPlaybackRate(output, permittedMovement.Length()));
+        _animationTree.Advance(delta);
+        ApplyMotionOnce(frameDelta, permissions);
+        UpdateStopCutGating(frameDelta);
+        ReportStationaryTurnPresentationLimit(permittedMovement, turn);
     }
 
     private void ProcessPoseOverride(LocomotionStateTarget target, LocomotionPermissions permissions, float delta)
@@ -299,17 +302,16 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
             playback.Start(targetState, reset: true);
         }
 
-        _entryHandoff.Cancel();
-        ApplyMotionOnce(delta, permissions, default);
+        _animationTree!.Advance(delta);
+        ApplyMotionOnce(delta, permissions);
     }
 
     /// <summary>
     /// Aligns every sustained-travel blend point's custom timeline so the serving lane's declared release event
-    /// sits exactly at the shared cycle seam (ANIM-002 §7.7 normalise-to-common-cycle and align-release-at-seam;
-    /// CTRL-001 TR10 phase/contact/cycle-length synchronisation). The spaces are lane-dedicated by construction,
-    /// so the alignment is one deterministic startup configuration rather than a per-bout reconfiguration. The
-    /// entry clips end on their lane release (release at END), so the entry-to-travel reset starts travel exactly
-    /// where the entry's gait phase left off instead of half a cycle away.
+    /// sits exactly at the shared cycle seam (ANIM-002 §7.7 normalise-to-common-cycle and align-release-at-seam).
+    /// The spaces are lane-dedicated by construction, so the alignment is one deterministic startup configuration
+    /// rather than a per-bout reconfiguration. The entry clips end on their lane release (release at END), so the
+    /// entry-to-travel reset starts travel exactly where the entry's gait phase left off instead of half a cycle away.
     /// </summary>
     private void ApplyTravelSeamAlignmentOnce()
     {
@@ -360,318 +362,271 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         _animationTree?.ClearCaches();
     }
 
-    private void BeginTravelEntryHandoff(PlayerLocomotionOutput output)
+    /// <summary>
+    /// Resolves the sustained travel playback rate for one tick (CTRL-001 TR4): the demanded movement
+    /// magnitude scheduled onto the bounded [<see cref="MinimumPlaybackRate" />, <see cref=
+    /// "MaximumPlaybackRate" />] range — a demand-magnitude schedule, with the realised-motion
+    /// coupling confined to the fixture-declared unit-speed checks the cadence probes assert. An
+    /// authored stop fading the travel tree out keeps the last published travel rate so the crossfade
+    /// does not step the cadence (a reversal's authored braking stop therefore plays at the travelled
+    /// cadence while the body decelerates). The neutral stop freezes the fading travel presentation
+    /// outright: its remaining realised motion is already ≈0, so the presented gait agrees with realised
+    /// motion by standing still through the crossfade.
+    /// </summary>
+    private float ResolveTravelPlaybackRate(PlayerLocomotionOutput output, float demandMagnitude)
     {
-        float sustainedUnitSpeed = ResolveSustainedUnitSpeed(output);
-        if (sustainedUnitSpeed <= 0.0001f)
+        float minimumRate = Mathf.Max(0.01f, MinimumPlaybackRate);
+        float maximumRate = Mathf.Max(minimumRate, MaximumPlaybackRate);
+        float coupledRate = Mathf.Lerp(minimumRate, maximumRate, Mathf.Clamp(demandMagnitude, 0f, 1f));
+
+        if (output.State is PlayerLocomotionState.TravellingForward or PlayerLocomotionState.TravellingDirectional)
         {
-            _entryHandoff.Cancel();
-            return;
+            _retainedTravelPlaybackRate = coupledRate;
+            return coupledRate;
         }
 
-        // The stored terminal speed is the entry's last completed frame, measured before the travel hop.
-        _entryHandoff.Begin(_lastAuthoredPlanarSpeed, sustainedUnitSpeed, TravelEntryHandoffHoldSeconds);
+        return output.State is PlayerLocomotionState.ExitingForward or PlayerLocomotionState.ExitingBackward
+            ? _retainedTravelPlaybackRate
+            : (output.State == PlayerLocomotionState.ExitingNeutral
+                ? StopPresentationFreezeRate
+                : coupledRate);
     }
 
     /// <summary>
-    /// Resolves the live travel blend space's rate-1 sustained root speed: the nearest blend point's full-cycle
-    /// catalogue displacement over the space's common cycle length, the same analytic unit-speed measure the NPC
-    /// handoff uses. The handoff blends onto one dominated sample at the boundary, so the nearest point is the
-    /// honest unit measure for the arriving gait.
+    /// Reports the stationary-turn presentation limitation once per session: the player graph wires no continuous
+    /// stationary-turn content, so a stationary stick turn presents the idle pose while the actor rotates
+    /// (CTRL-001 TR4 requires the degradation to be reported with evidence rather than silently accepted). The
+    /// physical response is unaffected — yaw follows the continuous demand regardless.
     /// </summary>
-    private float ResolveSustainedUnitSpeed(PlayerLocomotionOutput output)
+    private void ReportStationaryTurnPresentationLimit(Vector2 movement, float turn)
     {
-        StandingLocomotionCatalogue? catalogue = ResolveLocomotionCatalogue();
-        AnimationNodeBlendTree? travel = ResolvePlayerTravelTree();
-        if (catalogue is null || travel is null)
+        if (_stationaryTurnLimitationReported
+            || _controller.State != PlayerLocomotionState.Idle
+            || !movement.IsZeroApprox()
+            || Mathf.IsZeroApprox(turn))
         {
-            return 0f;
+            return;
         }
 
-        bool rightLane = output.PhaseLane == PlayerLocomotionPhaseLane.Right;
-        bool directional = output.DomainBlend > 0.5f;
-        string spaceName = directional
-            ? rightLane ? "DirectionalR" : "DirectionalL"
-            : rightLane ? "ForwardArcR" : "ForwardArcL";
-        if (travel.GetNode(new StringName(spaceName)) is not AnimationNodeBlendSpace2D space)
+        // The presentation exists: the degradation is reported only when the authored turn-in-place states
+        // are genuinely absent from the wired player tree (a content-wiring gap), not while they present.
+        AnimationNodeStateMachine? states = ResolvePlayerStates();
+        if (states is not null
+            && states.HasNode(new StringName(TurnInPlaceLeftStateName))
+            && states.HasNode(new StringName(TurnInPlaceRightStateName)))
         {
-            return 0f;
+            return;
         }
 
-        Vector2 blend = directional
-            ? output.Blend
-            : new(output.ForwardArcBlend, 1f - Mathf.Abs(output.ForwardArcBlend));
-        int nearest = -1;
-        float nearestDistance = float.PositiveInfinity;
-        for (int index = 0; index < space.GetBlendPointCount(); index++)
+        _stationaryTurnLimitationReported = true;
+        if (GameLoggerResolver.TryResolve(out ILogger<CharacterLocomotion>? logger) && logger is not null)
         {
-            float distance = blend.DistanceSquaredTo(space.GetBlendPointPosition(index));
-            if (distance < nearestDistance)
-            {
-                nearest = index;
-                nearestDistance = distance;
-            }
+            logger.LogWarning(
+                "Stationary authored turning is unavailable: no compatible stationary-turn presentation is wired, so CTRL remains stationary and reports the finite degradation instead of applying synthetic yaw.");
         }
-
-        if (nearest < 0)
-        {
-            return 0f;
-        }
-
-        string role = space.GetBlendPointName(nearest).ToString();
-        return catalogue.Clips.TryGetValue(role, out StandingLocomotionClip? clip)
-            ? (float)(clip.EndpointRootDisplacement.Length() / space.CyclicLength)
-            : 0f;
     }
 
     private AnimationNodeBlendTree? ResolvePlayerTravelTree()
         => ResolvePlayerStates()?.GetNode(_walkingState) as AnimationNodeBlendTree;
 
-    private PlayerTravelReleaseOccurrenceV1? ObserveTravelRelease(
-        AnimationNodeStateMachinePlayback playback,
-        float delta)
-    {
-        _travelEvaluationTick++;
-        if (playback.GetCurrentNode() != _walkingState
-            || ResolveLocomotionCatalogue() is not { } catalogue
-            || ResolveEvaluatedTravelSource(catalogue) is not { } source
-            || !TryResolveCompatibleExit(
-                catalogue,
-                source.Clip,
-                ToReleaseSide(_controller.PhaseLane),
-                out StandingLocomotionClip? exit,
-                out string releaseEvent))
-        {
-            _travelReleaseGate.Cancel();
-            _hasTravelPhase = false;
-            return null;
-        }
-
-        float cycle = playback.GetCurrentLength();
-        float position = playback.GetCurrentPlayPosition();
-        float rate = _animationTree!.Get(_playbackRateParameter).AsSingle();
-        if (!float.IsFinite(cycle) || cycle <= 0f || !float.IsFinite(position) || !float.IsFinite(rate) || rate <= 0f)
-        {
-            _travelReleaseGate.Cancel();
-            _hasTravelPhase = false;
-            return null;
-        }
-
-        double currentPhase = Mathf.PosMod(position, cycle) / cycle;
-        double previousPhase = _hasTravelPhase ? _previousTravelPhase : currentPhase;
-        _previousTravelPhase = currentPhase;
-        _hasTravelPhase = true;
-        PlayerTravelReleaseSide side = ToReleaseSide(_controller.PhaseLane);
-        string provenance = CataloguePath;
-        PlayerTravelReleaseCandidateV1 candidate = new(
-            _travelSourceIdentity,
-            source.Clip.Role,
-            source.Clip.Identity,
-            source.EvaluatedAnimation,
-            PlayerTravelEvaluatedSourceAuthority.SingularBlendPoint,
-            releaseEvent,
-            side,
-            exit!.Role,
-            exit.Identity,
-            provenance,
-            source.ClockTransform)
-        {
-            EvaluatedCapability = source.Clip.Capability,
-            ExitCapability = exit.Capability,
-        };
-        PlayerTravelClockEvaluationV1 observation = new(
-            _travelSourceIdentity,
-            source.Clip.Role,
-            source.Clip.Identity,
-            source.EvaluatedAnimation,
-            PlayerTravelEvaluatedSourceAuthority.SingularBlendPoint,
-            provenance,
-            side,
-            _travelEvaluationTick,
-            previousPhase,
-            currentPhase,
-            source.EvaluatedCycleSeconds,
-            Math.Min((delta * rate / cycle) + 0.00001d, 0.99999d),
-            PlayerTravelReleaseEvidenceOrigin.LiveEvaluatedClock,
-            PlayerTravelReleaseFreshness.CurrentPhysicsTick);
-        PlayerTravelReleaseOccurrenceV1? occurrence = _travelReleaseGate.Observe(candidate, observation);
-        if (occurrence.HasValue)
-        {
-            LastTravelReleaseOccurrence = occurrence;
-        }
-        return occurrence;
-    }
-
-    private EvaluatedTravelSource? ResolveEvaluatedTravelSource(StandingLocomotionCatalogue catalogue)
-    {
-        AnimationNodeBlendTree? travel = ResolvePlayerTravelTree();
-        if (travel is null)
-        {
-            return null;
-        }
-
-        bool rightLane = _controller.PhaseLane == PlayerLocomotionPhaseLane.Right;
-        bool directional = _controller.State == PlayerLocomotionState.TravellingDirectional;
-        float expectedLaneBlend = rightLane ? 1f : 0f;
-        float phaseBlend = _animationTree!.Get(
-            directional ? _phaseDirectionalBlendParameter : _phaseForwardBlendParameter).AsSingle();
-        float domainBlend = _animationTree.Get(_domainBlendParameter).AsSingle();
-        if (!float.IsFinite(phaseBlend)
-            || !float.IsFinite(domainBlend)
-            || Mathf.Abs(phaseBlend - expectedLaneBlend) > 0.0001f
-            || Mathf.Abs(domainBlend - (directional ? 1f : 0f)) > 0.0001f)
-        {
-            return null;
-        }
-
-        string spaceName = directional
-            ? rightLane ? "DirectionalR" : "DirectionalL"
-            : rightLane ? "ForwardArcR" : "ForwardArcL";
-        if (travel.GetNode(new StringName(spaceName)) is not AnimationNodeBlendSpace2D space)
-        {
-            return null;
-        }
-
-        Vector2 blend = directional
-            ? _animationTree!.Get(rightLane ? _directionalRightBlendParameter : _directionalLeftBlendParameter).AsVector2()
-            : _animationTree!.Get(rightLane ? _forwardRightBlendParameter : _forwardLeftBlendParameter).AsVector2();
-        int singular = -1;
-        for (int index = 0; index < space.GetBlendPointCount(); index++)
-        {
-            float distance = blend.DistanceSquaredTo(space.GetBlendPointPosition(index));
-            if (distance > 0.00000001f)
-            {
-                continue;
-            }
-
-            if (singular >= 0)
-            {
-                return null;
-            }
-            singular = index;
-        }
-
-        if (singular < 0
-            || space.GetBlendPointNode(singular) is not AnimationNodeAnimation animationNode)
-        {
-            return null;
-        }
-
-        string evaluatedAnimation = animationNode.Animation.ToString();
-        int separator = evaluatedAnimation.LastIndexOf('/');
-        if (separator < 0
-            || !catalogue.TryGetClipByIdentity(evaluatedAnimation[(separator + 1)..], out StandingLocomotionClip? clip))
-        {
-            return null;
-        }
-        if (evaluatedAnimation != $"locomotion/{clip!.Identity}")
-        {
-            return null;
-        }
-
-        float evaluatedCycle = (float)space.CyclicLength;
-        PlayerTravelReleaseClockTransformV1 transform = PlayerTravelSeamAlignment.ResolveReleaseClockTransform(
-            clip,
-            rightLane,
-            evaluatedCycle);
-        return transform.IsValid()
-            ? new EvaluatedTravelSource(clip, evaluatedAnimation, evaluatedCycle, transform)
-            : null;
-    }
-
-    private readonly record struct EvaluatedTravelSource(
-        StandingLocomotionClip Clip,
-        string EvaluatedAnimation,
-        double EvaluatedCycleSeconds,
-        PlayerTravelReleaseClockTransformV1 ClockTransform);
-
-    private static bool TryResolveCompatibleExit(
-        StandingLocomotionCatalogue catalogue,
-        StandingLocomotionClip evaluated,
-        PlayerTravelReleaseSide side,
-        out StandingLocomotionClip? exit,
-        out string releaseEvent)
-    {
-        bool left = side == PlayerTravelReleaseSide.Left;
-        StandingLocomotionCapability exitCapability = StandingLocomotionCapabilities.Exit(
-            evaluated.Capability.IsBackward(),
-            left ? StandingLocomotionAnatomicalSide.Left : StandingLocomotionAnatomicalSide.Right);
-        StandingLocomotionClip resolvedExit = catalogue[exitCapability];
-        StandingLocomotionBoundaryMapping mapping = catalogue.ResolveBoundaryMapping(
-            evaluated.Role,
-            resolvedExit.Role,
-            left ? StandingLocomotionAnatomicalSide.Left : StandingLocomotionAnatomicalSide.Right);
-        releaseEvent = mapping.Source.ID;
-        exit = resolvedExit;
-        return true;
-    }
-
-    private static PlayerTravelReleaseSide ToReleaseSide(PlayerLocomotionPhaseLane lane)
-        => lane == PlayerLocomotionPhaseLane.Left ? PlayerTravelReleaseSide.Left : PlayerTravelReleaseSide.Right;
-
     private void ApplyLifecycleCommand(
         AnimationNodeStateMachinePlayback playback,
         PlayerLocomotionCommand command,
-        PlayerLocomotionPhaseLane lane)
+        PlayerLocomotionPhaseLane lane,
+        PlayerLocomotionState previousState)
     {
         if (playback.GetCurrentNode() == _startState)
         {
             playback.Start(IdleAnimationStateName, reset: true);
         }
 
-        StringName state = command switch
+        bool finiteTransition = command is PlayerLocomotionCommand.EnterForward or PlayerLocomotionCommand.EnterBackward
+            or PlayerLocomotionCommand.ExitForward or PlayerLocomotionCommand.ExitBackward;
+        StringName state = ResolveCommandState(command, lane);
+        if (state.IsEmpty)
+        {
+            return;
+        }
+
+        // Missing authored content fails closed to idle; no synthetic movement fallback exists.
+        if (ResolvePlayerStates()?.HasNode(state) != true)
+        {
+            state = IdleAnimationStateName;
+            finiteTransition = false;
+        }
+
+        if (command is PlayerLocomotionCommand.ExitForward
+            or PlayerLocomotionCommand.ExitBackward
+            or PlayerLocomotionCommand.ExitNeutral)
+        {
+            ConfigureStopPresentation(command, lane, state);
+        }
+
+        // A return to idle from an authored stop, the neutral stop, or from the turn-in-place presentation
+        // follows the authored transition (crossfaded); only a genuine permission loss drops straight to
+        // idle without one.
+        bool authoredReturnToIdle = command == PlayerLocomotionCommand.Idle
+            && previousState is PlayerLocomotionState.ExitingForward or PlayerLocomotionState.ExitingBackward
+                or PlayerLocomotionState.ExitingNeutral or PlayerLocomotionState.TurningInPlace;
+        if (command == PlayerLocomotionCommand.Idle && !authoredReturnToIdle)
+        {
+            // Permission loss drops straight to idle without a crossfade.
+            if (playback.GetCurrentNode() != state)
+            {
+                playback.Start(state, reset: true);
+            }
+        }
+        else
+        {
+            // Starts, travel, stops, and the stop's return to idle follow the authored transitions.
+            TravelTo(playback, state);
+        }
+
+        // The completion observer is armed only for the commanded finite clip itself so the lifecycle handshake
+        // cannot fire on any other node's window (see ObserveFiniteTransitionCompletion).
+        _transitionObserved = finiteTransition;
+        _observedTransitionStateName = _transitionObserved ? state : new StringName();
+    }
+
+    private StringName ResolveCommandState(PlayerLocomotionCommand command, PlayerLocomotionPhaseLane lane)
+        => command switch
         {
             PlayerLocomotionCommand.EnterForward => lane == PlayerLocomotionPhaseLane.Left ? new("PlayerI2FL") : new("PlayerI2FR"),
             PlayerLocomotionCommand.EnterBackward => lane == PlayerLocomotionPhaseLane.Left ? new("PlayerI2BL") : new("PlayerI2BR"),
             PlayerLocomotionCommand.Travel => _walkingState,
             PlayerLocomotionCommand.ExitForward => lane == PlayerLocomotionPhaseLane.Left ? new("PlayerF2IL") : new("PlayerF2IR"),
             PlayerLocomotionCommand.ExitBackward => lane == PlayerLocomotionPhaseLane.Left ? new("PlayerB2IL") : new("PlayerB2IR"),
-            PlayerLocomotionCommand.PivotLeft => new("PlayerPivotL"),
-            PlayerLocomotionCommand.PivotRight => new("PlayerPivotR"),
-            PlayerLocomotionCommand.SideStepLeft => new("PlayerSideStepL"),
-            PlayerLocomotionCommand.SideStepRight => new("PlayerSideStepR"),
+            PlayerLocomotionCommand.ExitNeutral => IdleAnimationStateName,
+            PlayerLocomotionCommand.TurnLeft => new(TurnInPlaceLeftStateName),
+            PlayerLocomotionCommand.TurnRight => new(TurnInPlaceRightStateName),
             PlayerLocomotionCommand.Idle => IdleAnimationStateName,
             PlayerLocomotionCommand.None => new StringName(),
             _ => new StringName(),
         };
-        if (!state.IsEmpty)
+
+    /// <summary>
+    /// Stop-rate governance (CTRL-001 responsiveness): resolves and publishes the playback rate for the
+    /// stop clip a lane just entered, and resets the in-flight stop budget. The rate compresses the authored
+    /// clip so its natural completion meets the configured release-to-stop time and post-release
+    /// displacement targets; the rate-failure fallback is the authored 1x playback. The neutral exit
+    /// carries no stop clip — its presentation freeze is published through the sustained travel rate.
+    /// </summary>
+    private void ConfigureStopPresentation(PlayerLocomotionCommand command, PlayerLocomotionPhaseLane lane, StringName state)
+    {
+        _stopCutPending = false;
+        _stopDisplacementAccumulatedMetres = 0f;
+        _stopElapsedSeconds = 0f;
+        _stopReleaseSpeed = AuthoredPlanarVelocity.Length();
+        if (command == PlayerLocomotionCommand.ExitNeutral)
         {
-            ApplyAnimationState(playback, command, state);
-            // Pivots and side steps are held loopable manoeuvres, not finite transitions: their release is
-            // input-driven, so they never arm the finite-completion observer used by the i2*/*2i handshake. The
-            // observer is armed only for the commanded clip itself so the handshake cannot fire on any other
-            // node's window (see ObserveFiniteTransitionCompletion).
-            _transitionObserved = command is PlayerLocomotionCommand.EnterForward or PlayerLocomotionCommand.EnterBackward
-                or PlayerLocomotionCommand.ExitForward or PlayerLocomotionCommand.ExitBackward;
-            _observedTransitionStateName = _transitionObserved ? state : new StringName();
+            _activeStopRateParameter = new StringName();
+            return;
         }
+
+        bool backward = command == PlayerLocomotionCommand.ExitBackward;
+        float rate = ResolveAuthoredStopRate(backward, lane);
+        _activeStopRateParameter = new StringName($"parameters/States/{state}/Rate/scale");
+        _animationTree?.Set(_activeStopRateParameter, rate);
     }
 
-    private static void ApplyAnimationState(
-        AnimationNodeStateMachinePlayback playback,
-        PlayerLocomotionCommand command,
-        StringName state)
+    private float ResolveAuthoredStopRate(bool backward, PlayerLocomotionPhaseLane lane)
     {
-        if (command is PlayerLocomotionCommand.EnterForward or PlayerLocomotionCommand.EnterBackward)
+        StandingLocomotionCatalogue? catalogue = ResolveLocomotionCatalogue();
+        if (catalogue is null)
         {
-            TravelTo(playback, state);
+            return 1f;
         }
-        else if (command is PlayerLocomotionCommand.ExitForward or PlayerLocomotionCommand.ExitBackward)
+
+        StandingLocomotionAnatomicalSide side = lane == PlayerLocomotionPhaseLane.Right
+            ? StandingLocomotionAnatomicalSide.Right
+            : StandingLocomotionAnatomicalSide.Left;
+        StandingLocomotionCapability capability = StandingLocomotionCapabilities.Exit(backward, side);
+        if (!catalogue.Capabilities.TryGetValue(capability, out StandingLocomotionClip? clip) || clip is null)
         {
-            TravelTo(playback, state);
+            return 1f;
         }
-        else
+
+        // ANIM-002 scale rule: player consumers of catalogue root-trajectory positions multiply by the
+        // bound skeleton's motion scale; yaw is not scaled.
+        Vector3 endpoint = clip.EndpointRootDisplacement;
+        float displacementMetres = new Vector2(endpoint.X, endpoint.Z).Length() * ResolveBoundSkeletonMotionScale();
+        return PlayerStopPolicy.ResolveStopPlaybackRate(
+            (float)clip.DurationSeconds,
+            displacementMetres,
+            StopTargetSeconds,
+            StopTargetDisplacementMetres,
+            MinimumStopPlaybackRate,
+            MaximumStopPlaybackRate);
+    }
+
+    private float ResolveBoundSkeletonMotionScale()
+    {
+        if (_stopMotionScaleResolved)
         {
-            TravelTo(playback, state);
+            return _boundSkeletonMotionScale;
         }
+
+        _stopMotionScaleResolved = true;
+        if (_rootMotionReference is not null)
+        {
+            foreach (Node child in _rootMotionReference.FindChildren("*", "Skeleton3D", true, false))
+            {
+                if (child is Skeleton3D skeleton)
+                {
+                    _boundSkeletonMotionScale = skeleton.MotionScale;
+                    break;
+                }
+            }
+        }
+
+        return _boundSkeletonMotionScale;
     }
 
     /// <summary>
-    /// Applies one lifecycle hop as a crossfaded state-machine travel instead of a teleporting restart. CTRL-001
-    /// TR11: every command is issued from the state that owns its single pre-authored edge to the target, so the
-    /// A* shortest path is always that one direct hop and no path-selection freedom is semantically involved. The
-    /// edges keep Godot's defaults — travel-only advance mode, immediate switch, reset-on-switch — so the target
-    /// clip restarts from its beginning exactly like the former Start(reset: true) while the source crossfades out.
+    /// Gates an in-flight authored stop against the responsiveness budgets: once the accumulated
+    /// post-release displacement approaches the displacement target, or the elapsed stop time approaches
+    /// the time target minus the idle-crossfade reserve, the stop clip is frozen (a zero playback rate
+    /// halts playback with no pose discontinuity and no further root displacement) and the lifecycle
+    /// completes into the authored idle return on the next tick. Release-speed continuity is not gated
+    /// here: the UR4 adaptation clamp in <see cref="ApplyMotionOnce" /> enforces it on the adapted root
+    /// itself, before this gate could observe a violation.
+    /// </summary>
+    private void UpdateStopCutGating(float delta)
+    {
+        if (_controller.State is not (PlayerLocomotionState.ExitingForward or PlayerLocomotionState.ExitingBackward)
+            || _activeStopRateParameter.IsEmpty)
+        {
+            return;
+        }
+
+        _stopElapsedSeconds += delta;
+        _stopDisplacementAccumulatedMetres += new Vector2(LastRealisedWorldDelta.X, LastRealisedWorldDelta.Z).Length();
+        float displacementLimit = Mathf.Max(0.02f, StopTargetDisplacementMetres - StopCutSafetyMarginMetres);
+        float timeLimit = Mathf.Max(0.05f, StopTargetSeconds - StopIdleCrossfadeReserveSeconds);
+        if (_stopDisplacementAccumulatedMetres < displacementLimit && _stopElapsedSeconds < timeLimit)
+        {
+            return;
+        }
+
+        _animationTree?.Set(_activeStopRateParameter, StopPresentationFreezeRate);
+        _stopCutPending = true;
+    }
+
+    /// <summary>
+    /// The neutral exit has no finite stop clip to observe: it completes once the authored crossfade into
+    /// idle has taken over the graph and its fading source has drained.
+    /// </summary>
+    private bool ObserveNeutralExitCompletion(AnimationNodeStateMachinePlayback playback)
+        => _controller.State == PlayerLocomotionState.ExitingNeutral
+            && playback.GetCurrentNode() == IdleAnimationStateName
+            && playback.GetFadingFromNode().IsEmpty;
+
+    /// <summary>
+    /// Applies one lifecycle hop as a crossfaded state-machine travel instead of a teleporting restart. Every command
+    /// is issued from a state that owns a direct edge to its target, so the A* shortest path is always that one hop
+    /// and interruption never routes through an unwanted finite exit, idle, or entry path. The edges keep Godot's
+    /// defaults — travel-only advance mode, immediate switch, reset-on-switch — so the target clip restarts from its
+    /// beginning exactly like the former Start(reset: true) while the source crossfades out.
     /// </summary>
     private static void TravelTo(AnimationNodeStateMachinePlayback playback, StringName state)
     {
@@ -742,7 +697,7 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         }
 
         // The handshake must only complete on the command's own finite state, so a completed entry cannot be
-        // mistaken for an exit completion before authoritative release evidence schedules that exit.
+        // mistaken for an exit completion before the lifecycle schedules that exit.
         if (playback.GetCurrentNode() != _observedTransitionStateName)
         {
             return false;
@@ -772,95 +727,68 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         _animationTree.Set(_playbackRateParameter, playbackRate);
     }
 
-    private void ApplyMotionOnce(float delta, LocomotionPermissions permissions, PlayerLocomotionOutput output)
+    /// <summary>Consumes the evaluated authored root exactly once in the actor's single collision operation.</summary>
+    private void ApplyMotionOnce(float delta, LocomotionPermissions permissions)
     {
         CharacterBody3D body = GetTargetBody();
         MovementOperationCount++;
-        Transform3D actorBeforeMovement = body.GlobalTransform;
         Vector3 positionBeforeMovement = body.GlobalPosition;
-        ContactLockMotionContribution contactContribution = default;
-        bool contactConsumed = _contactLockCoordinator?.TryConsumeAuthorisedContribution(
-            _contactLockEvaluationTick,
-            _contactLockClockGeneration,
-            out contactContribution) == true;
-        Vector3 rootDelta = GetRootMotionPositionDelta();
-        Vector3 rootVelocity = permissions.MovementAllowed && rootDelta.IsFinite()
-            ? GetRootMotionReferenceBasis() * rootDelta / delta
+        Vector3 evaluatedRoot = _animationTree!.GetRootMotionPosition();
+        Quaternion evaluatedRotation = _animationTree.GetRootMotionRotation();
+        // CTRL-001 rig-independent actor-frame semantics: the authored delta is expressed in the ANIM-002
+        // skeleton-authoring convention (avatar forward = skeleton-local +Z, avatar right = −X — the same
+        // FIXED convention AuthoredPlanarVelocity applies below), never in the rig container's runtime basis.
+        // The conversion composes that fixed convention with the ACTOR's world basis, so identically-authored
+        // clips move the actor identically whatever the rig node's own yaw is (the identity-rig control), and
+        // for the production rig — whose container's local basis under the body IS this 180° convention —
+        // the product equals the previous reference-global-basis conversion exactly, keeping every production
+        // cardinal/rotated behaviour unchanged.
+        Vector3 semanticDelta = new(-evaluatedRoot.X, 0f, -evaluatedRoot.Z);
+        Vector3 authoredWorldDelta = permissions.MovementAllowed && evaluatedRoot.IsFinite()
+            ? body.GlobalBasis.Orthonormalized() * semanticDelta
             : Vector3.Zero;
-        Vector2 authoredPlanar = new(rootVelocity.X, rootVelocity.Z);
-        // Retained for the entry-to-travel rate handoff: the entry's terminal authored root speed is the last
-        // completed entry frame's measurement, taken before the travel hop re-arms the state machine.
-        _lastAuthoredPlanarSpeed = authoredPlanar.Length();
-        Vector2 desiredLocal = output.Blend * DesiredPlanarSpeed;
-        Vector3 desiredWorld3 = GetRootMotionReferenceBasis() * new Vector3(desiredLocal.X, 0f, -desiredLocal.Y);
-        Vector2 desiredWorld = new(desiredWorld3.X, desiredWorld3.Z);
-        float speedWeight = Mathf.Clamp(output.Blend.Length(), 0f, 1f);
-        float phaseWeight = GetPhaseCorrectionWeight();
-        Vector2 residual = permissions.MovementAllowed
-            ? _controller.CalculatePlanarResidual(desiredWorld, authoredPlanar, speedWeight, phaseWeight, delta, MaximumPlanarResidualRate, MaximumPlanarResidualPerBout, ResidualSmoothingRate, ResidualEntryRampReference)
+        authoredWorldDelta.Y = 0f;
+        // Stop-responsiveness continuity (CTRL-001 UR4 adaptation): while any stop presents — an authored
+        // stop clip, or the neutral stop whose fading source may be an entry clip with no rate
+        // governance — the adapted root may not accelerate the body beyond the release-tick speed plus
+        // the no-rise tolerance. A rate-scaled stop clip's early authored root (authored to continue
+        // walk cadence) and a draining entry clip's root would otherwise surge the body — most visibly
+        // when the release speed is low.
+        if (_controller.State is PlayerLocomotionState.ExitingForward
+            or PlayerLocomotionState.ExitingBackward
+            or PlayerLocomotionState.ExitingNeutral)
+        {
+            float limit = (_stopReleaseSpeed + StopNoRiseToleranceMetresPerSecond) * delta;
+            Vector2 planar = new(authoredWorldDelta.X, authoredWorldDelta.Z);
+            if (planar.Length() > limit)
+            {
+                Vector2 limited = planar.LengthSquared() > 0f ? planar.Normalized() * limit : Vector2.Zero;
+                authoredWorldDelta = new Vector3(limited.X, 0f, limited.Y);
+            }
+        }
+        float authoredYaw = permissions.RotationAllowed && evaluatedRotation.IsFinite()
+            ? evaluatedRotation.GetEuler().Y
+            : 0f;
+        if (!float.IsFinite(authoredYaw))
+        {
+            authoredYaw = 0f;
+        }
+
+        LastAuthoredRootWorldDelta = authoredWorldDelta;
+        AuthoredPlanarVelocity = delta > 0f
+            ? new Vector2(-evaluatedRoot.X, evaluatedRoot.Z) / delta
             : Vector2.Zero;
-
-        float rootYaw = permissions.RotationAllowed ? GetRootMotionYawDelta() : 0f;
-        float authoredYawRate = rootYaw / delta;
-        // yawDelta shares the ANIM-002 local-Y convention (positive = counter-clockwise/left, so pr45 ends at
-        // -pi/4). A rightward stick (+X per the response coordinates) therefore requests a negative local-Y rate;
-        // the residual assist must use that same sign or it fights the authored arc and pivot yaw.
-        float desiredYawRate = permissions.RotationAllowed
-            ? -_rotationInput.X * RotationSpeedMultiplier * SmoothTurnSensitivity
-            : 0f;
-        float yawResidualRate = permissions.RotationAllowed
-            ? _controller.CalculateYawResidual(desiredYawRate, authoredYawRate, authoredPlanar.Length(), Mathf.Max(speedWeight, Mathf.Abs(_rotationInput.X)), phaseWeight, delta, MaximumYawResidualRate, MaximumYawResidualPerBout, ResidualSmoothingRate, ResidualEntryRampReference)
-            : 0f;
-        float contactYaw = contactConsumed ? contactContribution.Authorised.YawRadians : 0f;
-        float yawDelta = rootYaw + (yawResidualRate * delta) + contactYaw;
-        if (float.IsFinite(yawDelta) && !Mathf.IsZeroApprox(yawDelta))
+        AuthoredYawRate = delta > 0f ? authoredYaw / delta : 0f;
+        if (!Mathf.IsZeroApprox(authoredYaw))
         {
-            ApplyYawRotation(yawDelta);
+            ApplyYawRotation(authoredYaw);
         }
 
-        Vector3 contactVelocity = contactConsumed
-            ? contactContribution.Authorised.Translation / delta
-            : Vector3.Zero;
-        Vector2 planar = authoredPlanar + residual + new Vector2(contactVelocity.X, contactVelocity.Z);
-        body.Velocity = new Vector3(planar.X, body.Velocity.Y, planar.Y);
-        bool collided = body.MoveAndSlide();
-        if (contactConsumed)
-        {
-            Vector3 realisedDisplacement = body.GlobalPosition - positionBeforeMovement;
-            Vector2 nonContactPlanarDelta = (authoredPlanar + residual) * delta;
-            Vector3 realisedContactTranslation = new(
-                realisedDisplacement.X - nonContactPlanarDelta.X,
-                0f,
-                realisedDisplacement.Z - nonContactPlanarDelta.Y);
-            bool realised = _contactLockCoordinator!.RecordMovementRealisation(
-                contactContribution,
-                realisedContactTranslation,
-                permissions.RotationAllowed ? contactYaw : 0f,
-                collided);
-            LastContactLockConsumption = new ContactLockMovementConsumptionTrace(
-                MovementOperationCount,
-                contactContribution,
-                realisedContactTranslation,
-                permissions.RotationAllowed ? contactYaw : 0f,
-                realised,
-                collided,
-                !realised,
-                actorBeforeMovement,
-                body.GlobalTransform);
-            _contactLockComposition?.RecordCorrectionConsumption(LastContactLockConsumption);
-        }
-    }
-
-    private float GetPhaseCorrectionWeight()
-    {
-        AnimationNodeStateMachinePlayback playback = ResolvePlayback();
-        float length = playback.GetCurrentLength();
-        if (length <= 0f)
-        {
-            return 0.5f;
-        }
-        float phase = Mathf.PosMod(playback.GetCurrentPlayPosition(), length) / length;
-        return 0.35f + (0.65f * Mathf.Abs(Mathf.Cos(phase * Mathf.Tau)));
+        LastRequestedWorldDelta = authoredWorldDelta;
+        Vector3 planarVelocity = authoredWorldDelta / delta;
+        body.Velocity = new Vector3(planarVelocity.X, body.Velocity.Y, planarVelocity.Z);
+        _ = body.MoveAndSlide();
+        LastRealisedWorldDelta = body.GlobalPosition - positionBeforeMovement;
     }
 
     private void ResolveRuntimeReferences()
@@ -871,7 +799,8 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
         if (_animationTree is not null)
         {
             _animationTree.RootMotionLocal = true;
-            _animationTree.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics;
+            _animationTree.Set("process_callback", (int)AnimationMixer.AnimationCallbackModeProcess.Manual);
+            _animationTree.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual;
         }
         SetPhysicsProcess(_targetBody is not null && _animationTree is not null && _rootMotionReference is not null);
     }
@@ -883,13 +812,6 @@ public partial class CharacterLocomotion : LocomotionBase, IManualTranslationAcc
     private CharacterBody3D GetTargetBody()
         => _targetBody ?? throw new InvalidOperationException($"{nameof(CharacterLocomotion)} target body is not available before _Ready.");
 
-    protected virtual Vector3 GetRootMotionPositionDelta() => _animationTree?.GetRootMotionPosition() ?? Vector3.Zero;
-    protected virtual Quaternion GetRootMotionRotation() => _animationTree?.GetRootMotionRotation() ?? Quaternion.Identity;
-    protected virtual float GetRootMotionYawDelta()
-    {
-        Quaternion rotation = GetRootMotionRotation();
-        return rotation.IsFinite() ? rotation.GetEuler().Y : 0f;
-    }
-    protected virtual Basis GetRootMotionReferenceBasis() => _rootMotionReference?.GlobalBasis ?? Basis.Identity;
     protected virtual void ApplyYawRotation(float yawDelta) => GetTargetBody().RotateY(yawDelta);
+
 }
