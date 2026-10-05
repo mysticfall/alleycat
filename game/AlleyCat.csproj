@@ -25,6 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Compile Remove="temp/**/*.cs" />
       <Folder Include="src/**" />
     </ItemGroup>
 </Project>
