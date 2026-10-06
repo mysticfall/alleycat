@@ -3,8 +3,8 @@
 [ext_resource type="Script" uid="uid://bkdyco5nf5xyp" path="res://src/Mind/AI/Prompting/FilePromptSection.cs" id="1_2m31c"]
 [ext_resource type="Script" uid="uid://b5evrsqr6axkt" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
 [ext_resource type="Script" uid="uid://ma8scv62385o" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
-[ext_resource type="Script" uid="uid://bw4auhhfuy2rh" path="res://src/Mind/AI/Prompting/LoreCataloguePromptSection.cs" id="5_lorcata"]
 [ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
+[ext_resource type="Script" uid="uid://bw4auhhfuy2rh" path="res://src/Mind/AI/Prompting/LoreCataloguePromptSection.cs" id="5_lorcata"]
 
 [sub_resource type="Resource" id="Resource_fqak1"]
 script = ExtResource("1_2m31c")

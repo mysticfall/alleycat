@@ -6,188 +6,179 @@
 [sub_resource type="Resource" id="Resource_tlm0"]
 script = ExtResource("1_bb707")
 Joint = 1
-SourceNeutral = Quaternion(-0.079947028, 0.5618452, 0.402148143, 0.718481256)
-DestinationNeutral = Quaternion(-0.214186761, 0.673887254, 0.214186761, 0.673887254)
+SourceNeutral = Quaternion(-0.079947025, 0.5618452, 0.40214816, 0.71848124)
+DestinationNeutral = Quaternion(-0.21418676, 0.67388725, 0.21418676, 0.67388725)
 
 [sub_resource type="Resource" id="Resource_tlp0"]
 script = ExtResource("1_bb707")
 Joint = 2
-SourceNeutral = Quaternion(0.16066605, -0.082452026, -0.055896017, 0.981969307)
-DestinationNeutral = Quaternion(0, 0, 0, 1)
+SourceNeutral = Quaternion(0.16066605, -0.08245203, -0.055896018, 0.9819693)
 
 [sub_resource type="Resource" id="Resource_tld0"]
 script = ExtResource("1_bb707")
 Joint = 3
-SourceNeutral = Quaternion(-0.105460033, 0.084218027, 0.068658022, 0.988469312)
-DestinationNeutral = Quaternion(0, 0, 0, 1)
+SourceNeutral = Quaternion(-0.10546003, 0.084218025, 0.068658024, 0.9884693)
 
 [sub_resource type="Resource" id="Resource_80a1h"]
 script = ExtResource("1_bb707")
-SourceNeutral = Quaternion(0.183761645, 0.020114948, -0.109258861, 0.976672692)
+SourceNeutral = Quaternion(0.18376164, 0.020114947, -0.10925886, 0.9766727)
 
 [sub_resource type="Resource" id="Resource_lb1y3"]
 script = ExtResource("1_bb707")
 Joint = 6
-SourceNeutral = Quaternion(0.003242671, -0.025568779, -0.006858143, 0.999644281)
+SourceNeutral = Quaternion(0.003242671, -0.02556878, -0.006858143, 0.9996443)
 
 [sub_resource type="Resource" id="Resource_y5ccu"]
 script = ExtResource("1_bb707")
 Joint = 7
-SourceNeutral = Quaternion(-0.025892004, -0.016465727, -0.026737638, 0.999171448)
+SourceNeutral = Quaternion(-0.025892004, -0.016465727, -0.026737638, 0.99917144)
 
 [sub_resource type="Resource" id="Resource_5jf3r"]
 script = ExtResource("1_bb707")
 Joint = 9
-SourceNeutral = Quaternion(0.261092265, -0.026238159, -0.081508925, 0.961508546)
+SourceNeutral = Quaternion(0.26109228, -0.026238158, -0.08150893, 0.9615086)
 
 [sub_resource type="Resource" id="Resource_svko7"]
 script = ExtResource("1_bb707")
 Joint = 10
-SourceNeutral = Quaternion(-0.001756608, -0.011414507, -0.004352703, 0.999923836)
+SourceNeutral = Quaternion(-0.001756608, -0.011414507, -0.004352703, 0.9999238)
 
 [sub_resource type="Resource" id="Resource_8f3l5"]
 script = ExtResource("1_bb707")
 Joint = 11
-SourceNeutral = Quaternion(-0.059239228, -0.037404361, -0.002833273, 0.997538771)
+SourceNeutral = Quaternion(-0.059239227, -0.037404362, -0.002833273, 0.99753875)
 
 [sub_resource type="Resource" id="Resource_e7ill"]
 script = ExtResource("1_bb707")
 Joint = 13
-SourceNeutral = Quaternion(0.224532459, -0.064318007, -0.063592417, 0.970259951)
+SourceNeutral = Quaternion(0.22453246, -0.06431801, -0.06359242, 0.97025996)
 
 [sub_resource type="Resource" id="Resource_g2xoc"]
 script = ExtResource("1_bb707")
 Joint = 14
-SourceNeutral = Quaternion(0.005500336, -0.033803354, -0.002770696, 0.999409527)
+SourceNeutral = Quaternion(0.005500336, -0.033803355, -0.002770696, 0.99940956)
 
 [sub_resource type="Resource" id="Resource_ttymf"]
 script = ExtResource("1_bb707")
 Joint = 15
-SourceNeutral = Quaternion(-0.009264074, -0.003896694, 0.029607039, 0.999511088)
+SourceNeutral = Quaternion(-0.009264074, -0.003896694, 0.029607039, 0.99951106)
 
 [sub_resource type="Resource" id="Resource_2skhe"]
 script = ExtResource("1_bb707")
 Joint = 17
-SourceNeutral = Quaternion(0.144475515, 0.094214467, 0.064075222, 0.982926664)
+SourceNeutral = Quaternion(0.14447552, 0.09421447, 0.064075224, 0.98292667)
 
 [sub_resource type="Resource" id="Resource_dj5i5"]
 script = ExtResource("1_bb707")
 Joint = 18
-SourceNeutral = Quaternion(0.015157515, -0.040090018, -0.042108551, 0.998193323)
+SourceNeutral = Quaternion(0.015157515, -0.040090017, -0.04210855, 0.9981933)
 
 [sub_resource type="Resource" id="Resource_gfuox"]
 script = ExtResource("1_bb707")
 Joint = 19
-SourceNeutral = Quaternion(0.001357210, 0.000917888, 0.049402216, 0.998777621)
+SourceNeutral = Quaternion(0.00135721, 0.000917888, 0.049402215, 0.9987776)
 
 [sub_resource type="Resource" id="Resource_trm0"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 1
-SourceNeutral = Quaternion(-0.006335003, -0.589948267, -0.461939209, 0.6622183)
-DestinationNeutral = Quaternion(-0.214186761, -0.673887254, -0.214186761, 0.673887254)
+SourceNeutral = Quaternion(-0.006335003, -0.5899483, -0.46193922, 0.6622183)
+DestinationNeutral = Quaternion(-0.21418676, -0.67388725, -0.21418676, 0.67388725)
 
 [sub_resource type="Resource" id="Resource_trp0"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 2
-SourceNeutral = Quaternion(0.245730042, 0.081178014, 0.047528008, 0.964763165)
-DestinationNeutral = Quaternion(0, 0, 0, 1)
+SourceNeutral = Quaternion(0.24573004, 0.08117802, 0.04752801, 0.96476316)
 
 [sub_resource type="Resource" id="Resource_trd0"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 3
-SourceNeutral = Quaternion(-0.043338015, -0.083254029, -0.063860022, 0.993535344)
-DestinationNeutral = Quaternion(0, 0, 0, 1)
+SourceNeutral = Quaternion(-0.043338016, -0.08325403, -0.06386002, 0.99353534)
 
 [sub_resource type="Resource" id="Resource_f8dot"]
 script = ExtResource("1_bb707")
 Side = 1
-SourceNeutral = Quaternion(0.240030753, -0.019368532, 0.091644959, 0.966235633)
+SourceNeutral = Quaternion(0.24003075, -0.019368531, 0.09164496, 0.96623564)
 
 [sub_resource type="Resource" id="Resource_icrr4"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 6
-SourceNeutral = Quaternion(0.004036845, 0.025799219, 0.007094232, 0.999633821)
+SourceNeutral = Quaternion(0.004036845, 0.025799219, 0.007094232, 0.99963385)
 
 [sub_resource type="Resource" id="Resource_o1oq0"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 7
-SourceNeutral = Quaternion(-0.027432040, 0.016350422, 0.026457625, 0.999139700)
+SourceNeutral = Quaternion(-0.02743204, 0.016350422, 0.026457625, 0.9991397)
 
 [sub_resource type="Resource" id="Resource_4p23l"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 9
-SourceNeutral = Quaternion(0.303707296, 0.030253133, 0.083450549, 0.948621438)
+SourceNeutral = Quaternion(0.3037073, 0.030253133, 0.08345055, 0.94862145)
 
 [sub_resource type="Resource" id="Resource_jyb3m"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 10
-SourceNeutral = Quaternion(-0.001689492, 0.011366728, 0.004200596, 0.999925146)
+SourceNeutral = Quaternion(-0.001689492, 0.011366728, 0.004200596, 0.99992514)
 
 [sub_resource type="Resource" id="Resource_j3kvl"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 11
-SourceNeutral = Quaternion(-0.057345190, 0.037602572, 0.003317672, 0.997640501)
+SourceNeutral = Quaternion(-0.05734519, 0.037602574, 0.003317672, 0.9976405)
 
 [sub_resource type="Resource" id="Resource_cespy"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 13
-SourceNeutral = Quaternion(0.272604421, 0.067725959, 0.063601906, 0.957629794)
+SourceNeutral = Quaternion(0.27260444, 0.06772596, 0.0636019, 0.9576298)
 
 [sub_resource type="Resource" id="Resource_ev3o5"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 14
-SourceNeutral = Quaternion(0.005467540, 0.033466948, 0.002876236, 0.999420731)
+SourceNeutral = Quaternion(0.00546754, 0.033466946, 0.002876236, 0.9994207)
 
 [sub_resource type="Resource" id="Resource_cydb7"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 15
-SourceNeutral = Quaternion(-0.017550459, 0.003737272, -0.029237573, 0.999411416)
+SourceNeutral = Quaternion(-0.01755046, 0.003737272, -0.029237572, 0.9994114)
 
 [sub_resource type="Resource" id="Resource_65buo"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 17
-SourceNeutral = Quaternion(0.227606673, -0.092609343, -0.043664544, 0.968355369)
+SourceNeutral = Quaternion(0.22760667, -0.092609346, -0.043664545, 0.96835536)
 
 [sub_resource type="Resource" id="Resource_jpfyt"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 18
-SourceNeutral = Quaternion(-0.012834835, 0.037494415, 0.043034932, 0.998287248)
+SourceNeutral = Quaternion(-0.012834835, 0.037494414, 0.043034934, 0.99828726)
 
 [sub_resource type="Resource" id="Resource_u856n"]
 script = ExtResource("1_bb707")
 Side = 1
 Joint = 19
-SourceNeutral = Quaternion(-0.010758433, -0.001114397, -0.049043396, 0.998738084)
+SourceNeutral = Quaternion(-0.010758433, -0.001114397, -0.049043395, 0.9987381)
 
 [resource]
 script = ExtResource("2_tvl1y")
-SchemaVersion = "2"
 ProfileVersion = "quest3-wivrn-reference-female-v2"
 ReferenceRig = "reference-female"
 Headset = "Quest 3"
 Runtime = "WiVRn 26.6.2/OpenXR"
 SourceCaptureID = "reference-female-quest3-wivrn-authored-thumb-axes-v1"
 Provenance = "Semantic profile provenance: reference-female Quest 3/WiVRn profile with authored-animation thumb axes. Source-neutral values, authored destination-neutral compatibility metadata, and metacarpal correspondence values are fixed runtime inputs."
-MetacarpalCorrespondenceProvenance = "Per-side metacarpal correspondence records: Q0 neutral anchors, K_meta swing gains, and shared directional response thresholds are fixed authored runtime inputs; no runtime fitting path."
-LeftMetacarpalNeutralAnchor = Quaternion(-0.1273963451385498, 0.019958913326263428, 0.25467225909233093, 0.9583913087844849)
+LeftMetacarpalNeutralAnchor = Quaternion(-0.12739635, 0.019958913, 0.25467226, 0.9583913)
 LeftMetacarpalSwingGain = 2.0
-RightMetacarpalNeutralAnchor = Quaternion(-0.10855846107006073, 0.020310375839471817, -0.15915964543819427, 0.9810559153556824)
+RightMetacarpalNeutralAnchor = Quaternion(-0.10855846, 0.020310376, -0.15915965, 0.9810559)
 RightMetacarpalSwingGain = 2.25
-MetacarpalHingeGateStart = 0.4
-MetacarpalHingeGateEnd = 0.625
-MetacarpalBendGateStart = 0.05
-MetacarpalBendGateEnd = 0.15
+MetacarpalCorrespondenceProvenance = "Per-side metacarpal correspondence records: Q0 neutral anchors, K_meta swing gains, and shared directional response thresholds are fixed authored runtime inputs; no runtime fitting path."
 Entries = [SubResource("Resource_tlm0"), SubResource("Resource_tlp0"), SubResource("Resource_tld0"), SubResource("Resource_80a1h"), SubResource("Resource_lb1y3"), SubResource("Resource_y5ccu"), SubResource("Resource_5jf3r"), SubResource("Resource_svko7"), SubResource("Resource_8f3l5"), SubResource("Resource_e7ill"), SubResource("Resource_g2xoc"), SubResource("Resource_ttymf"), SubResource("Resource_2skhe"), SubResource("Resource_dj5i5"), SubResource("Resource_gfuox"), SubResource("Resource_trm0"), SubResource("Resource_trp0"), SubResource("Resource_trd0"), SubResource("Resource_f8dot"), SubResource("Resource_icrr4"), SubResource("Resource_o1oq0"), SubResource("Resource_4p23l"), SubResource("Resource_jyb3m"), SubResource("Resource_j3kvl"), SubResource("Resource_cespy"), SubResource("Resource_ev3o5"), SubResource("Resource_cydb7"), SubResource("Resource_65buo"), SubResource("Resource_jpfyt"), SubResource("Resource_u856n")]
