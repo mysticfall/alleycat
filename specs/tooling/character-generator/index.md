@@ -44,6 +44,12 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   eligible, nonprotected same-side twist-helper zeros promoted to positive through conserved axial authoring and
   independently attributed opposite-hand finger zero ghosts removed from their groups. Every other original zero key,
   including protected and out-of-domain memberships, remains physical; a calculated zero creates no selectable group.
+- Generated characters keep their subdivided surface geometry and their full blendshape set through Godot glTF
+  import, so imported characters show neither raw unsubdivided meshes nor lost ARKit/viseme morphs.
+- Subdivision baking adds no configuration fields and no manual artist steps; generation stays driven by the simple
+  four-field JSON schema.
+- Generated collider meshes keep their fit: baking subdivision into the body leaves the generated collider set
+  unchanged.
 - Configuration uses a simple JSON schema with `preset`, `name`, `outputFile`, and `amimations` fields.
 
 ## Technical Requirements
@@ -132,15 +138,53 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   deterministic from the installed generic sources and wrist joint geometry, never hand-tuned per character.
 - Twist helpers are excluded from `SkeletonProfileHumanoid`, BoneMap, and retarget and animation mapping, and
   remain deform-only.
-- Immediately after MPFB `export_copy`, before cleanup or writing groups, snapshot each export mesh vertex's complete
-  physical group membership map, including present zero-weight keys; keep this separate from the positive
-  post-axial reference used for ownership and import validation. Before mirrored cleanup, protect complete physical
-  group assignments on both sides of each ambiguous source-present bilateral row. Suffix, zero or small weight, and
-  position do not prove exporter contamination. Cleanup may remove an independently identified exporter-introduced
-  counterpart, but cannot transfer a positive source-present bilateral assignment without approved, independently
-  justified row-specific attribution. If none is evidenced, perform no speculative positive transfer. Do not require
-  a general per-vertex provenance system or invent source-to-export vertex correspondence; an uncorrelated bilateral
-  row remains protected rather than inferred from position or suffix.
+- MPFB export copies arrive with SUBSURF modifiers whose viewport level is 0 and render level is 1, while the Godot
+  glTF import sidecar keeps `blender/nodes/modifiers=0` (the exporter applies no modifiers), so exported meshes would
+  otherwise be raw unsubdivided geometry. Applying modifiers directly is not an alternative: Blender cannot apply
+  subsurf to meshes carrying shape keys, which would destroy the ARKit/viseme blendshapes. The generator therefore
+  bakes render subdivision into the exported meshes through `tools/bake_subdivision_modifiers.py`.
+- Subdivision baking runs over the export-copy object set immediately after MPFB `export_copy` and immediately
+  before the export physical-membership snapshot. The ordering is a hard contract: the RIG-002 membership
+  snapshot/verify, forearm-twist manifests, axial authoring, and collider generation must all operate on the final
+  subdivided topology, so baking after the snapshot would invalidate `verify_export_physical_memberships`.
+- The baker consumes only SUBSURF modifiers with `render_levels > 0`, evaluating each at `levels = render_levels`
+  and removing the consumed modifiers once baked. All other modifiers — for example ARMATURE and MASK — are
+  temporarily disabled for evaluation, restored to their prior visibility afterwards, and left live on the object.
+- Baking evaluates meshes through the dependency graph instead of `bpy.ops.object.modifier_apply`: a fresh
+  `evaluated_depsgraph_get()` per shape-key value change and `to_mesh(preserve_all_data_layers=True, depsgraph=…)`
+  capture the subdivided geometry while vertex groups, UV layers, and materials survive.
+- The Basis key is the evaluation with every key value zeroed; each non-Basis key is captured at value 1 as full
+  per-vertex deltas against the Basis (no magnitude cutoff) and reconstructed on the subdivided mesh with its
+  original name, order, value, mute, slider bounds, and active index; non-Basis keys are rebuilt relative to the
+  Basis.
+- The baker fails closed through guards: OBJECT mode is required, absolute shape keys are rejected, subdivision must
+  increase the vertex count (a non-increasing result means the modifiers were not applied and would silently export
+  unsubdivided), per-key delta counts must match the captured keys, and reconstructed key names and order are
+  verified against the originals. The generator wiring raises any `BakeError` as a `ScriptError`.
+- Subdivision interpolation leaves residual seam weights whose axial side pool sums marginally above one, so axial
+  authoring can redistribute the pool into weights marginally outside [0, 1] (measured example: 1.0000098).
+  `apply_forearm_twist_gradient_on_export` clamps the frozen authored reference to the storable range
+  (`min(max(weight, 0.0), 1.0)`), matching Blender's write-time clamping so authored evidence and saved rows compare
+  within the validator tolerance (measured maximum error 2.98e-8 over 53514 rows against a 1e-6 tolerance).
+- The export physical-membership zero ledger follows the side-anchor rule: an originally positive side key may reach
+  physical zero only through authored concentration onto a side anchor — the helper within the eligible pool, or,
+  for non-eligible non-bilateral vertices, the lone anchor holding the entire authored side pool where a boundary
+  phase completes the blend with zero twist support (the hand at the distal boundary, the lower arm at the proximal
+  boundary). Comparisons stay exact under the epsilon-free doctrine; the rule derives from existing axial-reference
+  side-group masses and requires no ledger schema change.
+- Subdivision baking and its downstream weight contracts are proven by `tools/tests/test_bake_subdivision_modifiers.py`
+  (including its fake-BPY evaluation stand-in) and by
+  `test_distal_hand_phase_concentration_retains_authored_side_zeros` in
+  `tools/tests/test_forearm_twist_generator_run_ownership.py`; the `tools/tests/` suite must pass.
+- After MPFB `export_copy` and its subdivision bake, before cleanup or writing groups, snapshot each export mesh
+  vertex's complete physical group membership map, including present zero-weight keys; keep this separate from the
+  positive post-axial reference used for ownership and import validation. Before mirrored cleanup, protect complete
+  physical group assignments on both sides of each ambiguous source-present bilateral row. Suffix, zero or small
+  weight, and position do not prove exporter contamination. Cleanup may remove an independently identified
+  exporter-introduced counterpart, but cannot transfer a positive source-present bilateral assignment without
+  approved, independently justified row-specific attribution. If none is evidenced, perform no speculative positive
+  transfer. Do not require a general per-vertex provenance system or invent source-to-export vertex correspondence;
+  an uncorrelated bilateral row remains protected rather than inferred from position or suffix.
 - The forearm-twist weight pipeline runs that safe cleanup, recensuses eligibility on the resulting input, and
   constructs axial lower-arm/twist-helper/hand ownership (including eligible rows with no original helper weight),
   snapshotting the completed axial distribution as the immutable ownership and import-validation reference.
@@ -185,6 +229,9 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   regeneration.
 - Twist-helper chain emission, exclusions, axial authoring and reference snapshot, and bone-binding index
   refresh for RIG-002.
+- Subdivision baking of MPFB export-copy meshes through `tools/bake_subdivision_modifiers.py`, its placement before
+  the export physical-membership snapshot, the authored-reference storable-range clamp, and the zero-ledger
+  side-anchor rule.
 
 ## Out Of Scope
 - Creating new character presets or modifying existing ones beyond the known female custom-source weight correction
@@ -201,6 +248,10 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Defining character-specific gameplay attributes or abilities.
 - Project management of character presets (the content creator's responsibility, not the project's), and MPFB
   source assets beyond the generic forearm-twist sources required by RIG-002.
+- Changing Godot glTF import sidecar modifier handling or retarget behaviour; `blender/nodes/modifiers=0` remains in
+  force, with subdivision delivered by the Blender-side bake rather than exporter modifier application.
+- Regenerating the committed male/female character assets to pick up baked subdivision (deferred asset work; the
+  baking pipeline, its placement, and its validation contracts remain in scope).
 
 ## Acceptance Criteria
 - User Requirements:
@@ -237,6 +288,16 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Saved and reopened Blender characters retain pre-existing zero-weight group memberships outside eligible
         same-side helper promotion and independently attributed opposite-hand finger-ghost removal; calculated zeros
         introduce no selectable memberships.
+  - [ ] A full generator run on each installed MPFB character preset (`alleycat_female` and `alleycat_male`) completes
+        end-to-end with subdivision baked: the body mesh is subdivided (reference run: 13380 → 53514 vertices) with
+        its shape keys retained (53 including Basis), and no SUBSURF modifier remains on any exported mesh.
+  - [ ] A glTF probe export of the generated character under the sidecar-faithful options (`use_visible=True`,
+        `export_apply=False`, skins and morph targets enabled) contains subdivided geometry and non-Basis morph
+        targets on every keyed mesh (body reference run: 52 morphs).
+  - [ ] Generated collider output is unchanged by the bake: the collider set matches the pre-bake pipeline (reference
+        run: 24 meshes with identical vertex counts), preserving collider fit.
+  - [ ] Character generation still requires only the four-field JSON configuration; subdivision baking introduces no
+        new configuration fields or manual artist steps.
   - [ ] Forearm-twist generation runs only with the needed presets installed in MPFB — generic reference presets
         manually installed from the repository, character presets installed by the content creator — and then
         uses the RIG-002 ordinary-regeneration workflow.
@@ -285,6 +346,27 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
         no second helper bone; a disposable-generation test proves the regenerated assets through the ordinary
         pipeline without direct generated-`.blend` edits.
   - [ ] Twist helpers are excluded from `SkeletonProfileHumanoid`, BoneMap, and retarget and animation mapping.
+  - [ ] Subdivision baking runs over the export-copy set immediately after MPFB `export_copy` and before
+        `snapshot_export_physical_memberships`, placing the RIG-002 membership snapshot/verify, forearm-twist
+        manifests, axial authoring, and collider generation on the final subdivided topology.
+  - [ ] The baker consumes only SUBSURF modifiers with `render_levels > 0` through the evaluated dependency graph
+        (a fresh evaluation per shape-key value change, `preserve_all_data_layers=True`), temporarily disabling and
+        restoring all other modifiers, which remain live on the objects.
+  - [ ] Shape keys are reconstructed from full per-vertex deltas with names, order, values, mutes, slider bounds,
+        and active index preserved; vertex groups, UV layers, and materials survive the bake.
+  - [ ] Bake guards fail generation closed as `ScriptError` on non-OBJECT mode, absolute shape keys, a vertex count
+        that did not increase, delta-count mismatches, or reconstructed key name/order mismatches.
+  - [ ] The frozen authored axial reference is clamped to the storable range so saved membership rows and authored
+        evidence compare exactly within the validator tolerance.
+  - [ ] The zero-ledger side-anchor rule holds in `compare_zero_ledger`: an originally positive side key reaches
+        physical zero only through authored concentration onto the helper within the eligible pool, or — for
+        non-eligible non-bilateral vertices — onto the lone anchor holding the entire authored side pool where a
+        boundary phase completes the blend with zero twist support (the hand at the distal boundary, the lower arm
+        at the proximal boundary); comparisons are exact with no epsilon.
+  - [ ] `tools/tests/test_bake_subdivision_modifiers.py` passes, including its fake-BPY evaluation stand-in coverage,
+        and `test_distal_hand_phase_concentration_retains_authored_side_zeros` in
+        `tools/tests/test_forearm_twist_generator_run_ownership.py` passes; the rest of `tools/tests/` stays green
+        (the pre-existing `test_retarget_mixamo_animation.py` collection error under system Python is unrelated).
   - [ ] Ordinary generation and focused tests snapshot every export-stage physical membership, including zero keys,
         before cleanup or writing; bilateral protection precedes scoped cleanup. Only independently evidenced
         exporter-added counterparts or approved row-specific corrections can change positive wrong-side assignments.
@@ -322,6 +404,9 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Collider profile post-import module: `game/assets/characters/import/character_collider_profile_import.gd`
 - Import sidecar metadata updater: `tools/update_character_import_retarget_metadata.py`
 - Forearm-twist weight pipeline: `tools/forearm_twist_weights.py`
+- Forearm-twist run ownership and zero ledger: `tools/forearm_twist_generator_run_ownership.py`
+- Subdivision baker: `tools/bake_subdivision_modifiers.py`
+- Subdivision baker tests: `tools/tests/test_bake_subdivision_modifiers.py`
 - Bone-binding guard: `tools/character_template_bone_bindings.py` and `tools/check_character_template_bone_bindings.py`
 - Portable character contract: @specs/character/001-character-skeleton/index.md
 - Character root import contract: @specs/character/002-character-root/index.md

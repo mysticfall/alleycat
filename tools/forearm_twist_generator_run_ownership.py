@@ -311,6 +311,10 @@ def compare_zero_ledger(
     come from the saved armature, not suffix inference. Geometry/topology and
     beta eligibility still rely on the generator's authored eligibility list.
     No finger-ghost deletion is attributed here.
+    An original positive reaches zero only through authored concentration onto
+    a side anchor: the helper within the eligible pool, or the lone anchor
+    holding the entire side pool where a boundary phase completes the blend
+    with zero twist support (the hand distally, the lower arm proximally).
     Float32 zero is exactly 0.0 (including negative zero); no epsilon may
     reclassify a positive assignment as a retained zero membership.
     """
@@ -385,14 +389,31 @@ def compare_zero_ledger(
             if not promotable:
                 raise ValueError(f"{context} vertex {index}: lost physical zero {name!r}")
         # An original positive can reach physical zero only as its authored axial
-        # mass legitimately concentrates onto the helper within the eligible pool.
+        # mass legitimately concentrates onto a side anchor: the helper within
+        # the eligible pool, or the lone anchor holding the entire side pool
+        # where a boundary phase completes the blend with zero twist support —
+        # the hand at the distal boundary, the lower arm at the proximal one.
         retained = set()
         for lower, helper, hand in sides:
-            if index not in eligible[helper] or is_source_bilateral(axial[index]):
+            axial_row = axial[index]
+            if is_source_bilateral(axial_row):
                 continue
-            for name in positives.get(index, set()) & {lower, helper, hand}:
-                if name == helper or axial[index].get(name, 0.0) == 0.0:
-                    retained.add(name)
+            if index in eligible[helper]:
+                for name in positives.get(index, set()) & {lower, helper, hand}:
+                    if name == helper or axial_row.get(name, 0.0) == 0.0:
+                        retained.add(name)
+                continue
+            positive_anchors = {
+                name
+                for name, weight in ((lower, axial_row.get(lower, 0.0)),
+                                     (helper, axial_row.get(helper, 0.0)),
+                                     (hand, axial_row.get(hand, 0.0)))
+                if weight > 0.0
+            }
+            if len(positive_anchors) == 1:
+                for name in positives.get(index, set()) & {lower, helper, hand}:
+                    if axial_row.get(name, 0.0) == 0.0:
+                        retained.add(name)
         invented = {name for name, weight in candidate.items() if weight == 0.0} - original - retained
         if invented:
             raise ValueError(f"{context} vertex {index}: invented physical zero {sorted(invented)}")

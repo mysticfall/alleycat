@@ -25,6 +25,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+import bake_subdivision_modifiers
 import generate_body_colliders
 import forearm_twist_generator_run_ownership
 import forearm_twist_weights
@@ -1081,13 +1082,21 @@ def apply_forearm_twist_gradient_on_export(
             authored = forearm_twist_weights.author_axial_weights(vertices, polygons, sides, projections)
         except (ValueError, IndexError) as exc:
             raise ScriptError(f'Cannot author forearm twist on "{mesh.name}": {exc}') from exc
-        final = [dict(row) for row in authored.reference]
+        # Subdivision interpolation leaves residual seam weights whose side pool
+        # sums marginally above one, and the authoring redistributes that pool
+        # into values above 1.0. Blender clamps vertex weights to the storable
+        # range on write, so freeze the reference at the same range to keep the
+        # authored evidence and the saved rows exactly equal.
+        final = [
+            {name: min(max(weight, 0.0), 1.0) for name, weight in row.items()}
+            for row in authored.reference
+        ]
         # Provisional pre-export ceiling for Godot's configured All Influences skin import;
         # passing this check does not prove exported/imported channel retention.
         for index, row in enumerate(final):
             if sum(weight > 0.0 and name in deform_bones for name, weight in row.items()) > 8:
                 raise ScriptError(f'Cannot author forearm twist: "{mesh.name}" vertex {index} exceeds eight deform influences.')
-        references[mesh.name] = [dict(row) for row in authored.reference]
+        references[mesh.name] = [dict(row) for row in final]
         if source_domain is not None:
             source_domain[mesh.name] = {
                 side.helper: [index for index, allowed in enumerate(authored.source_domain[position]) if allowed]
@@ -3317,6 +3326,12 @@ def generate_character(config: CharacterConfig) -> Path:
     exported_objects = set(bpy.data.objects) - objects_before_export - source_hierarchy
     if not exported_objects:
         raise ScriptError(f'MPFB export_copy did not create exported objects for preset "{preset}".')
+    # Bake before the physical-membership snapshot so every downstream
+    # manifest, weight and collider step sees the final subdivided topology.
+    try:
+        bake_subdivision_modifiers.bake_subdivision_modifiers(exported_objects)
+    except bake_subdivision_modifiers.BakeError as exc:
+        raise ScriptError(f"Subdivision bake failed on exported meshes: {exc}") from exc
     export_physical_snapshot = snapshot_export_physical_memberships(exported_objects)
 
     delete_objects(source_hierarchy)

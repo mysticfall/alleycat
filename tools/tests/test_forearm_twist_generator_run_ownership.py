@@ -79,6 +79,49 @@ class GeneratorRunOwnershipTests(unittest.TestCase):
             ownership.compare_zero_ledger(original_zeros, axial, saved, eligible, SIDES, "saved",
                 [{"vertex": 0, "positives": ["LeftForearmTwist", "LeftForearmTwist"]}])
 
+    def test_distal_hand_phase_concentration_retains_authored_side_zeros(self) -> None:
+        # Subdivision smoothing moves wrist-ring vertices past the profile's
+        # boundaries, where the authoring finishes the blend with the whole side
+        # pool concentrated onto one anchor and zero helper support: the hand at
+        # the distal boundary, the lower arm at the proximal one. Those vertices
+        # are not authoring-eligible, yet their zeroed side mass lives in the
+        # anchor group.
+        empty_eligible = {"LeftForearmTwist": [], "RightForearmTwist": []}
+        for label, anchor_row in (
+            ("distal hand concentration", {"hand_r": 1.0, "lowerarm_r": 0.0, "body": 1.0}),
+            ("proximal lower concentration", {"lowerarm_r": 1.0, "RightForearmTwist": 0.0, "body": 1.0}),
+        ):
+            axial = [{"vertex": 0, "weights": dict(anchor_row)}]
+            final = {0: dict(anchor_row)}
+            positives = [{"vertex": 0, "positives": sorted(anchor_row)}]
+            with self.subTest(label=label):
+                self.assertEqual(0, ownership.compare_zero_ledger(
+                    [], axial, final, empty_eligible, SIDES, "saved", positives))
+        # The recognised concentration stays tight: diffuse, vanished, bilateral
+        # and anchor-losing rows are still invented zeros, epsilon-free.
+        hand_row = {"hand_r": 1.0, "lowerarm_r": 0.0, "body": 1.0}
+        for label, bad_axial, bad_final in (
+            ("diffuse two anchors",
+             [{"vertex": 0, "weights": {"hand_r": .6, "lowerarm_r": .4, "RightForearmTwist": 0.0}}],
+             {0: {"hand_r": .6, "lowerarm_r": .4, "RightForearmTwist": 0.0}}),
+            ("vanished side pool",
+             [{"vertex": 0, "weights": {"RightForearmTwist": 0.0, "body": 1.0}}],
+             {0: {"RightForearmTwist": 0.0, "body": 1.0}}),
+            ("bilateral source",
+             [{"vertex": 0, "weights": {**hand_row, "lowerarm_l": .4}}],
+             {0: {**hand_row, "lowerarm_l": .4}}),
+            ("hand mass lost",
+             [{"vertex": 0, "weights": hand_row}],
+             {0: {"hand_r": 0.0, "lowerarm_r": 0.0, "body": 1.0}}),
+            ("anchor itself zeroed",
+             [{"vertex": 0, "weights": dict(hand_row)}],
+             {0: {"hand_r": 0.0, "lowerarm_r": 0.0, "body": 1.0}}),
+        ):
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError, "invented physical zero"):
+                ownership.compare_zero_ledger(
+                    [], bad_axial, bad_final, empty_eligible, SIDES, "saved",
+                    [{"vertex": 0, "positives": ["hand_r", "lowerarm_r", "RightForearmTwist", "body"]}])
+
     def test_export_local_out_of_domain_zero_survives_saved_membership_window(self) -> None:
         # Synthetic export-local row, captured before authoring and observed after save.
         # The old positive-only comparison silently accepts the lost nonbilateral key.
