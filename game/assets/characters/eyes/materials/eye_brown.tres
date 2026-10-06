@@ -11,7 +11,7 @@
 render_priority = 0
 shader = ExtResource("1_x63qt")
 shader_parameter/sclera_albedo = Color(1, 1, 1, 1)
-shader_parameter/iris_albedo = Color(0.55010897, 0.3009818, 0.10020932, 1)
+shader_parameter/iris_albedo = Color(0.4243778, 0.22779372, 0.068176836, 1)
 shader_parameter/sclera_albedo_texture = ExtResource("4_443fu")
 shader_parameter/iris_albedo_texture = ExtResource("2_6irb4")
 shader_parameter/height_enabled = true
