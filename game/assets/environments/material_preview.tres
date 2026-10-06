@@ -1,0 +1,16 @@
+[gd_resource type="Environment" format=3 uid="uid://cjoyjddg83iap"]
+
+[ext_resource type="Texture2D" uid="uid://ckv3oj6mms0ge" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="1_udsuk"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_42fxf"]
+panorama = ExtResource("1_udsuk")
+
+[sub_resource type="Sky" id="Sky_ura0y"]
+sky_material = SubResource("PanoramaSkyMaterial_42fxf")
+
+[resource]
+background_mode = 2
+sky = SubResource("Sky_ura0y")
+tonemap_mode = 4
+tonemap_exposure = 1.12
+tonemap_agx_contrast = 1.26

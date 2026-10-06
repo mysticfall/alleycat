@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://dmb5js8m572l8"]
+
+[ext_resource type="Environment" uid="uid://cjoyjddg83iap" path="res://assets/environments/material_preview.tres" id="1_mljq1"]
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_42fxf"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" unique_id=836458591]
+environment = ExtResource("1_mljq1")
+camera_attributes = SubResource("CameraAttributesPractical_42fxf")
