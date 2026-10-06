@@ -14,6 +14,8 @@ metadata/_custom_type_script = "uid://dv076impllmml"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 current = true
 fov = 37.849285
+near = 0.01
+far = 1000.0
 script = ExtResource("1_4dboc")
 metadata/_custom_type_script = "uid://cu4kqed31nlny"
 
