@@ -6,7 +6,7 @@
       "duration_seconds": 7.96666666666667,
       "feet": {
         "left": {
-          "baseline_ball_height_m": 0.006106,
+          "baseline_ball_height_m": 0.006091,
           "segments": [
             {
               "end_seconds": 7.96666666666667,
@@ -16,7 +16,7 @@
           ]
         },
         "right": {
-          "baseline_ball_height_m": 0.011615,
+          "baseline_ball_height_m": 0.011544,
           "segments": [
             {
               "end_seconds": 7.96666666666667,
@@ -54,7 +54,7 @@
       "identity": "planted_interval_role_policy_v1",
       "sha256": "f96c39822e2c7aede52b91a8b88e30aa3f93698893da43bf890403b355ac2d49"
     },
-    "runtime_library_sha256": "5ae387b13dcf3242ff9c9b5de2960596ecedf36d72b49d15450e8f85f8092af1",
+    "runtime_library_sha256": "62c7b4624b92cd0bb54e5fdf71a229285efc00c30a91c0fe34b92919d00f9baf",
     "sampling_rate_hz": 60.0,
     "skeleton": {
       "motion_scale": 0.938770651817322,

@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
-"""Bake materialised Kimodo actions to the constrained Female rig.
+"""Bake materialised Kimodo actions to a character's constrained target rig.
 
 Called by the ``commands/retarget_animations.py`` Blender entry point.
 
     blender --background --factory-startup --python tools/kimodo-pipeline/commands/retarget_animations.py -- \
-        --package locomotion --variant sad
+        --package locomotion --variant sad --character-root game/assets/characters/reference/female
     blender --background --factory-startup --python tools/kimodo-pipeline/commands/retarget_animations.py -- \
-        --package idle --idle-source-action kimodo_m0a3dyf0
+        --package idle --variant sad --character-root game/assets/characters/reference/female \
+        --idle-source-action <idle_action>
 
-The locomotion package opens the character's authoring workspace (or a staged,
-already-materialised copy of it) and publishes beneath the character asset
-root's flattened ``animations/processed/locomotion`` directory.  The processor
-never saves either source blend.  It writes a staged package, reopens it for
-verification, then publishes its blend, index and metrics as a directory
-transaction.  It intentionally does not invoke a retarget add-on or perform
-Mixamo Root reconstruction.
+The processor is character-generic (KIMODO-CHAR-001): the character asset root
+is an explicit required input, the target rig name is resolved from the opened
+content (or named explicitly with ``--target-rig``), and the Root
+lateral-location axis convention is a per-character parameter with no implicit
+default.  The locomotion package opens the character's authoring workspace (or
+a staged, already-materialised copy of it) and publishes beneath the character
+asset root's flattened ``animations/processed/locomotion`` directory.  The idle
+package opens the character's per-character idle source
+(KIMODO-IDLE-002) with an explicit idle action name, and binds it to the
+approved setup baseline through a setup-parity gate (KIMODO-SET-002) before
+any bake output.  The processor never saves either source blend.  It
+writes a staged package, reopens it for verification, then publishes its
+blend, index and metrics as a directory transaction.  It intentionally does
+not invoke a retarget add-on or perform Mixamo Root reconstruction.
 """
 from __future__ import annotations
 
@@ -40,7 +48,16 @@ from .retargeting import (
     portable_source_name,
     published_output_root,
 )
-from .bootstrap_paths import BootstrapPathError, derive_artefact_paths, repository_root
+from .bootstrap_manifest import _constraint_graph_edges, _helper_configuration_entries
+from .bootstrap_paths import (
+    BootstrapArtefactPaths,
+    BootstrapPathError,
+    derive_artefact_paths,
+    derive_idle_source_path,
+    repository_root,
+)
+from .character_baselines import CharacterBaselineError, resolve_approved_character
+from .setup_parity import parity_fingerprint_records, setup_parity_failures
 from .phase_events import PhaseEventEvidenceError, validate_complete_event_provenance
 from .loop_seam import validate_loop_repair_provenance
 from .leg_silhouette import LegSilhouetteError, assess_precision_leg_silhouette
@@ -59,12 +76,7 @@ from .workflow_binding import (
 
 
 ROOT = repository_root()
-SOURCE_ROOT = ROOT / "game/assets/characters/animations/source"
-# The idle package still reads the legacy monolith-flow idle source; the
-# locomotion package opens the character authoring workspace instead.
-LEGACY_IDLE_SOURCE = SOURCE_ROOT / "idle/idle-standing.blend"
-LEGACY_IDLE_SOURCE_ACTION = "kimodo_m0a3dyf0"
-DEFAULT_CHARACTER_ASSET_ROOT = ROOT / "game/assets/characters/reference/female"
+SOURCE_ARMATURE_NAME = "Kimodo_Source"
 METRICS_SCHEMA_VERSION = 2
 TRACKED_BONES = ("Root", "pelvis", "head", "foot_l", "foot_r", "hand_l", "hand_r")
 PRECISION_LEG_CHAINS = (("thigh_l", "calf_l", "foot_l"), ("thigh_r", "calf_r", "foot_r"))
@@ -77,9 +89,10 @@ CYCLIC_TRAVEL_CAPABILITIES = frozenset({
     "cyclic_arc_left_left_lane", "cyclic_arc_left_right_lane",
     "cyclic_arc_right_left_lane", "cyclic_arc_right_right_lane",
 })
-# The established Female Root convention is local X lateral (and its canonical
-# Blender-to-Godot transport maps X to -X).  Do not translate local Y/Z.
-FEMALE_ROOT_LATERAL_LOCATION_AXIS = 0
+# The Root lateral-location channel is a per-character convention (the
+# reference female's established Root convention is local X lateral, axis 0,
+# and the canonical Blender-to-Godot transport maps X to -X).  It is supplied
+# explicitly through --root-lateral-axis; do not translate local Y/Z.
 EPSILON = 1e-4
 OPENING_ROOT_ALIGNMENT_LIMIT_RADIANS = math.radians(0.1)
 ROOT_TILT_LIMIT_RADIANS = math.radians(5.0)
@@ -102,18 +115,55 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--package", choices=("locomotion", "idle"), required=True)
     parser.add_argument("--variant", required=True, help="Lower-case snake_case content variant key.")
     parser.add_argument(
-        "--character-root", type=Path, default=DEFAULT_CHARACTER_ASSET_ROOT,
-        help="Character asset root driving workspace and published-path derivation.",
+        "--character-root", type=Path, required=True,
+        help=(
+            "Character asset root driving workspace and published-path derivation; "
+            "required because the pipeline assumes no default character."
+        ),
+    )
+    parser.add_argument(
+        "--target-rig", default=None,
+        help=(
+            "Character target rig name.  When omitted it is resolved from the opened "
+            'content as the armature whose Root bone is bound onto "Kimodo_Source" '
+            "by COPY_LOCATION and COPY_ROTATION constraints."
+        ),
+    )
+    parser.add_argument(
+        "--root-lateral-axis", type=int, choices=(0, 1, 2), default=None,
+        help=(
+            "Character Root local location axis (0=X, 1=Y, 2=Z) carrying the lateral "
+            "channel used by the precision temporal reversal; a per-character "
+            "convention with no implicit default (the reference female uses 0)."
+        ),
     )
     parser.add_argument(
         "--workspace", type=Path,
         help="Locomotion authoring workspace blend to open (or its staged materialised copy).",
     )
     parser.add_argument(
-        "--idle-source-action", default=LEGACY_IDLE_SOURCE_ACTION,
-        help="Idle source action name inside the idle source blend (an input, not a constant).",
+        "--idle-source-action", default=None,
+        help=(
+            "Idle source action name inside the idle source blend (an input, not a "
+            "constant).  Required for the idle package; the setup-calibrated flow "
+            "assumes no default action name."
+        ),
     )
-    parser.add_argument("--source", type=Path, help="Override source blend (useful only for disposable-copy tests).")
+    parser.add_argument(
+        "--approved-character-baselines",
+        help=(
+            "Optional JSON per-character baseline mapping for the shared setup-parity "
+            'gate in disposable tests, as in \'{"fixture_character": '
+            '{"canonical_source": "<sha256>", ...}}\'.'
+        ),
+    )
+    parser.add_argument(
+        "--source", type=Path,
+        help=(
+            "Override locomotion source blend (useful only for disposable-copy tests); "
+            "the idle package always bakes the character's per-character idle source."
+        ),
+    )
     parser.add_argument(
         "--output-root", type=Path, default=None,
         help="Published package root; defaults to the character's flattened animations/processed tree.",
@@ -138,6 +188,17 @@ def parse_args() -> argparse.Namespace:
         parser.error("--workspace and --source are mutually exclusive source inputs.")
     if namespace.workspace is not None and namespace.package != "locomotion":
         parser.error("--workspace names a locomotion authoring artefact and cannot serve the idle package.")
+    if namespace.source is not None and namespace.package != "locomotion":
+        parser.error(
+            "--source cannot serve the idle package; the idle package bakes the "
+            "character's per-character idle source (animations/source/idle/<variant>.blend)."
+        )
+    if namespace.package == "idle" and namespace.idle_source_action is None:
+        parser.error(
+            "--idle-source-action is required when the idle package bakes the "
+            "per-character idle source; the setup-calibrated flow assumes no "
+            "default action name."
+        )
     return namespace
 
 
@@ -162,6 +223,20 @@ def _workspace_provenance_path(source_path: Path, derived_workspace: Path) -> Pa
     if source_path.name == derived_workspace.name:
         return derived_workspace.relative_to(ROOT)
     return Path(f"source/locomotion/{portable_source_name(source_path.name)}")
+
+
+def _idle_source_provenance_path(source_path: Path) -> Path:
+    """Return the portable provenance path naming the per-character idle source.
+
+    An in-repository idle source records its repository-relative path (its
+    durable character-authored identity per KIMODO-SRC-006); anything staged
+    outside the repository falls back to the portable ``source/idle/<name>``
+    shape.
+    """
+    try:
+        return source_path.relative_to(ROOT)
+    except ValueError:
+        return Path(f"source/idle/{portable_source_name(source_path.name)}")
 
 
 def action_has_keys(action: bpy.types.Action) -> bool:
@@ -197,6 +272,29 @@ def action_curve_container(action: bpy.types.Action) -> Any:
     raise ProcessorError(f'Action "{action.name}" has no editable fcurve container.')
 
 
+def bind_action_slot(animation_data: Any, action: bpy.types.Action) -> None:
+    """Bind a slotted action for evaluation (Blender 4.4+ slot requirement).
+
+    Assigning ``animation_data.action`` binds a slot automatically only when the
+    slot identifier matches the object. Idle donor actions carry history-named
+    slots from their authoring armature (for example ``OBKimodo`` on a rig since
+    renamed to ``Kimodo_Source``); such an assignment leaves ``action_slot``
+    null and the action then evaluates no channels at all, so a bake of it
+    records one frozen pose at every frame. Legacy-layout actions carry no
+    slots and need no binding. A multi-slot action is refused rather than
+    guessed.
+    """
+    slots = list(getattr(action, "slots", ()))
+    if not slots or getattr(animation_data, "action_slot", None) is not None:
+        return
+    if len(slots) != 1:
+        raise ProcessorError(
+            f'Action "{action.name}" carries {len(slots)} slots; '
+            "refusing to guess which slot drives the rig."
+        )
+    animation_data.action_slot = slots[0]
+
+
 def select_target(target: bpy.types.Object) -> None:
     if bpy.context.object is not None and bpy.context.object.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -217,20 +315,215 @@ def source_constraints(target: bpy.types.Object, source: bpy.types.Object) -> li
     return [constraint for bone in target.pose.bones for constraint in bone.constraints if constraint.target == source]
 
 
+def _carries_root_retarget_binding(candidate: bpy.types.Object, source: bpy.types.Object) -> bool:
+    """Whether ``candidate``'s Root bone is bound onto the source armature."""
+    root = candidate.pose.bones.get("Root") if candidate.pose else None
+    if root is None:
+        return False
+    types = {item.type for item in root.constraints if item.target == source}
+    return {"COPY_LOCATION", "COPY_ROTATION"}.issubset(types)
+
+
+def resolve_target_rig(
+    explicit_name: str | None, source: bpy.types.Object | None
+) -> bpy.types.Object:
+    """Resolve the character target rig from the opened content (KIMODO-CHAR-001).
+
+    Every calibrated retarget setup binds its character rig onto
+    ``Kimodo_Source`` through Root COPY_LOCATION and COPY_ROTATION constraints,
+    so that binding is the structural definition of the target rig and no
+    character name is assumed.  ``explicit_name`` (``--target-rig``) selects
+    among several bound armatures; it must never name the source rig itself.
+    """
+    if explicit_name is not None:
+        candidate = bpy.data.objects.get(explicit_name)
+        if candidate is None or candidate.type != "ARMATURE":
+            raise ProcessorError(f'--target-rig names no armature named "{explicit_name}".')
+        if candidate == source:
+            raise ProcessorError(
+                "--target-rig must name the character target rig, not the "
+                f'"{SOURCE_ARMATURE_NAME}" source armature.'
+            )
+        return candidate
+    if source is None or source.type != "ARMATURE":
+        raise ProcessorError(
+            f'The opened blend lacks the "{SOURCE_ARMATURE_NAME}" source armature '
+            "required to resolve the character target rig."
+        )
+    candidates = sorted(
+        (
+            obj
+            for obj in bpy.data.objects
+            if obj.type == "ARMATURE"
+            and obj != source
+            and _carries_root_retarget_binding(obj, source)
+        ),
+        key=lambda obj: obj.name,
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    present = sorted(obj.name for obj in bpy.data.objects if obj.type == "ARMATURE")
+    if not candidates:
+        raise ProcessorError(
+            "No character target armature carries the Root COPY_LOCATION and "
+            f'COPY_ROTATION binding onto "{SOURCE_ARMATURE_NAME}"; armatures present: '
+            f"{present}."
+        )
+    raise ProcessorError(
+        "Multiple armatures carry the Root retarget binding onto "
+        f'"{SOURCE_ARMATURE_NAME}" ({[obj.name for obj in candidates]}); name one '
+        "explicitly with --target-rig."
+    )
+
+
 def validate_rigs(target: bpy.types.Object | None, source: bpy.types.Object | None) -> None:
     if target is None or target.type != "ARMATURE":
-        raise ProcessorError('Expected target armature named "Female".')
+        raise ProcessorError("The resolved character target rig is not an armature.")
     if source is None or source.type != "ARMATURE":
-        raise ProcessorError('Expected source armature named "Kimodo_Source".')
+        raise ProcessorError(f'Expected source armature named "{SOURCE_ARMATURE_NAME}".')
     if target.pose.bones.get("Root") is None:
-        raise ProcessorError('Female has no required pose bone "Root".')
+        raise ProcessorError(f'{target.name} has no required pose bone "Root".')
     constraints = source_constraints(target, source)
     if not constraints:
-        raise ProcessorError("Female has no visual constraints targeting Kimodo_Source.")
+        raise ProcessorError(
+            f"{target.name} has no visual constraints targeting {SOURCE_ARMATURE_NAME}."
+        )
     root_constraints = [item for item in target.pose.bones["Root"].constraints if item.target == source]
     types = {item.type for item in root_constraints}
     if not {"COPY_LOCATION", "COPY_ROTATION"}.issubset(types):
-        raise ProcessorError("Female:Root must have Kimodo_Source COPY_LOCATION and COPY_ROTATION constraints.")
+        raise ProcessorError(
+            f"{target.name}:Root must have {SOURCE_ARMATURE_NAME} COPY_LOCATION and "
+            "COPY_ROTATION constraints."
+        )
+
+
+def capture_setup_parity_records(explicit_target_rig: str | None) -> dict[str, Any]:
+    """Capture the calibration-relevant rig records of the currently opened blend.
+
+    The rows mirror the plain manifest captures: the target and source
+    constraint graphs (whose edges carry constraint mute state and influence)
+    plus the ``_RET`` helper rest and fixed pose matrix_basis entries.
+    The setup-parity gate compares two of these
+    records, so the calibration state it protects is exactly the state named
+    by KIMODO-SET-003.
+    """
+    source = bpy.data.objects.get(SOURCE_ARMATURE_NAME)
+    if source is None or source.type != "ARMATURE":
+        raise ProcessorError(
+            f'The opened blend lacks the "{SOURCE_ARMATURE_NAME}" source armature '
+            "required by the setup-parity gate."
+        )
+    target = resolve_target_rig(explicit_target_rig, source)
+    # No evaluation-frame choice can recover authored calibration from an
+    # animated helper. Refuse ambiguous inputs instead of sampling an action or
+    # clearing animation (which leaves the last evaluated channel values behind).
+    # Check all resident actions, including the unbound donor staged for baking,
+    # and drivers. NLA actions are resident too. This is deliberately fail-closed.
+    helper_paths = tuple(
+        bone.path_from_id() for bone in source.pose.bones
+        if bone.name.endswith("_RET")
+    )
+    curves = []
+    for action in bpy.data.actions:
+        if action.is_action_legacy:
+            curves.extend(action.fcurves)
+        else:
+            for layer in action.layers:
+                for strip in layer.strips:
+                    for bag in strip.channelbags:
+                        curves.extend(bag.fcurves)
+    if source.animation_data is not None:
+        curves.extend(source.animation_data.drivers)
+    for curve in curves:
+        if curve.data_path.startswith(helper_paths):
+            raise ProcessorError(
+                "Setup-parity gate refused the bake: fixed helper calibration "
+                f"is animated or driven at {curve.data_path!r}; cannot establish "
+                "action-independent pose matrix_basis calibration."
+            )
+    return {
+        "target_rig": target.name,
+        "target_constraint_edges": _constraint_graph_edges(target),
+        "source_constraint_edges": _constraint_graph_edges(source),
+        "helper_entries": _helper_configuration_entries(source, include_fixed_pose=True),
+    }
+
+
+def _capture_parity_from_blend(path: Path, explicit_target_rig: str | None) -> dict[str, Any]:
+    bpy.ops.wm.open_mainfile(filepath=str(path), load_ui=False, use_scripts=False)
+    return capture_setup_parity_records(explicit_target_rig)
+
+
+def verify_setup_parity(
+    artefacts: BootstrapArtefactPaths,
+    source_path: Path,
+    explicit_target_rig: str | None,
+    approved_character_baselines: Any = None,
+    *,
+    gate_name: str = "Setup-parity gate",
+) -> dict[str, Any]:
+    """Bind any bake to the character's approved setup baseline (KIMODO-SET-002).
+
+    The gate refuses before any bake or publication output.  First the three
+    bootstrap inputs must hash to one approved character baseline (byte-digest
+    binding, exactly as workspace composition requires).  Then the selected
+    source's setup-derived rig content must fingerprint-match the approved
+    setup's calibration — constraint mute state plus helper rest and fixed pose
+    matrix_basis — so an un-calibrated staged copy (for example helpers reset to
+    identity or Locked Tracks un-muted) is refused as calibration drift with a
+    diagnostic naming the drifted state, not as opaque byte drift.
+    """
+    baseline_files = {
+        "canonical_source": artefacts.canonical_source,
+        "neutral_template": artefacts.neutral_template,
+        "character_setup": artefacts.character_setup,
+    }
+    for key, path in baseline_files.items():
+        if not path.is_file():
+            raise ProcessorError(
+                f'{gate_name} requires the approved bootstrap input '
+                f'"{key}": {path}'
+            )
+    digests = {key: sha256_file(path) for key, path in baseline_files.items()}
+    try:
+        character, _expected = resolve_approved_character(digests, approved_character_baselines)
+    except CharacterBaselineError as error:
+        raise ProcessorError(f"{gate_name}: {error}") from error
+    try:
+        approved_records = _capture_parity_from_blend(
+            baseline_files["character_setup"], explicit_target_rig
+        )
+        actual_records = _capture_parity_from_blend(source_path, explicit_target_rig)
+    except ProcessorError as error:
+        raise ProcessorError(f"{gate_name} refused the bake: {error}") from error
+    failures = setup_parity_failures(approved_records, actual_records)
+    if failures:
+        raise ProcessorError(
+            f"{gate_name} refused the bake: the source's rig content "
+            "does not match the approved calibrated setup (calibration drift): "
+            + "; ".join(failures)
+        )
+    return {
+        "baseline_character": character,
+        "setup_sha256": digests["character_setup"],
+        "source_sha256": sha256_file(source_path),
+        "setup_parity": parity_fingerprint_records(approved_records),
+    }
+
+
+def verify_idle_setup_parity(
+    artefacts: BootstrapArtefactPaths,
+    idle_source_path: Path,
+    explicit_target_rig: str | None,
+    approved_character_baselines: Any = None,
+) -> dict[str, Any]:
+    """Apply the shared gate while retaining the idle provenance contract."""
+    binding = verify_setup_parity(
+        artefacts, idle_source_path, explicit_target_rig,
+        approved_character_baselines, gate_name="Idle setup-parity gate",
+    )
+    binding["idle_source_sha256"] = binding.pop("source_sha256")
+    return binding
 
 
 def constraint_graph(target: bpy.types.Object) -> tuple[tuple[Any, ...], ...]:
@@ -249,7 +542,9 @@ def constraint_graph(target: bpy.types.Object) -> tuple[tuple[Any, ...], ...]:
 
 def validate_constraint_graph(target: bpy.types.Object, authored: tuple[tuple[Any, ...], ...]) -> None:
     if constraint_graph(target) != authored:
-        raise ProcessorError("Female authored retarget constraint graph changed during evaluation.")
+        raise ProcessorError(
+            f"{target.name}'s authored retarget constraint graph changed during evaluation."
+        )
 
 
 def helper_configuration(source: bpy.types.Object) -> tuple[tuple[Any, ...], ...]:
@@ -280,6 +575,7 @@ def bake_action(scene: bpy.types.Scene, target: bpy.types.Object, source: bpy.ty
     baked.use_fake_user = True
     target_data.action = baked
     source_data.action = source_action
+    bind_action_slot(source_data, source_action)
     start, end = math.floor(source_action.frame_range[0]), math.ceil(source_action.frame_range[1])
     scene.frame_set(start)
     select_deformation_bones(target)
@@ -330,14 +626,15 @@ def _reverse_curve_keys(curve: Any, start: float, end: float, offset: float = 0.
 
 
 def derive_baked_temporal_reversal(
-    sr: bpy.types.Action, motion: ExportMotion,
+    sr: bpy.types.Action, motion: ExportMotion, root_lateral_location_axis: int,
 ) -> bpy.types.Action:
-    """Create ``sl`` by reversing the already baked Female ``sr`` Action.
+    """Create ``sl`` by reversing the already baked target-rig ``sr`` Action.
 
-    Every curve is directly reversed, preserving its baked representation. Root
-    local X is Female's established lateral channel, so it alone
-    receives ``-sr[end]``: ``sl[i] = sr[N - 1 - i] - sr[N - 1]``.  This makes
-    the derived action begin at the lateral origin without changing its pose.
+    Every curve is directly reversed, preserving its baked representation.  The
+    character's Root lateral location channel (``root_lateral_location_axis``,
+    a per-character convention) alone receives ``-sr[end]``:
+    ``sl[i] = sr[N - 1 - i] - sr[N - 1]``.  This makes the derived action
+    begin at the lateral origin without changing its pose.
     """
     if motion.runtime_capability != "confined_side_step_left":
         raise ProcessorError("Only the precision sl role may be derived from a baked temporal reversal.")
@@ -348,12 +645,14 @@ def derive_baked_temporal_reversal(
     root_lateral = next((
         curve for curve in action_fcurves(sr)
         if curve.data_path == 'pose.bones["Root"].location'
-        and curve.array_index == FEMALE_ROOT_LATERAL_LOCATION_AXIS
+        and curve.array_index == root_lateral_location_axis
     ), None)
     if root_lateral is None or not root_lateral.keyframe_points:
-        raise ProcessorError("Baked precision sr requires a non-empty Female Root local lateral location curve.")
+        raise ProcessorError(
+            "Baked precision sr requires a non-empty character Root local lateral location curve."
+        )
     root_offsets = [0.0, 0.0, 0.0]
-    root_offsets[FEMALE_ROOT_LATERAL_LOCATION_AXIS] = -float(root_lateral.evaluate(end))
+    root_offsets[root_lateral_location_axis] = -float(root_lateral.evaluate(end))
     for curve in action_fcurves(derived):
         offset = root_offsets[curve.array_index] if curve.data_path == 'pose.bones["Root"].location' else 0.0
         _reverse_curve_keys(curve, start, end, offset)
@@ -365,11 +664,16 @@ def derive_baked_temporal_reversal(
         "root_reverse_offset": root_offsets,
         "root_reverse_offset_space": "female_pose_root_location",
     }, sort_keys=True, separators=(",", ":"))
-    validate_baked_temporal_reversal_fcurves(sr, derived)
+    validate_baked_temporal_reversal_fcurves(sr, derived, root_lateral_location_axis)
     return derived
 
 
-def validate_baked_temporal_reversal_fcurves(sr: bpy.types.Action, sl: bpy.types.Action, tolerance: float = 1e-7) -> None:
+def validate_baked_temporal_reversal_fcurves(
+    sr: bpy.types.Action,
+    sl: bpy.types.Action,
+    root_lateral_location_axis: int,
+    tolerance: float = 1e-7,
+) -> None:
     """Prove ``sl`` is direct ``sr`` reversal except final-relative Root lateral."""
     start, end = (float(value) for value in sr.frame_range)
     sr_curves = {(curve.data_path, curve.array_index): curve for curve in action_fcurves(sr)}
@@ -384,7 +688,7 @@ def validate_baked_temporal_reversal_fcurves(sr: bpy.types.Action, sl: bpy.types
             reversed_point = sl_curve.keyframe_points[-index - 1]
             reverse_time = start + end - float(point.co.x)
             offset = -float(sr_curve.evaluate(end)) if key == (
-                'pose.bones["Root"].location', FEMALE_ROOT_LATERAL_LOCATION_AXIS,
+                'pose.bones["Root"].location', root_lateral_location_axis,
             ) else 0.0
             if abs(float(sl_curve.evaluate(reverse_time)) - (float(point.co.y) + offset)) > tolerance:
                 raise ProcessorError(f"Baked precision temporal reversal curve mismatch: {key[0]}[{key[1]}].")
@@ -397,9 +701,11 @@ def validate_baked_temporal_reversal_fcurves(sr: bpy.types.Action, sl: bpy.types
                 raise ProcessorError(f"Baked precision temporal reversal changed key representation: {key[0]}[{key[1]}].")
             if index > 0 and reversed_point.interpolation != sr_curve.keyframe_points[index - 1].interpolation:
                 raise ProcessorError(f"Baked precision temporal reversal changed interpolation: {key[0]}[{key[1]}].")
-    root_key = ('pose.bones["Root"].location', FEMALE_ROOT_LATERAL_LOCATION_AXIS)
+    root_key = ('pose.bones["Root"].location', root_lateral_location_axis)
     if root_key not in sr_curves:
-        raise ProcessorError("Baked precision temporal reversal lacks the Female Root local lateral location curve.")
+        raise ProcessorError(
+            "Baked precision temporal reversal lacks the character Root local lateral location curve."
+        )
     sr_lateral, sl_lateral = sr_curves[root_key], sl_curves[root_key]
     if abs(float(sl_lateral.evaluate(start))) > tolerance:
         raise ProcessorError("Baked precision temporal reversal Root lateral does not begin at the origin.")
@@ -568,12 +874,14 @@ def sample_metrics(scene: bpy.types.Scene, target: bpy.types.Object, action: bpy
 def precision_leg_silhouette_sample(
     scene: bpy.types.Scene, target: bpy.types.Object, action: bpy.types.Action, role: str,
 ) -> tuple[dict[str, Any], list[float], list[dict[str, Vector]], list[tuple[float, float, float]]]:
-    """Measure the baked Female's evaluated hip, knee, ankle, and foot-tip chains."""
+    """Measure the baked character rig's evaluated hip, knee, ankle, and foot-tip chains."""
     left_names, right_names = PRECISION_LEG_CHAINS
     if target.pose.bones.get("Root") is None or any(
         target.pose.bones.get(name) is None for name in (*left_names, *right_names)
     ):
-        raise ProcessorError("Female precision leg-silhouette gate requires Root, thigh, calf, and foot chains.")
+        raise ProcessorError(
+            "The precision leg-silhouette gate requires Root, thigh, calf, and foot chains."
+        )
     data = target.animation_data_create()
     assert data is not None
     data.action = action
@@ -584,7 +892,9 @@ def precision_leg_silhouette_sample(
     lateral = left_rest - right_rest
     lateral -= up * lateral.dot(up)
     if lateral.length <= EPSILON:
-        raise ProcessorError("Female precision leg-silhouette gate cannot derive Root-rest lateral basis.")
+        raise ProcessorError(
+            "The precision leg-silhouette gate cannot derive the Root-rest lateral basis."
+        )
     lateral.normalize()
     scale = max(target.data.bones[name].length for name in (*left_names, *right_names))
     start, end = (int(math.floor(value)) for value in action.frame_range)
@@ -617,13 +927,13 @@ def precision_leg_silhouette_sample(
         evidence = assess_precision_leg_silhouette(
             role, samples, scale, stage="female_bake", armature_identity=f"{target.name}:evaluated_baked_female",
             basis_evidence={
-                "basis": "Female Root-rest positive-left lateral and Root-rest +Z up",
+                "basis": f"{target.name} Root-rest positive-left lateral and Root-rest +Z up",
                 "left_chain": [*left_names, "foot_l_tail"], "right_chain": [*right_names, "foot_r_tail"],
-                "coordinate_space": "evaluated Female armature local",
+                "coordinate_space": f"evaluated {target.name} armature local",
             }, tolerance_scale=PRECISION_LEG_SILHOUETTE_TOLERANCE,
         )
     except LegSilhouetteError as error:
-        raise ProcessorError(f"Female precision leg-silhouette evidence is invalid: {error}") from error
+        raise ProcessorError(f"Precision leg-silhouette evidence is invalid: {error}") from error
     for frame, left, right in samples:
         trace.append(float(assess_precision_leg_silhouette(
             role, [(frame, left, right)], scale, stage="female_bake", armature_identity=target.name,
@@ -662,15 +972,18 @@ def validate_precision_leg_silhouette_pair(
     if set(actions).isdisjoint({"sr", "sl"}):
         return
     if set(actions).intersection({"sr", "sl"}) != {"sr", "sl"}:
-        raise ProcessorError("Female precision leg-silhouette gate requires sr and sl together for same-anatomy reversal.")
+        raise ProcessorError(
+            "The precision leg-silhouette gate requires sr and sl together for "
+            "same-anatomy reversal."
+        )
     sampled = {role: precision_leg_silhouette_sample(scene, target, actions[role], role) for role in ("sr", "sl")}
     for role, (evidence, _, _, _) in sampled.items():
         if not evidence["accepted"]:
-            raise ProcessorError(f'Baked Female precision-step {role} leg silhouette rejected: {evidence["rejection_reason"]}')
+            raise ProcessorError(f'Baked precision-step {role} leg silhouette rejected: {evidence["rejection_reason"]}')
         metrics[role]["precision_leg_silhouette"] = evidence
     sr_trace, sl_trace = sampled["sr"][1], sampled["sl"][1]
     if len(sr_trace) != len(sl_trace):
-        raise ProcessorError("Baked Female precision-step pair has unequal temporal sample counts.")
+        raise ProcessorError("Baked precision-step pair has unequal temporal sample counts.")
     scale = max(float(sampled["sr"][0]["anatomical_scale"]), float(sampled["sl"][0]["anatomical_scale"]))
     reversal_error = max(abs(a - b) for a, b in zip(sr_trace, reversed(sl_trace), strict=True))
     sr_chains, sl_chains = sampled["sr"][2], sampled["sl"][2]
@@ -687,7 +1000,7 @@ def validate_precision_leg_silhouette_pair(
     limit = scale * PRECISION_REVERSAL_TOLERANCE_SCALE
     if reversal_error > limit or idle_error > limit or root_reverse_error > limit:
         raise ProcessorError(
-            "Baked Female precision-step same-anatomy temporal reversal rejected: "
+            "Baked precision-step same-anatomy temporal reversal rejected: "
             f"silhouette={reversal_error:.9f}, shared_idle={idle_error:.9f}, root_reverse_offset={root_reverse_error:.9f}, limit={limit:.9f}; "
             f"shared_idle_extremum={json.dumps(idle_extremum, sort_keys=True)}"
         )
@@ -839,7 +1152,7 @@ def validate_baked(action: bpy.types.Action, motion: ExportMotion, source: bpy.t
     rest_basis = target.data.bones["Root"].matrix_local.to_3x3()
     opening_angle = rest_basis.to_quaternion().rotation_difference(opening_basis.to_quaternion()).angle
     if opening_angle > OPENING_ROOT_ALIGNMENT_LIMIT_RADIANS:
-        raise ProcessorError(f'Baked action "{action.name}" opening Female Root is not rest-aligned.')
+        raise ProcessorError(f'Baked action "{action.name}" opening Root is not rest-aligned.')
     if motion.runtime_capability != "idle_contact_free" and max(sample["root_tilt_radians"] for sample in metrics["samples"]) > ROOT_TILT_LIMIT_RADIANS:
         raise ProcessorError(f'Baked action "{action.name}" exceeds the Root pitch/roll bound.')
     if translation_semantics == "zero_translation" and math.sqrt(sum(value * value for value in endpoint)) > EPSILON:
@@ -862,11 +1175,11 @@ def remove_source_dependencies(target: bpy.types.Object, source: bpy.types.Objec
 
 
 def remove_non_animation_data(target: bpy.types.Object) -> None:
-    """Reduce the published blend to the baked Female rig and its actions.
+    """Reduce the published blend to the baked character rig and its actions.
 
     Published files are animation carriers, not character scenes.  Removing the
     source meshes before saving also keeps Blender's scene importer from
-    selecting a mesh/skeleton import path that differs from the intended Female
+    selecting a mesh/skeleton import path that differs from the intended
     animation-only path.
     """
     for obj in list(bpy.data.objects):
@@ -884,11 +1197,13 @@ def remove_non_animation_data(target: bpy.types.Object) -> None:
         pass
 
 
-def validate_reopened(path: Path, expected: tuple[ExportMotion, ...]) -> None:
+def validate_reopened(path: Path, expected: tuple[ExportMotion, ...], target_name: str) -> None:
     bpy.ops.wm.open_mainfile(filepath=str(path))
-    target, source = bpy.data.objects.get("Female"), bpy.data.objects.get("Kimodo_Source")
-    if target is None or source is not None or target.type != "ARMATURE" or len(bpy.data.objects) != 1:
-        raise ProcessorError("Reopened package does not contain only the required Female rig.")
+    target = bpy.data.objects.get(target_name)
+    if target is None or target.type != "ARMATURE" or len(bpy.data.objects) != 1:
+        raise ProcessorError(
+            f"Reopened package does not contain only the required {target_name!r} rig."
+        )
     if bpy.data.meshes or bpy.data.materials or bpy.data.images:
         raise ProcessorError("Reopened package retains mesh, material, or image datablocks.")
     if len(bpy.data.armatures) != 1:
@@ -964,7 +1279,11 @@ def main() -> None:
     if args.package == "locomotion":
         source_path = (args.workspace or args.source or artefacts.authoring_workspace).resolve()
     else:
-        source_path = (args.source or LEGACY_IDLE_SOURCE).resolve()
+        # The idle package bakes the character's per-character idle source
+        # (KIMODO-IDLE-002/003); no other source input serves it.
+        source_path = derive_idle_source_path(
+            artefacts.character_asset_root, variant
+        ).resolve()
     if not source_path.is_file():
         raise ProcessorError(f'Source blend does not exist: {source_path}')
     source_carrier_binding = None
@@ -989,9 +1308,39 @@ def main() -> None:
         motions = tuple(item for item in motions if item.role in allowed)
         if not motions or allowed != {item.role for item in motions}:
             raise ProcessorError("--roles must name one or more published projected roles.")
+    if args.root_lateral_axis is None and any(
+        motion.runtime_capability == "confined_side_step_left" for motion in motions
+    ):
+        raise ProcessorError(
+            "--root-lateral-axis is required when the selected roles derive the "
+            "precision temporal reversal (sl); it is a per-character Root "
+            "lateral-location convention with no implicit default."
+        )
     if args.dry_run:
         print(json.dumps({"package": args.package, "variant": variant, "motions": [item.__dict__ for item in motions]}, sort_keys=True))
         return
+    idle_setup_binding = None
+    locomotion_setup_binding = None
+    if args.package == "idle":
+        # Setup-parity gate (KIMODO-SET-002): refuse before any bake or
+        # publication output when the idle source is not bound to the
+        # character's approved setup calibration.
+        idle_setup_binding = verify_idle_setup_parity(
+            artefacts, source_path, args.target_rig,
+            json.loads(args.approved_character_baselines)
+            if args.approved_character_baselines is not None
+            else None,
+        )
+    else:
+        # Byte integrity of a materialised carrier is distinct from approval of
+        # its calibration. Apply the same approved setup gate before staging.
+        locomotion_setup_binding = verify_setup_parity(
+            artefacts, source_path, args.target_rig,
+            json.loads(args.approved_character_baselines)
+            if args.approved_character_baselines is not None
+            else None,
+            gate_name="Locomotion setup-parity gate",
+        )
     if args.output_root is not None:
         output = args.output_root.resolve() / args.package
     elif args.package == "locomotion":
@@ -999,24 +1348,30 @@ def main() -> None:
         output = artefacts.processed_package.parent
     else:
         output = ROOT / published_output_root(artefacts.character_asset_root.relative_to(ROOT), "idle")
-    provenance_path = (
-        Path(args.provenance_path)
-        if args.provenance_path is not None
-        else (
-            _workspace_provenance_path(source_path, artefacts.authoring_workspace)
-            if args.package == "locomotion" and args.workspace is not None
-            else Path(f"source/{args.package}/{portable_source_name(source_path.name)}")
-        )
-    )
+    if args.provenance_path is not None:
+        provenance_path = Path(args.provenance_path)
+    elif args.package == "locomotion" and args.workspace is not None:
+        provenance_path = _workspace_provenance_path(source_path, artefacts.authoring_workspace)
+    elif args.package == "idle":
+        # Provenance names the per-character idle source itself (KIMODO-IDLE-003).
+        provenance_path = _idle_source_provenance_path(source_path)
+    else:
+        provenance_path = Path(f"source/{args.package}/{portable_source_name(source_path.name)}")
     if provenance_path.is_absolute() or ".." in provenance_path.parts:
         raise ProcessorError("--provenance-path must be a portable package-relative path.")
     stage = output.with_name(f".{output.name}.staging-{uuid.uuid4().hex}")
     try:
         stage.mkdir(parents=True)
-        bpy.ops.wm.open_mainfile(filepath=str(source_path))
-        scene, target, source = bpy.context.scene, bpy.data.objects.get("Female"), bpy.data.objects.get("Kimodo_Source")
+        # The shared gate leaves the exact verified carrier loaded. Do not
+        # reload an input after approving it and then capture a new self-baseline.
+        source = bpy.data.objects.get(SOURCE_ARMATURE_NAME)
+        target = resolve_target_rig(args.target_rig, source)
+        scene = bpy.context.scene
         validate_rigs(target, source)
         assert target is not None and source is not None
+        # Capture the resolved identity before any later reload invalidates
+        # the Python references; the index records it from the actual rig.
+        target_name = target.name
         coordinate_contract = make_coordinate_contract(target)
         authored_constraints = constraint_graph(target)
         authored_helpers = helper_configuration(source)
@@ -1044,7 +1399,7 @@ def main() -> None:
                 sr = precision_actions.get("sr")
                 if sr is None:
                     raise ProcessorError("Precision sl must be derived after baking its native sr counterpart.")
-                output_action = derive_baked_temporal_reversal(sr, motion)
+                output_action = derive_baked_temporal_reversal(sr, motion, args.root_lateral_axis)
             else:
                 output_action = bake_action(scene, target, source, motion, source_action)
             validate_constraint_graph(target, authored_constraints)
@@ -1103,12 +1458,27 @@ def main() -> None:
         scene.frame_end = max(math.ceil(action.frame_range[1]) for action in baked)
         blend_name = f"{args.package}_{variant}.blend"
         bpy.ops.wm.save_as_mainfile(filepath=str(stage / blend_name), check_existing=False)
-        validate_reopened(stage / blend_name, motions)
+        validate_reopened(stage / blend_name, motions, target_name)
         index = {"schema_version": 2, "metrics_schema_version": METRICS_SCHEMA_VERSION, "package": args.package, "variant": variant, "source_blend": portable_source_name(source_path.name),
-                  "source_path": provenance_path.as_posix(), "target_skeleton": "Female",
+                  "source_path": provenance_path.as_posix(), "target_skeleton": target_name,
                   "coordinate_contract": coordinate_contract, "action_count": len(entries), "actions": entries}
         if source_carrier_binding is not None:
             index["source_carrier_binding"] = source_carrier_binding
+        if locomotion_setup_binding is not None:
+            # Additive provenance for newly baked packages only. Existing
+            # retained indexes/descriptors do not require a schema migration.
+            index["setup_binding"] = locomotion_setup_binding
+        if idle_setup_binding is not None:
+            # Provenance names the per-character idle source and action, and
+            # carries the setup-parity binding of the bake (KIMODO-IDLE-003).
+            index["idle_source_binding"] = {
+                "idle_source_path": provenance_path.as_posix(),
+                "idle_source_action": args.idle_source_action,
+                "idle_source_sha256": idle_setup_binding["idle_source_sha256"],
+                "setup_baseline_character": idle_setup_binding["baseline_character"],
+                "setup_sha256": idle_setup_binding["setup_sha256"],
+                "setup_parity_fingerprints": idle_setup_binding["setup_parity"],
+            }
         (variant_stage / "processed-index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         preserve_unmanaged_package_files(stage, output)
         publish(stage, output)
@@ -1121,4 +1491,3 @@ def main() -> None:
         if stage.exists():
             shutil.rmtree(stage)
         raise
-

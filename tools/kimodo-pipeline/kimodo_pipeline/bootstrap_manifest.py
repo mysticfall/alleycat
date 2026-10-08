@@ -113,13 +113,12 @@ def _constraint_graph_edges(obj: Any) -> list[list[Any]]:
     return edges
 
 
-def _helper_configuration_entries(obj: Any) -> list[list[Any]]:
-    """Plain helper rows: name, parent, and rest matrices from data bones.
+def _helper_configuration_entries(obj: Any, *, include_fixed_pose: bool = False) -> list[list[Any]]:
+    """Capture rest rows, optionally including verified unanimated pose calibration.
 
-    The studied ``helper_configuration`` in ``blender_retargeting.py``
-    also digests pose ``matrix_basis`` rows, which reflect whichever variant
-    action is active at capture time.  This manifest needs a variant-neutral
-    immutability check, so only action-independent rest data is digested.
+    Extraction manifests retain their rest-only structural contract. Setup parity
+    requests fixed pose rows after excluding animation of helpers; matrix_basis
+    is before constraints/parenting, so animated donor ancestors cannot pollute it.
     """
     entries: list[list[Any]] = []
     for bone in sorted(obj.data.bones, key=lambda item: item.name):
@@ -130,6 +129,11 @@ def _helper_configuration_entries(obj: Any) -> list[list[Any]]:
             bone.parent.name if bone.parent is not None else None,
             [round(float(value), 7) for row in bone.matrix_local for value in row],
         ])
+        if include_fixed_pose:
+            entries[-1].append([
+                round(float(value), 7)
+                for row in obj.pose.bones[bone.name].matrix_basis for value in row
+            ])
     return entries
 
 

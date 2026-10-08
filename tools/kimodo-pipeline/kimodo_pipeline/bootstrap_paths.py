@@ -9,6 +9,9 @@ contract:
 * ``kimodo_retarget_setup`` — per-character, beneath the character asset root.
 * ``locomotion_[variant]_authoring`` — per-character authoring workspace.
 * ``locomotion_[variant]`` — per-character processed package.
+
+The per-character animated idle sources (KIMODO-IDLE-002) are a sixth,
+character-scoped authored input family derived by ``derive_idle_source_path``.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ from .contracts import validate_variant
 CANONICAL_SOURCE_RELATIVE = Path("game/assets/characters/animations/source/kimodo_source.blend")
 NEUTRAL_TEMPLATE_RELATIVE = Path("game/assets/characters/animations/source/locomotion/locomotion_template.blend")
 CHARACTER_SETUP_RELATIVE = Path("animations/source/kimodo_retarget_setup.blend")
+IDLE_SOURCE_DIRECTORY_RELATIVE = Path("animations/source/idle")
 AUTHORING_WORKSPACE_DIRECTORY_RELATIVE = Path("animations/source/locomotion")
 PROCESSED_PACKAGE_DIRECTORY_RELATIVE = Path("animations/processed/locomotion")
 
@@ -101,4 +105,26 @@ def derive_artefact_paths(
         ),
         variant=validated_variant,
         character_asset_root=root,
+    )
+
+
+def derive_idle_source_path(
+    character_asset_root: Union[str, Path],
+    variant: str,
+) -> Path:
+    """Derive the per-character animated idle-source path for ``variant``.
+
+    Idle sources live at ``[character asset root]/animations/source/idle/
+    <variant>.blend`` (KIMODO-IDLE-002); they are protected character-authored
+    inputs the pipeline never modifies.  Paths are derived only — existence is
+    a later idle-staging-phase concern.
+    """
+    try:
+        validated_variant = validate_variant(variant)
+    except ValueError as error:
+        raise BootstrapPathError(f"Invalid variant for the idle source: {error}") from error
+    return (
+        _character_asset_root(character_asset_root)
+        / IDLE_SOURCE_DIRECTORY_RELATIVE
+        / f"{validated_variant}.blend"
     )

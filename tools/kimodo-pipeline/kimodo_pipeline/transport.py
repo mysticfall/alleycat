@@ -27,18 +27,25 @@ def _columns(matrix: Any) -> list[list[float]]:
 
 
 def make_coordinate_contract(target: Any) -> dict[str, Any]:
-    """Bind canonical axis conversion to the loaded Female Root edit-bone rest.
+    """Bind canonical axis conversion to the loaded target rig's Root rest.
 
-    Strategy B is intentional: canonical ``(-x, z, y)`` remains the transport
-    mapping, while the processed index carries the actual loaded Blender rest and
-    its mapped Godot expectation. Godot packaging must reject any imported rig
-    whose real Root rest does not satisfy this evidence before writing outputs.
+    The character target rig is named by resolution, not assumption: the
+    contract records the actual armature's name and the loaded Blender rest
+    with its mapped Godot expectation.  Strategy B is intentional: canonical
+    ``(-x, z, y)`` remains the transport mapping, while the processed index
+    carries the actual loaded Blender rest and its mapped Godot expectation.
+    Godot packaging must reject any imported rig whose real Root rest does not
+    satisfy this evidence before writing outputs.
     """
-    if target is None or getattr(target, "type", None) != "ARMATURE" or target.name != "Female":
-        raise TransportContractError('coordinate contract requires the supported "Female" armature')
+    if target is None or getattr(target, "type", None) != "ARMATURE":
+        raise TransportContractError(
+            "coordinate contract requires the resolved character target armature"
+        )
     root = target.data.bones.get("Root")
     if root is None or root.parent is not None:
-        raise TransportContractError('coordinate contract requires an unparented Female bone named "Root"')
+        raise TransportContractError(
+            "coordinate contract requires an unparented target-rig bone named \"Root\""
+        )
     matrix = root.matrix_local.copy()
     conversion = matrix.to_3x3().__class__(CANONICAL_BLENDER_TO_GODOT_COLUMNS).transposed()
     blender_basis = matrix.to_3x3()
@@ -47,7 +54,7 @@ def make_coordinate_contract(target: Any) -> dict[str, Any]:
     return {
         "version": COORDINATE_CONTRACT,
         "strategy": COORDINATE_STRATEGY,
-        "source_armature": "Female",
+        "source_armature": target.name,
         "root_bone": "Root",
         "blender_rest": {
             "coordinate_space": "female_armature_local_z_up",

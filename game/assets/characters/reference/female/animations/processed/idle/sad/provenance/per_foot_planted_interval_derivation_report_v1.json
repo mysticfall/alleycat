@@ -13,7 +13,7 @@
           "planted_intervals": [
             {
               "duration_seconds": 7.966667,
-              "maximum_planar_drift_m": 0.002907,
+              "maximum_planar_drift_m": 0.003441,
               "start_seconds": 0.0
             }
           ],
@@ -27,7 +27,7 @@
           "planted_intervals": [
             {
               "duration_seconds": 7.966667,
-              "maximum_planar_drift_m": 0.002649,
+              "maximum_planar_drift_m": 0.002187,
               "start_seconds": 0.0
             }
           ],
@@ -38,7 +38,7 @@
       "duration_seconds": 7.96666666666667,
       "feet": {
         "left": {
-          "baseline_ball_height_m": 0.006106,
+          "baseline_ball_height_m": 0.006091,
           "segments": [
             {
               "end_seconds": 7.96666666666667,
@@ -48,7 +48,7 @@
           ]
         },
         "right": {
-          "baseline_ball_height_m": 0.011615,
+          "baseline_ball_height_m": 0.011544,
           "segments": [
             {
               "end_seconds": 7.96666666666667,
@@ -65,14 +65,14 @@
     }
   ],
   "contract": "anim002_per_foot_planted_interval_derivation_report_v1",
-  "intervals_sha256": "87e682ff5a73d3b7cedd56df234f79d282643ee650910643308e81e94667fb3c",
+  "intervals_sha256": "a25ad6e803c6f3fbd87381b9b028129c5f640a133a47584ebfd79d6d57af78fe",
   "package": "idle",
   "policy": {
     "identity": "planted_interval_role_policy_v1",
     "sha256": "f96c39822e2c7aede52b91a8b88e30aa3f93698893da43bf890403b355ac2d49"
   },
   "refused": [],
-  "runtime_library_sha256": "5ae387b13dcf3242ff9c9b5de2960596ecedf36d72b49d15450e8f85f8092af1",
+  "runtime_library_sha256": "62c7b4624b92cd0bb54e5fdf71a229285efc00c30a91c0fe34b92919d00f9baf",
   "schema_version": 1,
   "variant": "sad"
 }

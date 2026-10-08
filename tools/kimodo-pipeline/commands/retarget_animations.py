@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Blender command wrapper for Kimodo-to-Female animation retargeting."""
+"""Blender command wrapper for character-generic Kimodo animation retargeting."""
 from __future__ import annotations
 
 from pathlib import Path

@@ -60,6 +60,16 @@ ALLOWED_PYTHON_OCCURRENCES = {
         "sad",
     ): "production tool fixture source variant (input staging, not an oracle)",
     (
+        "tools/kimodo-pipeline/tests/test_blender_idle_real_asset_smoke.py",
+        "<module>",
+        "sad",
+    ): "production idle-source variant identity (input staging, not an oracle)",
+    (
+        "tools/kimodo-pipeline/tests/test_blender_locomotion_setup_parity.py",
+        "<module>",
+        "sad",
+    ): "production producer-input variant identity (approval/byte-integrity staging, not a motion oracle)",
+    (
         "tools/kimodo-pipeline/tests/test_runtime_package_descriptor.py",
         "fixture_package",
         "locomotion_catalogue.json",
@@ -74,17 +84,13 @@ ALLOWED_PYTHON_OCCURRENCES = {
         "<module>",
         "game/assets/characters/animations/source/locomotion/locomotion_template.blend",
     ): "structural/immutability smoke",
-    (
-        "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
-        "<module>",
-        "game/assets/characters/reference/female/animations/source/kimodo_retarget_setup.blend",
-    ): "structural/immutability smoke",
-    # The two exact 'sad' literals below are the selected-variant identity of the read-only source-contract
-    # smoke, not motion-behaviour oracles (KIMODO-TAC-007/TAC-008; Kimodo TR23; ANIM-002 TR22): the
-    # module-level constant derives the repository-fixed canonical-source/neutral-template paths, and the
-    # bootstrap_manifest fixture passes the variant to a preflight that asserts the monolith's SHA-256 is
-    # unchanged before and after. Only these two (path, symbol, exact literal) tuples are exempt; every
-    # other literal or symbol of that file stays unclassified.
+    # The two exact 'sad' allowance tuples below are the selected-variant identity of the read-only
+    # source-contract smoke, not motion-behaviour oracles (KIMODO-TAC-007/TAC-008; Kimodo TR23;
+    # ANIM-002 TR22): the module-level literals derive the repository-fixed canonical-source /
+    # neutral-template paths and the character's idle-source path, and the bootstrap_manifest
+    # fixture passes the variant to a preflight that asserts the monolith's SHA-256 is unchanged
+    # before and after. Only these (path, symbol, exact literal) tuples are exempt; every other
+    # literal or symbol of that file stays unclassified.
     (
         "tools/kimodo-pipeline/tests/test_core_asset_read_only_smoke.py",
         "<module>",

@@ -30,6 +30,28 @@ POSE_REFERENCE_IDLE_ACTION_NAME = "pose_ref_idle"
 VARIANT_SOURCE_ACTION_PREFIX = "kimodo_multi_"
 VARIANT_MATERIALISED_ACTION_PREFIX = "loc_"
 
+# Inert staging infrastructure that never belongs in a per-character idle
+# source (KIMODO-IDLE-002): the neutral IK control rig, the pose-reference and
+# waypoint carriers, and the legacy monolith's foot-marker helpers.  Staging
+# from the calibrated setup excludes them structurally; the staging command
+# asserts that with this policy.
+INERT_STAGING_OBJECT_PREFIXES = (
+    IK_ARMATURE_NAME,
+    POSE_REFERENCE_PREFIX,
+    WAYPOINT_PREFIX,
+    "Kimodo_LFoot_",
+    "Kimodo_RFoot_",
+)
+
+
+def inert_staging_objects(object_names: Iterable[str]) -> list[str]:
+    """Return the object names that belong to inert staging infrastructure."""
+    return sorted(
+        name
+        for name in object_names
+        if any(str(name).startswith(prefix) for prefix in INERT_STAGING_OBJECT_PREFIXES)
+    )
+
 CLASSIFICATIONS = (
     # The "kimodo_source" bucket is intentionally never assigned by
     # ``classify_object``: the canonical clean rig is not a separate object in

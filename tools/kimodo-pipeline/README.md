@@ -123,9 +123,11 @@ path), package, variant, every clip's role, capability, loop intent, and duratio
 
 ## Repository Source Assets
 
-These `.blend` files are durable authoring inputs, not runtime packages. Generated workspaces, processed carriers,
-runtime resources, metadata, and reports are derivatives and cannot replace a source merely because they contain similar
-data. The [authoritative specification][spec] owns their preservation and retirement requirements.
+Durable authoring inputs split into two families: the three repository-fixed `.blend` artefacts under
+`game/assets/characters/animations/source/` (shared by every character) and each character's own authored inputs beneath
+its character asset root (the calibrated retarget setup and the animated idle sources). Generated workspaces, processed
+carriers, runtime resources, metadata, and reports are derivatives and cannot replace a source merely because they
+contain similar data. The [authoritative specification][spec] owns their preservation and retirement requirements.
 
 ### Canonical Clean Rig
 
@@ -151,14 +153,17 @@ content. [`bootstrap_extraction.py`][bootstrap-extraction] owns this input and m
 runtime package. Retire it only after bootstrap extraction and every reproducibility and provenance dependency has an
 approved replacement.
 
-### Legacy Default Idle Input
+### Per-Character Authored Inputs
 
-[`game/assets/characters/animations/source/idle/idle-standing.blend`][idle-source] is the legacy default read-only idle
-source for action `kimodo_m0a3dyf0`. [`blender_retargeting.py`][blender-retargeting] owns the default, and generated
-idle provenance records the source path. Explicit-source workflows may supersede this default operationally. Preserve
-the file until defaults, generated provenance, and validation contracts migrate together.
+Each character owns two protected input families beneath its character asset root
+(KIMODO-SRC-006): the calibrated retarget setup at `animations/source/kimodo_retarget_setup.blend` and the animated
+idle sources at `animations/source/idle/<variant>.blend` (for example the reference female's `sad.blend`). They are
+authored inputs, not repository-fixed assets and not derivatives. [`bootstrap_paths.py`][bootstrap-paths] owns their
+path derivation; idle sources are created only through [`idle_source_bootstrap`][idle-source-bootstrap] (below), which
+stages a byte-verified copy of the character's approved setup with the donor idle action appended, and refuses to
+overwrite an existing idle source. The pipeline never modifies them.
 
-Repository bootstrap and legacy default paths must report a clear error when a required input is missing; they must not
+Repository bootstrap and character input paths must report a clear error when a required input is missing; they must not
 silently select a generated derivative. Source validation covers structure, path ownership, provenance, and read-only
 or baseline byte integrity. Keep those checks separate from synthetic behavioural fixtures and real selected-package
 delivery checks. Exact digest values remain in the owning implementation rather than this README.
@@ -182,12 +187,42 @@ Set `KIMODO_BLENDER_PYTHON_DEPS` to place those dependencies outside the default
 Use these supported entry points:
 
 ```sh
-blender --background --python tools/kimodo-pipeline/commands/retarget_animations.py -- --help
+blender --background --factory-startup --python tools/kimodo-pipeline/commands/retarget_animations.py -- \
+    --package locomotion --variant sad --character-root game/assets/characters/reference/female \
+    --root-lateral-axis 0 --workspace <materialised-workspace-or-staged-copy>
+blender --background --factory-startup --python tools/kimodo-pipeline/commands/retarget_animations.py -- \
+    --package idle --variant sad --character-root game/assets/characters/reference/female \
+    --idle-source-action <idle_action>
+blender --background --factory-startup --python tools/kimodo-pipeline/commands/idle_source_bootstrap.py -- \
+    --character-root game/assets/characters/reference/female --variant sad \
+    --donor-blend <donor.blend> --donor-action <idle_action>
 python3 tools/kimodo-pipeline/commands/prepare_validated_publication_manifest.py --help
 python3 tools/kimodo-pipeline/commands/publish_validated_packages.py --help
 ```
 
-`retarget_animations.py` writes the set-level authoring blend and the variant-scoped metadata directory. The manifest
+Both retarget invocations name the character explicitly: `--character-root` is required (the pipeline assumes no
+default character), `--root-lateral-axis` is the character's Root local lateral-location axis (required whenever the
+selected locomotion roles derive the precision temporal reversal, `0` for the reference female), and the target rig is
+resolved from the opened content or named with `--target-rig`. Locomotion opens the character's authoring workspace
+(or a staged materialised copy, bound with `--materialisation-report`); the idle package accepts no workspace or source
+override — it always bakes the character's idle source at `animations/source/idle/<variant>.blend` with an explicit
+`--idle-source-action`.
+
+`idle_source_bootstrap` creates one per-character idle source. It is the only writer of `animations/source/idle/`:
+`--character-root`, `--variant`, `--donor-blend`, and `--donor-action` are required (`--setup`, `--temp-root`,
+`--repository-root`, and `--approved-character-baselines` exist for disposable tests). It resolves the character's
+Gate-1 approved baseline, copies the character setup byte-verified, appends only the donor's animated Kimodo-space
+idle action (admission requires an animated loop: more than one distinct frame, Kimodo-space pose-bone channels,
+finite values), reopens the staged blend to verify setup calibration parity, inert-rig absence, and the
+exactly-one-action object set, and publishes transactionally to the derived idle-source path. An existing idle source
+is a protected authoring input: the command refuses to overwrite one, and it never writes to any bootstrap input or
+the donor blend. It prints a `KIMODO_IDLE_SOURCE_JSON=` summary and writes its self-validated `kimodo-idle-source/1`
+report beneath `--temp-root` (default `game/temp/kimodo-idle-source/`).
+
+`retarget_animations.py` writes the set-level authoring blend and the variant-scoped metadata directory. Before any
+bake output, the idle package passes the setup-parity gate (KIMODO-SET-002): the idle source's setup bytes must match
+the approved character baseline and its constraint/helper fingerprints must match the approved calibration, and
+generated idle provenance records the idle source path, action, and digest (`idle_source_binding`). The manifest
 preparer requires each staged variant's `provenance/per_foot_planted_intervals_v1.json` and takes
 `--stage-root`, `--processed-root`, `--runtime-root`, `--legacy-root`, and `--output`; it does not mutate production
 roots and refuses a different additional variant when the durable set already contains the selected variant.
@@ -230,10 +265,28 @@ empty `stitch_edges` array.
 
 For a metadata-only repair, copy both current processed packages byte-for-byte to disposable paths under `game/temp`;
 add or update only the package-owned intent; derive each package's planted intervals from its published library into
-the staged `provenance/per_foot_planted_intervals_v1.json`; prepare the two-package manifest; package both stages with
+the staged `provenance/per_foot_planted_intervals_v1.json` **and write the fresh derivation report alongside it in the
+same invocation**; prepare the two-package manifest; package both stages with
 `--preserve-runtime-library`; and publish them with `publish_validated_packages.py`. Do not run source repair,
 materialisation, or retargeting. Use full provenance regeneration instead if any processed animation, index, metrics,
 source/action provenance, retarget binding, or materialisation carrier is changed or invalid.
+
+For each package, the derivation arguments must target the same staged variant provenance directory (replace
+`<repair>`, `<set>`, and `<variant>` with the selected stage, package, and variant):
+
+```text
+--output=res://temp/<repair>/stage/processed/<set>/<variant>/provenance/per_foot_planted_intervals_v1.json
+--report=res://temp/<repair>/stage/processed/<set>/<variant>/provenance/per_foot_planted_interval_derivation_report_v1.json
+```
+
+Remove the copied interval and report files from that staged directory before deriving, and stop on derivation
+failure. Before manifest preparation, require both fresh files and verify the report's `intervals_sha256` against
+the SHA-256 of the staged interval file's bytes. The manifest's `processed_stage` must name the processed package
+directory containing both files; packaging/preflight descriptors must select those staged intervals. Manifest
+preparation does not validate the report binding. Directing `--report` only to a logs directory leaves a copied stale
+report in the publication stage. Keep command logs separately; copy the fresh staged report to logs only if needed.
+This pairing applies to full provenance regeneration too. Historical `republish.sh` scripts under `game/temp/` are
+task scratch artefacts, not maintained publication entry points; follow this staged recipe instead.
 
 Staged publication bytes move only through binary-safe channels: `ResourceSaver`/`ResourceLoader` for libraries,
 `DirAccess.copy_absolute` for UID sidecars, and `shutil.copy2`/`os.replace` for stage transport. Text writes target
@@ -254,8 +307,7 @@ registration or import-cache state (`test_cold_import_project_loads_the_package_
 [canonical-source]: ../../game/assets/characters/animations/source/kimodo_source.blend
 [locomotion-template]: ../../game/assets/characters/animations/source/locomotion/locomotion_template.blend
 [locomotion-source]: ../../game/assets/characters/animations/source/locomotion/locomotion.blend
-[idle-source]: ../../game/assets/characters/animations/source/idle/idle-standing.blend
 [bootstrap-paths]: kimodo_pipeline/bootstrap_paths.py
 [bootstrap-workspace]: kimodo_pipeline/bootstrap_workspace.py
 [bootstrap-extraction]: kimodo_pipeline/bootstrap_extraction.py
-[blender-retargeting]: kimodo_pipeline/blender_retargeting.py
+[idle-source-bootstrap]: kimodo_pipeline/idle_source_bootstrap.py

@@ -34,12 +34,12 @@ from .bootstrap_policy import (
     POSE_REFERENCE_ACTION_PREFIX,
     POSE_REFERENCE_IDLE_ACTION_NAME,
     SOURCE_ARMATURE_NAME,
-    TARGET_ARMATURE_NAME,
     classify_action,
     classify_object,
     constraint_graph_fingerprint,
     helper_configuration_fingerprint,
 )
+from .character_baselines import resolve_approved_character
 from .bootstrap_validation import (
     CHANNEL_DELTA_EPSILON,
     ROOT_TRANSLATION_TOLERANCE,
@@ -57,14 +57,12 @@ from .temp_paths import resolve_temp_root
 
 DEFAULT_CHARACTER_ROOT_RELATIVE = Path("game/assets/characters/reference/female")
 
-# The Gate 1 baseline: the user-inspected bytes of the three bootstrap inputs.
-# Any drift (most plausibly an accidental re-run of extract_bootstrap.py)
-# aborts workspace composition until the baseline is re-approved.
-BASELINE_INPUT_SHA256 = {
-    "canonical_source": "a6bb259d8765b2ef794b24b8bec45ebafa61567ed92cbac4696e3d4b8436bacf",
-    "neutral_template": "e67259db06edcc9d08dcd8292eb43fbcd9bc9ecfd430f1e82ddaa3552f3f06a4",
-    "character_setup": "1a5e48c5cc4740715bb3e2808b66fc2fcad687f74319352819a93d9338ef3338",
-}
+# Gate 1 baseline approval is per character (KIMODO-CHAR-002): the approved
+# bytes of the three bootstrap inputs live in ``character_baselines``, where
+# onboarding a new character means adding that character's own baseline entry
+# while every existing character's entry stays untouched.  Any drift (most
+# plausibly an accidental re-run of extract_bootstrap.py) aborts workspace
+# composition until the affected character's baseline is re-approved.
 
 
 class WorkspaceError(RuntimeError):
@@ -118,15 +116,20 @@ def _curve_records(action: Any) -> list[dict[str, Any]]:
 
 
 def _fingerprints() -> dict[str, Any]:
-    female = bpy.data.objects.get(TARGET_ARMATURE_NAME)
+    from .blender_retargeting import ProcessorError, resolve_target_rig
+
     source = bpy.data.objects.get(SOURCE_ARMATURE_NAME)
-    female_edges = _constraint_graph_edges(female) if female is not None else []
+    try:
+        target = resolve_target_rig(None, source)
+    except ProcessorError as error:
+        raise WorkspaceError(str(error)) from error
+    target_edges = _constraint_graph_edges(target)
     helper_entries = _helper_configuration_entries(source) if source is not None else []
     return {
-        "female_constraint_graph_sha256": (
-            constraint_graph_fingerprint(female_edges) if female is not None else None
-        ),
-        "female_constraint_graph_edge_count": len(female_edges),
+        # Keep the existing report column names; capture the resolved target,
+        # not a character-name default. No report/schema migration is needed.
+        "female_constraint_graph_sha256": constraint_graph_fingerprint(target_edges),
+        "female_constraint_graph_edge_count": len(target_edges),
         "kimodo_source_constraint_graph_sha256": (
             constraint_graph_fingerprint(_constraint_graph_edges(source))
             if source is not None
@@ -531,13 +534,13 @@ def _workspace_inventory() -> dict[str, Any]:
 
 
 def _verify_baseline(
-    hashes: Mapping[str, str], phase: str, expected: Mapping[str, str] = BASELINE_INPUT_SHA256
+    hashes: Mapping[str, str], phase: str, expected: Mapping[str, str]
 ) -> None:
     for key in ("canonical_source", "neutral_template", "character_setup"):
         if hashes[key] != expected[key]:
             raise WorkspaceError(
                 f"{phase}: bootstrap input {key} digest {hashes[key]} does not match the "
-                f"Gate 1 baseline {expected[key]}; refusing to compose over "
+                f"approved character baseline {expected[key]}; refusing to compose over "
                 "unapproved bytes (re-extraction or an in-place edit drifted the artefact)."
             )
 
@@ -552,7 +555,7 @@ def bootstrap_workspace(
     temp_root: str | Path | None = None,
     publish_root: str | Path | None = None,
     repository_root_path: str | Path | None = None,
-    baseline_input_sha256: Mapping[str, str] | None = None,
+    approved_character_baselines: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Stage, compose, validate, and publish one authoring workspace transactionally."""
     if variant is None:
@@ -600,28 +603,38 @@ def bootstrap_workspace(
         if not candidate.is_file():
             raise WorkspaceError(f"The {label} input does not exist: {candidate}")
 
-    # The Gate 1 baseline binds the DERIVED artefact paths (the repository-fixed
-    # template and canonical source plus the character setup beneath the
-    # character root), because those are what an accidental re-extraction would
-    # overwrite.  Caller-supplied --setup/--template/--idle-blend overrides are
-    # still hashed before and after the run so the report attests that the
-    # composition never wrote to any input.
+    # Gate 1 approves the bytes actually consumed. Override immutability is not
+    # approval, and identical approved bytes at another path remain admissible.
     baseline_files = {
         "canonical_source": paths.canonical_source,
-        "neutral_template": paths.neutral_template,
-        "character_setup": paths.character_setup,
+        "neutral_template": template_input,
+        "character_setup": setup_input,
     }
-    expected_baseline = BASELINE_INPUT_SHA256 if baseline_input_sha256 is None else dict(baseline_input_sha256)
-    if set(expected_baseline) != set(baseline_files) or any(
-        not isinstance(value, str) or len(value) != 64 for value in expected_baseline.values()
-    ):
-        raise WorkspaceError("Baseline input digests must cover exactly the three bootstrap inputs.")
+    derived_files = (paths.canonical_source, paths.neutral_template, paths.character_setup)
+    derived_before = {path: _sha256(path) for path in derived_files if path.is_file()}
     baseline_before = {key: _sha256(path) for key, path in baseline_files.items()}
-    _verify_baseline(baseline_before, "baseline check", expected_baseline)
+    try:
+        approved_character, expected_baseline = resolve_approved_character(
+            baseline_before, approved_character_baselines
+        )
+    except ValueError as error:
+        raise WorkspaceError(str(error)) from error
     hashes_before = {key: _sha256(path) for key, path in inputs.items()}
 
     template_state = _read_template(template_input)
     conventions = template_state["conventions"]
+
+    from .blender_retargeting import ProcessorError, capture_setup_parity_records
+    from .setup_parity import setup_parity_failures
+
+    # Establish valid, action-independent approved calibration before staging.
+    # These captures contain plain values only and survive the subsequent reload.
+    _open_mainfile(setup_input)
+    setup_state = _setup_records()
+    try:
+        approved_setup_records = capture_setup_parity_records(None)
+    except ProcessorError as error:
+        raise WorkspaceError(f"Workspace setup-parity gate: {error}") from error
 
     staging_root = resolve_temp_root(temp_root) / WORKSPACE_DIRECTORY_NAME
     staged_directory = staging_root / "staged"
@@ -632,7 +645,6 @@ def bootstrap_workspace(
         raise WorkspaceError("The staged workspace copy does not match the setup input bytes.")
     _open_mainfile(staged)
 
-    setup_state = _setup_records()
     overlap = sorted(
         set(setup_state["object_names"]) & set(template_state["object_names"])
     )
@@ -856,6 +868,17 @@ def bootstrap_workspace(
     _save_staged(staged)
 
     _open_mainfile(staged)
+    try:
+        calibration_failures = setup_parity_failures(
+            approved_setup_records, capture_setup_parity_records(None)
+        )
+    except ProcessorError as error:
+        raise WorkspaceError(f"Workspace setup-parity gate: {error}") from error
+    if calibration_failures:
+        raise WorkspaceError(
+            "Workspace setup-parity gate refused composition: calibration drift: "
+            + "; ".join(calibration_failures)
+        )
     inventory = _workspace_inventory()
     expectations = {
         "setup_object_names": setup_state["object_names"],
@@ -884,6 +907,8 @@ def bootstrap_workspace(
     hashes_after = {key: _sha256(path) for key, path in inputs.items()}
     baseline_after = {key: _sha256(path) for key, path in baseline_files.items()}
     _verify_baseline(baseline_after, "post-run check", expected_baseline)
+    if any(not path.is_file() or _sha256(path) != digest for path, digest in derived_before.items()):
+        raise WorkspaceError("A derived bootstrap input changed during composition.")
 
     destination = paths.authoring_workspace
     if publish_root is not None:
@@ -910,6 +935,7 @@ def bootstrap_workspace(
         "blender_version": ".".join(str(component) for component in bpy.app.version),
         "variant": paths.variant,
         "character_asset_root": str(paths.character_asset_root),
+        "baseline_character": approved_character,
         "publish_root": str(publish_root) if publish_root is not None else None,
         "inputs": {
             key: {
@@ -1007,6 +1033,7 @@ def bootstrap_workspace(
             "replaced_existing": replaced_existing,
         },
         "variant": paths.variant,
+        "baseline_character": approved_character,
         "validation_passed": True,
         "inputs_unchanged": True,
     }

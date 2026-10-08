@@ -124,12 +124,16 @@ class SyntheticKimodoBlendBuilder:
 
         return run_blender_python(["--python", Path(__file__), "--", output], ROOT)
 
-    def build_bootstrap_monolith(self, output: Path) -> subprocess.CompletedProcess[str]:
+    def build_bootstrap_monolith(
+        self, output: Path, *, target_rig_name: str = "Female"
+    ) -> subprocess.CompletedProcess[str]:
         """Build a complete disposable bootstrap input from this manifest.
 
         This deliberately models only the structural contracts consumed by the
         bootstrap stages.  It never copies, opens, or characterises an authored
-        blend, and its variant-shaped names are fixture declarations.
+        blend, and its variant-shaped names are fixture declarations.  The
+        character target rig is named by ``target_rig_name`` so character-generic
+        processor paths are testable against a differently named rig.
         """
         output = output.resolve()
         if output.suffix != ".blend":
@@ -137,9 +141,10 @@ class SyntheticKimodoBlendBuilder:
         output.parent.mkdir(parents=True, exist_ok=True)
         from kimodo_pipeline.blender_cli import run_blender_python
 
-        return run_blender_python(
-            ["--python", Path(__file__), "--", output, "--bootstrap-monolith"], ROOT
-        )
+        arguments = ["--python", Path(__file__), "--", output, "--bootstrap-monolith"]
+        if target_rig_name != "Female":
+            arguments.extend(("--target-rig-name", target_rig_name))
+        return run_blender_python(arguments, ROOT)
 
     def runtime_descriptor(self, processed_set: Path, runtime_root: Path, *, package_name: str) -> dict[str, Any]:
         """Return a declared, disposable Godot package descriptor.
@@ -241,19 +246,19 @@ def _bootstrap_source_rig() -> Any:
     return rig
 
 
-def _fixture_mesh() -> None:
+def _fixture_mesh(target_rig_name: str) -> None:
     """Create one visible fixture-owned character mesh and material."""
     import bpy
 
-    mesh = bpy.data.meshes.new("Female.fixture_mesh")
+    mesh = bpy.data.meshes.new(f"{target_rig_name}.fixture_mesh")
     mesh.from_pydata([(0, 0, 0), (0.1, 0, 0), (0, 0.1, 0)], [], [(0, 1, 2)])
-    material = bpy.data.materials.new("Female.fixture_mesh")
+    material = bpy.data.materials.new(f"{target_rig_name}.fixture_mesh")
     mesh.materials.append(material)
-    character = bpy.data.objects.new("Female.fixture_mesh", mesh)
+    character = bpy.data.objects.new(f"{target_rig_name}.fixture_mesh", mesh)
     bpy.context.collection.objects.link(character)
 
 
-def _bootstrap_monolith(output: Path) -> None:
+def _bootstrap_monolith(output: Path, target_rig_name: str = "Female") -> None:
     """Write a fully synthetic source for manifest/extraction/workspace tests."""
     import bpy
 
@@ -263,7 +268,7 @@ def _bootstrap_monolith(output: Path) -> None:
 
     ensure_registered()
     source = _bootstrap_source_rig()
-    target = _create_rig("Female")
+    target = _create_rig(target_rig_name)
     target.data.bones["Root"].use_deform = True
     for kind in ("COPY_LOCATION", "COPY_ROTATION"):
         constraint = target.pose.bones["Root"].constraints.new(kind)
@@ -271,7 +276,7 @@ def _bootstrap_monolith(output: Path) -> None:
         constraint.subtarget = "Root"
         constraint.owner_space = "WORLD"
         constraint.target_space = "WORLD"
-    _fixture_mesh()
+    _fixture_mesh(target_rig_name)
     _create_rig("Kimodo_IK")
     _create_rig("Kimodo_PoseRef_fixture")
     waypoint = bpy.data.objects.new("Kimodo_Waypoint_fixture", None)
@@ -438,6 +443,9 @@ if __name__ == "__main__":
     arguments = sys.argv[sys.argv.index("--") + 1 :]
     destination = Path(arguments[0])
     if "--bootstrap-monolith" in arguments:
-        _bootstrap_monolith(destination)
+        monolith_target_rig = "Female"
+        if "--target-rig-name" in arguments:
+            monolith_target_rig = arguments[arguments.index("--target-rig-name") + 1]
+        _bootstrap_monolith(destination, monolith_target_rig)
     else:
         build_blend(destination)

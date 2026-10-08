@@ -34,6 +34,16 @@ WORKSPACE_REPORT_SCHEMA = "kimodo-bootstrap-workspace/1"
 WORKSPACE_DIRECTORY_NAME = "kimodo-bootstrap-workspace"
 WORKSPACE_REPORT_FILE_NAME = "bootstrap_workspace_report.json"
 
+IDLE_SOURCE_REPORT_SCHEMA = "kimodo-idle-source/1"
+IDLE_SOURCE_DIRECTORY_NAME = "kimodo-idle-source"
+IDLE_SOURCE_REPORT_FILE_NAME = "idle_source_report.json"
+IDLE_SOURCE_INPUT_KEYS = (
+    "canonical_source",
+    "neutral_template",
+    "character_setup",
+    "donor_blend",
+)
+
 FRAME_EPSILON = 1e-6
 ROOT_TRANSLATION_TOLERANCE = 1e-6
 # The template's turn actions were baked through float32 quaternion/euler
@@ -433,6 +443,32 @@ def _distinct_frames(
     return collapsed
 
 
+def _pose_channel_failures(
+    name: str, channel_map: Mapping[tuple[str, int], Sequence[tuple[float, float]]],
+    rig_bones: set[str],
+) -> list[str]:
+    """Shared pose-channel rules: Kimodo-space bones and finite samples."""
+    failures: list[str] = []
+    for (data_path, _), keys in sorted(channel_map.items()):
+        if not data_path.startswith("pose.bones["):
+            failures.append(
+                f"idle action {name!r} carries a non-pose channel: {data_path!r}"
+            )
+            continue
+        bone = data_path.split('"')[1] if '"' in data_path else ""
+        if bone not in rig_bones:
+            failures.append(
+                f"idle action {name!r} channels bone {bone!r} absent from the staged rig"
+            )
+        for frame, value in keys:
+            if not (math.isfinite(frame) and math.isfinite(value)):
+                failures.append(
+                    f"idle action {name!r} carries a non-finite sample on {data_path!r}"
+                )
+                break
+    return failures
+
+
 def idle_input_failures(
     idle: Mapping[str, Any], expectations: Mapping[str, Any]
 ) -> list[str]:
@@ -458,23 +494,7 @@ def idle_input_failures(
             f"found {len(frames)} distinct frames starting {frames[:4]}"
         )
     rig_bones = set(idle.get("rig_bone_names", ()))
-    for (data_path, _), keys in sorted(channel_map.items()):
-        if not data_path.startswith("pose.bones["):
-            failures.append(
-                f"idle action {name!r} carries a non-pose channel: {data_path!r}"
-            )
-            continue
-        bone = data_path.split('"')[1] if '"' in data_path else ""
-        if bone not in rig_bones:
-            failures.append(
-                f"idle action {name!r} channels bone {bone!r} absent from the workspace rig"
-            )
-        for frame, value in keys:
-            if not (math.isfinite(frame) and math.isfinite(value)):
-                failures.append(
-                    f"idle action {name!r} carries a non-finite sample on {data_path!r}"
-                )
-                break
+    failures.extend(_pose_channel_failures(name, channel_map, rig_bones))
     tolerance = float(expectations.get("root_translation_tolerance", ROOT_TRANSLATION_TOLERANCE))
     root_location = f'pose.bones["{ROOT_BONE_NAME}"].location'
     for (data_path, _), keys in sorted(channel_map.items()):
@@ -487,6 +507,32 @@ def idle_input_failures(
                     f"{value!r} at frame {frame!r}; reference poses are authored in place"
                 )
     return failures
+
+
+def animated_idle_input_failures(idle: Mapping[str, Any]) -> list[str]:
+    """Validate a plain animated idle-loop record for idle-source admission.
+
+    Admission for an animated idle loop (KIMODO-IDLE-002, Role A) is
+    deliberately distinct from the single-frame ``pose_ref_idle`` admission
+    above: the donor action must be animated — its keys occupy more than one
+    distinct frame — every channel must address a pose bone of the Kimodo
+    source rig (Kimodo-space), and every value must be finite.  Root motion is
+    authored content here, so no reference-pose translation rule applies.
+    """
+    name = str(idle.get("action_name", "<unnamed>"))
+    curves = list(idle.get("curves", ()))
+    if not curves:
+        return [f"idle action {name!r} carries no curves at all"]
+    channel_map = _curve_channel_map(curves)
+    frames = _distinct_frames(channel_map)
+    if len(frames) < 2:
+        return [
+            f"idle action {name!r} must be an animated loop with keys on more than "
+            f"one frame; found {len(frames)} distinct frame(s) {frames[:4]} — a "
+            "single-frame input belongs to the pose-reference bootstrap admission, "
+            "not to an animated idle source"
+        ]
+    return _pose_channel_failures(name, channel_map, set(idle.get("rig_bone_names", ())))
 
 
 def derive_rotation_conventions(
@@ -823,4 +869,100 @@ def workspace_report_structure_failures(report: Mapping[str, Any]) -> list[str]:
                 failures.append(f"workspace report composition lacks {field!r}")
     else:
         failures.append("workspace report lacks the composition record")
+    return failures
+
+
+def idle_source_report_structure_failures(report: Mapping[str, Any]) -> list[str]:
+    """Check the idle-source staging report carries its contract structure."""
+    failures: list[str] = []
+    for key in (
+        "schema",
+        "generated_by",
+        "blender_version",
+        "variant",
+        "character_asset_root",
+        "baseline_character",
+        "inputs",
+        "baseline",
+        "donor",
+        "idle_source",
+        "admission",
+        "fingerprints",
+        "validation",
+    ):
+        if key not in report:
+            failures.append(f"idle-source report is missing the {key!r} field")
+    if report.get("schema") != IDLE_SOURCE_REPORT_SCHEMA:
+        failures.append(
+            f"idle-source report schema {report.get('schema')!r} is not "
+            f"{IDLE_SOURCE_REPORT_SCHEMA!r}"
+        )
+    baseline = report.get("baseline")
+    if not isinstance(baseline, Mapping) or sorted(baseline) != sorted(
+        ("canonical_source", "neutral_template", "character_setup")
+    ):
+        failures.append("idle-source report baseline must cover the three Gate 1 artefacts")
+    elif not all(entry.get("matches_gate1") for entry in baseline.values()):
+        failures.append("idle-source report baseline does not attest the Gate 1 digests")
+    inputs = report.get("inputs")
+    if not isinstance(inputs, Mapping) or sorted(inputs) != sorted(IDLE_SOURCE_INPUT_KEYS):
+        failures.append(
+            "idle-source report inputs must cover the three Gate 1 artefacts plus the "
+            "donor blend"
+        )
+        inputs = None
+    if inputs is not None:
+        for key, entry in inputs.items():
+            if not isinstance(entry, Mapping):
+                failures.append(f"idle-source report input {key!r} must be a record")
+                continue
+            if entry.get("sha256_before") != entry.get("sha256_after") or not entry.get("unchanged"):
+                failures.append(
+                    f"idle-source report input {key!r} does not attest unchanged bytes"
+                )
+    donor = report.get("donor")
+    if isinstance(donor, Mapping):
+        for field in ("blend", "action", "frame_range", "curve_count"):
+            if field not in donor:
+                failures.append(f"idle-source report donor record lacks {field!r}")
+    else:
+        failures.append("idle-source report lacks the donor record")
+    idle_source = report.get("idle_source")
+    if isinstance(idle_source, Mapping):
+        for field in ("destination", "staged", "published", "replaced_existing", "sha256"):
+            if field not in idle_source:
+                failures.append(f"idle-source report record lacks {field!r}")
+        if idle_source.get("published") is not True:
+            failures.append("idle-source report must attest a published idle source")
+        if idle_source.get("replaced_existing") is not False:
+            failures.append(
+                "idle-source report must attest that no protected idle source was replaced"
+            )
+        if not idle_source.get("sha256"):
+            failures.append("idle-source report has no idle-source digest")
+    else:
+        failures.append("idle-source report lacks the idle-source record")
+    admission = report.get("admission")
+    if not isinstance(admission, Mapping) or sorted(admission) != ["failures", "passed"]:
+        failures.append("idle-source report admission must carry failures and passed")
+    elif admission["passed"] != (not admission["failures"]):
+        failures.append("idle-source report admission flags disagree with its failures")
+    elif admission["passed"] is not True:
+        failures.append("idle-source report must attest a passed admission")
+    fingerprints = report.get("fingerprints")
+    if isinstance(fingerprints, Mapping) and fingerprints:
+        for key, entry in sorted(fingerprints.items()):
+            if not isinstance(entry, Mapping) or entry.get("equal") is not True:
+                failures.append(
+                    f"idle-source fingerprint {key!r} does not attest setup parity"
+                )
+    else:
+        failures.append("idle-source report lacks the parity fingerprints")
+    validation = report.get("validation")
+    if not isinstance(validation, Mapping) or sorted(validation) != ["failures", "passed"]:
+        failures.append("idle-source report validation must carry failures and passed")
+    elif validation["passed"] != (not validation["failures"]):
+        failures.append("idle-source report validation flags disagree with its failures")
+    elif validation["passed"] is not True:
+        failures.append("idle-source report must attest a passed validation")
     return failures

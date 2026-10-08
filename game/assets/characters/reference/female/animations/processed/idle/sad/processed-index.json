@@ -115,11 +115,28 @@
     "strategy": "canonical_axis_conversion_with_strict_processed_root_rest",
     "version": "anim002_female_root_rest_basis_v1"
   },
+  "idle_source_binding": {
+    "idle_source_action": "kimodo_m0a3dyf0",
+    "idle_source_path": "game/assets/characters/reference/female/animations/source/idle/sad.blend",
+    "idle_source_sha256": "aeb6eef819ea86ebac035988e3938a3e2c2ca58201e6ff6b5278364520bd6e57",
+    "setup_baseline_character": "female",
+    "setup_parity_fingerprints": {
+      "helper_capture_contract": "rest-and-unanimated-pose-basis-v2",
+      "source_constraint_graph_edge_count": 4,
+      "source_constraint_graph_sha256": "a20104ceff35eaee55c89eb629274737385cd031093e15fca77653a896441bc0",
+      "source_helper_bone_count": 53,
+      "source_helper_configuration_sha256": "4043251cada10d18ce4f89ed820a3ada5fde3663e24b8479002a79356f9f96a8",
+      "target_constraint_graph_edge_count": 55,
+      "target_constraint_graph_sha256": "1ff25ba247a1362d00f616b2709e1346ae9c53484264c449170a433fc535d136",
+      "target_rig": "Female"
+    },
+    "setup_sha256": "1a5e48c5cc4740715bb3e2808b66fc2fcad687f74319352819a93d9338ef3338"
+  },
   "metrics_schema_version": 2,
   "package": "idle",
   "schema_version": 2,
-  "source_blend": "idle-standing.blend",
-  "source_path": "source/idle/idle-standing.blend",
+  "source_blend": "sad.blend",
+  "source_path": "game/assets/characters/reference/female/animations/source/idle/sad.blend",
   "target_skeleton": "Female",
   "variant": "sad"
 }

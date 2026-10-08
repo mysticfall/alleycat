@@ -1,4 +1,9 @@
-"""Persistent structural and read-only validation for the four Kimodo source inputs."""
+"""Persistent structural and read-only validation for the Kimodo source inputs.
+
+Covers the three repository-fixed bootstrap inputs and the reference female's
+character-authored idle source (KIMODO-SRC-006): protected inputs the pipeline
+must never mutate.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -9,9 +14,8 @@ from typing import Iterator
 
 import pytest
 
-from kimodo_pipeline.bootstrap_paths import derive_artefact_paths
+from kimodo_pipeline.bootstrap_paths import derive_artefact_paths, derive_idle_source_path
 from kimodo_pipeline.blender_cli import run_blender_python
-from kimodo_pipeline.retargeting import published_output_root
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,19 +25,14 @@ BOOTSTRAP_PATHS = derive_artefact_paths(CHARACTER_ROOT, "sad", ROOT)
 CANONICAL_SOURCE = BOOTSTRAP_PATHS.canonical_source
 NEUTRAL_TEMPLATE = BOOTSTRAP_PATHS.neutral_template
 MONOLITH = ROOT / "game/assets/characters/animations/source/locomotion/locomotion.blend"
-LEGACY_IDLE_SOURCE = ROOT / "game/assets/characters/animations/source/idle/idle-standing.blend"
-LEGACY_IDLE_INDEX = (
-    ROOT
-    / published_output_root(CHARACTER_ROOT.relative_to(ROOT), "idle")
-    / "sad/processed-index.json"
-)
+IDLE_SOURCE = derive_idle_source_path(CHARACTER_ROOT, "sad")
 MANIFEST_ENTRYPOINT = ROOT / "tools/kimodo-pipeline/kimodo_pipeline/manifest_bootstrap.py"
 LFS_POINTER_HEADER = b"version https://git-lfs.github.com/spec/v1"
 SOURCE_ROLES = (
     "canonical clean rig",
     "neutral locomotion template",
     "bootstrap monolith",
-    "legacy idle",
+    "idle source",
 )
 
 
@@ -103,12 +102,14 @@ def _bootstrap_validator_expression(manifest_path: Path, kind: str, baseline_key
         "from kimodo_pipeline.compatibility import ensure_registered; "
         "from kimodo_pipeline.bootstrap_extraction import _read_inventory; "
         f"from kimodo_pipeline.bootstrap_validation import expectations_from_manifest, {validator}; "
-        "from kimodo_pipeline.bootstrap_workspace import BASELINE_INPUT_SHA256, _sha256; "
+        "from kimodo_pipeline.character_baselines import APPROVED_CHARACTER_BASELINES; "
+        "from kimodo_pipeline.bootstrap_workspace import _sha256; "
         f"manifest=json.loads(Path({str(manifest_path)!r}).read_text(encoding='utf-8')); "
         "expectations=expectations_from_manifest(manifest); ensure_registered(); "
         f"failures={validator}(_read_inventory({kind!r}), expectations); "
         "assert not failures, '; '.join(failures); "
-        f"assert _sha256(Path(bpy.data.filepath)) == BASELINE_INPUT_SHA256[{baseline_key!r}]"
+        "assert _sha256(Path(bpy.data.filepath)) == "
+        f"APPROVED_CHARACTER_BASELINES['female'][{baseline_key!r}]"
     )
 
 
@@ -126,9 +127,11 @@ def test_canonical_clean_source_passes_extraction_structure_and_approved_baselin
 def test_neutral_template_passes_workspace_structure_and_approved_baseline() -> None:
     expression = (
         "from pathlib import Path; "
-        "from kimodo_pipeline.bootstrap_workspace import BASELINE_INPUT_SHA256, _read_template, _sha256; "
+        "from kimodo_pipeline.character_baselines import APPROVED_CHARACTER_BASELINES; "
+        "from kimodo_pipeline.bootstrap_workspace import _read_template, _sha256; "
         "template_path=Path(bpy.data.filepath).resolve(); _read_template(template_path); "
-        "assert _sha256(template_path) == BASELINE_INPUT_SHA256['neutral_template']"
+        "assert _sha256(template_path) == "
+        "APPROVED_CHARACTER_BASELINES['female']['neutral_template']"
     )
     _run_blender_read_only(
         NEUTRAL_TEMPLATE,
@@ -151,20 +154,19 @@ def test_bootstrap_monolith_passes_read_only_manifest_preflight(
     _run_blender_read_only(MONOLITH, "bootstrap monolith", expression)
 
 
-def test_legacy_idle_source_exposes_configured_default_action_without_mutation() -> None:
+def test_character_idle_source_is_a_single_animated_action_on_the_calibrated_rig() -> None:
     expression = (
-        "from pathlib import Path; "
-        "from kimodo_pipeline.blender_retargeting import LEGACY_IDLE_SOURCE, LEGACY_IDLE_SOURCE_ACTION; "
-        "from kimodo_pipeline.retargeting import idle_export; "
-        "assert Path(bpy.data.filepath).resolve() == LEGACY_IDLE_SOURCE.resolve(); "
-        "assert idle_export('sad').source_action == LEGACY_IDLE_SOURCE_ACTION; "
-        "assert LEGACY_IDLE_SOURCE_ACTION in bpy.data.actions, "
-        "f'missing configured idle action {LEGACY_IDLE_SOURCE_ACTION!r}'"
+        "import bpy; "
+        "from kimodo_pipeline.bootstrap_policy import inert_staging_objects; "
+        "names = sorted(action.name for action in bpy.data.actions); "
+        "assert len(names) == 1, f'the idle source must carry exactly one idle action: {names}'; "
+        "span = bpy.data.actions[names[0]].frame_range; "
+        "assert float(span[1]) - float(span[0]) >= 1.0, f'the idle action is not animated: {span}'; "
+        "objects = sorted(obj.name for obj in bpy.data.objects); "
+        "assert 'Kimodo_Source' in objects, 'the idle source lost the source rig'; "
+        "assert not inert_staging_objects(objects), list(inert_staging_objects(objects))"
     )
-    _run_blender_read_only(LEGACY_IDLE_SOURCE, "legacy idle", expression)
-    provenance = json.loads(LEGACY_IDLE_INDEX.read_text(encoding="utf-8"))
-    assert provenance["source_blend"] == LEGACY_IDLE_SOURCE.name
-    assert Path(provenance["source_path"]).name == LEGACY_IDLE_SOURCE.name
+    _run_blender_read_only(IDLE_SOURCE, "idle source", expression)
 
 
 @pytest.mark.parametrize("role", SOURCE_ROLES)

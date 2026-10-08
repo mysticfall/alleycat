@@ -8,6 +8,7 @@ from kimodo_pipeline.bootstrap_validation import (
     WORKSPACE_REPORT_SCHEMA,
     derive_rotation_conventions,
     idle_input_failures,
+    animated_idle_input_failures,
     rotation_action_comparison,
     workspace_failures,
     workspace_report_structure_failures,
@@ -119,6 +120,63 @@ class IdleInputFailureTests(unittest.TestCase):
             "rig_bone_names": ["Root", "Hips"],
         }
         self.assertEqual(idle_input_failures(idle, {}), [])
+
+
+class AnimatedIdleInputFailureTests(unittest.TestCase):
+    """Admission for animated idle loops (KIMODO-IDLE-002), distinct from Role B."""
+
+    def _record(self, curves: list[dict]) -> dict:
+        return {
+            "action_name": "kimodo_fixture_idle",
+            "curves": curves,
+            "rig_bone_names": ["Root", "Hips"],
+        }
+
+    def test_accepts_an_animated_kimodo_space_loop_with_root_motion(self) -> None:
+        record = self._record(_idle_curves(frames=(1.0, 24.0), root_translation=0.75))
+        self.assertEqual(animated_idle_input_failures(record), [])
+
+    def test_rejects_a_single_frame_action_and_names_the_other_admission(self) -> None:
+        failures = animated_idle_input_failures(self._record(_idle_curves()))
+        self.assertEqual(len(failures), 1)
+        self.assertIn("must be an animated loop", failures[0])
+        self.assertIn("more than one frame", failures[0])
+        self.assertIn("pose-reference bootstrap admission", failures[0])
+
+    def test_rejects_empty_and_non_pose_and_unknown_bone_inputs(self) -> None:
+        self.assertIn(
+            "no curves", animated_idle_input_failures(self._record([]))[0]
+        )
+        failures = animated_idle_input_failures(
+            self._record([_curve("location", 0, 1.0, 1.0), _curve("location", 0, 2.0, 2.0)])
+        )
+        self.assertTrue(any("non-pose channel" in failure for failure in failures))
+        failures = animated_idle_input_failures(
+            self._record([
+                _curve('pose.bones["Ghost"].location', 0, 1.0, 0.0),
+                _curve('pose.bones["Ghost"].location', 0, 2.0, 0.0),
+            ])
+        )
+        self.assertTrue(any("Ghost" in failure and "staged rig" in failure for failure in failures))
+
+    def test_rejects_non_finite_samples(self) -> None:
+        record = self._record([
+            {
+                "data_path": 'pose.bones["Hips"].location',
+                "array_index": 0,
+                "keyframes": [[1.0, math.inf, "BEZIER"], [2.0, 0.0, "BEZIER"]],
+            }
+        ])
+        self.assertTrue(any("non-finite" in failure for failure in animated_idle_input_failures(record)))
+
+    def test_the_two_idle_admissions_are_mutually_exclusive(self) -> None:
+        """Role A and Role B admission rules accept disjoint frame structure."""
+        single = self._record(_idle_curves())
+        animated = self._record(_idle_curves(frames=(1.0, 24.0)))
+        self.assertEqual(idle_input_failures(single, {}), [])
+        self.assertNotEqual(animated_idle_input_failures(single), [])
+        self.assertNotEqual(idle_input_failures(animated, {}), [])
+        self.assertEqual(animated_idle_input_failures(animated), [])
 
 
 class RotationConventionTests(unittest.TestCase):

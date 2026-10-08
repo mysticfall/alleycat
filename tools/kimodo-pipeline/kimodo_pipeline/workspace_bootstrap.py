@@ -66,8 +66,11 @@ def _arguments() -> argparse.Namespace:
         help="Optional root for repository-fixed bootstrap inputs in disposable tests.",
     )
     parser.add_argument(
-        "--baseline-input-sha256",
-        help="Optional JSON baseline digest mapping for a disposable fixture.",
+        "--approved-character-baselines",
+        help=(
+            "Optional JSON per-character baseline mapping for a disposable fixture, "
+            'as in \'{"fixture_character": {"canonical_source": "<sha256>", ...}}\'.'
+        ),
     )
     arguments = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     return parser.parse_args(arguments)
@@ -86,9 +89,9 @@ def main() -> int:
             temp_root=arguments.temp_root,
             publish_root=arguments.publish_root,
             repository_root_path=arguments.repository_root,
-            baseline_input_sha256=(
-                json.loads(arguments.baseline_input_sha256)
-                if arguments.baseline_input_sha256 is not None
+            approved_character_baselines=(
+                json.loads(arguments.approved_character_baselines)
+                if arguments.approved_character_baselines is not None
                 else None
             ),
         )

@@ -8,9 +8,11 @@ import unittest
 from kimodo_pipeline.bootstrap_paths import (
     CANONICAL_SOURCE_RELATIVE,
     CHARACTER_SETUP_RELATIVE,
+    IDLE_SOURCE_DIRECTORY_RELATIVE,
     NEUTRAL_TEMPLATE_RELATIVE,
     BootstrapPathError,
     derive_artefact_paths,
+    derive_idle_source_path,
     repository_root,
 )
 
@@ -74,6 +76,28 @@ class BootstrapPathTests(unittest.TestCase):
         unsupported_root: Any = 42
         with self.assertRaises(BootstrapPathError):
             derive_artefact_paths(unsupported_root, VARIANT, REPOSITORY_ROOT)
+
+    def test_derives_the_character_idle_source_per_variant(self) -> None:
+        self.assertEqual(
+            derive_idle_source_path(CHARACTER_ROOT, VARIANT),
+            CHARACTER_ROOT / IDLE_SOURCE_DIRECTORY_RELATIVE / f"{VARIANT}.blend",
+        )
+        self.assertEqual(
+            derive_idle_source_path(CHARACTER_ROOT, VARIANT),
+            CHARACTER_ROOT / "animations/source/idle" / f"{VARIANT}.blend",
+        )
+        self.assertNotEqual(
+            derive_idle_source_path(CHARACTER_ROOT, "calm"),
+            derive_idle_source_path(Path("/tmp/kimodo-other-character"), VARIANT),
+        )
+
+    def test_invalid_idle_source_variants_and_roots_raise_contract_errors(self) -> None:
+        for variant in ("Ember", "1x", "", None):
+            with self.subTest(variant=variant), self.assertRaises(BootstrapPathError):
+                derive_idle_source_path(CHARACTER_ROOT, variant)
+        for root in ("", "   ", "/", Path("/")):
+            with self.subTest(root=root), self.assertRaises(BootstrapPathError):
+                derive_idle_source_path(root, VARIANT)
 
 
 if __name__ == "__main__":

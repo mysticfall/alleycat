@@ -199,7 +199,9 @@ def synthetic_package() -> Iterator[dict[str, Any]]:
     with tempfile.TemporaryDirectory(prefix="kimodo-publication-", dir=GAME / "assets/testing") as directory:
         fixture = Path(directory)
         source = fixture / "source.blend"
-        builder = SyntheticKimodoBlendBuilder()
+        from approved_retarget_fixture import ApprovedRetargetBuilder
+
+        builder = ApprovedRetargetBuilder()
         built = builder.build_bootstrap_monolith(source)
         assert built.returncode == 0, built.stdout + built.stderr
         processed_root = fixture / "processed"
@@ -207,7 +209,9 @@ def synthetic_package() -> Iterator[dict[str, Any]]:
             [
                 "blender", "--background", "--factory-startup", "--python", str(RETARGET), "--",
                 "--package", "locomotion", "--source", str(source), "--output-root", str(processed_root),
+                "--character-root", str(fixture),
                 "--variant", FIXTURE_VARIANT, "--roles", "wf",
+                "--approved-character-baselines", (fixture / "approved-baseline.json").read_text(),
             ],
             cwd=ROOT, text=True, capture_output=True, check=False, timeout=180,
         )

@@ -52,21 +52,25 @@ def test_idle_contract_is_parameterised_and_portable() -> None:
     )
     with pytest.raises(ValueError):
         idle_export("calm", "   ")
-    assert portable_source_name("/unshareable/work/idle-standing.blend") == "idle-standing.blend"
+    assert portable_source_name("/unshareable/work/donor_idle.blend") == "donor_idle.blend"
 
 
 def test_published_output_is_character_root_derived_and_outside_the_ignored_source_tree() -> None:
     ignored_source = Path("game/assets/characters/animations/source")
-    output = Path(published_output_root())
+    female_root = Path("game/assets/characters/reference/female")
+    output = Path(published_output_root(female_root))
     assert output == Path("game/assets/characters/reference/female/animations/processed/locomotion")
-    assert Path(published_output_root(package="idle")) == Path(
+    assert Path(published_output_root(female_root, package="idle")) == Path(
         "game/assets/characters/reference/female/animations/processed/idle"
     )
     assert ignored_source not in (output, *output.parents)
     # Publications never target the retired processed/kimodo tree.
     assert "kimodo" not in output.parts
     with pytest.raises(ValueError):
-        published_output_root(package="bogus")
+        published_output_root(female_root, package="bogus")
+    # The character asset root is explicit; the contract has no default character.
+    with pytest.raises(TypeError):
+        published_output_root()  # type: ignore[call-arg]
 
 
 def test_published_output_matches_the_bootstrap_artefact_contract() -> None:

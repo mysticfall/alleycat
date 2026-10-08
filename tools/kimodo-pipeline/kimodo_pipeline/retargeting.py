@@ -1,4 +1,4 @@
-"""Portable contracts shared by the Kimodo-to-Female Blender processor.
+"""Portable contracts shared by the Kimodo character retarget processor.
 
 This module deliberately has no ``bpy`` import so projection and naming rules
 can be verified by the normal Python test runner.  The published-path contract
@@ -13,11 +13,10 @@ from pathlib import Path, PurePosixPath
 import re
 
 
-# Published packages belong beneath the character asset root; the reference
-# Female is the canonical bake target.  Kimodo inputs are deliberately kept
-# below the ignored animation source directory and must never be used as an
-# import destination.
-DEFAULT_CHARACTER_ASSET_ROOT = PurePosixPath("game/assets/characters/reference/female")
+# Published packages belong beneath the character asset root; the processor
+# assumes no default character (KIMODO-CHAR-001).  Kimodo inputs are
+# deliberately kept below the ignored animation source directory and must
+# never be used as an import destination.
 PROCESSED_DIRECTORY_RELATIVE = PurePosixPath("animations/processed")
 PACKAGES = ("locomotion", "idle")
 
@@ -32,14 +31,16 @@ def validate_variant(variant: str) -> str:
 
 
 def published_output_root(
-    character_asset_root: str | Path | PurePosixPath = DEFAULT_CHARACTER_ASSET_ROOT,
+    character_asset_root: str | Path | PurePosixPath,
     package: str = "locomotion",
 ) -> PurePosixPath:
     """Return the published package directory beneath a character asset root.
 
     Locomotion packages publish to ``[character asset root]/animations/processed
     /locomotion`` and idle packages to the parallel ``idle`` directory; the old
-    ``processed/kimodo`` directory level is gone from new publications.
+    ``processed/kimodo`` directory level is gone from new publications.  The
+    character asset root is an explicit per-character parameter with no
+    single-character default.
     """
     if package not in PACKAGES:
         raise ValueError(f"Unknown Kimodo package {package!r}; expected one of {sorted(PACKAGES)}.")
@@ -139,12 +140,11 @@ def locomotion_exports(variant: str) -> tuple[ExportMotion, ...]:
     return tuple(result)
 
 
-def idle_export(variant: str, source_action: str = "kimodo_m0a3dyf0") -> ExportMotion:
+def idle_export(variant: str, source_action: str) -> ExportMotion:
     """Return the isolated provisional idle contract for one variant.
 
-    The idle source action is an input, not a constant: the default names the
-    legacy monolith-flow action, while workspace-flow callers pass the idle
-    action of their authoring source explicitly.
+    The idle source action is an explicit input, not a constant: callers name
+    the idle action of the character's idle source (KIMODO-IDLE-003).
     """
     validate_variant(variant)
     if not isinstance(source_action, str) or not source_action.strip():
