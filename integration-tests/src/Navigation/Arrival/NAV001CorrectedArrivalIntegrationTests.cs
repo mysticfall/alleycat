@@ -38,7 +38,7 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
 
     private static async Task VerifyAsync(NPCNavigationRig rig, bool flight)
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig, useReducedRenderSize: true);
         await fixture.StepAsync(WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
         string directory = EvidenceDestinations.Resolve(

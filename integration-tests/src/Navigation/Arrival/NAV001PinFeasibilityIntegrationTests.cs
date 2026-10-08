@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.IK;
 using AlleyCat.Navigation;
@@ -9,12 +10,13 @@ using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Navigation.Arrival.NAV001ArrivalPlannerIntegrationTests;
 using static AlleyCat.IntegrationTests.Navigation.NAV001ArrivalOutcomeIntegrationTests;
+using static AlleyCat.IntegrationTests.Support.TestUtils;
 
 namespace AlleyCat.IntegrationTests.Navigation.Arrival;
 
 /// <summary>
 /// Read-only pre-IK feasibility measurement of the default corrected arrival population, plus integrity of the
-/// immutable unit-6b allocator recordings and exact repeatability of identical-request planning ledgers.
+/// frozen allocator recording fixtures and exact repeatability of identical-request planning ledgers.
 /// </summary>
 public sealed class NAV001PinFeasibilityIntegrationTests
 {
@@ -26,9 +28,73 @@ public sealed class NAV001PinFeasibilityIntegrationTests
     [Fact]
     public Task Male() => MeasurePopulation(NPCNavigationRig.Male);
 
-    /// <summary>Verifies the immutable unit-6b allocator recordings remain internally well-formed archive evidence.</summary>
+    /// <summary>Preserves the complete female long-straight pin oracle at both real window sizes.</summary>
     [Fact]
-    public void Female_HistoricalArchiveRecordingIntegrity() => VerifyHistoricalRecordingArchive();
+    public Task Female_ReducedWindowPreservesPinMeasurements() => VerifyRenderSizeAsync(NPCNavigationRig.Female);
+
+    /// <summary>Preserves the complete male long-straight pin oracle at both real window sizes.</summary>
+    [Fact]
+    public Task Male_ReducedWindowPreservesPinMeasurements() => VerifyRenderSizeAsync(NPCNavigationRig.Male);
+
+    private static async Task VerifyRenderSizeAsync(NPCNavigationRig rig)
+    {
+        SceneTree tree = GetSceneTree();
+        Vector2I previousSize = tree.Root.Size;
+        int previousSteps = Engine.MaxPhysicsStepsPerFrame;
+        string directory = EvidenceDestinations.Resolve(ProjectSettings.GlobalizePath(
+            $"res://temp/nav001-pin-feasibility/{rig}-render-size-equivalence"));
+        var captures = new PinCapture[2];
+        foreach (bool reduced in new[] { false, true })
+        {
+            try
+            {
+                await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig, useReducedRenderSize: reduced);
+                await fixture.StepAsync(WarmUpPhysicsTicks);
+                Binding binding = Bind(fixture);
+                await TeleportToIdleAtOriginAsync(fixture, binding);
+                ArrivalPlan plan = binding.Planner.Plan(IdleStart(fixture, binding), new ArrivalTarget(new Vector2(0, -4), 0));
+                SequencePrediction prediction = binding.Planner.Predict(plan);
+                string name = reduced ? "reduced" : "default";
+                WriteLedger(directory, name + "-ledger.csv", prediction);
+                Assert.Equal(60, Engine.PhysicsTicksPerSecond);
+                Assert.Equal(1, Engine.MaxPhysicsStepsPerFrame);
+                using var capture = new PinCapture(fixture, prediction.Ticks.Length + 60);
+                captures[reduced ? 1 : 0] = capture;
+                await Measure(fixture, binding, plan, directory, name, capture);
+                capture.VerifyAndSave(directory, name);
+            }
+            finally
+            {
+                Assert.Equal(previousSize, tree.Root.Size);
+                Assert.Equal(previousSteps, Engine.MaxPhysicsStepsPerFrame);
+            }
+        }
+
+        string[] baseline = File.ReadAllLines(Path.Combine(directory, "default.csv"));
+        string[] candidate = File.ReadAllLines(Path.Combine(directory, "reduced.csv"));
+        Assert.Equal(baseline.Length, candidate.Length);
+        Assert.Equal(baseline[0], candidate[0]);
+        ulong first = ulong.Parse(baseline[1].Split(',')[1], CultureInfo.InvariantCulture);
+        ulong second = ulong.Parse(candidate[1].Split(',')[1], CultureInfo.InvariantCulture);
+        for (int row = 1; row < baseline.Length; row++)
+        {
+            string[] full = baseline[row].Split(',');
+            string[] reduced = candidate[row].Split(',');
+            Assert.Equal(first + (ulong)((row - 1) / 2), ulong.Parse(full[1], CultureInfo.InvariantCulture));
+            Assert.Equal(second + (ulong)((row - 1) / 2), ulong.Parse(reduced[1], CultureInfo.InvariantCulture));
+            // Compare relative native IDs only; preserve both complete raw foot streams, including Idle NaNs.
+            full[1] = reduced[1] = ((row - 1) / 2).ToString(CultureInfo.InvariantCulture);
+            Assert.True(full.SequenceEqual(reduced), $"{rig} pin size mismatch at row {row}: {baseline[row]} != {candidate[row]}");
+        }
+
+        Assert.Equal(File.ReadAllText(Path.Combine(directory, "default-ledger.csv")),
+            File.ReadAllText(Path.Combine(directory, "reduced-ledger.csv")));
+        captures[0].AssertEquivalent(captures[1]);
+    }
+
+    /// <summary>Verifies the frozen allocator recording fixtures remain internally well-formed.</summary>
+    [Fact]
+    public void Female_FrozenRecordingFixtureIntegrity() => VerifyFrozenRecordingFixtures();
 
     /// <summary>Verifies identical idle requests reproduce exactly the same complete predicted planning ledger.</summary>
     [Fact]
@@ -61,7 +127,7 @@ public sealed class NAV001PinFeasibilityIntegrationTests
 
     private static async Task MeasurePopulation(NPCNavigationRig rig)
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig, useReducedRenderSize: true);
         await fixture.StepAsync(WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
         string directory = EvidenceDestinations.Resolve(ProjectSettings.GlobalizePath(
@@ -109,15 +175,15 @@ public sealed class NAV001PinFeasibilityIntegrationTests
     private static Transform3D Transform(SequencePose pose) =>
         new(new Basis(Vector3.Up, pose.Yaw), new Vector3(pose.Position.X, 0, pose.Position.Y));
 
-    private const string HistoricalRecordingHeader =
+    private const string FrozenRecordingHeader =
         "plan_tick,physics_tick,window,planted_left,planted_right,planar_right_mm,planar_forward_mm,yaw_deg,pivot,"
         + "origin_right_mm,origin_forward_mm,residual_right_mm,residual_forward_mm,residual_yaw_deg,actor_x,actor_z,actor_yaw_deg,idle";
 
-    private static readonly int[] _historicalRecordingNumericColumns = [5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16];
+    private static readonly int[] _frozenRecordingNumericColumns = [5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16];
 
-    private static readonly int[] _historicalRecordingBooleanColumns = [3, 4, 17];
+    private static readonly int[] _frozenRecordingBooleanColumns = [3, 4, 17];
 
-    private static readonly string[] _historicalRecordings =
+    private static readonly string[] _frozenRecordings =
     [
         "behind-1.5m-0-corrections.csv",
         "distant-lateral-3m-0-corrections.csv",
@@ -135,23 +201,23 @@ public sealed class NAV001PinFeasibilityIntegrationTests
     ];
 
     /// <summary>
-    /// Verifies the immutable unit-6b allocator recordings are internally well-formed archive evidence: known header,
+    /// Verifies the frozen allocator recording fixtures are internally well-formed: known header,
     /// contiguous tick rows, parseable Boolean and finite invariant numeric fields, and a row count that matches the
     /// last recorded tick. The recordings are never compared against current planner output.
     /// </summary>
-    private static void VerifyHistoricalRecordingArchive()
+    private static void VerifyFrozenRecordingFixtures()
     {
-        string directory = ProjectSettings.GlobalizePath("res://temp/nav001-p4-u6b/Female-defaults");
-        foreach (string file in _historicalRecordings)
+        string directory = ProjectSettings.GlobalizePath("res://tests/navigation/pin-recording-fixtures/Female-defaults");
+        foreach (string file in _frozenRecordings)
         {
             string path = Path.Combine(directory, file);
             Assert.True(File.Exists(path),
-                $"SETUP: immutable historical recording is missing: {path}. The unit-6b archive is test input; "
-                + "restore it byte-identically instead of regenerating it.");
+                $"SETUP: frozen recording fixture is missing: {path}. Include all maintained fixture files byte-identically; "
+                + "do not regenerate them from current planner output.");
             string[] lines = File.ReadAllLines(path);
             Assert.True(lines.Length >= 2, $"{file}: expected a header and at least one recorded tick.");
-            Assert.True(lines[0] == HistoricalRecordingHeader,
-                $"{file}: unexpected header: '{lines[0]}' (expected '{HistoricalRecordingHeader}').");
+            Assert.True(lines[0] == FrozenRecordingHeader,
+                $"{file}: unexpected header: '{lines[0]}' (expected '{FrozenRecordingHeader}').");
             for (int row = 1; row < lines.Length; row++)
             {
                 string[] fields = lines[row].Split(',');
@@ -162,12 +228,12 @@ public sealed class NAV001PinFeasibilityIntegrationTests
                 Assert.True(
                     int.TryParse(fields[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int physics) && physics >= 0,
                     $"{file} row {row}: physics_tick '{fields[1]}' is not a non-negative integer.");
-                foreach (int column in _historicalRecordingBooleanColumns)
+                foreach (int column in _frozenRecordingBooleanColumns)
                 {
                     Assert.True(bool.TryParse(fields[column], out _),
                         $"{file} row {row}: column {column + 1} '{fields[column]}' is not a Boolean.");
                 }
-                foreach (int column in _historicalRecordingNumericColumns)
+                foreach (int column in _frozenRecordingNumericColumns)
                 {
                     Assert.True(
                         float.TryParse(fields[column], NumberStyles.Float, CultureInfo.InvariantCulture, out float value)
@@ -350,7 +416,8 @@ public sealed class NAV001PinFeasibilityIntegrationTests
         File.WriteAllText(Path.Combine(directory, file), rows.ToString());
     }
 
-    private static async Task Measure(NPCNavigationRigFixture fixture, Binding binding, ArrivalPlan plan, string directory, string name)
+    private static async Task Measure(NPCNavigationRigFixture fixture, Binding binding, ArrivalPlan plan, string directory, string name,
+        PinCapture? capture = null)
     {
         Assert.Equal(ArrivalPlanStatus.Planned, plan.Status);
         SequencePrediction prediction = binding.Planner.Predict(plan);
@@ -422,6 +489,7 @@ public sealed class NAV001PinFeasibilityIntegrationTests
                     new Vector2(ball.X, -ball.Z), new Vector2(offset.X, -offset.Z), phase);
             }
 
+            capture?.RecordCorrection(tick, correction);
             Vector2 synthetic = correction.OriginShift + correction.Planar;
             float correctionYaw = correction.Yaw;
 
@@ -452,6 +520,7 @@ public sealed class NAV001PinFeasibilityIntegrationTests
             Assert.Equal(initial + tick + 1, fixture.Driver.EvaluationCount);
             left.Write(rows, tick, physics, leftPlanted, clip, fading);
             right.Write(rows, tick, physics, rightPlanted, clip, fading);
+            capture?.RecordSample(physics, fixture.Driver.EvaluationCount);
             if (tick + 1 < prediction.Ticks.Length)
             {
                 RequestIfDue(fixture.Driver, binding, segments, prediction, tick + 1, ref next);
@@ -460,6 +529,89 @@ public sealed class NAV001PinFeasibilityIntegrationTests
 
         binding.IdlePosition = playback.GetCurrentPlayPosition();
         File.WriteAllText(Path.Combine(directory, name + ".csv"), rows.ToString());
+    }
+
+    // Optional, local to the two render-size controls. Population callers retain their original sampling path.
+    private sealed class PinCapture : IDisposable
+    {
+        private readonly NPCNavigationRigFixture _fixture;
+        private readonly NativeEvent[] _mixer;
+        private readonly NativeEvent[] _skeleton;
+        private readonly NativeEvent[] _samples;
+        private readonly CorrectionSample[] _corrections;
+        private int _mixerCount;
+        private int _skeletonCount;
+        private int _sampleCount;
+
+        private readonly record struct NativeEvent(ulong Physics, long Evaluation);
+        private readonly record struct CorrectionSample(int Tick, float PlanarX, float PlanarY, float OriginX, float OriginY, float Yaw);
+
+        public PinCapture(NPCNavigationRigFixture fixture, int ticks)
+        {
+            _fixture = fixture;
+            _mixer = new NativeEvent[(ticks * 4) + 16];
+            _skeleton = new NativeEvent[(ticks * 4) + 16];
+            _samples = new NativeEvent[ticks];
+            _corrections = new CorrectionSample[ticks];
+            fixture.Tree.MixerApplied += OnMixer;
+            fixture.Skeleton.SkeletonUpdated += OnSkeleton;
+        }
+
+        private void OnMixer() => _mixer[_mixerCount++] = new NativeEvent(Engine.GetPhysicsFrames(), _fixture.Driver.EvaluationCount + 1);
+        private void OnSkeleton() => _skeleton[_skeletonCount++] = new NativeEvent(Engine.GetPhysicsFrames(), _fixture.Driver.EvaluationCount);
+
+        public void RecordCorrection(int tick, SwingCorrection correction) => _corrections[tick] = new CorrectionSample(tick,
+            correction.Planar.X, correction.Planar.Y, correction.OriginShift.X, correction.OriginShift.Y, correction.Yaw);
+
+        public void RecordSample(ulong physics, long evaluation) => _samples[_sampleCount++] = new NativeEvent(physics, evaluation);
+
+        public void VerifyAndSave(string directory, string name)
+        {
+            Assert.Equal(_samples.Length, _sampleCount);
+            for (int index = 0; index < _sampleCount; index++)
+            {
+                NativeEvent expected = new(_samples[0].Physics + (ulong)index, _samples[0].Evaluation + index);
+                Assert.Equal(expected, _samples[index]);
+                Assert.Contains(expected, _mixer.Take(_mixerCount));
+                Assert.Contains(expected, _skeleton.Take(_skeletonCount));
+            }
+
+            File.WriteAllText(Path.Combine(directory, name + "-native.json"), JsonSerializer.Serialize(new
+            {
+                prediction_ticks = _sampleCount - 60,
+                idle_ticks = 60,
+                mixer = _mixer.Take(_mixerCount).ToArray(),
+                skeleton = _skeleton.Take(_skeletonCount).ToArray(),
+                samples = _samples,
+                corrections = _corrections
+            }));
+        }
+
+        public void AssertEquivalent(PinCapture candidate)
+        {
+            Assert.Equal(_corrections, candidate._corrections);
+            Assert.Equal(Relative(_samples, _sampleCount), candidate.Relative(candidate._samples, candidate._sampleCount));
+            // Include all raw notifications: queued preparation ticks and extra mixer applications are not discarded.
+            Assert.Equal(Relative(_mixer, _mixerCount), candidate.Relative(candidate._mixer, candidate._mixerCount));
+            Assert.Equal(Relative(_skeleton, _skeletonCount), candidate.Relative(candidate._skeleton, candidate._skeletonCount));
+        }
+
+        private IEnumerable<(long Physics, long Evaluation)> Relative(NativeEvent[] events, int count)
+        {
+            for (int index = 0; index < count; index++)
+            {
+                long physics = (long)events[index].Physics - (long)_samples[0].Physics;
+                long evaluation = events[index].Evaluation - _samples[0].Evaluation;
+                Assert.Equal(physics, evaluation);
+                yield return (physics, evaluation);
+            }
+        }
+
+        public void Dispose()
+        {
+            _fixture.Tree.MixerApplied -= OnMixer;
+            _fixture.Skeleton.SkeletonUpdated -= OnSkeleton;
+        }
     }
 
     private sealed class Chain
