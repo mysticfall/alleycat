@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using AlleyCat.Common;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.IK;
 using AlleyCat.Navigation;
@@ -89,8 +90,8 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
     public async Task LongStraight_FootPlantingCausesNoActorMovement()
     {
         ArrivalRequest[] requests = [new ArrivalRequest(new Vector3(0f, 0f, -4f), 0f)];
-        ScenarioTrace withPlanting = await RunAsync("uac004-with", requests, planting: true);
-        ScenarioTrace without = await RunAsync("uac004-without", requests, planting: false);
+        ScenarioTrace withPlanting = await RunAsync("uac004-with", requests, planting: true, preparePairedIdlePhase: true);
+        ScenarioTrace without = await RunAsync("uac004-without", requests, planting: false, preparePairedIdlePhase: true);
 
         Assert.True(withPlanting.PinnedFootTicks > 0, "SETUP: the planted run never pinned a foot.");
         Assert.Equal(without.ActorTrace.Count, withPlanting.ActorTrace.Count);
@@ -102,7 +103,8 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
         }
     }
 
-    private static async Task<ScenarioTrace> RunAsync(string scenario, ArrivalRequest[] requests, bool planting)
+    private static async Task<ScenarioTrace> RunAsync(
+        string scenario, ArrivalRequest[] requests, bool planting, bool preparePairedIdlePhase = false)
     {
         SceneTree sceneTree = GetSceneTree();
         int previousStepLimit = Engine.MaxPhysicsStepsPerFrame;
@@ -139,11 +141,19 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
 
             sceneTree.Root.AddChild(root);
             INavigation navigation = await WaitForReadyNavigationAsync(sceneTree, root, actor);
+            if (preparePairedIdlePhase)
+            {
+                await PreparePairedIdlePhaseAsync(sceneTree, actor, navigation, left, right);
+            }
             recorder = BindRecorder(actor);
             recorder.Attach();
             left.TickRecorded += OnLeft;
             right.TickRecorded += OnRight;
             await WaitForPhysicsFramesAsync(sceneTree, WarmUpPhysicsTicks);
+            if (preparePairedIdlePhase)
+            {
+                AssertIdlePhase(actor, (float)(WarmUpPhysicsTicks / (double)Engine.PhysicsTicksPerSecond));
+            }
 
             trace.WindowStart = Engine.GetPhysicsFrames() + 1;
             for (int index = 0; index < requests.Length; index++)
@@ -198,6 +208,40 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
             root.QueueFree();
             await WaitForFramesAsync(sceneTree, 1);
         }
+    }
+
+    private static async Task PreparePairedIdlePhaseAsync(
+        SceneTree sceneTree, Node3D actor, INavigation navigation,
+        FootPlantingTargetProvider left, FootPlantingTargetProvider right)
+    {
+        Assert.Equal(60, Engine.PhysicsTicksPerSecond);
+        NPCNavigation npc = Assert.IsType<NPCNavigation>(navigation, exactMatch: false);
+        Assert.True(npc.IsRuntimeBindingActive && npc.IsMovementAuthorityActive,
+            "SETUP: paired Idle preparation requires the active native NPC owner.");
+        Assert.False(npc.HasDestination);
+        NPCAnimationTreeDriver driver = npc.AnimationDriver
+            ?? throw new InvalidOperationException("SETUP: paired Idle preparation has no native animation driver.");
+        long evaluations = driver.EvaluationCount;
+        Assert.True(driver.TryRequestTransition(NPCAnimationProgramme.IdleState, 0d, 0d),
+            "SETUP: native driver refused the paired authored Idle start.");
+        await WaitForNextPhysicsFrameAsync(sceneTree);
+        Assert.False(driver.HasPendingTransition);
+        Assert.Equal(evaluations + 1, driver.EvaluationCount);
+        AssertIdlePhase(actor, 0f);
+        left.ResetPin();
+        right.ResetPin();
+    }
+
+    private static void AssertIdlePhase(Node3D actor, float expectedPosition)
+    {
+        AnimationTree tree = actor.RequireNode<AnimationTree>("AnimationTree");
+        AnimationNodeStateMachinePlayback playback = tree.Get("parameters/States/playback")
+            .As<AnimationNodeStateMachinePlayback>();
+        using StringName current = playback.GetCurrentNode();
+        using StringName fading = playback.GetFadingFromNode();
+        Assert.Equal(NPCAnimationProgramme.IdleState, current);
+        Assert.True(fading.IsEmpty, "SETUP: paired Idle admission must not be fading.");
+        Assert.Equal(expectedPosition, playback.GetCurrentPlayPosition());
     }
 
     private static ScenarioAnalysis Analyse(ScenarioTrace trace)
