@@ -195,6 +195,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         if (authoredActor.HasNode("Male/GeneralSkeleton"))
         {
             Actor = authoredActor;
+            BindStartupGateActor(authoredActor);
             NavigationPath = new NodePath($"{ActorNodeName}/Navigation");
             Navigation = authoredActor.GetNodeOrNull<NavigationBase>("Navigation");
             return;
@@ -203,6 +204,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         PackedScene maleScene = ResourceLoader.Load<PackedScene>(ReferenceMaleNPCScenePath)
             ?? throw new InvalidOperationException($"Navigation playtest could not load reference-male scene '{ReferenceMaleNPCScenePath}'.");
         Node3D maleActor = maleScene.Instantiate<Node3D>();
+        BindStartupGateActor(maleActor);
         RemoveChild(authoredActor);
         authoredActor.Free();
         maleActor.Name = ActorNodeName;
@@ -213,6 +215,9 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         Navigation = maleActor.GetNodeOrNull<NavigationBase>("Navigation")
             ?? throw new InvalidOperationException("Selected reference-male playtest actor does not expose NPC Navigation.");
     }
+
+    private void BindStartupGateActor(Node3D actor)
+        => GetNodeOrNull("NavigationMapStartupGate")?.Set("actor", actor);
 
     internal Vector3 LastCameraOrbitPosition => _lastCameraOrbitPosition;
 
@@ -231,8 +236,14 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         ApplyCharacterVariantSelection();
         _logger = ResolveLogger();
         _startupCameraActivationFramesRemaining = StartupCameraActivationFrameCount;
-        SetProcess(true);
-        SetPhysicsProcess(true);
+        // The authored gate is readied before its parent. Do not undo its startup hold here.
+        bool hasStartupGate = GetNodeOrNull("NavigationMapStartupGate") is not null;
+        SetProcess(!hasStartupGate);
+        SetPhysicsProcess(!hasStartupGate);
+        if (hasStartupGate)
+        {
+            SetProcessUnhandledInput(false);
+        }
         InitialiseCameraOrbit();
         UpdateDestinationMarkerVisibility(false);
         ActivatePlaytestCamera();

@@ -18,6 +18,119 @@ public sealed class NavigationPlaytestControllerIntegrationTests
     private const float BasisTolerance = 0.0001f;
     private const string NavigationTestScenePath = "res://assets/testing/navigation/navigation_test.tscn";
 
+    /// <summary>Verifies actual pre-tree male selection preserves gate ownership and ready ordering.</summary>
+    [Fact]
+    public Task NavigationTestScene_MaleStartupGateOwnsSelectedActor()
+        => VerifyStartupGateAsync(NavigationPlaytestCharacterVariant.ReferenceMale, true);
+
+    /// <summary>Verifies the authored female follows the same map-ready startup contract.</summary>
+    [Fact]
+    public Task NavigationTestScene_FemaleStartupGateWaitsForMap()
+        => VerifyStartupGateAsync(NavigationPlaytestCharacterVariant.ReferenceFemale, false);
+
+    /// <summary>Verifies selection performed by the controller's own Ready callback also rebinds the gate.</summary>
+    [Fact]
+    public Task NavigationTestScene_MaleReadySelectionRebindsStartupGate()
+        => VerifyStartupGateAsync(NavigationPlaytestCharacterVariant.ReferenceMale, false);
+
+    private static async Task VerifyStartupGateAsync(NavigationPlaytestCharacterVariant variant, bool selectBeforeTree)
+    {
+        SceneTree tree = GetSceneTree();
+        DirectTransformNavigationPlaytestController controller = LoadPackedScene(NavigationTestScenePath).Instantiate<DirectTransformNavigationPlaytestController>();
+        Node gate = controller.GetNode("NavigationMapStartupGate");
+        Node original = controller.GetNode("NavigationTestNpc");
+        ulong originalID = original.GetInstanceId();
+        Assert.Equal(originalID, gate.Get("actor").AsGodotObject().GetInstanceId());
+        controller.CharacterVariant = variant;
+        try
+        {
+            if (selectBeforeTree)
+            {
+                controller.ApplyCharacterVariantSelection();
+                _ = AssertGateOwnsSelectedActor(controller, gate);
+                Assert.False(GodotObject.IsInstanceValid(original));
+            }
+
+            tree.Root.AddChild(controller);
+            Node3D selected = AssertGateOwnsSelectedActor(controller, gate);
+            if (variant == NavigationPlaytestCharacterVariant.ReferenceMale)
+            {
+                Assert.NotEqual(originalID, selected.GetInstanceId());
+                Assert.False(GodotObject.IsInstanceValid(original));
+                Assert.NotNull(selected.GetNodeOrNull("Male/GeneralSkeleton"));
+            }
+            else
+            {
+                Assert.Equal(originalID, selected.GetInstanceId());
+                Assert.NotNull(selected.GetNodeOrNull("Female/GeneralSkeleton"));
+            }
+
+            // Child Ready has established the hold; parent Ready must not override it.
+            Assert.True(gate.IsPhysicsProcessing());
+            Assert.False(controller.IsProcessing());
+            Assert.False(controller.IsPhysicsProcessing());
+            Assert.False(controller.IsProcessingUnhandledInput());
+
+            bool activated = false;
+            for (int tick = 0; tick < 60; tick++)
+            {
+                await WaitForPhysicsFramesAsync(tree, 1);
+                await WaitForFramesAsync(tree, 1);
+                Assert.Same(selected, AssertGateOwnsSelectedActor(controller, gate));
+                bool enabled = controller.IsPhysicsProcessing();
+                Assert.Equal(enabled, controller.IsProcessing());
+                Assert.Equal(enabled, controller.IsProcessingUnhandledInput());
+                if (enabled)
+                {
+                    Assert.True(selected.IsNodeReady());
+                    Rid map = controller.GetNode<NavigationRegion3D>("NavigationRegion3D").GetNavigationMap();
+                    Assert.True(map.IsValid);
+                    Assert.True(NavigationServer3D.MapGetIterationId(map) > 0);
+                    Assert.True(NavigationServer3D.MapGetPath(map, selected.GlobalPosition,
+                        new Vector3(2.043711f, 0.0f, -1.5803192f), true).Length >= 2);
+                    Assert.False(gate.IsPhysicsProcessing());
+                    activated = true;
+                }
+                else
+                {
+                    Assert.False(activated); // No second hold/release cycle after activation.
+                    Assert.True(gate.IsPhysicsProcessing());
+                }
+            }
+
+            Assert.True(activated, "The real selected actor and authored map must release the startup hold.");
+            Assert.Equal(1, CountNavigationAuthorities(controller));
+            var destination = new Vector3(2.043711f, 0.0f, -1.5803192f);
+            controller.BeginDestinationPlacementAt(destination);
+            controller.CompleteDestinationPlacementAt(destination);
+            Assert.True(selected.GetNode<NPCNavigation>("Navigation").HasDestination);
+            await WaitForPhysicsFramesAsync(tree, 1);
+            Assert.Same(selected, AssertGateOwnsSelectedActor(controller, gate));
+            Assert.True(controller.IsPhysicsProcessing());
+        }
+        finally
+        {
+            if (controller.IsInsideTree())
+            {
+                controller.QueueFree();
+                await WaitForFramesAsync(tree, 1);
+            }
+            else
+            {
+                controller.Free();
+            }
+        }
+    }
+
+    private static Node3D AssertGateOwnsSelectedActor(DirectTransformNavigationPlaytestController controller, Node gate)
+    {
+        GodotObject target = gate.Get("actor").AsGodotObject();
+        Assert.True(GodotObject.IsInstanceValid(target), "Startup gate must not retain the freed authored actor.");
+        Node3D selected = controller.GetNode<Node3D>("NavigationTestNpc");
+        Assert.Equal(selected.GetInstanceId(), target.GetInstanceId());
+        return selected;
+    }
+
     /// <summary>Verifies the authored navigation playtest remains reference-female by default.</summary>
     [Fact]
     public async Task NavigationTestScene_DefaultVariantIsReferenceFemale()

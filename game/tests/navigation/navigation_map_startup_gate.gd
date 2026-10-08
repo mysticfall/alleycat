@@ -14,8 +14,11 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if not is_instance_valid(actor) or not actor.is_inside_tree() or not actor.is_node_ready():
+		return
+
 	var map := navigation_region.get_navigation_map()
-	if not map.is_valid():
+	if not map.is_valid() or NavigationServer3D.map_get_iteration_id(map) == 0:
 		return
 
 	var path := NavigationServer3D.map_get_path(
