@@ -69,7 +69,7 @@ public sealed class NAV001SequencePredictorOracleIntegrationTests
 
     private static async Task VerifyAsync(NPCNavigationRig rig)
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig, useReducedRenderSize: true);
         await fixture.StepAsync(NAV001ArrivalOutcomeIntegrationTests.WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
 
@@ -637,8 +637,10 @@ public sealed class NAV001SequencePredictorOracleIntegrationTests
             fixture.Skeleton.SkeletonUpdated -= OnSkeletonUpdated;
         }
 
-        // Let the NPC settle in Idle before the next sequence.
-        await fixture.StepAsync(30);
+        // Let the NPC settle in Idle before the next sequence. Ten ticks is more than the 0.15 s crossfade into
+        // Idle that each sequence's own prediction window already outlasts by ~27 ticks, and the next sequence
+        // starts from a fresh pose capture plus a teleport start, never from residual fade state.
+        await fixture.StepAsync(10);
         return run;
     }
 

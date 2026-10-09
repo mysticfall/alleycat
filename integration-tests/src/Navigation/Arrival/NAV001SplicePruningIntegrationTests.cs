@@ -19,7 +19,7 @@ public sealed class NAV001SplicePruningIntegrationTests
     [Fact]
     public async Task Female_RepeatedSecondLegPreservesBetterLegalEndpoint()
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(NPCNavigationRig.Female);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(NPCNavigationRig.Female, useReducedRenderSize: true);
         await fixture.StepAsync(WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
         Assert.Equal(0.190f, binding.Predictor.SeamToleranceMetres, 6);

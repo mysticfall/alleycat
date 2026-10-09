@@ -52,7 +52,7 @@ public sealed class NAV001ArrivalPlannerIntegrationTests
     private const double StartIdleSeconds = 0d;
 
     /// <summary>Plans timed per scenario (after warm-up) for the planning-time distribution.</summary>
-    private const int TimedPlans = 20;
+    private const int TimedPlans = 5;
 
     /// <summary>Design correction budget (Q3): forward (lengthening) per single-swing step, conservative and optimistic.</summary>
     private const float ForwardPerStepConservative = 0.016f;
@@ -96,7 +96,7 @@ public sealed class NAV001ArrivalPlannerIntegrationTests
 
     private static async Task VerifyAsync(NPCNavigationRig rig)
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig, useReducedRenderSize: true);
         await fixture.StepAsync(NAV001ArrivalOutcomeIntegrationTests.WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
 
@@ -228,12 +228,13 @@ public sealed class NAV001ArrivalPlannerIntegrationTests
         => new(PoseOf(fixture.Actor), binding.Planner.IdleRole, binding.IdlePosition);
 
     /// <summary>
-    /// Test setup: a driver <c>Start</c> into Idle at <see cref="StartIdleSeconds"/> (a teleport outside any plan),
+    /// Test setup: a ten-tick pad (longer than the 0.15 s crossfade, so the previous plan's final fade has fully
+    /// elapsed), a driver <c>Start</c> into Idle at <see cref="StartIdleSeconds"/> (a teleport outside any plan),
     /// one tick for it to take effect, and the actor placed at the origin facing -Z.
     /// </summary>
     internal static async Task TeleportToIdleAtOriginAsync(NPCNavigationRigFixture fixture, Binding binding)
     {
-        await fixture.StepAsync(20);
+        await fixture.StepAsync(10);
         if (!fixture.Driver.TryRequestTransition(NPCAnimationProgramme.IdleState, StartIdleSeconds, 0d))
         {
             throw new InvalidOperationException("SETUP: the driver refused the Idle start.");

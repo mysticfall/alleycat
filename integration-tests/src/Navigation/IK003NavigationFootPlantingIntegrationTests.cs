@@ -51,17 +51,27 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
     ];
 
     /// <summary>
-    /// All NAV-001 scenarios: runtime and independent planted state agree on every tick, the diagnostics are complete,
-    /// no applied target exceeds the leg's rest length, and the per-run attribution is written as evidence.
+    /// All NAV-001 scenarios in one booted rig, reset between scenarios by teleporting back to Idle at the origin:
+    /// runtime and independent planted state agree on every tick, the diagnostics are complete, no applied target
+    /// exceeds the leg's rest length, and the per-run attribution is written as evidence.
     /// </summary>
     [Fact]
     public async Task Scenarios_RuntimePlantedStateMatchesIndependentRecorder_AndDiagnosticsAreComplete()
     {
         var summary = new StringBuilder("scenario,ticks,disagreements,missing_diagnostics,max_reach_usage,reach_blend_outs_l,reach_blend_outs_r,worst_run\n");
         var failures = new List<string>();
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(
+            NPCNavigationRig.Female, useReducedRenderSize: true);
+        CharacterIK characterIK = fixture.Actor.GetNode<CharacterIK>("CharacterIK");
+        FootPlantingTargetProvider left = Assert.IsType<FootPlantingTargetProvider>(characterIK.LeftFootTargetIntentProvider);
+        FootPlantingTargetProvider right = Assert.IsType<FootPlantingTargetProvider>(characterIK.RightFootTargetIntentProvider);
+        Assert.Equal(LimbSide.Left, left.Side);
+        Assert.Equal(LimbSide.Right, right.Side);
         foreach ((string name, ArrivalRequest[] requests) in _scenarios)
         {
-            ScenarioTrace trace = await RunAsync(name, requests, planting: true);
+            await ResetToIdleAtOriginAsync(fixture);
+            ScenarioTrace trace = await MeasureScenarioAsync(
+                GetSceneTree(), fixture.Actor, fixture.Navigation, left, right, name, requests);
             ScenarioAnalysis analysis = Analyse(trace);
             _ = summary.AppendLine(analysis.SummaryLine(name));
             WriteEvidence($"{name}.txt", analysis.Report);
@@ -85,13 +95,33 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
         Assert.True(failures.Count == 0, string.Join('\n', failures) + "\n" + summary);
     }
 
-    /// <summary>IK-UAC-004: foot planting never moves, steers, or delays the actor.</summary>
+    /// <summary>
+    /// IK-UAC-004: foot planting never moves, steers, or delays the actor. One booted rig replays the 4 m request
+    /// with planting enabled, then — reset to Idle at the origin — replays it with both foot intent providers
+    /// detached at runtime (CharacterIK re-reads them on every foot stage), and the two actor trajectories must be
+    /// identical tick by tick.
+    /// </summary>
     [Fact]
     public async Task LongStraight_FootPlantingCausesNoActorMovement()
     {
         ArrivalRequest[] requests = [new ArrivalRequest(new Vector3(0f, 0f, -4f), 0f)];
-        ScenarioTrace withPlanting = await RunAsync("uac004-with", requests, planting: true, preparePairedIdlePhase: true);
-        ScenarioTrace without = await RunAsync("uac004-without", requests, planting: false, preparePairedIdlePhase: true);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(NPCNavigationRig.Female);
+        CharacterIK characterIK = fixture.Actor.GetNode<CharacterIK>("CharacterIK");
+        FootPlantingTargetProvider left = Assert.IsType<FootPlantingTargetProvider>(characterIK.LeftFootTargetIntentProvider);
+        FootPlantingTargetProvider right = Assert.IsType<FootPlantingTargetProvider>(characterIK.RightFootTargetIntentProvider);
+        Assert.Equal(LimbSide.Left, left.Side);
+        Assert.Equal(LimbSide.Right, right.Side);
+        SceneTree sceneTree = GetSceneTree();
+        await PreparePairedIdlePhaseAsync(sceneTree, fixture.Actor, fixture.Navigation, left, right);
+        ScenarioTrace withPlanting = await MeasureScenarioAsync(
+            sceneTree, fixture.Actor, fixture.Navigation, left, right, "uac004-with", requests, assertPairedIdlePhase: true);
+
+        characterIK.LeftFootTargetIntentProvider = null;
+        characterIK.RightFootTargetIntentProvider = null;
+        await ResetToIdleAtOriginAsync(fixture);
+        await PreparePairedIdlePhaseAsync(sceneTree, fixture.Actor, fixture.Navigation, left, right);
+        ScenarioTrace without = await MeasureScenarioAsync(
+            sceneTree, fixture.Actor, fixture.Navigation, left, right, "uac004-without", requests, assertPairedIdlePhase: true);
 
         Assert.True(withPlanting.PinnedFootTicks > 0, "SETUP: the planted run never pinned a foot.");
         Assert.Equal(without.ActorTrace.Count, withPlanting.ActorTrace.Count);
@@ -103,16 +133,34 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
         }
     }
 
-    private static async Task<ScenarioTrace> RunAsync(
-        string scenario, ArrivalRequest[] requests, bool planting, bool preparePairedIdlePhase = false)
+    /// <summary>
+    /// Scenario reset on the shared boot: a ten-tick pad (longer than the 0.15 s crossfade, so the previous
+    /// scenario's final fade has fully elapsed), a driver <c>Start</c> into Idle at zero (a teleport outside any
+    /// plan), one tick for it to take effect, the actor returned to the origin facing -Z, and both foot pins and
+    /// per-scenario statistics reset.
+    /// </summary>
+    private static async Task ResetToIdleAtOriginAsync(NPCNavigationRigFixture fixture)
     {
-        SceneTree sceneTree = GetSceneTree();
-        int previousStepLimit = Engine.MaxPhysicsStepsPerFrame;
-        Engine.MaxPhysicsStepsPerFrame = 1;
-        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NavigationTestScenePath).Instantiate(), exactMatch: false);
-        AnimationGraphPlantedStateRecorder? recorder = null;
-        FootPlantingTargetProvider? left = null;
-        FootPlantingTargetProvider? right = null;
+        await fixture.StepAsync(10);
+        if (!fixture.Driver.TryRequestTransition(NPCAnimationProgramme.IdleState, 0d, 0d))
+        {
+            throw new InvalidOperationException("SETUP: the driver refused the Idle start.");
+        }
+
+        await fixture.StepAsync(1);
+        fixture.Actor.GlobalTransform = Transform3D.Identity;
+        foreach (FootPlantingTargetProvider provider in fixture.Actor.FindChildren("*", "", true, false).OfType<FootPlantingTargetProvider>())
+        {
+            provider.ResetPin();
+            provider.ResetStatistics();
+        }
+    }
+
+    private static async Task<ScenarioTrace> MeasureScenarioAsync(
+        SceneTree sceneTree, Node3D actor, INavigation navigation,
+        FootPlantingTargetProvider left, FootPlantingTargetProvider right,
+        string scenario, ArrivalRequest[] requests, bool assertPairedIdlePhase = false)
+    {
         var trace = new ScenarioTrace();
         void OnLeft(FootPlantingTickDiagnostic diagnostic)
         {
@@ -124,33 +172,14 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
             trace.Right[diagnostic.Tick] = diagnostic;
         }
 
+        AnimationGraphPlantedStateRecorder recorder = BindRecorder(actor);
+        recorder.Attach();
+        left.TickRecorded += OnLeft;
+        right.TickRecorded += OnRight;
         try
         {
-            Node3D actor = root.GetNode<Node3D>(ActorNodeName);
-            PrepareActorBeforeTreeEntry(actor);
-            CharacterIK characterIK = actor.GetNode<CharacterIK>("CharacterIK");
-            left = Assert.IsType<FootPlantingTargetProvider>(characterIK.LeftFootTargetIntentProvider);
-            right = Assert.IsType<FootPlantingTargetProvider>(characterIK.RightFootTargetIntentProvider);
-            Assert.Equal(LimbSide.Left, left.Side);
-            Assert.Equal(LimbSide.Right, right.Side);
-            if (!planting)
-            {
-                characterIK.LeftFootTargetIntentProvider = null;
-                characterIK.RightFootTargetIntentProvider = null;
-            }
-
-            sceneTree.Root.AddChild(root);
-            INavigation navigation = await WaitForReadyNavigationAsync(sceneTree, root, actor);
-            if (preparePairedIdlePhase)
-            {
-                await PreparePairedIdlePhaseAsync(sceneTree, actor, navigation, left, right);
-            }
-            recorder = BindRecorder(actor);
-            recorder.Attach();
-            left.TickRecorded += OnLeft;
-            right.TickRecorded += OnRight;
             await WaitForPhysicsFramesAsync(sceneTree, WarmUpPhysicsTicks);
-            if (preparePairedIdlePhase)
+            if (assertPairedIdlePhase)
             {
                 AssertIdlePhase(actor, (float)(WarmUpPhysicsTicks / (double)Engine.PhysicsTicksPerSecond));
             }
@@ -193,20 +222,9 @@ public sealed class IK003NavigationFootPlantingIntegrationTests
         }
         finally
         {
-            recorder?.Detach();
-            if (left is not null)
-            {
-                left.TickRecorded -= OnLeft;
-            }
-
-            if (right is not null)
-            {
-                right.TickRecorded -= OnRight;
-            }
-
-            Engine.MaxPhysicsStepsPerFrame = previousStepLimit;
-            root.QueueFree();
-            await WaitForFramesAsync(sceneTree, 1);
+            recorder.Detach();
+            left.TickRecorded -= OnLeft;
+            right.TickRecorded -= OnRight;
         }
     }
 

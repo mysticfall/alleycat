@@ -19,53 +19,34 @@ public sealed class NAV001StationaryPartialTurnIntegrationTests
 {
     private const string EvidenceDirectory = "res://temp/nav001-stationary-turn-candidate";
 
-    /// <summary>Female left 20-degree stationary request.</summary>
+    /// <summary>
+    /// Female rig in one booted session: the named ±20° and ±25° stationary requests plus the 5°–90° control
+    /// angles, each reset to Idle at the origin before its request. Every angle keeps the identical full-window
+    /// acceptance.
+    /// </summary>
     [Fact]
-    public Task Female_Left20() => VerifyAsync(NPCNavigationRig.Female, 20);
+    public Task Female_PartialTurnsAcrossAngles() => VerifyAsync(
+        NPCNavigationRig.Female, [20, -20, 25, -25, 5, 10, 15, 30, 90]);
 
-    /// <summary>Female right 20-degree stationary request.</summary>
+    /// <summary>Male rig in one booted session: the named ±20° and ±25° stationary requests (two-rig contract).</summary>
     [Fact]
-    public Task Female_Right20() => VerifyAsync(NPCNavigationRig.Female, -20);
+    public Task Male_PartialTurnsAcrossAngles() => VerifyAsync(NPCNavigationRig.Male, [20, -20, 25, -25]);
 
-    /// <summary>Female left 25-degree stationary request.</summary>
-    [Fact]
-    public Task Female_Left25() => VerifyAsync(NPCNavigationRig.Female, 25);
-
-    /// <summary>Female right 25-degree stationary request.</summary>
-    [Fact]
-    public Task Female_Right25() => VerifyAsync(NPCNavigationRig.Female, -25);
-
-    /// <summary>Male left 20-degree stationary request (explicit two-rig contract).</summary>
-    [Fact]
-    public Task Male_Left20() => VerifyAsync(NPCNavigationRig.Male, 20);
-
-    /// <summary>Male right 20-degree stationary request.</summary>
-    [Fact]
-    public Task Male_Right20() => VerifyAsync(NPCNavigationRig.Male, -20);
-
-    /// <summary>Male left 25-degree stationary request.</summary>
-    [Fact]
-    public Task Male_Left25() => VerifyAsync(NPCNavigationRig.Male, 25);
-
-    /// <summary>Male right 25-degree stationary request.</summary>
-    [Fact]
-    public Task Male_Right25() => VerifyAsync(NPCNavigationRig.Male, -25);
-
-    /// <summary>Broader-angle controls use the identical full-window acceptance.</summary>
-    [Theory]
-    [InlineData(5)]
-    [InlineData(10)]
-    [InlineData(15)]
-    [InlineData(30)]
-    [InlineData(90)]
-    public Task Female_Control(int degrees) => VerifyAsync(NPCNavigationRig.Female, degrees);
-
-    private static async Task VerifyAsync(NPCNavigationRig rig, int degrees)
+    private static async Task VerifyAsync(NPCNavigationRig rig, int[] degrees)
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(
+            rig, useReducedRenderSize: true);
         await fixture.StepAsync(WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
-        await TeleportToIdleAtOriginAsync(fixture, binding);
+        foreach (int degree in degrees)
+        {
+            await TeleportToIdleAtOriginAsync(fixture, binding);
+            await VerifyTurnAsync(fixture, binding, rig, degree);
+        }
+    }
+
+    private static async Task VerifyTurnAsync(NPCNavigationRigFixture fixture, Binding binding, NPCNavigationRig rig, int degrees)
+    {
         using AnimationGraphPlantedStateRecorder recorder = fixture.BindRecorder();
         recorder.Attach();
         // Seed the recorder before issue, so a fade starting at issue has an independently observed predecessor.
@@ -85,13 +66,14 @@ public sealed class NAV001StationaryPartialTurnIntegrationTests
         _ = report.AppendLine(FormattableString.Invariant($"status={plan.Status} kind={plan.Kind} failure={plan.Failure} detail={plan.FailureDetail} tolerance_mm={binding.Predictor.SeamToleranceMetres * 1000:R} ticks={plan.TickCount}"));
         _ = report.AppendLine($"start={plan.Start} sequence_start={plan.SequenceStart} statistics={plan.Statistics}");
         // Planning only: no simulation advance, replay replacement, or acceptance change. Measure active requests,
-        // including materialisation and summary prediction, after warming the same request twenty times.
-        for (int iteration = 0; iteration < 20; iteration++)
+        // including materialisation and summary prediction, after warming the same request five times.
+        const int timedPlans = 5;
+        for (int iteration = 0; iteration < timedPlans; iteration++)
         {
             _ = binding.Planner.Plan(start, target);
         }
 
-        double[] times = new double[20];
+        double[] times = new double[timedPlans];
         long allocated = GC.GetAllocatedBytesForCurrentThread();
         for (int iteration = 0; iteration < times.Length; iteration++)
         {
@@ -102,7 +84,9 @@ public sealed class NAV001StationaryPartialTurnIntegrationTests
 
         allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
         Array.Sort(times);
-        _ = report.AppendLine(FormattableString.Invariant($"active_plan_iterations=20 warmup=20 median_ms={times[10]:R} p95_ms={times[18]:R} max_ms={times[19]:R} allocated_bytes_per_plan={allocated / 20d:R}"));
+        // With five samples the 95th percentile is the maximum, so only median and max are reported.
+        _ = report.AppendLine(FormattableString.Invariant(
+            $"active_plan_iterations={times.Length} warmup={times.Length} median_ms={times[times.Length / 2]:R} max_ms={times[^1]:R} allocated_bytes_per_plan={allocated / (double)times.Length:R}"));
         foreach (ArrivalPlanSegment segment in plan.Segments)
         {
             _ = report.AppendLine(segment.ToString());

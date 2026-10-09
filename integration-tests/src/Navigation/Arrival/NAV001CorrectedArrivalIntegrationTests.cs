@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.IK;
 using AlleyCat.Navigation;
 using AlleyCat.Navigation.Arrival;
 using AlleyCat.TestFramework;
@@ -14,6 +15,10 @@ namespace AlleyCat.IntegrationTests.Navigation.Arrival;
 /// <summary>
 /// P4 unit 6b: measurement-only replay of the planner with swing correction on the two production rigs.
 /// Only Idle immobility, double-support correction and blended phase agreement are acceptance assertions.
+/// Each replay also emits the pre-IK pin-feasibility evidence (per-foot ball, hip, ankle, pin drift, reach, and
+/// provider diagnostics per tick) and enforces its measurement gates — planted-state availability, predicted-versus-
+/// runtime planted parity, and collision-free movement — replacing the retired separate pin-feasibility population
+/// replays of the identical 13-leg population.
 /// </summary>
 public sealed class NAV001CorrectedArrivalIntegrationTests
 {
@@ -43,6 +48,8 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
         Binding binding = Bind(fixture);
         string directory = EvidenceDestinations.Resolve(
             ProjectSettings.GlobalizePath($"{EvidenceDirectory}/{rig}-{(flight ? "defaults" : "no-flight")}"));
+        string pinDirectory = EvidenceDestinations.Resolve(
+            ProjectSettings.GlobalizePath($"res://temp/nav001-pin-feasibility/{rig}-{(flight ? "defaults" : "no-flight")}"));
         var summary = new StringBuilder("scenario,leg,A1_mm,A1_deg,A1_pass,A2_mm,A2_pass,A3_changed_ticks,A3_mm,A3_deg,A4_mm,A4_deg,left_reach,left_tick,right_reach,right_tick,forward_mm,backward_mm,lateral_mm,yaw_abs_deg,FL_ticks,FL_corrected_ticks,collisions,phase_pass\n");
         List<string> failures = [];
         try
@@ -54,7 +61,7 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
                 {
                     var target = new ArrivalTarget(new Vector2(legs[leg].Destination.X, legs[leg].Destination.Z), legs[leg].Yaw);
                     ArrivalPlan plan = binding.Planner.Plan(IdleStart(fixture, binding), target);
-                    await MeasureAsync(fixture, binding, plan, name, leg, flight, directory, summary, failures);
+                    await MeasureAsync(fixture, binding, plan, name, leg, flight, directory, pinDirectory, summary, failures);
                 }
             }
 
@@ -89,7 +96,7 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
                 var start = new ArrivalStart(pose, walk, prediction.Ticks[cut].Current.PositionSeconds) { Prompt = prompt };
                 SequencePose goal = new PlanarMotion(0.6d, 2d, Mathf.DegToRad(-20f)).From(pose);
                 ArrivalPlan plan = binding.Planner.Plan(start, new ArrivalTarget(goal.Position, goal.Yaw));
-                await MeasureAsync(fixture, binding, plan, prompt ? "replan-mid-walk-prompt" : "replan-mid-walk", 0, flight, directory, summary, failures);
+                await MeasureAsync(fixture, binding, plan, prompt ? "replan-mid-walk-prompt" : "replan-mid-walk", 0, flight, directory, pinDirectory, summary, failures);
             }
         }
         finally
@@ -111,7 +118,7 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
 
     private static async Task MeasureAsync(
         NPCNavigationRigFixture fixture, Binding binding, ArrivalPlan plan, string scenario, int leg,
-        bool flight, string directory, StringBuilder summary, List<string> failures)
+        bool flight, string directory, string pinDirectory, StringBuilder summary, List<string> failures)
     {
         RequirePlan(plan);
         SequencePrediction prediction = binding.Planner.Predict(plan);
@@ -129,6 +136,11 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
         var reaches = new Dictionary<ulong, (float Left, float Right)>();
         var left = new LegChain(fixture.Skeleton, "Left");
         var right = new LegChain(fixture.Skeleton, "Right");
+        FootPlantingTargetProvider[] providers = [.. fixture.Actor.FindChildren("*", "", true, false).OfType<FootPlantingTargetProvider>()];
+        var pinLeft = new Chain(fixture.Skeleton, "Left", providers.Single(provider => provider.Side.ToString() == "Left"));
+        var pinRight = new Chain(fixture.Skeleton, "Right", providers.Single(provider => provider.Side.ToString() == "Right"));
+        StringBuilder pinRows = new(
+            "tick,physics,foot,planted,clip,fading,ball_x,ball_y,ball_z,hip_x,hip_y,hip_z,ankle_x,ankle_y,ankle_z,length,drift_mm,required_reach,ball_reach,post_x,post_y,post_z,post_reach,live_drift_mm,live_required_reach,pin_x,pin_z,release,animated_ball_x,animated_ball_z,preIK_stage_difference_mm,table_drift_mm,table_pose_error_mm\n");
         void OnMixer()
         {
             roots[driver.EvaluationCount + 1] = (Engine.GetPhysicsFrames(), fixture.Tree.GetRootMotionPosition(), fixture.Tree.GetRootMotionRotation());
@@ -154,6 +166,11 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
         Transform3D end = actor.GlobalTransform;
         int tick = 0;
         int windowIndex = 0;
+        ulong physics = 0;
+        string pinClip = "";
+        string pinFading = "";
+        bool leftPlanted = false;
+        bool rightPlanted = false;
         int leftToes = fixture.Skeleton.FindBone("LeftToes");
         int rightToes = fixture.Skeleton.FindBone("RightToes");
         AnimationGraphPlantedStateSource plantedSource = fixture.Actor.FindChildren("*", "", true, false)
@@ -164,6 +181,7 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
         void MoveAfterAnimation()
         {
             (_, Vector3 rootPosition, Quaternion rootRotation) = roots[driver.EvaluationCount];
+            physics = Engine.GetPhysicsFrames();
             bool idle = tick >= prediction.Ticks.Length;
             var frame = new NPCNavigationSemanticFrame(actor.GlobalBasis, reference.GlobalBasis);
             float rootYaw = frame.EvaluatedRootRotationToActorLocal(rootRotation).GetEuler().Y;
@@ -178,6 +196,32 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
             Vector3 rootDelta = new NPCNavigationSemanticFrame(afterRoot, afterReference).EvaluatedRootDeltaToWorld(rootPosition);
             rootDelta.Y = 0f;
             var actualAfterRoot = new Transform3D(afterRoot, actor.GlobalPosition + rootDelta);
+            if (!plantedSource.TryGetPlantedState(out PlantedFeetState planted))
+            {
+                throw new InvalidOperationException("MEASUREMENT: current live planted state is unavailable.");
+            }
+
+            leftPlanted = planted.Left;
+            rightPlanted = planted.Right;
+            // Read the current mixer-written pose, not the previous tick's post-IK sample.
+            Transform3D actorFromSkeleton = actor.GlobalTransform.AffineInverse() * fixture.Skeleton.GlobalTransform;
+            Transform3D predictedSkeleton = Transform(idle ? prediction.EndPose : prediction.Ticks[tick].Pose) * actorFromSkeleton;
+            pinLeft.Capture(predictedSkeleton, planted.Left);
+            pinRight.Capture(predictedSkeleton, planted.Right);
+            if (!idle)
+            {
+                Assert.Equal(prediction.Ticks[tick].Planted, planted);
+                pinLeft.CaptureTable(Transform(prediction.Ticks[tick].Pose) * prediction.Ticks[tick].LeftBall, planted.Left);
+                pinRight.CaptureTable(Transform(prediction.Ticks[tick].Pose) * prediction.Ticks[tick].RightBall, planted.Right);
+            }
+            else
+            {
+                pinLeft.CaptureTable(null, planted.Left);
+                pinRight.CaptureTable(null, planted.Right);
+            }
+
+            pinClip = idle ? "Idle" : prediction.Ticks[tick].Current.Role;
+            pinFading = idle ? "" : prediction.Ticks[tick].FadingFrom?.Role ?? "";
             correction = default;
             residual = default;
             phase = SupportPhase.BothPlanted;
@@ -189,15 +233,8 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
                 }
 
                 SupportWindow window = prediction.Windows[windowIndex];
-                if (!plantedSource.TryGetPlantedState(out PlantedFeetState planted))
-                {
-                    throw new InvalidOperationException("MEASUREMENT: current live planted state is unavailable.");
-                }
-
                 phase = SupportPhases.Of(planted);
                 residual = Residual(actualAfterRoot, prediction.Ticks[tick].Pose, prediction.EndPose, plan.Target, out Vector2 endpointOffset);
-                // Read the current mixer-written pose, not the previous tick's post-IK sample.
-                Transform3D actorFromSkeleton = actor.GlobalTransform.AffineInverse() * fixture.Skeleton.GlobalTransform;
                 Vector3 ball = phase == SupportPhase.LeftSwing
                     ? actorFromSkeleton * fixture.Skeleton.GetBoneGlobalPose(rightToes).Origin
                     : phase == SupportPhase.RightSwing ? actorFromSkeleton * fixture.Skeleton.GetBoneGlobalPose(leftToes).Origin : Vector3.Zero;
@@ -220,7 +257,11 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
             if (!delta.IsZeroApprox() && actor.MoveAndCollide(delta) is not null)
             {
                 collisions++;
+                Assert.Fail($"MEASUREMENT: movement collided at plan tick {tick}.");
             }
+
+            pinLeft.CaptureLive(planted.Left);
+            pinRight.CaptureLive(planted.Right);
         }
 
         using var replay = new PhysicsReplay(fixture, MoveAfterAnimation);
@@ -279,6 +320,8 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
 
                 _ = ticks.AppendLine(FormattableString.Invariant(
                     $"{tick},{root.Tick},{phase},{sample.Planted.Left},{sample.Planted.Right},{correction.Planar.X * 1000:R},{correction.Planar.Y * 1000:R},{Mathf.RadToDeg(correction.Yaw):R},{correction.Pivot},{correction.OriginShift.X * 1000:R},{correction.OriginShift.Y * 1000:R},{residual.Position.X * 1000:R},{residual.Position.Y * 1000:R},{Mathf.RadToDeg(residual.Yaw):R},{actor.GlobalPosition.X:R},{actor.GlobalPosition.Z:R},{Mathf.RadToDeg(YawOf(actor.GlobalTransform)):R},{idle}"));
+                pinLeft.Write(pinRows, tick, physics, leftPlanted, pinClip, pinFading);
+                pinRight.Write(pinRows, tick, physics, rightPlanted, pinClip, pinFading);
                 if (tick + 1 < prediction.Ticks.Length)
                 {
                     RequestIfDue(driver, binding, segments, prediction, tick + 1, ref next);
@@ -293,6 +336,7 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
             fixture.Skeleton.SkeletonUpdated -= OnSkeleton;
             recorder.Detach();
             File.WriteAllText(Path.Combine(directory, $"{scenario}-{leg}-corrections.csv"), ticks.ToString());
+            File.WriteAllText(Path.Combine(pinDirectory, $"{scenario}-{leg}.csv"), pinRows.ToString());
         }
 
         PlantedStateSample[] samples = RequireCompleteWindow(recorder, firstTick, lastTick);
@@ -331,14 +375,12 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
         failures.AddRange(phaseFailures.Select(failure => $"{scenario}/{leg}: {failure}"));
     }
 
+    private static Transform3D Transform(SequencePose pose) =>
+        new(new Basis(Vector3.Up, pose.Yaw), new Vector3(pose.Position.X, 0, pose.Position.Y));
+
     private static SwingCorrectionResidual Residual(
         Transform3D actual, SequencePose predicted, SequencePose end, ArrivalTarget target, out Vector2 endpointOffset)
     {
-        static Transform3D Transform(SequencePose pose)
-        {
-            return new Transform3D(new Basis(Vector3.Up, pose.Yaw), new Vector3(pose.Position.X, 0f, pose.Position.Y));
-        }
-
         Transform3D projected = actual * Transform(predicted).AffineInverse() * Transform(end);
         Vector3 offset = actual.Basis.Inverse() * (projected.Origin - actual.Origin);
         endpointOffset = new Vector2(offset.X, -offset.Z);
@@ -378,6 +420,115 @@ public sealed class NAV001CorrectedArrivalIntegrationTests
         }
 
         public float Usage() => _skeleton.GetBoneGlobalPose(_hip).Origin.DistanceTo(_skeleton.GetBoneGlobalPose(_ankle).Origin) / _length;
+    }
+
+    /// <summary>Per-foot pre-IK pin-feasibility sampling of one replayed leg (ball, hip, ankle, pin, drift, reach).</summary>
+    private sealed class Chain
+    {
+        private readonly Skeleton3D _skeleton;
+        private readonly string _side;
+        private readonly int _hip;
+        private readonly int _ankle;
+        private readonly float _length;
+        private bool _previous;
+        private Vector3 _pin;
+        private Vector3 _ball;
+        private Vector3 _hipPosition;
+        private Vector3 _anklePosition;
+        private float _drift;
+        private float _reach;
+        private float _ballReach;
+        private bool _livePrevious;
+        private Vector3 _livePin;
+        private float _liveDrift;
+        private float _liveReach;
+        private Vector3 _liveBall;
+        private readonly FootPlantingTargetProvider _provider;
+        private Vector3 _tablePin;
+        private bool _tablePrevious;
+        private float _tableDrift;
+        private float _tableError;
+        public int BallIndex
+        {
+            get;
+        }
+
+        public Chain(Skeleton3D skeleton, string side, FootPlantingTargetProvider provider)
+        {
+            _provider = provider;
+            _skeleton = skeleton;
+            _side = side;
+            _hip = skeleton.FindBone(side + "UpperLeg");
+            _ankle = skeleton.FindBone(side + "Foot");
+            int knee = skeleton.FindBone(side + "LowerLeg");
+            BallIndex = skeleton.FindBone(side + "Toes");
+            _length = skeleton.GetBoneGlobalRest(_hip).Origin.DistanceTo(skeleton.GetBoneGlobalRest(knee).Origin)
+                + skeleton.GetBoneGlobalRest(knee).Origin.DistanceTo(skeleton.GetBoneGlobalRest(_ankle).Origin);
+        }
+
+        public void Capture(Transform3D transform, bool planted)
+        {
+            _ball = transform * _skeleton.GetBoneGlobalPose(BallIndex).Origin;
+            _hipPosition = transform * _skeleton.GetBoneGlobalPose(_hip).Origin;
+            _anklePosition = transform * _skeleton.GetBoneGlobalPose(_ankle).Origin;
+            if (planted && !_previous)
+            {
+                _pin = _ball;
+            }
+
+            _previous = planted;
+            Vector3 offset = _pin - _ball;
+            offset.Y = 0;
+            _drift = planted ? offset.Length() * 1000 : 0;
+            _reach = planted ? (_anklePosition + offset).DistanceTo(_hipPosition) / _length : 0;
+            _ballReach = planted ? _pin.DistanceTo(_hipPosition) / _length : 0;
+        }
+
+        public void Write(StringBuilder rows, int tick, ulong physics, bool planted, string clip, string fading)
+        {
+            Vector3 post = _skeleton.GlobalTransform * _skeleton.GetBoneGlobalPose(BallIndex).Origin;
+            float reach = _skeleton.GetBoneGlobalPose(_hip).Origin.DistanceTo(_skeleton.GetBoneGlobalPose(_ankle).Origin) / _length;
+            FootPlantingTickDiagnostic diagnostic = _provider.LastDiagnostic;
+            Assert.Equal(physics, diagnostic.Tick);
+            _ = rows.AppendLine(FormattableString.Invariant($"{tick},{physics},{_side},{planted},{clip},{fading},{_ball.X:R},{_ball.Y:R},{_ball.Z:R},{_hipPosition.X:R},{_hipPosition.Y:R},{_hipPosition.Z:R},{_anklePosition.X:R},{_anklePosition.Y:R},{_anklePosition.Z:R},{_length:R},{_drift:R},{_reach:R},{_ballReach:R},{post.X:R},{post.Y:R},{post.Z:R},{reach:R},{_liveDrift:R},{_liveReach:R},{diagnostic.Pin.X:R},{diagnostic.Pin.Z:R},{diagnostic.ReachBlendOutStarted},{diagnostic.AnimatedBall.X:R},{diagnostic.AnimatedBall.Z:R},{diagnostic.AnimatedBall.DistanceTo(_liveBall) * 1000:R},{_tableDrift:R},{_tableError:R}"));
+        }
+
+        public void CaptureLive(bool planted)
+        {
+            Transform3D transform = _skeleton.GlobalTransform;
+            Vector3 ball = transform * _skeleton.GetBoneGlobalPose(BallIndex).Origin;
+            _liveBall = ball;
+            if (planted && !_livePrevious)
+            {
+                _livePin = ball;
+            }
+
+            _livePrevious = planted;
+            Vector3 offset = _livePin - ball;
+            offset.Y = 0;
+            _liveDrift = planted ? offset.Length() * 1000 : 0;
+            _liveReach = planted ? ((transform * _skeleton.GetBoneGlobalPose(_ankle).Origin) + offset)
+                .DistanceTo(transform * _skeleton.GetBoneGlobalPose(_hip).Origin) / _length : 0;
+        }
+
+        public void CaptureTable(Vector3? predicted, bool planted)
+        {
+            if (predicted is not { } ball)
+            {
+                _tableDrift = float.NaN;
+                _tableError = float.NaN;
+                return;
+            }
+
+            if (planted && !_tablePrevious)
+            {
+                _tablePin = ball;
+            }
+
+            _tablePrevious = planted;
+            _tableDrift = planted ? new Vector2(ball.X - _tablePin.X, ball.Z - _tablePin.Z).Length() * 1000 : 0;
+            _tableError = ball.DistanceTo(_ball) * 1000;
+        }
     }
 
     private sealed class CorrectionTotals

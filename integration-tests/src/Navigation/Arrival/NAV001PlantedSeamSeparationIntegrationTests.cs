@@ -28,7 +28,7 @@ public sealed class NAV001PlantedSeamSeparationIntegrationTests
 
     private static async Task MeasureAsync(NPCNavigationRig rig)
     {
-        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig);
+        await using NPCNavigationRigFixture fixture = await NPCNavigationRigFixture.CreateAsync(rig, useReducedRenderSize: true);
         await fixture.StepAsync(NAV001ArrivalOutcomeIntegrationTests.WarmUpPhysicsTicks);
         Binding binding = Bind(fixture);
         string directory = EvidenceDestinations.Resolve(ProjectSettings.GlobalizePath(Evidence));
