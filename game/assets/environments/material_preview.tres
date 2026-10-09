@@ -13,4 +13,4 @@ background_mode = 2
 sky = SubResource("Sky_ura0y")
 tonemap_mode = 4
 tonemap_exposure = 1.12
-tonemap_agx_contrast = 1.26
+tonemap_agx_contrast = 1.35
