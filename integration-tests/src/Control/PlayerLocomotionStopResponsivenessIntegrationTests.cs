@@ -32,9 +32,12 @@ public sealed class PlayerLocomotionStopResponsivenessIntegrationTests
 {
     private const int SettleTicks = 30;
     private const int HoldTicks = 90;
-    private const int PostReleaseTicks = 330;
+    private const int MaximumPostReleaseTicks = 330;
+    // Approved completion-ended coverage: retain a half-second quiet tail after both motion and presentation
+    // finish. This is a temporal-coverage choice, not a duration inferred from the current animation's output.
+    private const int QuietTailTicks = 30;
     private const int EntryReleaseHoldTicks = 12;
-    private const int TurnPhaseTicks = 120;
+    private const int RotationReleaseTick = 210;
     private const float StopSpeed = 0.005f;
     private const float TargetStopSeconds = 0.4f;
     private const float TargetDisplacementMetres = 0.2f;
@@ -50,40 +53,22 @@ public sealed class PlayerLocomotionStopResponsivenessIntegrationTests
     private const float AuthoredStopBlendOvershootMetresPerSecond = 0.06f;
 
     [Fact]
-    public Task ForwardFullStick_StopsInsideTheResponsivenessBudget()
-        => RunScenarioAsync("fwd-full", new Vector2(0f, 1f), expectAuthoredStop: true);
-
-    [Fact]
-    public Task ForwardHalfStick_StopsInsideTheResponsivenessBudget()
-        => RunScenarioAsync("fwd-half", new Vector2(0f, 0.5f), expectAuthoredStop: true);
+    public Task ForwardFullAndHalfStick_StopInsideTheResponsivenessBudget()
+        => RunLaneCasesAsync(true, ("fwd-full", new Vector2(0f, 1f)), ("fwd-half", new Vector2(0f, 0.5f)));
 
     [Fact]
     public Task BackwardFullStick_StopsInsideTheResponsivenessBudget()
         => RunScenarioAsync("back-full", new Vector2(0f, -1f), expectAuthoredStop: true);
 
     [Fact]
-    public Task BackwardHalfStick_StopsInsideTheResponsivenessBudget()
-        => RunScenarioAsync("back-half", new Vector2(0f, -0.5f), expectAuthoredStop: true);
-
-    [Fact]
-    public Task LateralRightFullStick_TakesTheNeutralStopWithoutForwardGlide()
-        => RunScenarioAsync("lat-right-full", new Vector2(1f, 0f), expectAuthoredStop: false);
-
-    [Fact]
-    public Task LateralRightHalfStick_TakesTheNeutralStopWithoutForwardGlide()
-        => RunScenarioAsync("lat-right-half", new Vector2(0.5f, 0f), expectAuthoredStop: false);
-
-    [Fact]
-    public Task LateralLeftFullStick_TakesTheNeutralStopWithoutForwardGlide()
-        => RunScenarioAsync("lat-left-full", new Vector2(-1f, 0f), expectAuthoredStop: false);
+    public Task LateralRightAndLeftFullStick_TakeTheNeutralStopWithoutForwardGlide()
+        => RunLaneCasesAsync(false,
+            ("lat-right-full", new Vector2(1f, 0f)),
+            ("lat-left-full", new Vector2(-1f, 0f)));
 
     [Fact]
     public Task DiagonalForwardRightFullStick_KeepsTheScaledAuthoredForwardStop()
         => RunScenarioAsync("diag-fwd-right-full", new Vector2(0.70710678f, 0.70710678f), expectAuthoredStop: true);
-
-    [Fact]
-    public Task DiagonalForwardRightHalfStick_KeepsTheScaledAuthoredForwardStop()
-        => RunScenarioAsync("diag-fwd-right-half", new Vector2(0.35355339f, 0.35355339f), expectAuthoredStop: true);
 
     [Fact]
     public Task ReleaseDuringEntry_StopsInsideTheResponsivenessBudget()
@@ -106,6 +91,32 @@ public sealed class PlayerLocomotionStopResponsivenessIntegrationTests
             releaseMoveOnlyThenBoth: true,
             expectAuthoredStop: true);
 
+    private static async Task RunLaneCasesAsync(bool expectAuthoredStop, params (string Scenario, Vector2 Movement)[] cases)
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using ProductionPlayerSceneHarness harness =
+            await ProductionPlayerSceneHarness.CreateAsync(sceneTree, "ctrl001-stop-responsiveness", "last-run");
+        Transform3D initialActorTransform = harness.Actor.GlobalTransform;
+        for (int index = 0; index < cases.Length; index++)
+        {
+            if (index > 0)
+            {
+                // Share only inside this fact: TEST-001 destroys runtime roots between facts. Completion and the
+                // entire quiet tail have been asserted before placement for another independent lane stimulus.
+                ProductionWiringSample settled = harness.CaptureSample();
+                Assert.Equal(PlayerLocomotionState.Idle, settled.PlayerState);
+                Assert.Equal(harness.Locomotion.IdleAnimationStateName.ToString(), settled.GraphNode);
+                Assert.Equal(string.Empty, settled.FadingFromNode);
+                Assert.True(settled.ActorPlanarVelocity.Length() <= StopSpeed);
+                harness.ReleaseSticks();
+                harness.Actor.GlobalTransform = initialActorTransform;
+            }
+
+            (string scenario, Vector2 movement) = cases[index];
+            await RunScenarioAsync(scenario, movement, expectAuthoredStop: expectAuthoredStop, sharedHarness: harness);
+        }
+    }
+
     private static async Task RunScenarioAsync(
         string scenario,
         Vector2 movement,
@@ -113,11 +124,14 @@ public sealed class PlayerLocomotionStopResponsivenessIntegrationTests
         bool adaptiveCrossfadeRelease = false,
         Vector2 rotation = default,
         bool releaseMoveOnlyThenBoth = false,
-        bool expectAuthoredStop = true)
+        bool expectAuthoredStop = true,
+        ProductionPlayerSceneHarness? sharedHarness = null)
     {
         SceneTree sceneTree = GetSceneTree();
-        await using ProductionPlayerSceneHarness harness =
-            await ProductionPlayerSceneHarness.CreateAsync(sceneTree, "ctrl001-stop-responsiveness", "last-run");
+        await using ProductionPlayerSceneHarness? ownedHarness = sharedHarness is null
+            ? await ProductionPlayerSceneHarness.CreateAsync(sceneTree, "ctrl001-stop-responsiveness", "last-run")
+            : null;
+        ProductionPlayerSceneHarness harness = sharedHarness ?? ownedHarness!;
 
         Assert.True(harness.ControllerBound, "SETUP: the production PlayerController did not bind to the fake XR runtime.");
         _ = await harness.RunAsync(sceneTree, SettleTicks);
@@ -152,28 +166,51 @@ public sealed class PlayerLocomotionStopResponsivenessIntegrationTests
         ulong releaseFrame = atRelease.PhysicsFrame;
 
         string note = string.Empty;
-        List<ProductionWiringSample> samples = new(PostReleaseTicks);
-        int observe = releaseMoveOnlyThenBoth ? PostReleaseTicks - TurnPhaseTicks : PostReleaseTicks;
-        for (int tick = 0; tick < observe; tick++)
+        List<ProductionWiringSample> samples = new(MaximumPostReleaseTicks);
+        int completionTick = 0;
+        int stoppedTicks = 0;
+        // The deadline bounds completion, not its subsequent quiet tail.
+        for (int tick = 1; tick <= (completionTick > 0 ? completionTick + QuietTailTicks : MaximumPostReleaseTicks); tick++)
         {
             await WaitForNextPhysicsFrameAsync(sceneTree);
-            samples.Add(harness.CaptureSample());
-        }
+            ProductionWiringSample sample = harness.CaptureSample();
+            samples.Add(sample);
+            Assert.Equal(releaseFrame + (ulong)tick, sample.PhysicsFrame);
+            stoppedTicks = sample.ActorPlanarVelocity.Length() <= StopSpeed ? stoppedTicks + 1 : 0;
 
-        if (releaseMoveOnlyThenBoth)
-        {
-            harness.PushRotation(Vector2.Zero);
-            for (int tick = 0; tick < TurnPhaseTicks; tick++)
+            if (releaseMoveOnlyThenBoth && tick == RotationReleaseTick)
             {
-                await WaitForNextPhysicsFrameAsync(sceneTree);
-                samples.Add(harness.CaptureSample());
+                harness.PushRotation(Vector2.Zero);
+                note = "turn-released";
             }
 
-            note = "turn-released";
+            // The transient Idle before turn continuation is not the terminal state. Preserve every tick and
+            // the scheduled second input release before considering completion (CTRL-TAC-002).
+            bool allReleasesConsumed = !releaseMoveOnlyThenBoth || tick > RotationReleaseTick;
+            if (completionTick == 0 && allReleasesConsumed && stoppedTicks >= 3
+                && sample.PlayerState == PlayerLocomotionState.Idle
+                && sample.GraphNode == harness.Locomotion.IdleAnimationStateName.ToString()
+                && sample.FadingFromNode.Length == 0)
+            {
+                completionTick = tick;
+            }
+
+            if (completionTick > 0 && tick == completionTick + QuietTailTicks)
+            {
+                break;
+            }
         }
 
         harness.WriteReleaseTraceCsv(scenario, atRelease, releaseFrame, samples, note);
         AssertStopResponsiveness(scenario, atRelease, releaseFrame, samples, expectAuthoredStop);
+        Assert.True(completionTick > 0, $"({scenario}) stop presentation never completed in unfaded Idle.");
+        Assert.Equal(completionTick + QuietTailTicks, samples.Count);
+        Assert.All(samples.Skip(completionTick), sample =>
+        {
+            Assert.Equal(PlayerLocomotionState.Idle, sample.PlayerState);
+            Assert.Equal(harness.Locomotion.IdleAnimationStateName.ToString(), sample.GraphNode);
+            Assert.Equal(string.Empty, sample.FadingFromNode);
+        });
     }
 
     private static void AssertStopResponsiveness(

@@ -21,6 +21,9 @@ namespace AlleyCat.IntegrationTests.Speech;
 public sealed partial class A2FStreamingLipSyncIntegrationTests
 {
     private const float StreamFps = 30f;
+    // Lifecycle/routing fixtures still use the real audio clock; their length is not an inference-quality or
+    // starvation requirement. Keep the dedicated duration-gate, starvation and audio-end fixtures unchanged.
+    private const double LifecycleReplaySeconds = 0.3;
 
     /// <summary>
     /// Policy 1: preparation must complete (so playback can start audibly) once metadata and the startup
@@ -334,7 +337,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             // Begin the replacement immediately. Its HTTP request may only be admitted after the cut
             // session's reader has fully settled; this is intentionally not a PlayPrepared hand-off check.
             Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
-                CreateSilenceStream(seconds: 1.5));
+                CreateSilenceStream(seconds: LifecycleReplaySeconds));
             Task finishedSecond = await Task.WhenAny(secondPreparation, Task.Delay(4000));
             Assert.Same(secondPreparation, finishedSecond);
 
@@ -381,6 +384,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     [Headless]
     public async Task A2FStreaming_QueuedSuccessorPreparation_WaitsForPredecessorToSettleNaturally()
     {
+        TaskCompletionSource releasePredecessorDownload = new(TaskCreationOptions.RunContinuationsAsynchronously);
         LipSyncPlayer.StreamingPlaybackSession? firstSession = null;
         int secondRequestAdmittedBeforeFirstReadLoopSettled = 0;
         ScriptedA2FServer server = new(
@@ -398,17 +402,18 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
                     return;
                 }
 
-                // Slow predecessor stream: enough frames to open the startup gate immediately, then a
-                // trickle that keeps the read loop alive well after playback has started.
+                // Withhold completion until playback and the queued successor's non-admission check have run.
+                // Ordering, not a wall-clock trickle, is the contract; shorter real audio must not cancel the
+                // reader before its natural completion, so the test explicitly releases this producer barrier.
                 for (int frameIndex = 0; frameIndex < 8; frameIndex++)
                 {
                     await session.SendFrameAsync(frameIndex, frameIndex / 60f);
                 }
 
                 session.MarkEvent("predecessor-gate-frames-sent");
+                await releasePredecessorDownload.Task.WaitAsync(TimeSpan.FromSeconds(4));
                 for (int frameIndex = 8; frameIndex < 60; frameIndex++)
                 {
-                    await Task.Delay(35);
                     await session.SendFrameAsync(frameIndex, frameIndex / 60f);
                 }
 
@@ -431,8 +436,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
             GetSceneTree(),
             server.BlendshapesUrl,
-            // The queued successor queues behind the whole natural settlement of the slow trickle, so the
-            // bounded-settlement deadline needs headroom beyond that trickle's duration.
+            // Keep the existing admission deadline; only the test-local delivery cadence is changed.
             player => player.StreamingReplacementSettlementTimeoutSeconds = 9.5f);
         using RecordingDiagnosticsLogger logger = new();
         using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
@@ -443,7 +447,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             SceneTree sceneTree = GetSceneTree();
 
             Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
-                CreateSilenceStream(seconds: 3.0));
+                CreateSilenceStream(seconds: 0.8));
             Task firstFinished = await Task.WhenAny(firstPreparation, Task.Delay(4000));
             Assert.Same(firstPreparation, firstFinished);
             LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation;
@@ -460,13 +464,14 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.True(server.HasEvent("predecessor-gate-frames-sent"));
 
             Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
-                CreateSilenceStream(seconds: 1.5));
+                CreateSilenceStream(seconds: LifecycleReplaySeconds));
 
-            // While the predecessor read loop is still trickling, the queued successor must neither be
+            // While the predecessor read loop is held at the producer barrier, the queued successor must neither be
             // admitted to the server nor complete its own preparation.
             await WaitForFramesAsync(sceneTree, 15);
             _ = Assert.Single(server.TransportAcceptedRequestIndexes);
             Assert.False(secondPreparation.IsCompleted, "The queued successor must wait for natural predecessor settlement.");
+            _ = releasePredecessorDownload.TrySetResult();
 
             // The predecessor settles naturally once its complete record arrives; it is never cancelled.
             await WaitUntilAsync(sceneTree, () => firstSession.ReadLoop.IsCompleted, maxFrames: 3000);
@@ -502,6 +507,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         }
         finally
         {
+            _ = releasePredecessorDownload.TrySetResult();
             await fixture.DisposeAsync();
             server.Dispose();
         }
@@ -515,6 +521,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     [Headless]
     public async Task A2FStreaming_WhenPredecessorStreamFails_QueuedSuccessorPreparationIsNotPoisoned()
     {
+        TaskCompletionSource failPredecessorDownload = new(TaskCreationOptions.RunContinuationsAsynchronously);
         ScriptedA2FServer server = new(async session =>
         {
             await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
@@ -525,8 +532,8 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
                     await session.SendFrameAsync(frameIndex, frameIndex / 6f);
                 }
 
-                // Let playback start, then fail the stream by closing without the complete record.
-                await Task.Delay(300);
+                // Fail only after the test observed real audible playback; do not rely on a guessed delay.
+                await failPredecessorDownload.Task.WaitAsync(TimeSpan.FromSeconds(4));
                 return;
             }
 
@@ -559,6 +566,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
 
             fixture.Player.PlayPrepared(firstPlayback);
             Assert.True(fixture.Player.IsAudioPlaying);
+            _ = failPredecessorDownload.TrySetResult();
 
             // The server-side failure faults the predecessor's own read loop and playback.
             await WaitUntilAsync(sceneTree, () => firstSession.ReadLoop.IsCompleted, maxFrames: 3000);
@@ -568,7 +576,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
 
             // The next ordinary preparation is admitted anyway: the predecessor's fault is not inherited.
             Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
-                CreateSilenceStream(seconds: 1.5));
+                CreateSilenceStream(seconds: LifecycleReplaySeconds));
             LipSyncPlayer.PreparedPlayback secondPlayback = await secondPreparation.WaitAsync(TimeSpan.FromSeconds(4));
             Assert.NotNull(secondPlayback.StreamingSession);
             Assert.False(secondPlayback.StreamingSession!.Buffer.IsFaulted);
@@ -587,6 +595,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         }
         finally
         {
+            _ = failPredecessorDownload.TrySetResult();
             await fixture.DisposeAsync();
             server.Dispose();
         }
@@ -1071,7 +1080,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             int completedCount = 0;
             fixture.Player.PlaybackCompleted += () => completedCount++;
 
-            fixture.Player.Play(CreateSilenceStream(seconds: 1.5));
+            fixture.Player.Play(CreateSilenceStream(seconds: LifecycleReplaySeconds));
 
             Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
 
@@ -1087,8 +1096,8 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.Contains("Fps=17", request.PathAndQuery, StringComparison.Ordinal);
             Assert.DoesNotContain("fps=30", request.PathAndQuery, StringComparison.Ordinal);
 
-            // The uploaded inference payload must be float32 16 kHz mono PCM: 1.5 s × 16000 samples × 4 bytes.
-            Assert.Equal(24000 * sizeof(float), request.Body.Length);
+            // The uploaded inference payload must remain float32 16 kHz mono PCM: 0.3 s × 16000 × 4 bytes.
+            Assert.Equal(4800 * sizeof(float), request.Body.Length);
 
             Assert.True(fixture.Player.AppliedFrameCount > 0);
             Assert.False(fixture.Player.HasActiveStreamingSession);

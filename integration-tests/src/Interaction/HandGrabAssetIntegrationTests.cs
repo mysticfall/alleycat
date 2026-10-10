@@ -933,19 +933,29 @@ public sealed partial class HandGrabAssetIntegrationTests
     public async Task ReferencePlayerFixture_StaticDirectTargets_ExactControlsRemainStable()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        StaticTargetTrace ballInterior = await CaptureStaticTargetTraceAsync(
-            sceneTree,
-            "ball-interior",
-            static fixture => ConfigureBallExpectedAttachment(fixture, new Vector3(0.419f, 1.049f, -0.037f)));
-        StaticTargetTrace stickOffset = await CaptureStaticTargetTraceAsync(sceneTree, "stick-offset", static fixture =>
+        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
+        try
         {
-            GrabPointCandidate candidate = ((IGrabbable)fixture.Stick).GetGrabPoint(LimbSide.Right, _referenceMockQueryTarget)
-                ?? throw new Xunit.Sdk.XunitException("Expected the fixed authored stick query to resolve.");
-            return candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
-        });
+            // Neither control grabs or overrides a provider. Only the controller source changes; each control keeps
+            // its own convergence gate and all 30 stable samples. The rig lives inside this fact, never across the
+            // TEST-001 baseline restore. Rest-chain oracles remain independent of the previous solved pose.
+            StaticTargetTrace ballInterior = await CaptureStaticTargetTraceAsync(
+                sceneTree, fixture, "ball-interior",
+                static rig => ConfigureBallExpectedAttachment(rig, new Vector3(0.419f, 1.049f, -0.037f)));
+            StaticTargetTrace stickOffset = await CaptureStaticTargetTraceAsync(sceneTree, fixture, "stick-offset", static rig =>
+            {
+                GrabPointCandidate candidate = ((IGrabbable)rig.Stick).GetGrabPoint(LimbSide.Right, _referenceMockQueryTarget)
+                    ?? throw new Xunit.Sdk.XunitException("Expected the fixed authored stick query to resolve.");
+                return candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+            });
 
-        AssertStaticTargetExact(ballInterior);
-        AssertStaticTargetExact(stickOffset);
+            AssertStaticTargetExact(ballInterior);
+            AssertStaticTargetExact(stickOffset);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
     }
 
     /// <summary>
@@ -3156,80 +3166,73 @@ public sealed partial class HandGrabAssetIntegrationTests
 
     private static async Task<StaticTargetTrace> CaptureStaticTargetTraceAsync(
         SceneTree sceneTree,
+        ReferencePlayerMockXRFixture fixture,
         string label,
         Func<ReferencePlayerMockXRFixture, Transform3D> expectedAttachmentFactory)
     {
-        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
-        try
+        Transform3D expectedAttachment = expectedAttachmentFactory(fixture);
+        Assert.Null(fixture.RightHand.CurrentGrabbed);
+        Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
+        SetMockRightWristTransformForPlayerVRIK(fixture, expectedAttachment);
+
+        IKTargetPipelineResult pipeline = default;
+        for (int frame = 0; frame < 180; frame++)
         {
-            Transform3D expectedAttachment = expectedAttachmentFactory(fixture);
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+            pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+            if (pipeline.SourceTarget.Origin.DistanceTo(expectedAttachment.Origin) <= PositionToleranceMetres
+                && pipeline.RequestedTarget.Origin.DistanceTo(expectedAttachment.Origin) <= PositionToleranceMetres
+                && pipeline.Feedback.ErrorDistance <= PositionToleranceMetres
+                && fixture.RightHandTarget.GlobalPosition.DistanceTo(pipeline.RealisedTarget.Origin) <= PositionToleranceMetres)
+            {
+                break;
+            }
+
+            if (frame == 179)
+            {
+                throw new Xunit.Sdk.XunitException(
+                    $"Static target '{label}' did not converge through the source/request/realised pipeline. "
+                    + $"E={expectedAttachment.Origin}, S={pipeline.SourceTarget.Origin}, R={pipeline.RequestedTarget.Origin}, "
+                    + $"P={pipeline.RealisedTarget.Origin}, actuator={pipeline.Feedback.ErrorDistance:F6} m.");
+            }
+        }
+
+        var samples = new List<StaticTargetSample>(30);
+        for (int frame = 0; frame < 30; frame++)
+        {
+            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
+            await TestUtils.WaitForFramesAsync(sceneTree, 1);
+            pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
+            Transform3D attachment = fixture.RightHandAttachment.GlobalTransform;
+            samples.Add(new StaticTargetSample(
+                attachment.Origin.DistanceTo(expectedAttachment.Origin),
+                GetAngularDifferenceDegrees(expectedAttachment.Basis, attachment.Basis),
+                pipeline.Feedback.ErrorDistance));
             Assert.Null(fixture.RightHand.CurrentGrabbed);
             Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
-            SetMockRightWristTransformForPlayerVRIK(fixture, expectedAttachment);
-
-            IKTargetPipelineResult pipeline = default;
-            for (int frame = 0; frame < 180; frame++)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
-                await TestUtils.WaitForFramesAsync(sceneTree, 1);
-                pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
-                if (pipeline.SourceTarget.Origin.DistanceTo(expectedAttachment.Origin) <= PositionToleranceMetres
-                    && pipeline.RequestedTarget.Origin.DistanceTo(expectedAttachment.Origin) <= PositionToleranceMetres
-                    && pipeline.Feedback.ErrorDistance <= PositionToleranceMetres
-                    && fixture.RightHandTarget.GlobalPosition.DistanceTo(pipeline.RealisedTarget.Origin) <= PositionToleranceMetres)
-                {
-                    break;
-                }
-
-                if (frame == 179)
-                {
-                    throw new Xunit.Sdk.XunitException(
-                        $"Static target '{label}' did not converge through the source/request/realised pipeline. "
-                        + $"E={expectedAttachment.Origin}, S={pipeline.SourceTarget.Origin}, R={pipeline.RequestedTarget.Origin}, "
-                        + $"P={pipeline.RealisedTarget.Origin}, actuator={pipeline.Feedback.ErrorDistance:F6} m.");
-                }
-            }
-
-            var samples = new List<StaticTargetSample>(30);
-            for (int frame = 0; frame < 30; frame++)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
-                await TestUtils.WaitForFramesAsync(sceneTree, 1);
-                pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
-                Transform3D attachment = fixture.RightHandAttachment.GlobalTransform;
-                samples.Add(new StaticTargetSample(
-                    attachment.Origin.DistanceTo(expectedAttachment.Origin),
-                    GetAngularDifferenceDegrees(expectedAttachment.Basis, attachment.Basis),
-                    pipeline.Feedback.ErrorDistance));
-                Assert.Null(fixture.RightHand.CurrentGrabbed);
-                Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
-            }
-
-            int shoulderBone = fixture.Skeleton.FindBone("RightUpperArm");
-            int lowerArmBone = fixture.Skeleton.FindBone("RightLowerArm");
-            int handBone = fixture.Skeleton.FindBone("RightHand");
-            Assert.True(shoulderBone >= 0 && lowerArmBone >= 0 && handBone >= 0, "Expected the authored right-arm rest chain.");
-
-            Vector3 shoulderWorldRest = WorldRestOrigin(fixture.Skeleton, shoulderBone);
-            Vector3 lowerArmWorldRest = WorldRestOrigin(fixture.Skeleton, lowerArmBone);
-            Vector3 handWorldRest = WorldRestOrigin(fixture.Skeleton, handBone);
-            float restChainLength = shoulderWorldRest.DistanceTo(lowerArmWorldRest) + lowerArmWorldRest.DistanceTo(handWorldRest);
-            float shoulderToExpectedAttachment = shoulderWorldRest.DistanceTo(expectedAttachment.Origin);
-            return new StaticTargetTrace(
-                label,
-                expectedAttachment,
-                pipeline.SourceTarget,
-                pipeline.RequestedTarget,
-                pipeline.RealisedTarget,
-                samples,
-                shoulderToExpectedAttachment,
-                restChainLength,
-                restChainLength - shoulderToExpectedAttachment);
         }
-        finally
-        {
-            await fixture.DisposeAsync(sceneTree);
-        }
+
+        int shoulderBone = fixture.Skeleton.FindBone("RightUpperArm");
+        int lowerArmBone = fixture.Skeleton.FindBone("RightLowerArm");
+        int handBone = fixture.Skeleton.FindBone("RightHand");
+        Assert.True(shoulderBone >= 0 && lowerArmBone >= 0 && handBone >= 0, "Expected the authored right-arm rest chain.");
+
+        Vector3 shoulderWorldRest = WorldRestOrigin(fixture.Skeleton, shoulderBone);
+        Vector3 lowerArmWorldRest = WorldRestOrigin(fixture.Skeleton, lowerArmBone);
+        Vector3 handWorldRest = WorldRestOrigin(fixture.Skeleton, handBone);
+        float restChainLength = shoulderWorldRest.DistanceTo(lowerArmWorldRest) + lowerArmWorldRest.DistanceTo(handWorldRest);
+        float shoulderToExpectedAttachment = shoulderWorldRest.DistanceTo(expectedAttachment.Origin);
+        return new StaticTargetTrace(
+            label,
+            expectedAttachment,
+            pipeline.SourceTarget,
+            pipeline.RequestedTarget,
+            pipeline.RealisedTarget,
+            samples,
+            shoulderToExpectedAttachment,
+            restChainLength,
+            restChainLength - shoulderToExpectedAttachment);
     }
 
     private static Vector3 WorldRestOrigin(Skeleton3D skeleton, int bone)
