@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Logging;
+using AlleyCat.IK;
 using AlleyCat.Navigation.Arrival;
 using Godot;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ namespace AlleyCat.Navigation;
 public partial class NPCNavigation : NavigationBase
 {
     private const string SeamTolerancePath = "res://assets/characters/templates/navigation/seam_tolerance_sad.tres";
+    private FootPlantingTargetProvider[] _plantingClocks = [];
     private static readonly StringName _playbackParameter = new("parameters/States/playback");
     private static readonly StringName _statesNode = new("States");
     private readonly Dictionary<string, StringName> _stateOf = new(StringComparer.Ordinal);
@@ -231,12 +233,19 @@ public partial class NPCNavigation : NavigationBase
             AnimationTree.AnimPlayer = AnimationTree.GetPathTo(player);
             var catalogue = StandingLocomotionCatalogue.Parse(Godot.FileAccess.GetFileAsString(CataloguePath), CataloguePath);
             catalogue.RequireCapabilities(nameof(NPCNavigation), Enum.GetValues<StandingLocomotionCapability>());
-            var driver = new NPCAnimationTreeDriver(AnimationTree, _statesNode);
             NodePath track = AnimationTree.RootMotionTrack;
             _skeleton = AnimationTree.GetNodeOrNull(AnimationTree.RootNode)?.GetNodeOrNull<Skeleton3D>(new NodePath(track.GetConcatenatedNames()))
                 ?? throw new InvalidOperationException($"Root-motion track '{track}' does not resolve to a Skeleton3D.");
             _leftToes = _skeleton.FindBone("LeftToes");
             _rightToes = _skeleton.FindBone("RightToes");
+            _plantingClocks = [.. Actor.FindChildren("*", "", true, false).OfType<FootPlantingTargetProvider>()
+                .Where(provider => ReferenceEquals(provider.Skeleton, _skeleton))];
+            if (_plantingClocks.GroupBy(provider => provider.Side).Any(group => group.Count() > 1))
+            {
+                throw new InvalidOperationException("NPC navigation found duplicate planting providers for the same anatomical side.");
+            }
+
+            var driver = new NPCAnimationTreeDriver(AnimationTree, _statesNode, ObservePlantingElapsed);
             if (_leftToes < 0 || _rightToes < 0)
             {
                 throw new InvalidOperationException("NPC arrival binding requires both LeftToes and RightToes bones.");
@@ -444,10 +453,36 @@ public partial class NPCNavigation : NavigationBase
     /// <inheritdoc/>
     public override void _ExitTree()
     {
+        SetPhysicsProcess(false);
+        IsRuntimeBindingActive = false;
         if (CurrentStatus.HasActiveRequest)
         {
             _ = TryCancelActiveOutcome(NavigationCancellationSource.OwnerRemoved,
                 CreateCurrentTerminalContext(NavigationTerminalReason.Cancellation), Engine.GetPhysicsFrames());
+        }
+
+        ClearPlan();
+        _plantingClocks = [];
+        AnimationDriver = null;
+        Trajectories = null;
+        _planner = null;
+        _skeleton = null;
+        _plantedSource = null;
+        _stateOf.Clear();
+        _roleOf.Clear();
+        _pivotContinuationAliases = [];
+        _phaseObserved = false;
+        _phaseBudget = null;
+    }
+
+    private void ObservePlantingElapsed(ulong tick, double delta)
+    {
+        foreach (FootPlantingTargetProvider provider in _plantingClocks)
+        {
+            if (IsInstanceValid(provider) && ReferenceEquals(provider.Skeleton, _skeleton))
+            {
+                provider.ObservePhysicsElapsed(tick, delta);
+            }
         }
     }
 

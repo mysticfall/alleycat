@@ -68,6 +68,7 @@ public readonly record struct FootPlantingTickDiagnostic(
 public partial class FootPlantingTargetProvider : IKTargetIntentProvider
 {
     private readonly FootPlantingSolver _solver = new();
+    private readonly FootPlantingElapsedClock _elapsedClock = new();
     private Skeleton3D? _skeleton;
     private Skeleton3D? _connectedSkeleton;
     private int _upperLeg = -1;
@@ -78,6 +79,17 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
     private bool _resolutionAttempted;
     private ulong _lastTick;
     private IKTargetIntentResolution _lastResolution;
+
+    /// <summary>Observes physics time before the ordinary animation and movement owners.</summary>
+    public FootPlantingTargetProvider()
+    {
+        ProcessPhysicsPriority = -101;
+    }
+
+    /// <summary>Observe time even when the CharacterIK commit stage is inactive.</summary>
+    public override void _PhysicsProcess(double delta) => ObservePhysicsElapsed(Engine.GetPhysicsFrames(), delta);
+
+    internal void ObservePhysicsElapsed(ulong tick, double delta) => _elapsedClock.Observe(tick, delta);
 
     /// <summary>Anatomical side of the planted foot.</summary>
     [Export]
@@ -141,6 +153,39 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
         get; private set;
     }
 
+    /// <summary>Unmodified double-precision input at the most recent committed Step call boundary.</summary>
+    internal double LastCommittedInputDeltaSeconds
+    {
+        get; private set;
+    }
+
+    /// <summary>Physics tick of that call boundary; unchanged by previews and cached returns.</summary>
+    internal ulong LastCommittedInputTick
+    {
+        get; private set;
+    }
+
+    /// <summary>
+    /// Lifetime count of committed Step invocations, including an invocation that throws; excludes Preview.
+    /// Pin/statistics resets do not reset this read-only telemetry.
+    /// </summary>
+    internal ulong CommittedStepInvocationCount
+    {
+        get; private set;
+    }
+
+    /// <summary>Lifetime count of returns through the existing same-tick cache branch.</summary>
+    internal ulong CacheReturnCount
+    {
+        get; private set;
+    }
+
+    /// <summary>Whether the most recent resolution query returned through that cache branch.</summary>
+    internal bool LastResolutionUsedCache
+    {
+        get; private set;
+    }
+
     /// <summary>Number of pins released because they left the leg's reach.</summary>
     public int ReachBlendOutCount
     {
@@ -182,6 +227,7 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
     /// <inheritdoc />
     public override bool TryGetTargetIntent(out IKTargetIntentResolution resolution)
     {
+        LastResolutionUsedCache = false;
         if (!TryResolve())
         {
             resolution = default;
@@ -191,6 +237,8 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
         ulong tick = Engine.GetPhysicsFrames();
         if (tick == _lastTick)
         {
+            LastResolutionUsedCache = true;
+            CacheReturnCount++;
             resolution = _lastResolution;
             return true;
         }
@@ -217,7 +265,9 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
             _ballInFoot,
             legRoot,
             worldChainLength,
-            _lastTick == 0 ? 0d : (double)(tick - _lastTick) / Engine.PhysicsTicksPerSecond,
+            FootTargetResolutionStage.IsActiveFor(skeleton)
+                ? _elapsedClock.ForCommit(tick)
+                : _elapsedClock.Peek(tick, GetPhysicsProcessDeltaTime()),
             skeletonWorld.Origin);
         if (!FootTargetResolutionStage.IsActiveFor(skeleton))
         {
@@ -229,7 +279,12 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
             return true;
         }
 
+        // Telemetry observes the admitted input and invocation; it does not advance time or change commit/cache policy.
+        LastCommittedInputTick = tick;
+        LastCommittedInputDeltaSeconds = input.DeltaSeconds;
+        CommittedStepInvocationCount++;
         FootPlantingOutput output = _solver.Step(input);
+        _elapsedClock.Acknowledge(tick);
 
         if (output.ReachBlendOutStarted)
         {
@@ -272,6 +327,19 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
     public override void _ExitTree()
     {
         DisconnectSkeleton();
+        _elapsedClock.ResetBinding();
+        _solver.Reset();
+        _skeleton = null;
+        _resolutionAttempted = false;
+        _lastTick = 0;
+        _lastResolution = default;
+        LastDiagnostic = default;
+        IsPlantingAvailable = false;
+        _upperLeg = -1;
+        _foot = -1;
+        _ballInFoot = default;
+        _upperToLowerRest = default;
+        _lowerToFootRest = default;
         base._ExitTree();
     }
 
@@ -317,6 +385,7 @@ public partial class FootPlantingTargetProvider : IKTargetIntentProvider
         _upperToLowerRest = lowerRest - upperRest;
         _lowerToFootRest = footRest.Origin - lowerRest;
         _lastTick = 0;
+        _elapsedClock.ResetBinding();
         _solver.Reset();
         ConnectSkeleton(skeleton);
         return true;

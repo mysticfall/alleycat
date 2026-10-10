@@ -53,6 +53,7 @@ public sealed class NPCAnimationTreeDriver
     private const double CrossfadeTolerance = 1e-4d;
 
     private readonly AnimationTree _tree;
+    private readonly Action<ulong, double>? _beforeAdvance;
     private readonly StringName _playbackParameter;
     private readonly Dictionary<StringName, StateBinding> _states = [];
     private readonly Dictionary<(StringName From, StringName To), double> _crossfades = [];
@@ -62,12 +63,14 @@ public sealed class NPCAnimationTreeDriver
     /// <summary>Binds the driver to the tree's authored NPC states and transitions.</summary>
     /// <param name="tree">The NPC AnimationTree, already set to manual process callbacks.</param>
     /// <param name="stateMachineNode">Name of the root blend tree's state machine node.</param>
+    /// <param name="beforeAdvance">Optional tick-time admission before transitions and final evaluation.</param>
     /// <exception cref="InvalidOperationException">An NPC state does not have the required shape.</exception>
-    public NPCAnimationTreeDriver(AnimationTree tree, StringName stateMachineNode)
+    public NPCAnimationTreeDriver(AnimationTree tree, StringName stateMachineNode, Action<ulong, double>? beforeAdvance = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(stateMachineNode);
         _tree = tree;
+        _beforeAdvance = beforeAdvance;
         AnimationNodeStateMachine machine = (tree.TreeRoot as AnimationNodeBlendTree)?.GetNode(stateMachineNode) as AnimationNodeStateMachine
             ?? throw new InvalidOperationException($"The AnimationTree root has no '{stateMachineNode}' state machine.");
         string prefix = $"parameters/{stateMachineNode}";
@@ -190,6 +193,7 @@ public sealed class NPCAnimationTreeDriver
     /// </summary>
     public void Advance(double delta)
     {
+        _beforeAdvance?.Invoke(Engine.GetPhysicsFrames(), delta);
         if (_pending is { } pending)
         {
             _pending = null;

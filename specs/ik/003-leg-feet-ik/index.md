@@ -278,11 +278,44 @@ reduced coverage. Each exercised real NAV movement requests; removal asserts no 
 Current automated yaw-hold coverage on both rigs still includes the scripted native-heading ±180° wrap scenario with
 its user-accepted `5 mm` planar final-post-IK ball realisation tolerance (Technical Requirement 26), and on the
 female rig the same-tick-interval walk crossfade and stop-to-idle fact; both were green in the recorded 2026-10-04
-default matrix, run before the removals. All other IK-003 fixture coverage is untouched by this change.
+default matrix, run before the removals. All other IK-003 fixture coverage is untouched by this change. Both named
+facts were removed by the 2026-10-10 suite redesign below; read this paragraph as the 2026-10-04 record, not current
+coverage.
 
 Because the same decision reduced [NAV-001][nav-001] outcome coverage, the "in the NAV-001 scenarios" evidence of
 IK-UAC-002 and IK-UAC-006 now derives only from the NAV scenarios that keep an automated outcome guard. The
 IK-UAC-005 user naturalness judgement has not been performed and is outstanding.
+
+### Suite Redesign (2026-10-10)
+
+By user decision on 2026-10-10, the NAV/CTRL integration suite was redesigned rather than optimised: the
+implementation is incomplete with unresolved problems, the current `sad` ANIM-002 variant is placeholder content to be
+replaced, and no male retarget setup exists. Tests that had come to encode current placeholder behaviour were
+deleted, not fixed; removal asserts no pass and fixes no behaviour. This entry supersedes the coverage statements
+above as the current record.
+
+IK-003-scoped changes:
+
+- `IK003FootPlantingRigIntegrationTests` is trimmed from 21 facts to one: only `Female_MissingToeBoneFailsClosed`
+  remains, a cheap anatomical wiring refusal in which providers, modifiers, and navigation fail closed. The deleted
+  twenty include the scripted native-heading ±180° wrap scenarios on both rigs, the world-yaw temporal matrices, the
+  scripted interval capture/hold/blend-out facts, the female same-tick-interval walk crossfade and stop-to-idle fact,
+  and every male twin. Automated yaw-hold coverage now rests only on the retained world-facing hold regressions; the
+  scripted wrap guard of Technical Requirement 22 and IK-TAC-008, with its user-accepted `5 mm` tolerance, has no
+  automated guard.
+- `IK003NavigationFootPlantingIntegrationTests` is deleted. Its navigation planting coverage is replaced at outcome
+  granularity by NAV-001 spine fact 2, `WalkToDestination_PlantedFeetHoldStance_NoFootSliding`: stance pinning
+  against world anchors within the A2 `5 mm` planar bound, on the female default rig only.
+- The runtime-vs-recorder parity machinery is removed with `NAV001PlantedStateRecorderValidationIntegrationTests` and
+  `NPCSameTickPoseOrderingIntegrationTests`; generic graph-weight and planted-rule unit oracles remain.
+- Retained unchanged: `IK003WorldFacingHoldRegressionIntegrationTests` (6 facts — the remaining content-coupled female
+  live yaw-hold regressions, deliberately kept as a distinct IK safety guard beyond the positional NAV spine, which
+  checks ball position, not world orientation) and `FootPlantingElapsedClockIntegrationTests` (5 facts — actual
+  observed time, stage skip, cache/rebind, and lifecycle). The production simulated-clock actual-delta fix and its
+  tests remain: that fix is a defect fix independent of the test-strategy change.
+- The "in the NAV-001 scenarios" evidence of IK-UAC-002 and IK-UAC-006 now derives only from the spine's single
+  female walk. No automated male-rig IK-003 locomotion coverage remains; rigs resume automated coverage when
+  replacement content and male retargeting land.
 
 ## References
 

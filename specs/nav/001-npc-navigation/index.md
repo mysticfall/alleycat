@@ -647,6 +647,93 @@ from-idle corner obstacle scenario. Those retained facts assert the full arrival
 and were green in the recorded 2026-10-04 default matrix, run before the removals. Every scenario or regression
 listed above as removed now has no automated outcome guard.
 
+### Suite Redesign (2026-10-10)
+
+By user decision on 2026-10-10, the NAV/CTRL integration suite was redesigned rather than optimised. The NAV-001
+implementation is incomplete with unresolved problems, the current `sad` ANIM-002 variant is placeholder content to be
+replaced, no male retarget setup exists, and the expensive per-tick replay and diagnostic classes had come to encode
+current placeholder behaviour as if it were a contract. Those tests were deleted, not fixed; removal asserts no pass
+and fixes no behaviour. This entry supersedes the retained-facts list above: the 2026-10-04 retained outcome classes
+were themselves removed on 2026-10-10.
+
+The current automated end-to-end coverage is a two-fact spine, `NAV001LocomotionEndToEndIntegrationTests`, female
+default rig only:
+
+1. `WalkToDestination_ArrivesAndSettles_WithSmoothStitching` (foot IK disabled): a multi-metre turning walk reaches
+   its destination within the A1 tolerance (`0.01 m`, `1°`), ends `Completed`, and settles to unfaded Idle across the
+   post-completion window; maximum per-tick actor displacement and inter-sample hips/ball bone deltas stay inside the
+   spine's envelopes.
+2. `WalkToDestination_PlantedFeetHoldStance_NoFootSliding` (foot IK enabled): every observed contact stance holds its
+   world anchor within the A2 `5 mm` planar bound, both feet across multiple stances, and the realised terminal actor
+   transform agrees with the independently observed settled actor. Ownership evidence is outcome-level agreement
+   only, not exclusive per-tick mutation authority.
+
+The settled-drift (`1 mm`) and per-tick envelopes (actor `150 mm`, hips/ball `250 mm`) are loose engineering bounds
+pending replacement content — not measured `sad` thresholds, not aesthetic seam-quality claims, and not spec numbers
+(numeric caps remain configuration, not spec constants). They must be reviewed and replaced with content-independent
+bounds when replacement content lands, and must not be tightened to current `sad` output.
+
+Removed automated coverage (per-class inventory: `game/temp/suite-redesign-v13/report.md`):
+
+- Superseded outcome scenarios: `NAV001ArrivalOutcomeIntegrationTests`, `NAV001WaypointRouteOutcomeIntegrationTests`,
+  and `NAV001CornerRouteOutcomeIntegrationTests` — the 2026-10-04 retained spine is itself superseded.
+- Heavy replay and diagnostic classes: `NAV001CorrectedArrivalIntegrationTests` (corrected-arrival population and pin
+  evidence), `NAV001SequencePredictorOracleIntegrationTests`, `NAV001ArrivalPlannerIntegrationTests` (planner seam and
+  planner-set), `NAV001PinFeasibilityIntegrationTests`, `NAV001SplicePruningIntegrationTests`,
+  `NAV001StationaryPartialTurnIntegrationTests`, `NAV001PlantedSeamSeparationIntegrationTests`, and
+  `NAV001ReplayPacingIntegrationTests`.
+- Diagnostic probes: `NAV001RoboticMotionProbeIntegrationTests`, `NAV001NativeSpeedGraphIntegrationTests`,
+  `NAV001MidClipEntryIntegrationTests`, `NAV001PivotContinuationIntegrationTests`,
+  `NAV001PlantedStateRecorderValidationIntegrationTests`, `NAV001ComposedSectionContainmentIntegrationTests`,
+  `NAV001SectionEndpointBoundIntegrationTests`, `NAV001TerminalContinuationAdmissibilityIntegrationTests`,
+  `NPCSameTickPoseOrderingIntegrationTests`, `SeamTableIntegrationTests`, and
+  `NPCNavigationQueuedManoeuvreIntegrationTests`.
+- `IK003NavigationFootPlantingIntegrationTests`, replaced by spine fact 2; the IK-side removals, including the
+  `IK003FootPlantingRigIntegrationTests` trim from 21 facts to one, are recorded under IK-003's status.
+- Non-physics tautology and redundancy removals: `DirectTransformNavigationIntegrationTests` trimmed from 24 facts to
+  four atomic request-boundary guards, `NPCNavigationTrajectoryBindingIntegrationTests` reduced to its bound
+  `motion_scale` equation fact, and two `INavigationFacadeTests` declaration/enum restatements deleted.
+
+Criteria coverage after the redesign — every criterion keeps its normative force; the table records only its current
+automated guard:
+
+| Criterion | Current Automated Guard |
+| --------- | ----------------------- |
+| A1 | Spine fact 1 only (single female default-rig walk); no per-scenario guard. |
+| A2 | Spine fact 2 only (observed contact stances on that walk). |
+| A3 | Spine fact 1's settle window only. |
+| A4 | None. |
+| A5 | None; unit-level movement-choice algorithm tests remain. |
+| A6 | Manual judgement; not yet performed. |
+| NAV-TAC-001 | Outcome-level ownership agreement in spine fact 2 only; per-tick trace checks removed. |
+| NAV-TAC-002 | Bound `motion_scale` equation fact retained; sequence, slice-pair, and ball-table checks removed. |
+| NAV-TAC-003 | None. |
+| NAV-TAC-004 | Completion exercised by spine fact 1; tolerance-trace checks removed. |
+| NAV-TAC-005 | Atomicity guards and unit lifecycle tests retained; promptness and cancel/replace traces removed. |
+| NAV-TAC-006 | None (inspection criterion). |
+| NAV-TAC-007 | Route-authoring UI tests retained; via-point traversal outcome guard removed. |
+| NAV-TAC-008 | None; synthetic seam unit tests remain. |
+| NAV-TAC-009 | None; synthetic planner unit tests remain. |
+| NAV-TAC-010 | None. |
+| NAV-TAC-011 | None; synthetic geometry unit tests remain. |
+
+Retained NAV-side guards: the four atomic request-boundary facts of `DirectTransformNavigationIntegrationTests`
+(map-not-ready rejection, replacement atomicity, zero-delta and already-complete non-mutation), the bound
+`motion_scale` equation fact of `NPCNavigationTrajectoryBindingIntegrationTests`, the production-package boundary
+completeness facts, the non-reference mirror-room bind-crash regression, the playtest controller and startup-gate
+facts (17 facts, including destination-marker and via-authoring UI), and the synthetic planner, seam, predictor,
+budget, route, and lifecycle unit tests, which use independent synthetic inputs rather than recorded placeholder
+output.
+
+No automated male-rig locomotion coverage remains: the male replay twins were deleted, no retarget setup exists, and
+the retained male selection/bind facts are not retarget verification. Rigs resume automated coverage when replacement
+content and male retargeting land.
+
+The post-redesign full windowed suite gate is 1213 passed / 0 failed / 1 skipped (one pre-existing, unrelated
+dynamic-rig fixture skip) in 11 m 36.8 s wall time — roughly 60% shorter than the 29 m 11 s pre-redesign baseline.
+The reduction comes from deliberately smaller scope, not faster equivalent coverage, and establishes no criterion as
+met.
+
 ### Unresolved Outcomes
 
 Measured in the removed facts' final failing runs; each remains a live product deficit:
@@ -666,6 +753,9 @@ Measured in the removed facts' final failing runs; each remains a live product d
 - A6 manual naturalness judgement has not been performed and is outstanding.
 - The deficits above are unresolved and unguarded after the removal; nothing in this section may be read as A1–A6
   achieved.
+- The 2026-10-10 spine's engineering envelopes must be reviewed and replaced with content-independent bounds when
+  replacement animation content and male retargeting land; automated guards for the criteria listed above as
+  unguarded must be rebuilt on that content.
 
 ## References
 

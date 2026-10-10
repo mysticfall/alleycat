@@ -312,6 +312,27 @@ The retained CTRL-001 implementation deltas are delivered and independently revi
 - The stationary turn rate follows the authored pivot content (measured ~0.48 rad/s live versus the fixture's 1.87) —
   a content decision, not a runtime knob.
 
+### Suite Redesign (2026-10-10)
+
+By user decision on 2026-10-10, the NAV/CTRL integration suite was redesigned rather than optimised: the NAV/CTRL
+implementation is incomplete with unresolved problems, the current `sad` ANIM-002 variant is placeholder content to be
+replaced, and no male retarget setup exists. Expensive per-tick replay tests that encoded current placeholder
+behaviour were deleted, not fixed; removal asserts no pass and fixes no behaviour. CTRL-001's criteria are unchanged
+and normative; this entry records reduced shared automated evidence only.
+
+CTRL-scoped effects:
+
+- Retained unchanged: the playtest controller and startup-gate facts (17 facts covering startup/map/gate ownership,
+  scene selection, input queuing, structured request logging, camera interactions, and destination-marker and
+  via-authoring UI), and the unit-level control cadence, frame, contact, stop, and manual-ownership tests, which
+  exercise player control rather than NPC animation output and are not superseded by the NAV spine. The retained
+  explicit male pointer-rebinding fact is selection and bind coverage only, not retarget verification.
+- NPC locomotion end-to-end automated evidence now flows only through the NAV-001 two-fact spine (female default rig);
+  see [NAV-001 Current Status][nav-status].
+- The post-redesign full windowed suite gate is 1213 passed / 0 failed / 1 skipped (one pre-existing, unrelated
+  dynamic-rig fixture skip) in 11 m 36.8 s wall time, against the 29 m 11 s pre-redesign baseline — a reduction from
+  deliberately smaller scope, not faster equivalent coverage.
+
 ### Remaining Acceptance Work
 
 - Focused manual naturalness and positioning acceptance (User Requirement 7) on real selected content, including VR
@@ -340,3 +361,4 @@ The retained CTRL-001 implementation deltas are delivered and independently revi
 [ik-003]: ../../ik/003-leg-feet-ik/index.md
 [anim-scale]: ../../animation/002-locomotive-animation-set/index.md#motion-metadata
 [nav-001]: ../../nav/001-npc-navigation/index.md#arrival-planner
+[nav-status]: ../../nav/001-npc-navigation/index.md#current-status

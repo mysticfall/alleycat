@@ -2,7 +2,7 @@ using AlleyCat.Control.Locomotion;
 using AlleyCat.Navigation;
 using Godot;
 using Xunit;
-using static AlleyCat.IntegrationTests.Navigation.NAV001ArrivalOutcomeIntegrationTests;
+using static AlleyCat.IntegrationTests.Navigation.NavigationRigTestSupport;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
 namespace AlleyCat.IntegrationTests.Navigation;

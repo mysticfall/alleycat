@@ -992,9 +992,22 @@ public partial class CharacterIK : Node3D
         AfterProviderTargetProcessing(GetResolvedSkeleton(), delta);
     }
 
+    /// <summary>Unmodified supplied modifier delta at the most recent foot-provider stage entry.</summary>
+    internal double LastFootProviderStageDeltaSeconds
+    {
+        get; private set;
+    }
+
+    /// <summary>Lifetime stage entries, including entries refused by the existing activity gates.</summary>
+    internal ulong FootProviderStageInvocationCount
+    {
+        get; private set;
+    }
+
     private void OnFootProviderStage(double delta)
     {
-        _ = delta;
+        LastFootProviderStageDeltaSeconds = delta;
+        FootProviderStageInvocationCount++;
         if (!Active || !CanProcessProviderTargets)
         {
             return;

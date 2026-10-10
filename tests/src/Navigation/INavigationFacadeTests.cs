@@ -25,13 +25,6 @@ public sealed class INavigationFacadeTests
     }
 
     /// <summary>
-    /// Verifies the shared Godot-backed base is itself the NavigationAgent3D used for path state.
-    /// </summary>
-    [Fact]
-    public void NavigationBase_InheritsNavigationAgent3D()
-        => Assert.True(typeof(NavigationAgent3D).IsAssignableFrom(typeof(NavigationBase)));
-
-    /// <summary>
     /// Verifies the facade uses destination terminology for navigation intent.
     /// </summary>
     [Fact]
@@ -47,22 +40,6 @@ public sealed class INavigationFacadeTests
         Assert.Contains(navigationType.GetMethods(), method => method.Name == nameof(INavigation.ClearDestination));
         Assert.Contains(navigationType.GetMethods(), method => method.Name == nameof(INavigation.Poll));
         Assert.DoesNotContain(navigationType.GetMethods(), method => method.Name == "GetNextPathPosition");
-    }
-
-    /// <summary>
-    /// Verifies request outcomes distinguish unknown map readiness from invalid and unreachable destinations.
-    /// </summary>
-    [Fact]
-    public void NavigationDestinationResult_DefinesDistinctAtomicRejectionOutcomes()
-    {
-        NavigationDestinationResult[] results = Enum.GetValues<NavigationDestinationResult>();
-
-        Assert.Contains(NavigationDestinationResult.Accepted, results);
-        Assert.Contains(NavigationDestinationResult.Invalid, results);
-        Assert.Contains(NavigationDestinationResult.Unreachable, results);
-        Assert.Contains(NavigationDestinationResult.NotReady, results);
-        Assert.Contains(NavigationDestinationResult.OutcomeBackpressure, results);
-        Assert.Equal(5, results.Distinct().Count());
     }
 
     /// <summary>

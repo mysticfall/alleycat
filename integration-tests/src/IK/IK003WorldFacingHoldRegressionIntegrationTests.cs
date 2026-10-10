@@ -59,18 +59,18 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         int previousLimit = Engine.MaxPhysicsStepsPerFrame;
         Engine.MaxPhysicsStepsPerFrame = 1;
-        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NAV001ArrivalOutcomeIntegrationTests.NavigationTestScenePath).Instantiate(), exactMatch: false);
+        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NavigationRigTestSupport.NavigationTestScenePath).Instantiate(), exactMatch: false);
         KnownTargetProvider? leftProvider = null;
         KnownTargetProvider? rightProvider = null;
         try
         {
-            Node3D actor = root.GetNode<Node3D>(NAV001ArrivalOutcomeIntegrationTests.ActorNodeName);
-            NAV001ArrivalOutcomeIntegrationTests.PrepareActorBeforeTreeEntry(actor);
+            Node3D actor = root.GetNode<Node3D>(NavigationRigTestSupport.ActorNodeName);
+            NavigationRigTestSupport.PrepareActorBeforeTreeEntry(actor);
             sceneTree.Root.AddChild(root);
-            _ = await NAV001ArrivalOutcomeIntegrationTests.WaitForReadyNavigationAsync(sceneTree, root, actor);
-            await WaitForPhysicsFramesAsync(sceneTree, NAV001ArrivalOutcomeIntegrationTests.WarmUpPhysicsTicks);
+            _ = await NavigationRigTestSupport.WaitForReadyNavigationAsync(sceneTree, root, actor);
+            await WaitForPhysicsFramesAsync(sceneTree, NavigationRigTestSupport.WarmUpPhysicsTicks);
 
-            Skeleton3D skeleton = actor.GetNode<Skeleton3D>(NAV001ArrivalOutcomeIntegrationTests.SkeletonPath);
+            Skeleton3D skeleton = actor.GetNode<Skeleton3D>(NavigationRigTestSupport.SkeletonPath);
             CharacterIK characterIK = actor.GetNode<CharacterIK>("CharacterIK");
             Node3D leftTarget = Assert.IsType<Node3D>(characterIK.LeftFootIKTarget, exactMatch: false);
             Node3D rightTarget = Assert.IsType<Node3D>(characterIK.RightFootIKTarget, exactMatch: false);
@@ -284,24 +284,24 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         int previousLimit = Engine.MaxPhysicsStepsPerFrame;
         Engine.MaxPhysicsStepsPerFrame = 1;
-        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NAV001ArrivalOutcomeIntegrationTests.NavigationTestScenePath).Instantiate(), exactMatch: false);
+        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NavigationRigTestSupport.NavigationTestScenePath).Instantiate(), exactMatch: false);
         AnimationGraphPlantedStateRecorder? recorder = null;
         FacingCapture? capture = null;
         try
         {
-            Node3D actor = root.GetNode<Node3D>(NAV001ArrivalOutcomeIntegrationTests.ActorNodeName);
-            NAV001ArrivalOutcomeIntegrationTests.PrepareActorBeforeTreeEntry(actor);
+            Node3D actor = root.GetNode<Node3D>(NavigationRigTestSupport.ActorNodeName);
+            NavigationRigTestSupport.PrepareActorBeforeTreeEntry(actor);
             sceneTree.Root.AddChild(root);
-            INavigation navigation = await NAV001ArrivalOutcomeIntegrationTests.WaitForReadyNavigationAsync(sceneTree, root, actor);
-            recorder = NAV001ArrivalOutcomeIntegrationTests.BindRecorder(actor);
+            INavigation navigation = await NavigationRigTestSupport.WaitForReadyNavigationAsync(sceneTree, root, actor);
+            recorder = NavigationRigTestSupport.BindRecorder(actor);
             recorder.Attach();
-            Skeleton3D skeleton = actor.GetNode<Skeleton3D>(NAV001ArrivalOutcomeIntegrationTests.SkeletonPath);
+            Skeleton3D skeleton = actor.GetNode<Skeleton3D>(NavigationRigTestSupport.SkeletonPath);
             capture = new FacingCapture(actor, skeleton);
-            await WaitForPhysicsFramesAsync(sceneTree, NAV001ArrivalOutcomeIntegrationTests.WarmUpPhysicsTicks);
-            NAV001ArrivalOutcomeIntegrationTests.AssertIdleWarmUp(recorder, actor);
+            await WaitForPhysicsFramesAsync(sceneTree, NavigationRigTestSupport.WarmUpPhysicsTicks);
+            NavigationRigTestSupport.AssertIdleWarmUp(recorder, actor);
 
-            NavigationRequestIdentity identity = NAV001ArrivalOutcomeIntegrationTests.IssueRequest(
-                navigation, new NAV001ArrivalOutcomeIntegrationTests.ArrivalRequest(destination, yaw), scenario, 0);
+            NavigationRequestIdentity identity = NavigationRigTestSupport.IssueRequest(
+                navigation, new NavigationRigTestSupport.ArrivalRequest(destination, yaw), scenario, 0);
             ulong issueTick = Engine.GetPhysicsFrames();
             NavigationTerminalOutcomeRecord? outcome = null;
             ulong completionTick = 0;
@@ -310,7 +310,7 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
             await WaitForNextFrameAsync(sceneTree);
             for (int tick = 0; tick < 1200 && outcome is null; tick++)
             {
-                outcome = NAV001ArrivalOutcomeIntegrationTests.FindOutcome(navigation, identity);
+                outcome = NavigationRigTestSupport.FindOutcome(navigation, identity);
                 if (outcome is not null)
                 {
                     completionTick = Engine.GetPhysicsFrames();
@@ -398,7 +398,7 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
             {
                 HeadingPair heading = capture.Headings[sample.Tick];
                 string clip = sample.Graph.Current;
-                _ = csv.AppendLine(FormattableString.Invariant($"{sample.Tick},{clip},{sample.Graph.Fading},{(sample.Planted.Left ? 1 : 0)},{(sample.Planted.Right ? 1 : 0)},{Mathf.RadToDeg(NAV001ArrivalOutcomeIntegrationTests.YawOf(sample.Actor)):R},{Mathf.RadToDeg(heading.Left):R},{Mathf.RadToDeg(heading.Right):R},{sample.LeftBall.X:R},{sample.LeftBall.Z:R},{sample.RightBall.X:R},{sample.RightBall.Z:R},{(capture.Releases.Left.Contains(sample.Tick) ? 1 : 0)},{(capture.Releases.Right.Contains(sample.Tick) ? 1 : 0)}"));
+                _ = csv.AppendLine(FormattableString.Invariant($"{sample.Tick},{clip},{sample.Graph.Fading},{(sample.Planted.Left ? 1 : 0)},{(sample.Planted.Right ? 1 : 0)},{Mathf.RadToDeg(NavigationRigTestSupport.YawOf(sample.Actor)):R},{Mathf.RadToDeg(heading.Left):R},{Mathf.RadToDeg(heading.Right):R},{sample.LeftBall.X:R},{sample.LeftBall.Z:R},{sample.RightBall.X:R},{sample.RightBall.Z:R},{(capture.Releases.Left.Contains(sample.Tick) ? 1 : 0)},{(capture.Releases.Right.Contains(sample.Tick) ? 1 : 0)}"));
             }
 
             string directory = ProjectSettings.GlobalizePath(_evidenceDirectory);
