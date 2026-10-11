@@ -71,14 +71,14 @@ jolt_physics_3d/simulation/areas_detect_static_bodies=true
 
 [rendering]
 
-lights_and_shadows/directional_shadow/soft_shadow_filter_quality=4
-lights_and_shadows/positional_shadow/soft_shadow_filter_quality=4
 textures/light_projectors/filter=4
 environment/subsurface_scattering/subsurface_scattering_quality=2
 environment/subsurface_scattering/subsurface_scattering_scale=0.012
 environment/subsurface_scattering/subsurface_scattering_depth_scale=0.003
 environment/defaults/default_clear_color=Color(1, 1, 1, 1)
 anti_aliasing/quality/use_taa=true
+lights_and_shadows/positional_shadow/atlas_size=8192
+lights_and_shadows/positional_shadow/atlas_quadrant_0_subdiv=1
 scaling_3d/positional_shadow/soft_shadow_filter_quality=2
 scaling_3d/quality/use_taa=false
 
