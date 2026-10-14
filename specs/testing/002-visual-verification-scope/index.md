@@ -12,77 +12,100 @@ alone are insufficient.
 
 ## Goal
 
-Standardise a photobooth-based verification process where C# integration tests are the primary acceptance
-mechanism and screenshots serve as a diagnostic aid.
+Match evidence to the visible claim without requiring infrastructure that adds no relevant proof. This contract guides
+planners, implementers, and reviewers; owning feature specifications retain any additional validation requirements.
 
 ## User Requirements
 
-1. Contributors and agents must be able to verify visual feature intent using a repeatable workflow rather
-   than ad-hoc screenshot runs.
-2. Verification handoffs must include enough artefacts for reviewers to understand what was checked.
-3. Visual evidence should support debugging when assertions fail, without replacing objective test assertions.
+1. Contributors must be able to verify the actual visible outcome in a representative, repeatable scenario.
+2. Reviewers must be able to distinguish demonstrated outcomes from supporting checks, uncertainty, and unproved claims.
+3. Objective criteria must govern verification where applicable; user judgement remains required where the owning
+   feature specification assigns it. Automated checks must not substitute for that judgement.
 
 ## Technical Requirements
 
-1. Visual verification must use reusable photobooth test scenes and scripted scenario capture.
-2. Camera and marker framing validation must happen before feature-level capture.
-3. C# integration assertions must remain the primary acceptance gate for the same behaviour under test.
-4. Handoff artefacts must include scene, runner, output, and test paths needed for reproducibility.
+1. Define the visible claim, representative scenario and scene wiring, complete observation window, and acceptance
+   criterion before evaluating results. Justify objective bounds independently of the candidate implementation or its
+   observed output; existing test thresholds alone are not approval.
+2. Select the least-intrusive method that proves that claim. An existing runtime scene or harness may suffice.
+   Screenshots, GDScript runners, photobooths, and C# integration tests are required only when selected for the evidence
+   method or mandated by the owning feature contract, not solely because acceptance is visual.
+3. For a reported defect, establish a genuine failing baseline caused by the original visible symptom before production
+   implementation. Verify the final candidate against the same scenario, observation window, and criterion.
+   Only urgent safety or integrity containment may precede reproduction when delay itself would be unsafe, as defined
+   in [Bug Work](../../../AGENTS.md#bug-work). Make the minimum protective change; it is not verified resolution, and
+   the parent regression remains open. Ordinary defects, delivery pressure, and inconvenient reproduction do not
+   qualify.
+4. Temporal claims require time-resolved evidence covering the complete reported transition, including visible arrival
+   and sufficient settling to expose recurrence. Isolated screenshots, endpoints, state flags, actor-root stillness,
+   or other mechanism checks cannot replace evidence of the visible outcome.
+5. Selected screenshots require a working renderer, valid camera framing, and independent image inspection. Validate
+   markers when used or required by the claim or owning contract; screenshots do not inherently require markers.
+   File existence or successful capture alone is not acceptance.
+6. Handoffs must record the method and why it is representative, reproducible setup, evidence locations or observation
+   records, expected and observed outcomes, execution results for selected tests/runners, and any unproved remainder.
+7. Missing reproduction blocks verified symptom resolution. Only explicit user authorisation permits a conditional
+   handoff under an alternative evidence contract; record its exact conditions, risks, limitations, and unproved
+   remainder. Such a handoff is neither red-to-green evidence nor verified symptom resolution.
 
 ## In Scope
 
 - Feature-level visual checks tied to explicit spec expectations.
-- Photobooth-based verification scenes under `@game/tests/<feature>/...`.
-- Reuse of existing photobooth base scenes where applicable.
-- Marker-based visual references that are visible in screenshots.
-- Screenshot capture scripts that execute scenario states and produce reproducible outputs.
-- Screenshot capture on test failure as a diagnostic aid for investigating assertion failures.
-- C# integration tests that validate the same behaviour non-visually as the primary verification mechanism.
+- Representative runtime observations and static or time-resolved evidence.
+- Reusable photobooths, markers, capture runners, and C# assertions when relevant to the selected method.
+- Reproducible evidence and independent review of visible outcomes.
 
 ## Out Of Scope
 
-- Subjective art-direction judgement (mood, atmosphere, style preference).
+- Defining art-direction preferences or replacing user judgement assigned by an owning feature specification.
 - Replacing existing logic, unit, or integration tests that already validate behaviour sufficiently.
-- One-off screenshot workflows that skip reusable test-scene setup.
+- Mandatory creation of verification infrastructure unrelated to the claim or owning feature contract.
 
 ## Workflow Contract
 
-1. **Create a test scene (Photobooth)**
-   - Inherit a suitable base under `@game/assets/...` when available.
-   - Default base: `@game/assets/testing/photobooth/photobooth.tscn`.
-   - Save feature verification scene under `@game/tests/<feature>/...`.
-2. **Verify cameras and markers first**
-   - Add markers via Photobooth API.
-   - Capture per-camera framing screenshots before feature-level verification.
-   - Confirm required subject regions and markers are visible for the intended checks.
-3. **Add C# integration coverage**
-   - C# integration tests are the **primary** verification mechanism.
-   - Load the same test scene in C# integration tests.
-   - Assert non-visual equivalents (pole-target direction, bone positions, transform bounds).
-   - When assertions fail, capture screenshots from relevant cameras using `Object.Call()` to invoke
-     GDScript `Photobooth` or `CameraRig` methods.
-4. **Run feature scenarios for diagnostic screenshots**
-   - Use a runner script with the same base name as the test scene (`.tscn` + `.gd`).
-   - Apply scenario states and capture screenshots with `Photobooth.capture_screenshots(...)`.
-   - The GDScript runner produces multi-camera screenshots for all scenarios, but these serve as a
-     **diagnostic aid** reviewed when C# tests fail — they are not the primary acceptance gate.
+1. **Define the Claim and Baseline**
+   - Identify the owning feature requirements and any additional required checks or user judgement.
+   - Record the scenario, complete visible window, and independently justified criterion; reproduce reported defects,
+     subject only to the urgent containment exception in Technical Requirement 3.
+   - If reproduction is unavailable, escalate the evidence gap rather than substituting a convenient mechanism check.
+2. **Select Representative Evidence**
+   - Prefer the actual runtime scene or existing harness when it represents the claim.
+   - For static claims, expose the relevant pose, placement, framing, or appearance detail.
+   - For temporal claims, use representative playable observation, deterministic video, sampled frames, or a
+     synchronised trace only where it demonstrates the visible outcome throughout the required window.
+3. **Validate the Selected Setup**
+   - When using a photobooth, inherit a suitable reusable base and store feature scenes under `@game/tests/<feature>/`.
+   - When selecting screenshots, verify required camera views and applicable directional conventions before capture.
+     Validate markers when used or required by the claim or owning contract. Capture with a renderer and independently
+     inspect representative images; escalate unclear evidence.
+   - When selecting a runner or C# test, execute it against the representative scenario and retain relevant assertions
+     as supporting evidence. Mechanism assertions do not discharge a separate visible-outcome requirement.
+4. **Compare and Hand Off**
+   - Rerun the original regression after meaningful production changes and on the final candidate without weakening it.
+   - Provide reproducible records and distinguish symptom evidence, supporting checks, and outstanding user judgement.
+   - Keep unsupported outcomes open. Reopen acceptance when the user reports a visual contradiction after a prior pass.
 
 ## Acceptance Criteria
 
-1. The specification defines both user-facing verification workflow outcomes and technical implementation
-   contracts.
-2. Visual-verification tasks use the workflow contract above unless a spec explicitly overrides it.
-3. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate
-   photobooth inheritance chain.
-4. Camera and marker framing validation is completed before feature-level screenshot review.
-5. C# non-visual assertions are the primary verification mechanism; screenshot evidence serves as a
-   diagnostic aid when assertions fail.
-6. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration
-   test location.
+1. The evidence plan identifies the owning requirements, representative scenario, complete window, independent
+   criterion, and justified method without imposing unrelated infrastructure. (User 1, 3; Technical 1–2)
+2. Reported defects have original-symptom baseline failure and final-candidate success under the unchanged scenario,
+   window, and criterion before verified resolution is claimed. (User 1–2; Technical 3)
+3. Temporal outcomes are demonstrated throughout the required transition and settling window, not inferred solely from
+   static or mechanism checks. (User 1–2; Technical 4)
+4. Selected screenshot evidence has validated framing, applicable marker validation, renderer-backed capture, and
+   independent inspection of expected versus observed cues. Invalid or ambiguous evidence remains unresolved.
+   (User 1–2; Technical 5)
+5. Reviewers can reproduce the selected method from the handoff, locate its evidence, distinguish supporting checks from
+   outcome proof, and identify required user judgement and any unproved remainder. (User 1–3; Technical 6)
+6. Without reproduction, only an explicitly user-authorised alternative contract permits a conditional handoff, with
+   its conditions and limitations recorded and no claim of verified symptom resolution. (User 2; Technical 7)
 
 ## References
 
 - @specs/index.md
+- [Visual Verification Guidance](@.opencode/skills/godot-visual-verification/SKILL.md)
+- [Implementation Review Checklist](@.opencode/skills/reviewer-checklist-implementation/SKILL.md)
 - @game/assets/testing/photobooth/photobooth.tscn
 - @game/assets/testing/photobooth/templates/full_body_5_cams.tscn
 - @docs/gdscript-api.md

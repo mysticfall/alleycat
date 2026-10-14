@@ -32,6 +32,24 @@ Godot engine.
   framework already launches Godot with `--xr-mode off`; direct `godot-mono` commands must pass `--xr-mode off`
   explicitly.
 
+## Test Scope and Value
+
+- Before adding or strengthening a test, identify the approved requirement or reported symptom, the realistic failure
+  it distinguishes, and why existing coverage is insufficient. Include this briefly in `Validation`; no extra report
+  or per-assertion ledger is required. Technical contract tests are valid without a visible symptom when the contract
+  is approved; hypothetical corner cases are not new requirements by default.
+- Reuse or extend the smallest adequate check. Use unit tests for pure logic and integration tests for a necessary
+  Godot/runtime boundary. Use minimal relevant wiring; retain representative production interaction when isolation
+  would hide the symptom. Do not introduce full-character dependencies for unrelated component checks.
+- Expected results must come from the contract or an independent observation, not the algorithm's own output. Avoid
+  duplicate cases unless they distinguish another required failure mode. State the runtime/timeout cost of new slow
+  checks and justify long waits by the required observation window, not arbitrary settling delays.
+- A failing new test does not by itself justify a production fix. Check its authority, oracle, fixture and environment
+  first. Escalate newly proposed behaviour or a non-trivial prerequisite instead of recursively fixing and testing it.
+  Correct an invalid test without hiding genuine symptom evidence or relaxing authorised bounds.
+- For uncertain designs, return the smallest representative end-to-end result before expanding reusable collectors,
+  replay systems, or scenario matrices. Report infrastructure progress as partial and retain the parent outcome.
+
 ## Bug-Fix Entry Gate
 
 - Before a production bug fix, create or reuse a regression that genuinely fails on the reported symptom across the

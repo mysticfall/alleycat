@@ -45,6 +45,9 @@ If multiple contexts apply, combine the relevant checklists and make conflicts e
 - [ ] Any deferred issue is explicitly non-blocking and has a clear rationale.
 - [ ] For implementation readiness, critical user outcomes have success evidence, not just passing mechanism/refusal
   tests. Fixtures exercise the required engine boundary and active state; thresholds trace to approved requirements.
+- [ ] New or strengthened tests meet the coder's **Test Scope and Value** rules: approved authority, distinct failure
+  detection, an independent oracle, the smallest representative fixture, and justified execution cost. A test failure
+  alone is not proof that production behaviour must change; inspect the test's validity first.
 
 For bug-fix reviews, inspect evidence in this order:
 
@@ -91,6 +94,14 @@ For each issue include:
 - File reference(s)
 - Why it matters (impact/risk)
 - Concrete fix recommendation
+- For blockers: the exact approved requirement or user instruction, observed violation or missing mandatory evidence,
+  and why it blocks this handoff. Distinguish a product defect from an oracle, fixture, environment, or evidence gap.
+
+Do not promote optional hardening, an unapproved edge case, or a preferred evidence format into a must-fix. If a
+material risk or authority conflict remains uncertain, request a bounded investigation or decision rather than inventing
+a contract. A missing required outcome remains blocking even when supporting suites pass. Reuse valid evidence for
+unchanged checks, while retaining applicable independent final gates; do not restart broad validation merely because
+the report was reformatted. Group shared-cause fixes without losing individual blocker IDs.
 
 For re-review, retain each original blocker ID and meaning and give a concise resolved/re-raised verdict with evidence.
 Give new concerns new IDs; do not substitute unrelated regression results for prior blocker closure.
