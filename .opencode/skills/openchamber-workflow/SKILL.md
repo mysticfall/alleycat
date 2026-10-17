@@ -49,34 +49,30 @@ Do not append unapproved blockers, rewrite scope, drop constraints, or silently 
 when discoveries require a different plan. An authorised replacement must preserve all still-relevant objectives,
 requirements, decisions, acceptance and open work; use the last-read text as `expected`.
 
-## Coarse TODO Overview
+## Plan-Level Progress
 
-The user has explicitly made a standing request: after approval, all four primary agents maintain a coarse session
-progress overview in OpenChamber's TODO tab. This is the user-requested exception to the default backlog-only rule,
-not permission to create detailed task trackers for other users or unapproved work. For brainstormer, mirror only an
-approved exploration/handoff stage or an existing approved plan; this does not authorise an implementation plan.
+Use the approved plan's `## Steps` checklist as the sole execution progress overview for all four primary agents.
+Do not mirror stages into native TODOs or another tracker. For bounded work without a plan, report progress in the
+session; do not manufacture a plan or TODOs just for tracking. Brainstormer may track approved exploration/handoff
+steps in an existing plan, but this does not authorise writing an implementation plan.
 
-- Call `knowledge.list` first. Use `knowledge.save`, `kind: todo`, for a few coarse outcome stages, not each substep,
-  assertion, blocker, or report field. The approved plan remains the authority; the TODO tab is only an overview.
-- Use short, readable task-first labels so task names remain visible in a narrow TODO tab. Add a short human-readable
-  scope suffix only when needed for disambiguation, for example `Verify Arrival Motion (Locomotion)`.
-  Never put raw plan/session UUIDs in display text. Keep actual plan/session IDs, returned TODO IDs and their ownership
-  mapping in the continuity handoff instead. List and dedupe before adding; match owned items by stored TODO ID, not
-  ambiguous labels. If ownership cannot be recovered, resolve it before updating or creating a replacement.
-- Update only owned items by ID after evidence triage, using `completed: true/false`. For a state-only update omit
-  `body` to preserve user wording. Re-read before changing text; if the user changed it, reconcile rather than replace.
-- Identify the current stage in progress communication; native TODOs have a completion boolean, not an invented
-  in-progress state. Failed or paused work stays open. A checkbox cannot establish readiness or symptom resolution.
-- Do not bulk clear or delete TODOs, touch unrelated entries, or delete completed records as routine cleanup.
-  `knowledge.delete` is for an explicitly authorised deletion of the identified item, not progress management.
-- Outside this standing request, unrequested TODOs remain backlog only: add when leaving work for later, not to track
-  current execution. Dedupe against existing entries and distinguish unapproved suggestions from committed work.
+- Identify the current stage in progress communication. Tick only evidence-backed completed steps after response
+  triage; failed, paused or unproved steps stay open. A checkbox cannot establish readiness or symptom resolution.
+- A plan pinned to a session provides context, not private storage: plans are shared project knowledge. Separate tasks
+  use separate plans; a continuation retains the same canonical plan ID/path. Resolve an ambiguous plan association
+  before editing; do not reuse another task's plan merely because its title or steps resemble yours.
+- Native TODOs are project backlog only: add for user-requested backlog items or work left for later, never current
+  session progress. List and dedupe first; distinguish unapproved suggestions from committed work. Retain relevant
+  backlog IDs when needed for continuity, not mandatory session-progress ownership mappings.
+- Do not mutate, delete or migrate existing live TODOs to adopt plan-level tracking. Ordinary backlog changes need
+  their own task authority and exact item IDs; preserve user wording and unrelated entries. Never bulk clear entries
+  or delete completed records as routine cleanup.
 
 ## Continuity and Recovery State
 
 After compaction, restart, session movement, or resumption, re-read the canonical plan and current project knowledge
 before delegating. Recover scope from the approved document, not a remembered summary. Keep a concise continuity
-handoff in the session: plan ID/path, session ID, project/directory, TODO IDs and their plan/session ownership mapping,
+handoff in the session: canonical plan ID/path, session ID, project/directory, relevant backlog IDs if needed,
 authorisation, parent outcome/evidence paths, current stage, stable blocker IDs, unproved remainder, supporting-work
 count and next authorised evidence step.
 Do not amend the approved plan just to store these progress records. Preserve user decisions and partial changes.

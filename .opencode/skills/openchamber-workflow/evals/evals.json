@@ -3,8 +3,8 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Planner: the user dispatched a saved plan to improve it, not implement it. Knowledge list returns plan p7 at /custom/plans/fix.md. The user edits a constraint after you read it. Later they explicitly approve implementation and request the standing coarse TODO overview. Describe the tool sequence and permitted changes; do not call live tools.",
-      "expected_output": "List/read the returned path, revise with expected last-read text, reconcile conflict, save/show/wait; no implementation before authority. After approval list/dedupe coarse TODOs with readable task-first labels and an optional short human-readable scope suffix only for disambiguation; never display raw plan/session UUIDs. Retain actual plan/session/TODO IDs and ownership mapping in the continuity handoff; match owned items by stored TODO ID, not ambiguous labels. Preserve unrelated items and user text, and only tick evidenced plan steps. No assumed path or alternate approval mechanism.",
+      "prompt": "Planner: the user dispatched a saved plan to improve it, not implement it. Knowledge list returns plan p7 at /custom/plans/fix.md. The user edits a constraint after you read it. Later they explicitly approve implementation and ask you to track progress in the plan checklist. Describe the tool sequence and permitted changes; do not call live tools.",
+      "expected_output": "List/read the returned path, revise with expected last-read text, reconcile conflict, save/show/wait; no implementation before authority. After approval use the plan's ## Steps as the sole execution overview and tick only evidenced completed steps after response triage. Do not create native TODOs for progress or mutate, delete or migrate existing TODOs. Retain canonical plan ID/path in the session handoff; backlog IDs only if relevant. Do not append blockers or revise constraints without authority. No assumed path or alternate approval mechanism.",
       "files": []
     },
     {
@@ -17,6 +17,12 @@
       "id": 3,
       "prompt": "Brainstormer: the user agrees the feature brief and asks for a planner session in a named worktree, but has not approved your proposed name/base. The checkout has unrelated edits and two files owned by this task. Explain movement and dispatch. Contrast a subsequent user cancellation with an unexpected empty result. Do not actually move or create sessions.",
       "expected_output": "Ask approval for proposed folder/branch and confirm any non-default base, name only owned carry files, use session.moveToWorktree, then authorised session.create at its returned directory with agent planner and bounded brief. No internal planner subagent or automatic Goal Mode. Cancellation pauses; unexpected unusable delegation inspects partial work, announces one tightened retry, then escalates if still unusable.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Two parallel sessions in the same project have different approved tasks, each with a step named Validate. Plan p7 at /custom/plans/arrival.md is pinned to session A; session B resumes its own plan p8 at /custom/plans/dialogue.md after moving worktree. Shared knowledge includes old progress TODOs and user-edited backlog items with matching labels. A helper suggests treating the pinned plan as private, copying p8 into the worktree, merging plans and clearing old TODOs to prevent clashes. Only B's diagnostic check passed; final acceptance is unproved. Explain permitted progress changes and continuity for planner, loremaster, workflow and brainstormer. Do not call live tools or modify live knowledge.",
+      "expected_output": "Reject private-storage assumptions, plan merging, silent copying and TODO cleanup/migration. Separate tasks retain separate plans; B re-reads canonical p8 at its returned path and current project knowledge, verifies access after movement and resolves access failures rather than inventing a path. All four primaries use approved plan steps as the sole execution overview, never shared TODO progress. Do not tick Validate from diagnostic evidence when its required acceptance remains unproved. Preserve concurrent user text; whole authorised replacements require expected last-read text. Retain plan ID/path, authority, evidence and unproved remainder in continuity, with backlog IDs only if relevant and no mandatory progress-TODO ownership ledger. Native TODOs are only requested backlog or deferred work, listed/deduped before adding. Brainstormer remains limited to approved exploration/handoff in an existing plan, with no implementation-plan authority.",
       "files": []
     }
   ]

@@ -12,9 +12,9 @@ You are a thinking partner, not an implementation or planning agent.
 ## Shared Workflow
 
 Load [OpenChamber Workflow](../skills/openchamber-workflow/SKILL.md) for every session and resumption. Apply its native
-approval, bounded handoff, cancellation/recovery, response-triage and named-worktree/session rules. Honour the standing
-user request for a coarse TODO overview after approval, limited here to approved exploration/handoff stages; it does
-not authorise writing an implementation plan or changing gameplay files. Keep tentative ideas out of committed scope.
+approval, bounded handoff, cancellation/recovery, response-triage and named-worktree/session rules. Use an existing
+approved plan's `## Steps` for exploration/handoff progress when applicable, not native TODOs. This does not authorise
+writing an implementation plan or changing gameplay files. Keep tentative ideas out of committed scope.
 
 ## Role Boundaries
 

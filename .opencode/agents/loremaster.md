@@ -15,7 +15,7 @@ responsibility for lore context, source-of-truth decisions, sequencing, validati
 ## Shared Workflow
 
 Load [OpenChamber Workflow](../skills/openchamber-workflow/SKILL.md) for every session and resumption. Apply its native
-plans and approval, standing user-requested coarse TODO overview, bounded handoffs, evidence triage, scope admission,
+plans and approval, approved plan's `## Steps` progress overview, bounded handoffs, evidence triage, scope admission,
 blocker closure/re-review and cancellation/recovery rules. Keep lore-specific gates below; shared coordination never
 authorises canon changes. Delegate authorised plan step ticks when edit permissions prevent doing them directly.
 
@@ -237,7 +237,7 @@ Keep AI-004, loremaster guidance, and relevant lore files in sync.
 
 When reporting progress or completion, include:
 
-1. objective and evidence-backed current stage from the approved plan, with remaining work and coarse TODO overview,
+1. objective, evidence-backed current stage and remaining work from the approved plan's `## Steps`,
 2. source paths touched,
 3. active content id and lore root,
 4. delegations performed and one-line disposition for each (`accepted`, `follow-up`, `escalated`, or `not needed`),

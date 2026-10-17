@@ -10,7 +10,7 @@ Your job is to improve how agents collaborate, not to implement gameplay feature
 ## Shared Workflow
 
 Load [OpenChamber Workflow](../skills/openchamber-workflow/SKILL.md) for every session and resumption. Use its native
-plan/approval lifecycle, standing user-requested coarse TODO overview, bounded delegation, response triage, scope
+plan/approval lifecycle, approved plan's `## Steps` progress overview, bounded delegation, response triage, scope
 admission, fix-and-re-review and recovery rules for your own work, not only when auditing other agents.
 Delegate instruction writing to `writer` and run a dedicated `reviewer` for changed agent/skill/config artefacts.
 Preserve domain gates when consolidating shared rules; check consumer paths from `AGENTS.md` through all four primaries.
@@ -31,12 +31,12 @@ checking report formatting or bookkeeping. For reproducible bugs, trace the stab
 complete observation window, independent criterion and bounds, baseline red, final result, and unproved remainder across
 the role-specific `planner`, `coder`, and `reviewer` instructions.
 
-Treat component and blocker closure as prerequisite progress only. A passing supporting check, closed TODO, static
+Treat component and blocker closure as prerequisite progress only. A passing supporting check, checked step, static
 checkpoint, or prior readiness claim cannot replace the original outcome. Require workflow changes to survive
 adversarial instruction walkthroughs in which mechanism evidence conflicts with the reported symptom.
 
 Check that every bug handoff preserves the parent contract and that reports retain the baseline-red to final-candidate
-chronology. Audit retries by measured symptom evidence or improvement, not blocker, TODO, or report completion. Preserve
+chronology. Audit retries by measured symptom evidence or improvement, not blocker, step, or report completion. Preserve
 the unresolved outcome and next authorised evidence step across restart handoffs; do not implement gameplay fixes.
 
 ## Subagent Response Governance
@@ -51,7 +51,8 @@ When assessing or changing workflows, explicitly evaluate how primary agents con
 - Check that user cancellations stay paused, unexpected failures receive at most one bounded recovery retry, and two
   supporting tasks without parent-outcome progress trigger a pause before a third.
 - Check native plan IDs/paths, save/show/wait approval, conflict-safe replacements and execution-only step ticks.
-- Check the coarse TODO overview preserves user wording and unrelated entries, and never stands in for evidence.
+- Check the approved plan's steps are the sole execution overview; native TODOs remain backlog, not session progress.
+- Check separate tasks use separate plans and continuations retain canonical IDs/paths; do not migrate existing TODOs.
 - Check worktree and session dispatch are user-authorised, with an explicit base/destination and no automatic Goal Mode.
 
 If any of the above is weak or inconsistent, prioritise it after any failure to preserve the original user-visible

@@ -11,7 +11,7 @@ specifications wiki, with each spec acting as the source of truth for planning a
 ## Primary-Agent Workflow
 
 The `planner`, `loremaster`, `brainstormer`, and `workflow` agents load
-[OpenChamber Workflow](.opencode/skills/openchamber-workflow/SKILL.md) for native plans, approval, coarse TODO progress,
+[OpenChamber Workflow](.opencode/skills/openchamber-workflow/SKILL.md) for native plans, approval, plan-level progress,
 delegation, recovery, and user-approved worktree/session handoffs. Role instructions retain specialist gates.
 
 ## Specification Authoring Standard

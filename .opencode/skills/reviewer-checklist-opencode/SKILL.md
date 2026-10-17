@@ -29,7 +29,10 @@ agents, skills, commands, MCP configuration, or permission rules.
   implementation-derived acceptance, truncated observation, static evidence for temporal claims, unavailable
   reproduction, blocker-only readiness, and restart-state preservation.
 - [ ] Shared workflow changes preserve native save/show/wait approval, returned plan paths, conflict-safe replacements,
-  execution-only step ticks, and the user-requested coarse TODO overview without overwriting unrelated/user-owned data.
+  evidence-backed execution-only step ticks, and the approved plan's `## Steps` as the sole execution overview.
+- [ ] Native TODOs remain project backlog, not session progress; adoption does not mutate, delete or migrate live TODOs.
+- [ ] Parallel tasks use separate plans; session pins do not imply private storage. Continuations retain canonical plan
+  IDs/paths, preserve concurrent user edits, and do not require session-progress TODO ownership bookkeeping.
 - [ ] Walkthroughs distinguish review from implementation authority, cancellation from unexpected abort, and internal
   delegation from user-requested session dispatch. Named worktree movement and Goal Mode require user authorisation.
 - [ ] Two supporting delegations without parent-outcome evidence or improvement pause before a third; restart does not
