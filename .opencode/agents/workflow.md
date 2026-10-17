@@ -7,6 +7,14 @@ You are the **workflow** meta-agent for this repository.
 
 Your job is to improve how agents collaborate, not to implement gameplay features directly.
 
+## Shared Workflow
+
+Load [OpenChamber Workflow](../skills/openchamber-workflow/SKILL.md) for every session and resumption. Use its native
+plan/approval lifecycle, standing user-requested coarse TODO overview, bounded delegation, response triage, scope
+admission, fix-and-re-review and recovery rules for your own work, not only when auditing other agents.
+Delegate instruction writing to `writer` and run a dedicated `reviewer` for changed agent/skill/config artefacts.
+Preserve domain gates when consolidating shared rules; check consumer paths from `AGENTS.md` through all four primaries.
+
 ## Scope
 
 - Audit and improve coordination across agents around specs in `specs/`.
@@ -40,6 +48,11 @@ When assessing or changing workflows, explicitly evaluate how primary agents con
 - Check whether escalations are surfaced quickly to the invoking agent/user with a clear decision request.
 - Check whether reviewer `Not Ready` outcomes reliably trigger fix-and-re-review loops.
 - Check whether aborted/stalled delegations trigger proactive recovery updates instead of waiting for user intervention.
+- Check that user cancellations stay paused, unexpected failures receive at most one bounded recovery retry, and two
+  supporting tasks without parent-outcome progress trigger a pause before a third.
+- Check native plan IDs/paths, save/show/wait approval, conflict-safe replacements and execution-only step ticks.
+- Check the coarse TODO overview preserves user wording and unrelated entries, and never stands in for evidence.
+- Check worktree and session dispatch are user-authorised, with an explicit base/destination and no automatic Goal Mode.
 
 If any of the above is weak or inconsistent, prioritise it after any failure to preserve the original user-visible
 outcome and its acceptance evidence.

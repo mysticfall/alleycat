@@ -10,7 +10,7 @@ agents, skills, commands, MCP configuration, or permission rules.
 
 ## Source Of Truth
 
-- OpenCode schema and configuration rules from `customize-opencode`.
+- Current OpenCode V2 documentation through the `opencode` skill; native OpenChamber tool schemas for its actions.
 - `skill-creator` guidance when the change creates or updates skills.
 - Existing agent definitions under `.opencode/agents/` and existing skills under `.opencode/skills/`.
 
@@ -28,6 +28,12 @@ agents, skills, commands, MCP configuration, or permission rules.
 - [ ] Adversarial instruction walkthroughs cover mechanism-green/symptom-red, blocker-only closure,
   implementation-derived acceptance, truncated observation, static evidence for temporal claims, unavailable
   reproduction, blocker-only readiness, and restart-state preservation.
+- [ ] Shared workflow changes preserve native save/show/wait approval, returned plan paths, conflict-safe replacements,
+  execution-only step ticks, and the user-requested coarse TODO overview without overwriting unrelated/user-owned data.
+- [ ] Walkthroughs distinguish review from implementation authority, cancellation from unexpected abort, and internal
+  delegation from user-requested session dispatch. Named worktree movement and Goal Mode require user authorisation.
+- [ ] Two supporting delegations without parent-outcome evidence or improvement pause before a third; restart does not
+  reset the count. Exercise the shared skill's `evals/evals.json` scenarios without live project mutations.
 - [ ] Workflow-only validation is distinguished from gameplay suites; unrelated gameplay checks are not required for an
   instruction-only patch.
 - [ ] Any restart handoff is concise and current, preserves unresolved status, withdraws superseded readiness claims,

@@ -1,0 +1,23 @@
+{
+  "skill_name": "openchamber-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Planner: the user dispatched a saved plan to improve it, not implement it. Knowledge list returns plan p7 at /custom/plans/fix.md. The user edits a constraint after you read it. Later they explicitly approve implementation and request the standing coarse TODO overview. Describe the tool sequence and permitted changes; do not call live tools.",
+      "expected_output": "List/read the returned path, revise with expected last-read text, reconcile conflict, save/show/wait; no implementation before authority. After approval list/dedupe coarse TODOs with readable task-first labels and an optional short human-readable scope suffix only for disambiguation; never display raw plan/session UUIDs. Retain actual plan/session/TODO IDs and ownership mapping in the continuity handoff; match owned items by stored TODO ID, not ambiguous labels. Preserve unrelated items and user text, and only tick evidenced plan steps. No assumed path or alternate approval mechanism.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Planner: a foot-slide bug has a baseline-red full-arrival regression. Two supporting coder tasks closed local blockers but supplied no new symptom evidence. Reviewer says Not Ready: candidate evidence begins after arrival, uses implementation-derived bounds, and consists of static endpoints. The coder cites green mechanism tests. Decide next action and give a restart handoff; do not change files or run gameplay tests.",
+      "expected_output": "Keep symptom unresolved and Not Ready, reject weakened criterion/window and static temporal proof, retain blocker IDs, original red baseline and full criterion. Pause before a third supporting delegation, request a user decision and propose the smallest outcome check. Preserve supporting count, current evidence, unproved remainder and next authorised step across restart; fix-and-re-review remains required.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Brainstormer: the user agrees the feature brief and asks for a planner session in a named worktree, but has not approved your proposed name/base. The checkout has unrelated edits and two files owned by this task. Explain movement and dispatch. Contrast a subsequent user cancellation with an unexpected empty result. Do not actually move or create sessions.",
+      "expected_output": "Ask approval for proposed folder/branch and confirm any non-default base, name only owned carry files, use session.moveToWorktree, then authorised session.create at its returned directory with agent planner and bounded brief. No internal planner subagent or automatic Goal Mode. Cancellation pauses; unexpected unusable delegation inspects partial work, announces one tightened retry, then escalates if still unusable.",
+      "files": []
+    }
+  ]
+}
