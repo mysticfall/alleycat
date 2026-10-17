@@ -43,6 +43,9 @@ internal sealed class AgentSessionRunner
     /// </summary>
     internal const string CancelledActionResult = "The action was cancelled before it completed.";
 
+    /// <summary>Root path label of a call's arguments object inside schema-mismatch descriptions (AI-011 TR-21).</summary>
+    internal const string ArgumentsPathRoot = "arguments";
+
     private static readonly TimeSpan[] _defaultRetryDelays =
     [
         TimeSpan.FromSeconds(1),
@@ -489,9 +492,12 @@ internal sealed class AgentSessionRunner
                     bool recoveryCompleted;
                     try
                     {
+                        // The final rejection's specific reason travels into the terminal exhaustion outcome
+                        // (AI-011 TR-23).
                         recoveryCompleted = await TryBackoffInvalidResponseRecoveryAsync(
                             requestCount,
                             nextInvalidResponseCount,
+                            exception.Message,
                             lifetimeToken);
                     }
                     catch (Exception recoveryException)
@@ -684,6 +690,7 @@ internal sealed class AgentSessionRunner
     private async Task<bool> TryBackoffInvalidResponseRecoveryAsync(
         int requestCount,
         int nextInvalidResponseCount,
+        string finalRejection,
         CancellationToken lifetimeToken)
     {
         var recoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
@@ -713,7 +720,7 @@ internal sealed class AgentSessionRunner
 
             if (nextInvalidResponseCount >= _invalidResponseRecoveryPolicy.ConsecutiveFailureBudget)
             {
-                throw InvalidResponseRecoveryExhausted(requestCount, nextInvalidResponseCount);
+                throw InvalidResponseRecoveryExhausted(requestCount, nextInvalidResponseCount, finalRejection);
             }
 
             _logger.LogWarning(
@@ -1120,23 +1127,29 @@ internal sealed class AgentSessionRunner
     }
 
     /// <summary>
-    /// Validates the complete response batch — every call, identifier, argument, and content item — before any tool
-    /// in the batch executes (AI-002 TR-12).
+    /// Validates one response's shape and arguments — every call, identifier, argument, and content item —
+    /// before any tool in the batch executes (AI-002 TR-12), rejecting each failing branch with a
+    /// branch-specific diagnostic reason naming the parsed content that failed (AI-011 TR-20). The predicates
+    /// and their evaluation order are unchanged: only the rejection reason differs, so no verdict, acceptance
+    /// rule, or recovery-budget behaviour changes.
     /// </summary>
     private FunctionCallContent[] ValidateResponse(ChatResponse response, int requestCount)
     {
         if (response.Messages.Count == 0)
         {
-            throw InvalidResponse(requestCount);
+            throw InvalidResponse(requestCount, "the response carried no messages");
         }
 
         List<FunctionCallContent> calls = [];
         HashSet<string> batchCallIds = new(StringComparer.Ordinal);
-        foreach (ChatMessage message in response.Messages)
+        for (int messageIndex = 0; messageIndex < response.Messages.Count; messageIndex++)
         {
+            ChatMessage message = response.Messages[messageIndex];
             if (message.Role != ChatRole.Assistant)
             {
-                throw InvalidResponse(requestCount);
+                throw InvalidResponse(
+                    requestCount,
+                    $"message {messageIndex + 1} carried role '{message.Role.Value}' instead of 'assistant'");
             }
 
             foreach (AIContent content in message.Contents)
@@ -1155,17 +1168,52 @@ internal sealed class AgentSessionRunner
 
                 if (content is not FunctionCallContent call)
                 {
-                    throw InvalidResponse(requestCount);
+                    throw InvalidResponse(
+                        requestCount,
+                        $"message {messageIndex + 1} carried {DescribeNonCallContent(content)} instead of a "
+                        + "function call");
                 }
 
-                if (call.Exception is not null
-                    || call.InformationalOnly
-                    || string.IsNullOrWhiteSpace(call.CallId)
-                    || _callIds.Contains(call.CallId)
-                    || !batchCallIds.Add(call.CallId)
-                    || !_functions.ContainsKey(call.Name))
+                if (call.Exception is not null)
                 {
-                    throw InvalidResponse(requestCount);
+                    throw InvalidResponse(
+                        requestCount,
+                        $"function call {DescribeCall(call)} failed to parse: {call.Exception.Message}");
+                }
+
+                if (call.InformationalOnly)
+                {
+                    throw InvalidResponse(
+                        requestCount,
+                        $"function call {DescribeCall(call)} was informational only and requests no invocation");
+                }
+
+                if (string.IsNullOrWhiteSpace(call.CallId))
+                {
+                    throw InvalidResponse(
+                        requestCount,
+                        $"the function call for tool '{call.Name}' carried no call ID");
+                }
+
+                if (_callIds.Contains(call.CallId))
+                {
+                    throw InvalidResponse(
+                        requestCount,
+                        $"call ID '{call.CallId}' was reused from an earlier accepted exchange");
+                }
+
+                if (!batchCallIds.Add(call.CallId))
+                {
+                    throw InvalidResponse(
+                        requestCount,
+                        $"call ID '{call.CallId}' appeared more than once in the same response");
+                }
+
+                if (!_functions.ContainsKey(call.Name))
+                {
+                    throw InvalidResponse(
+                        requestCount,
+                        $"function call {DescribeCall(call)} targeted unknown tool '{call.Name}'");
                 }
 
                 calls.Add(call);
@@ -1174,7 +1222,7 @@ internal sealed class AgentSessionRunner
 
         if (calls.Count == 0)
         {
-            throw InvalidResponse(requestCount);
+            throw InvalidResponse(requestCount, "the response carried no function calls");
         }
 
         foreach (FunctionCallContent call in calls)
@@ -1185,49 +1233,101 @@ internal sealed class AgentSessionRunner
         return [.. calls];
     }
 
+    /// <summary>
+    /// Describes one non-call content item for an invalid-shape rejection reason (AI-011 TR-20): parsed content
+    /// metadata only — never a raw provider payload.
+    /// </summary>
+    private static string DescribeNonCallContent(AIContent content)
+        => content switch
+        {
+            TextContent => "text content",
+            FunctionResultContent => "a function call result",
+            _ => $"content of type '{content.GetType().Name}'",
+        };
+
+    /// <summary>
+    /// Labels one function call for a rejection reason using its parsed identifier and tool name; neither is an
+    /// argument value (AI-011 TR-21).
+    /// </summary>
+    private static string DescribeCall(FunctionCallContent call)
+        => string.IsNullOrWhiteSpace(call.CallId)
+            ? $"for tool '{call.Name}'"
+            : $"'{call.CallId}' of tool '{call.Name}'";
+
     private void ValidateArguments(FunctionCallContent call, int requestCount)
     {
         AIFunction function = _functions[call.Name];
-        if (call.Arguments is null || !ArgumentsMatchSchema(call.Arguments, function))
+        if (call.Arguments is null)
         {
-            throw InvalidResponse(requestCount);
+            throw InvalidResponse(
+                requestCount,
+                $"the function call {DescribeCall(call)} supplied no arguments object");
+        }
+
+        string? mismatch = DescribeArgumentsMismatch(call.Arguments, function);
+        if (mismatch is not null)
+        {
+            throw InvalidResponse(
+                requestCount,
+                $"the arguments of function call {DescribeCall(call)} mismatched their schema — {mismatch}");
         }
     }
 
-    private static bool ArgumentsMatchSchema(IDictionary<string, object?> arguments, AIFunction function)
+    /// <summary>
+    /// Returns the argument-schema mismatch description of one call's arguments, or null when they match. The
+    /// description names the failing property path and the expected constraint without copying argument values
+    /// (AI-011 TR-21); acceptance itself is decided by the unchanged schema walk.
+    /// </summary>
+    private static string? DescribeArgumentsMismatch(IDictionary<string, object?> arguments, AIFunction function)
     {
+        JsonElement value;
         try
         {
-            JsonElement value = JsonSerializer.SerializeToElement(arguments, function.JsonSerializerOptions);
-            return MatchesSchema(value, function.JsonSchema);
+            value = JsonSerializer.SerializeToElement(arguments, function.JsonSerializerOptions);
         }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            return false;
+            return "the parsed arguments could not be serialised for schema validation";
         }
+
+        return TryDescribeSchemaMismatch(value, function.JsonSchema, ArgumentsPathRoot);
     }
 
-    private static bool MatchesSchema(JsonElement value, JsonElement schema)
+    /// <summary>
+    /// Walks one parsed value against its JSON schema, returning null when the value matches and otherwise a
+    /// description naming the failing property path and the expected constraint (AI-011 TR-20/TR-21). The walk's
+    /// structure and evaluation order are those of the schema matcher it replaces, so acceptance behaviour is
+    /// unchanged while the verdict and its diagnostic now come from one shared implementation.
+    /// </summary>
+    /// <remarks>
+    /// Internal so unit tests pin both the matching and mismatching descriptions against hand-built schemas,
+    /// independently of any provider (AI-011 TR-13).
+    /// </remarks>
+    internal static string? TryDescribeSchemaMismatch(JsonElement value, JsonElement schema, string path)
     {
+        ArgumentNullException.ThrowIfNull(path);
+
         if (schema.ValueKind is JsonValueKind.True or JsonValueKind.Undefined)
         {
-            return true;
+            return null;
         }
 
         if (schema.ValueKind is not JsonValueKind.Object)
         {
-            return false;
+            return schema.ValueKind == JsonValueKind.False
+                ? $"{path}: the schema permits no value"
+                : $"{path}: the schema is not a JSON object schema";
         }
 
         if (schema.TryGetProperty("type", out JsonElement type) && !MatchesType(value, type))
         {
-            return false;
+            return $"{path}: {DescribeTypeMismatch(value, type)}";
         }
 
         if (schema.TryGetProperty("enum", out JsonElement enumValues)
             && !enumValues.EnumerateArray().Any(candidate => JsonElement.DeepEquals(candidate, value)))
         {
-            return false;
+            return $"{path}: expected one of the enumerated constants {DescribeEnumConstants(enumValues)}";
         }
 
         if (value.ValueKind == JsonValueKind.Object)
@@ -1239,7 +1339,7 @@ internal sealed class AgentSessionRunner
             {
                 if (!value.TryGetProperty(name, out _))
                 {
-                    return false;
+                    return $"{path}: the required property '{name}' is missing";
                 }
             }
 
@@ -1253,22 +1353,71 @@ internal sealed class AgentSessionRunner
                 if (properties.ValueKind == JsonValueKind.Object
                     && properties.TryGetProperty(property.Name, out JsonElement propertySchema))
                 {
-                    if (!MatchesSchema(property.Value, propertySchema))
+                    string? nested = TryDescribeSchemaMismatch(
+                        property.Value,
+                        propertySchema,
+                        $"{path}.{property.Name}");
+                    if (nested is not null)
                     {
-                        return false;
+                        return nested;
                     }
                 }
                 else if (!allowAdditional)
                 {
-                    return false;
+                    return $"{path}.{property.Name}: the property is not declared by the schema and additional "
+                        + "properties are disallowed";
                 }
             }
         }
 
-        return value.ValueKind != JsonValueKind.Array
-            || !schema.TryGetProperty("items", out JsonElement itemSchema)
-            || !value.EnumerateArray().Any(item => !MatchesSchema(item, itemSchema));
+        if (value.ValueKind == JsonValueKind.Array && schema.TryGetProperty("items", out JsonElement itemSchema))
+        {
+            int itemIndex = 0;
+            foreach (JsonElement item in value.EnumerateArray())
+            {
+                string? nested = TryDescribeSchemaMismatch(item, itemSchema, $"{path}[{itemIndex}]");
+                if (nested is not null)
+                {
+                    return nested;
+                }
+
+                itemIndex++;
+            }
+        }
+
+        return null;
     }
+
+    /// <summary>
+    /// Describes a type constraint failure using the schema's expected type and the parsed value's JSON kind —
+    /// metadata only, never the argument value itself (AI-011 TR-21).
+    /// </summary>
+    private static string DescribeTypeMismatch(JsonElement value, JsonElement type)
+    {
+        if (type.ValueKind == JsonValueKind.String
+            && type.GetString() == "integer"
+            && value.ValueKind == JsonValueKind.Number
+            && !value.TryGetInt64(out _))
+        {
+            return "expected type 'integer' but the parsed number is not an integer";
+        }
+
+        string expected = type.ValueKind == JsonValueKind.Array
+            ? string.Join("', '", type.EnumerateArray().Select(DescribeSchemaType))
+            : DescribeSchemaType(type);
+        return type.ValueKind == JsonValueKind.Array
+            ? $"expected one of the types '{expected}' but the parsed value is of kind '{value.ValueKind}'"
+            : $"expected type '{expected}' but the parsed value is of kind '{value.ValueKind}'";
+    }
+
+    private static string DescribeSchemaType(JsonElement type)
+        => type.ValueKind == JsonValueKind.String ? type.GetString() ?? string.Empty : type.GetRawText();
+
+    private static string DescribeEnumConstants(JsonElement enumValues)
+        => string.Join(
+            ", ",
+            enumValues.EnumerateArray().Select(static candidate =>
+                $"'{(candidate.ValueKind == JsonValueKind.String ? candidate.GetString() : candidate.GetRawText())}'"));
 
     private static bool MatchesType(JsonElement value, JsonElement type)
         => type.ValueKind == JsonValueKind.Array
@@ -1322,13 +1471,25 @@ internal sealed class AgentSessionRunner
         return false;
     }
 
-    private static AgentSessionException InvalidResponse(int requestCount)
-        => new($"The agent session received an invalid response shape at request {requestCount}.");
+    /// <summary>
+    /// Builds the invalid-response rejection with its branch-specific reason (AI-011 TR-20). The reason derives
+    /// exclusively from the parsed response the runner already holds.
+    /// </summary>
+    private static AgentSessionException InvalidResponse(int requestCount, string reason)
+        => new($"The agent session rejected the response at request {requestCount} because {reason}.");
 
-    private static AgentSessionException InvalidResponseRecoveryExhausted(int requestCount, int invalidResponseCount)
+    /// <summary>
+    /// Builds the terminal exhaustion failure carrying both the exhaustion state and the branch-specific reason of
+    /// the final rejection (AI-011 TR-23).
+    /// </summary>
+    private static AgentSessionException InvalidResponseRecoveryExhausted(
+        int requestCount,
+        int invalidResponseCount,
+        string finalRejection)
         => new(
             $"The agent session exhausted its invalid response recovery budget after "
-            + $"{invalidResponseCount} consecutive invalid response shapes at request {requestCount}.");
+            + $"{invalidResponseCount} consecutive invalid response shapes at request {requestCount}. "
+            + $"Final rejection: {finalRejection}");
 }
 
 /// <summary>

@@ -23,8 +23,9 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// Godot-runtime coverage for AI-011 mind session transcripts: one self-contained file per provider request cycle
 /// under the documented layout, visible anomaly annotations for transport retry, invalid-response recovery, and
 /// fresh-turn invalidation discards, the exchange-disposal decision, write-failure containment, the disabled
-/// null-object path, runner-generated canonical cancellation results, and turn numbering that survives mind
-/// re-creation (TR-14).
+/// null-object path, runner-generated canonical cancellation results, turn numbering that survives mind
+/// re-creation (TR-14), and the synthetic invalid-response diagnostics and invocation-index contract scenario
+/// (TR-15–TR-23).
 /// </summary>
 /// <remarks>
 /// Every fact owns one recorder-seam lifetime: the seams are installed inside the protected region before any
@@ -204,6 +205,154 @@ public sealed partial class MindSessionTranscriptIntegrationTests
                 ["turn-0001.md", "turn-0002.md", "turn-0003.md", "turn-0004.md"],
                 ListTranscriptFiles(characterDirectory));
             Assert.Contains("- **Outcome:** Interrupted", File.ReadAllText(Path.Combine(characterDirectory, "turn-0004.md")));
+        }
+        finally
+        {
+            await CleanupSessionScopeAsync(sceneTree, mind, fixtures, root);
+        }
+    }
+
+    /// <summary>
+    /// Synthetic diagnostics scenario for AI-011 UR-6/UR-7 and TR-15–TR-23: one scripted session rejects invalid
+    /// parsed prose carrying a supplied finish reason, recovers through a valid tool response, then rejects an
+    /// unparseable function call and a reused call ID until the recovery budget exhausts and the session ends on
+    /// its own. The harness assertions pin unchanged validation, recovery, exhaustion, and offending-response
+    /// retention (AI-002); the aggregated group pins the approved diagnostics-and-index contract, which the
+    /// generic implementation does not satisfy yet, so this fact fails before the change and must pass unchanged
+    /// on the final candidate.
+    /// </summary>
+    [Fact]
+    public async Task InvalidResponseCycles_ExposeBranchDiagnosticsAndInvocationIndex()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        string root = CreateTranscriptRoot();
+        FixtureBag fixtures = new();
+        TestAgenticMind? mind = null;
+        try
+        {
+            MindSessionTranscriptRecorder.ResetTurnCountersForTesting();
+            MindSessionTranscriptRecorder.SetRootPathOverrideForTesting(root);
+            TestCharacter owner = new();
+            FixturePlayerCharacter player = fixtures.Add(new FixturePlayerCharacter());
+            CapturingTool tool = fixtures.Add(new CapturingTool());
+            ScriptedSessionClientProvider clientProvider = fixtures.Add(new ScriptedSessionClientProvider());
+            clientProvider.EnqueueInvalidTextResponse(
+                "The model replied with ordinary prose instead of using its tools. [offending-prose-0001]",
+                finishReason: "length");
+            clientProvider.EnqueueCall(CapturingTool.ToolNameValue);
+            clientProvider.EnqueueUnparseableCallResponse(
+                "call-malformed",
+                CapturingTool.ToolNameValue,
+                new InvalidOperationException("the provider's function-call payload was malformed"),
+                finishReason: "content_filter");
+            // The exhausted cycle reuses the accepted cycle's call ID, exercising the reused-call-ID branch.
+            clientProvider.EnqueueCallBatch(new FunctionCallContent(
+                "call-2",
+                CapturingTool.ToolNameValue,
+                new Dictionary<string, object?>()));
+            mind = CreateTranscriptMind(owner, player, clientProvider, tool);
+            mind.InvalidResponseRecoveryBudget = 2;
+            mind.InvalidResponseRecoveryBackoffSeconds = [0f];
+            (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+            // Observation window: the session runs through rejection, recovery, and terminal exhaustion to its
+            // own completion; every settled cycle file is present afterwards and no further request was issued.
+            await WaitUntilAsync(sceneTree, () => mind.ActiveRunner is null, maxFrames: 2000);
+            string characterDirectory = GetCharacterDirectory(root);
+            await WaitUntilAsync(sceneTree, () => ListTranscriptFiles(characterDirectory).Length == 4);
+            Assert.Equal(4, clientProvider.Requests.Count);
+            Assert.Equal(
+                ["turn-0001.md", "turn-0002.md", "turn-0003.md", "turn-0004.md"],
+                ListTranscriptFiles(characterDirectory));
+
+            string proseCycle = File.ReadAllText(Path.Combine(characterDirectory, "turn-0001.md"));
+            string acceptedCycle = File.ReadAllText(Path.Combine(characterDirectory, "turn-0002.md"));
+            string parseErrorCycle = File.ReadAllText(Path.Combine(characterDirectory, "turn-0003.md"));
+            string exhaustedCycle = File.ReadAllText(Path.Combine(characterDirectory, "turn-0004.md"));
+
+            // Unchanged harness behaviour (AI-002): recovery and exhaustion outcomes with their budget state,
+            // and each offending response retained on its rejected cycle.
+            Assert.Contains("- **Outcome:** Invalid Response — Recovery Scheduled", proseCycle);
+            Assert.Contains("1/2", proseCycle);
+            Assert.Contains("offending-prose-0001", proseCycle);
+            Assert.Contains("- **Outcome:** Accepted", acceptedCycle);
+            Assert.Contains("capture_context — call `call-2`", acceptedCycle);
+            Assert.Contains("- **Outcome:** Invalid Response — Recovery Scheduled", parseErrorCycle);
+            Assert.Contains("call-malformed", parseErrorCycle);
+            Assert.Contains("- **Outcome:** Invalid Response — Recovery Budget Exhausted", exhaustedCycle);
+            Assert.Contains("2/2", exhaustedCycle);
+            Assert.Contains("**Function Call:** capture_context — call `call-2`", exhaustedCycle);
+
+            // Approved diagnostics and invocation-index contract (AI-011 UR-6/UR-7, TR-15–TR-23): specific
+            // branch reasons instead of the generic description, the supplied finish reason and parsing-error
+            // detail surfaced from the parsed response, and a chronological per-character index linking every
+            // cycle — including no-tool cycles — with full invocation parity. Expected red before
+            // implementation; Assert.Multiple reports every gap so this one fact captures the complete
+            // pre-change baseline and passes unchanged on the final candidate.
+            string indexPath = Path.Combine(characterDirectory, "index.md");
+            string index = File.Exists(indexPath) ? File.ReadAllText(indexPath) : string.Empty;
+            Assert.Multiple(
+                () => Assert.True(
+                    File.Exists(indexPath),
+                    "TR-15: the character folder must expose index.md alongside its turn pages."),
+                () => Assert.DoesNotContain(
+                    "received an invalid response shape at request",
+                    proseCycle),
+                () => Assert.DoesNotContain(
+                    "received an invalid response shape at request",
+                    parseErrorCycle),
+                () => Assert.DoesNotContain(
+                    "received an invalid response shape at request",
+                    exhaustedCycle),
+                () => Assert.Matches(
+                    @"(?i)\b(text|content|role)\b",
+                    proseCycle),
+                () => Assert.Matches(
+                    @"(?i)pars",
+                    parseErrorCycle),
+                () => Assert.Matches(
+                    @"(?i)(reused|duplicat)",
+                    exhaustedCycle),
+                () => Assert.Contains(
+                    "length",
+                    proseCycle),
+                () => Assert.Contains(
+                    "content_filter",
+                    parseErrorCycle),
+                () => Assert.Contains(
+                    "the provider's function-call payload was malformed",
+                    parseErrorCycle),
+                () => Assert.Contains(
+                    "(turn-0001.md)",
+                    index),
+                () => Assert.Contains(
+                    "(turn-0002.md)",
+                    index),
+                () => Assert.Contains(
+                    "(turn-0003.md)",
+                    index),
+                () => Assert.Contains(
+                    "(turn-0004.md)",
+                    index),
+                () =>
+                {
+                    int first = index.IndexOf("(turn-0001.md)", StringComparison.Ordinal);
+                    int second = index.IndexOf("(turn-0002.md)", StringComparison.Ordinal);
+                    int third = index.IndexOf("(turn-0003.md)", StringComparison.Ordinal);
+                    int fourth = index.IndexOf("(turn-0004.md)", StringComparison.Ordinal);
+                    Assert.True(
+                        first >= 0 && second > first && third > second && fourth > third,
+                        "TR-16: the index must list cycles in ascending per-character turn-number order.");
+                },
+                () => Assert.Contains(
+                    "capture_context — call `call-2`",
+                    index),
+                () => Assert.Contains(
+                    "**Arguments**",
+                    index),
+                () => Assert.Contains(
+                    "**Result**",
+                    index));
         }
         finally
         {
@@ -515,12 +664,29 @@ public sealed partial class MindSessionTranscriptIntegrationTests
                     "# Mind Session Transcript — Turn 0003",
                     File.ReadAllText(Path.Combine(characterDirectory, "turn-0003.md")));
 
+                // The index update follows its turn write, so quiescence waits for the index entry itself. The
+                // index retains every entry across the mind re-creation, in ascending turn order and with relative
+                // turn-page links, including the first mind's no-tool interrupted cycle (AI-011 TR-16/TR-18).
+                await WaitUntilIndexLinksTurnAsync(sceneTree, characterDirectory, "turn-0003.md");
+                string index = File.ReadAllText(Path.Combine(characterDirectory, "index.md"));
+                Assert.Contains("## [Turn 0001](turn-0001.md)", index);
+                Assert.Contains("## [Turn 0002](turn-0002.md)", index);
+                Assert.Contains("## [Turn 0003](turn-0003.md)", index);
+                Assert.True(
+                    index.IndexOf("](turn-0001.md)", StringComparison.Ordinal)
+                        < index.IndexOf("](turn-0003.md)", StringComparison.Ordinal));
+                Assert.Contains("_(no tool invocations)_", index);
+
                 (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(secondMind);
                 await WaitUntilAsync(sceneTree, secondProvider.EndedByCancellation);
                 await WaitUntilAsync(sceneTree, () => ListTranscriptFiles(characterDirectory).Length == 4);
+                await WaitUntilIndexLinksTurnAsync(sceneTree, characterDirectory, "turn-0004.md");
                 Assert.Equal(
                     ["turn-0001.md", "turn-0002.md", "turn-0003.md", "turn-0004.md"],
                     ListTranscriptFiles(characterDirectory));
+                string settledIndex = File.ReadAllText(Path.Combine(characterDirectory, "index.md"));
+                Assert.Contains("## [Turn 0004](turn-0004.md)", settledIndex);
+                Assert.Contains("## [Turn 0001](turn-0001.md)", settledIndex);
             }
             finally
             {
@@ -959,8 +1125,12 @@ public sealed partial class MindSessionTranscriptIntegrationTests
         return Assert.Single(Directory.GetDirectories(runDirectory, CharacterFolderName));
     }
 
+    /// <summary>
+    /// Lists the character folder's turn pages. The folder's <c>index.md</c> (AI-011 TR-15) is intentionally not a
+    /// turn page, so cycle-presence assertions scope to the <c>turn-*.md</c> pages it accompanies.
+    /// </summary>
     private static string[] ListTranscriptFiles(string characterDirectory)
-        => [.. Directory.GetFiles(characterDirectory)
+        => [.. Directory.GetFiles(characterDirectory, "turn-*.md")
             .Order()
             .Select(static path => Path.GetFileName(path)!)];
 
@@ -994,6 +1164,22 @@ public sealed partial class MindSessionTranscriptIntegrationTests
         }
 
         Assert.True(predicate(), $"Condition was not met within {maxFrames} frames.");
+    }
+
+    /// <summary>
+    /// Waits until the character folder's index links the given turn page: an index update follows its turn write,
+    /// so observing the turn file alone does not imply the index entry has settled (AI-011 TR-19).
+    /// </summary>
+    private static async Task WaitUntilIndexLinksTurnAsync(
+        SceneTree sceneTree,
+        string characterDirectory,
+        string turnFileName)
+    {
+        string indexPath = Path.Combine(characterDirectory, "index.md");
+        await WaitUntilAsync(
+            sceneTree,
+            () => File.Exists(indexPath)
+                && File.ReadAllText(indexPath).Contains($"]({turnFileName})", StringComparison.Ordinal));
     }
 
     private sealed record TestObservation(float Importance, string Value, bool Fresh = false) : AgentObservation
@@ -1195,6 +1381,37 @@ public sealed partial class MindSessionTranscriptIntegrationTests
         public void EnqueueInvalidResponse()
             => _steps.Enqueue(cancellationToken => Task.FromResult(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, "invalid ordinary assistant text"))));
+
+        /// <summary>
+        /// Enqueues an invalid parsed-prose assistant response carrying the supplied finish reason, so diagnostics
+        /// scenarios can require the parsed finish reason to surface in the transcript (AI-011 TR-22).
+        /// </summary>
+        public void EnqueueInvalidTextResponse(string text, string finishReason)
+            => _steps.Enqueue(cancellationToken => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, text))
+            {
+                FinishReason = new ChatFinishReason(finishReason),
+            }));
+
+        /// <summary>
+        /// Enqueues a response whose single function call carries a parsing exception and the supplied finish
+        /// reason, modelling a provider that failed to parse its own function-call payload (AI-011 TR-20/TR-22).
+        /// </summary>
+        public void EnqueueUnparseableCallResponse(
+            string callId,
+            string toolName,
+            Exception parseError,
+            string finishReason)
+            => _steps.Enqueue(cancellationToken => Task.FromResult(new ChatResponse(
+                new ChatMessage(
+                    ChatRole.Assistant,
+                    [new FunctionCallContent(callId, toolName, new Dictionary<string, object?>())
+                    {
+                        Exception = parseError,
+                    }]))
+            {
+                FinishReason = new ChatFinishReason(finishReason),
+            }));
 
         public void EnqueueTransientFailure()
             => _steps.Enqueue(cancellationToken => Task.FromException<ChatResponse>(new HttpRequestException("reset")));

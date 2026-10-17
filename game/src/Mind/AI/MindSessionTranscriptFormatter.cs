@@ -67,6 +67,55 @@ internal static partial class MindSessionTranscriptFormatter
     }
 
     /// <summary>
+    /// Renders a character folder's <c>index.md</c> (AI-011 TR-15–TR-17): every recorded cycle of the current game
+    /// run in per-character turn-number order, each under a heading linked to its turn page by a relative Markdown
+    /// link — so cycles without tool invocations stay discoverable — followed by that cycle's invocation blocks in
+    /// recorded invocation order. Invocation blocks reuse the turn pages' shared block renderer, so index and turn
+    /// page cannot diverge.
+    /// </summary>
+    /// <param name="characterId">The owning character's validated local identifier.</param>
+    /// <param name="entries">The character's recorded entries, already ordered by turn number.</param>
+    internal static string RenderIndex(string characterId, IReadOnlyList<MindTranscriptIndexEntry> entries)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(characterId);
+        ArgumentNullException.ThrowIfNull(entries);
+
+        StringBuilder document = new();
+        _ = document
+            .Append("# Mind Session Transcript Index — ").Append(characterId).Append(LineFeed)
+            .Append(LineFeed)
+            .Append("- **Character:** ").Append(characterId).Append(LineFeed)
+            .Append(LineFeed)
+            .Append("Every cycle recorded for this character in the current game run, in turn order; each entry ")
+            .Append("links to its turn page.")
+            .Append(LineFeed)
+            .Append(LineFeed);
+        foreach (MindTranscriptIndexEntry entry in entries)
+        {
+            string turnFileName = MindSessionTranscriptRecorder.CreateTurnFileName(entry.TurnNumber);
+            _ = document
+                .Append("## [Turn ")
+                .Append(entry.TurnNumber.ToString(CultureInfo.InvariantCulture).PadLeft(TurnNumberMinimumDigits, '0'))
+                .Append("](").Append(turnFileName).Append(") — ")
+                .Append(DescribeOutcome(entry.Outcome))
+                .Append(LineFeed)
+                .Append(LineFeed);
+            if (entry.ToolInvocations.Count == 0)
+            {
+                _ = document.Append("_(no tool invocations)_").Append(LineFeed).Append(LineFeed);
+                continue;
+            }
+
+            foreach (MindTranscriptToolInvocation invocation in entry.ToolInvocations)
+            {
+                AppendToolInvocationBlock(document, invocation, turnFileName);
+            }
+        }
+
+        return document.ToString();
+    }
+
+    /// <summary>
     /// Parses the pseudo-XML section format produced by <c>PseudoXmlFormatter</c> —
     /// <c>&lt;SectionName&gt;\ncontent\n&lt;/SectionName&gt;</c> blocks — and renders each recognised section as a
     /// level-three Markdown heading with its content nested beneath (AI-011 TR-9).
@@ -476,6 +525,13 @@ internal static partial class MindSessionTranscriptFormatter
                 break;
         }
 
+        // The parsed response's finish reason surfaces when the provider supplied one and is omitted gracefully when
+        // not (AI-011 TR-22); the label describes the parsed response object, never a raw provider payload.
+        if (response?.FinishReason is { Value: { Length: > 0 } finishReason })
+        {
+            _ = document.Append("**Finish Reason:** ").Append(finishReason).Append(LineFeed).Append(LineFeed);
+        }
+
         if (cycle.Annotations.Count == 0)
         {
             return;
@@ -522,7 +578,7 @@ internal static partial class MindSessionTranscriptFormatter
                 AppendReasoningBlock(document, reasoning.Text);
                 break;
             case FunctionCallContent call:
-                AppendFunctionCallBlock(document, call.Name, call.CallId, call.Arguments);
+                AppendFunctionCallBlock(document, call.Name, call.CallId, call.Arguments, call.Exception);
                 break;
             case FunctionResultContent result:
                 AppendFunctionResultBlock(document, result.CallId, result.Result);
@@ -855,11 +911,23 @@ internal static partial class MindSessionTranscriptFormatter
         StringBuilder document,
         string? toolName,
         string? callId,
-        IDictionary<string, object?>? arguments)
+        IDictionary<string, object?>? arguments,
+        Exception? parseError)
     {
         _ = document.Append("**Function Call:** ").Append(toolName ?? "(unknown)");
         AppendCallIdentifier(document, callId);
         _ = document.Append(LineFeed).Append(LineFeed);
+        // The parsed function-call content's own parsing-error detail surfaces when present and is omitted
+        // gracefully when not (AI-011 TR-22).
+        if (parseError is not null && !string.IsNullOrWhiteSpace(parseError.Message))
+        {
+            _ = document
+                .Append("**Function Call Parse Error:** ")
+                .Append(parseError.Message)
+                .Append(LineFeed)
+                .Append(LineFeed);
+        }
+
         AppendJsonBlock(document, arguments);
     }
 
@@ -903,29 +971,46 @@ internal static partial class MindSessionTranscriptFormatter
         _ = document.Append("## Tool Invocations").Append(LineFeed).Append(LineFeed);
         foreach (MindTranscriptToolInvocation invocation in invocations)
         {
-            _ = document.Append("### ").Append(invocation.ToolName);
-            AppendCallIdentifier(document, invocation.CallId);
-            if (invocation.Status == MindTranscriptToolInvocationStatus.SkippedByInvalidation)
-            {
-                _ = document.Append(" (skipped — batch invalidated)");
-            }
-            else if (invocation.Status == MindTranscriptToolInvocationStatus.Interrupted)
-            {
-                _ = document.Append(" (interrupted — no result delivered)");
-            }
-
-            _ = document
-                .Append(LineFeed)
-                .Append(LineFeed)
-                .Append("**Arguments**")
-                .Append(LineFeed)
-                .Append(LineFeed);
-            AppendJsonBlock(document, invocation.Arguments);
-            _ = document.Append("**Result**").Append(LineFeed).Append(LineFeed);
-            _ = invocation.Status == MindTranscriptToolInvocationStatus.Interrupted
-                ? document.Append("_(interrupted before a result was delivered)_").Append(LineFeed).Append(LineFeed)
-                : document.Append(RenderResultText(invocation.Result)).Append(LineFeed).Append(LineFeed);
+            AppendToolInvocationBlock(document, invocation, turnPageLink: null);
         }
+    }
+
+    /// <summary>
+    /// Renders one tool invocation block — heading, pretty-printed JSON arguments, and the delivered result — as
+    /// the single shared rendering path of the turn pages and the invocation index (AI-011 TR-17). The index passes
+    /// a relative turn-page link so each invocation event links to its own turn (TR-16); the heading text itself is
+    /// identical in both documents.
+    /// </summary>
+    private static void AppendToolInvocationBlock(
+        StringBuilder document,
+        MindTranscriptToolInvocation invocation,
+        string? turnPageLink)
+    {
+        StringBuilder heading = new();
+        _ = heading.Append(invocation.ToolName);
+        AppendCallIdentifier(heading, invocation.CallId);
+        if (invocation.Status == MindTranscriptToolInvocationStatus.SkippedByInvalidation)
+        {
+            _ = heading.Append(" (skipped — batch invalidated)");
+        }
+        else if (invocation.Status == MindTranscriptToolInvocationStatus.Interrupted)
+        {
+            _ = heading.Append(" (interrupted — no result delivered)");
+        }
+
+        _ = document
+            .Append("### ")
+            .Append(turnPageLink is null ? heading.ToString() : $"[{heading}]({turnPageLink})")
+            .Append(LineFeed)
+            .Append(LineFeed)
+            .Append("**Arguments**")
+            .Append(LineFeed)
+            .Append(LineFeed);
+        AppendJsonBlock(document, invocation.Arguments);
+        _ = document.Append("**Result**").Append(LineFeed).Append(LineFeed);
+        _ = invocation.Status == MindTranscriptToolInvocationStatus.Interrupted
+            ? document.Append("_(interrupted before a result was delivered)_").Append(LineFeed).Append(LineFeed)
+            : document.Append(RenderResultText(invocation.Result)).Append(LineFeed).Append(LineFeed);
     }
 
     private static void AppendJsonBlock(StringBuilder document, IDictionary<string, object?>? arguments)

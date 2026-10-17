@@ -883,6 +883,146 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
+    /// Each invalid-response validation branch rejects with its own specific diagnostic reason instead of the
+    /// generic invalid-shape sentence (AI-011 TR-20): the reason reaches the rejected cycle's recovery annotation,
+    /// names the parsed content that failed, and derives only from the parsed response.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BranchSpecificRejections))]
+    public async Task RunAsync_WithInvalidResponse_RecordsItsBranchSpecificReason(
+        ChatResponse response,
+        string expectedReasonFragment)
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        ScriptedSessionClient client = new(
+            Respond(response),
+            Respond(CreateCall("valid-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [],
+            transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        MindTranscriptAnnotation recovery = Assert.Single(
+            sink.Records[0].Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.InvalidResponseRecovery
+                && annotation.Message.StartsWith("Invalid response shape discarded", StringComparison.Ordinal));
+        Assert.Contains(expectedReasonFragment, recovery.Message, StringComparison.Ordinal);
+        Assert.StartsWith(
+            "Invalid response shape discarded (The agent session rejected the response at request 1 because ",
+            recovery.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("received an invalid response shape", recovery.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A call ID reused from an earlier accepted exchange rejects with its branch-specific reason on the later
+    /// cycle's recovery annotation (AI-011 TR-20).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithReusedCallID_AnnotatesTheRejectionWithTheReusedReason()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("accepted-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "First" })),
+            Respond(CreateCall("accepted-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Second" })),
+            Respond(CreateCall("fresh-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Third" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], [], transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Contains(
+            sink.Records[1].Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.InvalidResponseRecovery
+                && annotation.Message.Contains(
+                    "was reused from an earlier accepted exchange",
+                    StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The terminal exhaustion outcome carries both the exhaustion state and the branch-specific reason of the
+    /// final rejection (AI-011 TR-23).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ExhaustedRecovery_CarriesTheFinalBranchReasonInItsTerminalOutcome()
+    {
+        ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
+        ScriptedSessionClient client = new(Respond(invalid), Respond(invalid), Respond(invalid));
+        RecordingTranscriptSink sink = new();
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], [], transcriptSink: sink);
+
+        AgentSessionException error = await Assert.ThrowsAsync<AgentSessionException>(
+            () => runner.RunAsync(CancellationToken.None));
+
+        Assert.Contains("exhausted its invalid response recovery budget", error.Message, StringComparison.Ordinal);
+        Assert.Contains("3 consecutive invalid response shapes", error.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "Final rejection: The agent session rejected the response at request 3 because message 1 carried text "
+            + "content instead of a function call.",
+            error.Message,
+            StringComparison.Ordinal);
+        MindSessionCycleTranscript exhausted = sink.Records[^1];
+        Assert.Equal(MindTranscriptCycleOutcome.RecoveryExhausted, exhausted.Outcome);
+        Assert.Contains("Final rejection:", exhausted.OutcomeDetail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Argument-schema mismatch diagnostics identify the failing property path — including nested object and array
+    /// item paths — together with the expected constraint, without copying argument values (AI-011 TR-21).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithSchemaMismatchedArguments_IdentifiesNestedPropertyPathsAndExpectedConstraints()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        AIFunction parameterised = AIFunctionFactory.Create(
+            (string speech, Dictionary<string, object?>? options = null, IReadOnlyList<string>? tags = null) => "done",
+            "parameterised");
+        ChatMessage nestedObject = new(
+            ChatRole.Assistant,
+            [new FunctionCallContent("nested-call", "parameterised", new Dictionary<string, object?>
+            {
+                ["speech"] = "Hi",
+                ["options"] = 42,
+            })]);
+        ChatMessage arrayItem = new(
+            ChatRole.Assistant,
+            [new FunctionCallContent("array-call", "parameterised", new Dictionary<string, object?>
+            {
+                ["speech"] = "Hi",
+                ["tags"] = new List<object?> { "ok", 42 },
+            })]);
+        ScriptedSessionClient client = new(
+            Respond(nestedObject),
+            Respond(arrayItem),
+            Respond(CreateCall("valid-call", "parameterised", new Dictionary<string, object?> { ["speech"] = "Hi" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [parameterised], [], transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Contains(
+            sink.Records[0].Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.InvalidResponseRecovery
+                && annotation.Message.Contains("arguments.options:", StringComparison.Ordinal)
+                && annotation.Message.Contains("expected", StringComparison.Ordinal)
+                && annotation.Message.Contains("'object'", StringComparison.Ordinal));
+        Assert.Contains(
+            sink.Records[1].Annotations,
+            annotation => annotation.Kind == MindTranscriptAnnotationKind.InvalidResponseRecovery
+                && annotation.Message.Contains(
+                    "arguments.tags[1]: expected one of the types 'string', 'null' but the parsed value is of "
+                    + "kind 'Number'",
+                    StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// A malformed response is discarded and a later valid response resumes the same session without replaying any
     /// assistant content or tool effects from the rejected batch.
     /// </summary>
@@ -2506,6 +2646,113 @@ public sealed class AgentSessionRunnerTests
             ChatRole.Assistant,
             [new TextReasoningContent("reasoning without any call")])),
     ];
+
+    /// <summary>
+    /// Gets one response per invalid-response validation branch with the reason fragment its rejection must carry
+    /// (AI-011 TR-20).
+    /// </summary>
+    public static TheoryData<ChatResponse, string> BranchSpecificRejections
+    {
+        get;
+    } = new()
+    {
+        {
+            new ChatResponse(),
+            "the response carried no messages"
+        },
+        {
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")),
+            "message 1 carried text content instead of a function call"
+        },
+        {
+            new ChatResponse(new ChatMessage(ChatRole.User, [ValidSpeakCall("role-call", "Must not run")])),
+            "message 1 carried role 'user' instead of 'assistant'"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new ErrorContent("refusal or adapter error")])),
+            "content of type 'ErrorContent'"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent("call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })
+                {
+                    Exception = new InvalidOperationException("Malformed adapter arguments."),
+                }])),
+            "failed to parse: Malformed adapter arguments."
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent(
+                    "informational-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Hello" })
+                {
+                    InformationalOnly = true,
+                }])),
+            "was informational only and requests no invocation"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent(" ", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })])),
+            "carried no call ID"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [
+                    ValidSpeakCall("duplicate", "One"),
+                    ValidSpeakCall("duplicate", "Two"),
+                ])),
+            "call ID 'duplicate' appeared more than once in the same response"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent("call", "unknown_action", new Dictionary<string, object?>())])),
+            "targeted unknown tool 'unknown_action'"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new TextReasoningContent("reasoning without any call")])),
+            "the response carried no function calls"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent("null-arguments-call", SpeakToolName, null)])),
+            "supplied no arguments object"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent(
+                    "wrong-type-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = 123 })])),
+            "arguments.speech: expected type 'string' but the parsed value is of kind 'Number'"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent("missing-required-call", SpeakToolName, new Dictionary<string, object?>())])),
+            "the required property 'speech' is missing"
+        },
+        {
+            new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent(
+                    "unserialisable-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = new Func<string>(() => "unserialisable") })])),
+            "the parsed arguments could not be serialised for schema validation"
+        },
+    };
 
     /// <summary>
     /// Gets argument dictionaries that fail the production tool's JSON schema.

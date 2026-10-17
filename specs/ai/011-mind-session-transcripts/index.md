@@ -10,14 +10,19 @@ title: Mind Session Transcripts
 When enabled in game configuration, every AgenticMind provider request cycle must be recorded as one self-contained,
 human-readable Markdown transcript file under `user://logs/mind/`, with anomalous cycles recorded as visibly
 annotated first-class files, without altering request or response behaviour and without any recording failure
-reaching the session.
+reaching the session. Each character folder must additionally expose a chronologically ordered Markdown index
+linking every recorded cycle — including its full tool invocations — to its turn page, and invalid-response cycles
+must carry diagnostics specific enough to locate the failure from the parsed response alone, so developers never
+need to share transcripts to debug a rejection.
 
 ## Goal
 
 Give developers a readable, per-turn debugging record of AgenticMind ↔ LLM traffic — instructions, request
 transcript, response, and tool activity with real newlines and an intact heading hierarchy — replacing Trace-level
 escaped-JSON dumps as the primary diagnostics surface, while keeping the agent session completely isolated from
-recording.
+recording. A per-character invocation index makes recorded traffic navigable across turns and re-created minds,
+and actionable invalid-response diagnostics make rejected response shapes debuggable without sharing sensitive
+transcripts or capturing provider-wire payloads.
 
 ## User Requirements
 
@@ -38,6 +43,17 @@ recording.
    one game run.
 5. Harmless By Construction: Recording failures never disturb the running session — they surface as warnings only —
    and a disabled toggle means no file input or output and no change to request or response behaviour.
+6. Chronological Invocation Index: With the toggle enabled, each character folder contains an `index.md` listing
+   every cycle recorded for that character in the current game run, in per-character turn-number order. Each entry
+   links to its turn page and shows that cycle's full tool invocation blocks — arguments, results, and invocation
+   status/detail — so a developer can review a character's tool activity without opening every turn file; cycles
+   without tool invocations remain listed under their own linked headings.
+7. Actionable Invalid-Response Diagnostics: A rejected response is annotated with a specific reason naming the
+   failed validation branch — an empty response, an unexpected message role or content shape, an invalid or
+   unparseable function call, a missing, duplicate, or reused call ID, an unknown tool, absent required calls, or
+   an argument-schema mismatch identifying the failing property path and expected constraint — together with the
+   response's finish reason and function-call parsing-error detail when the provider supplies them. Diagnostics
+   describe only the parsed response the runner already holds, so debugging never requires sharing transcripts.
 
 ## Technical Requirements
 
@@ -120,6 +136,50 @@ recording.
     annotations for transport retry, malformed-response recovery, and fresh-turn invalidation discards, and
     write-failure containment with the session continuing normally.
 
+### Character Invocation Index
+
+15. When the toggle is enabled, the recorder maintains an `index.md` in each character folder alongside that
+    character's `turn-NNNN.md` files, listing every cycle recorded for that character in the current game run under
+    the existing run/character layout. The disabled null-object path (TR-5) produces no index and performs no file
+    input or output for it.
+16. The index presents recorded cycles in per-character turn-number order — the same process-wide monotonic order as
+    TR-4 — with each cycle's invocation blocks in recorded invocation order. Each cycle carries a heading linked to
+    its turn page by a relative Markdown link, so cycles without tool invocations remain discoverable, and each
+    invocation event likewise links to its associated turn page with a relative Markdown link.
+17. The index shows the same full tool invocation blocks as the corresponding turn pages — tool name, pretty-printed
+    JSON arguments, result, and existing invocation status/detail — produced by sharing one rendering path with the
+    turn-page formatter rather than maintaining a divergent index representation.
+18. The index is updated as each settled cycle is recorded, deriving entries from the live cycle objects the
+    recorder already holds; diagnostic data is never recovered by reparsing rendered turn Markdown. Per-character
+    index state is retained across mind re-creation within one process, matching TR-4's process-wide counter, so
+    earlier entries survive a re-created mind for the same character.
+19. Concurrent index updates for one character are serialised so entries are neither lost nor reordered. Index
+    failures are contained like any recording failure (TR-7): they warn without affecting the session, a turn page
+    already written successfully remains available when its index update fails, and index writes are
+    replacement-safe so a failed update does not unnecessarily destroy the previously written index. The TR-12
+    root-path and counter-reset seams apply equally to index output and ordering.
+
+### Invalid Response Diagnostics
+
+20. Each existing invalid-response validation branch produces a specific, distinct diagnostic reason instead of a
+    generic invalid-shape description, covering at least: empty responses; unexpected message role or content
+    shape; invalid function calls, including call parsing exceptions and informational-only calls; missing,
+    duplicate, and reused call IDs; unknown tool names; absent required calls; and argument-schema mismatches.
+    This contract adds no validation branch and changes no verdict, acceptance rule, recovery budget, or provider
+    behaviour: AI-002 (TR-12) remains authoritative for validation and recovery semantics.
+21. Argument-schema mismatch diagnostics identify the failing argument or property path and the expected type or
+    constraint sufficiently to locate the mismatch without reading the schema. Reason strings avoid copying
+    argument values unnecessarily: the opted-in turn transcript remains the source for offending values, so
+    diagnostics stay useful when transcripts are shared selectively.
+22. The response section surfaces the parsed response's finish reason when the provider supplies it, and relevant
+    function-call parsing-error details when present; unavailable metadata is omitted gracefully (TR-8). All
+    diagnostics derive exclusively from the parsed response objects the runner already holds: the recorder never
+    captures raw provider-wire payloads, raw representations, additional properties, credentials, or headers, and
+    diagnostic labels must not imply raw provider-wire capture.
+23. Specific reasons persist everywhere the generic description appeared: per-cycle recovery annotations and the
+    terminal invalid-response outcome on recovery-budget exhaustion both carry the branch-specific reason and the
+    exhaustion state. Logging or rendering of diagnostics remains contained by TR-7.
+
 ## In Scope
 
 - The `Diagnostics:AI:EnableSessionTranscriptLogging` toggle with binding and fail-closed semantics.
@@ -129,11 +189,21 @@ recording.
 - The Markdown rendering contract: the lax pseudo-XML section parser applied to instructions and message bodies,
   internal heading demotion, and hard-line-break preservation of message-body line structure.
 - Containment of recording failures and independence from `EnableRequestResponseLogging`.
+- The per-character `index.md` invocation index: turn-number ordering, relative turn-page links, shared invocation
+  rendering, process-wide entry retention, and replacement-safe contained index writes.
+- Specific per-branch invalid-response diagnostics with argument-schema paths, finish reason and parsing-error
+  detail, recovery and terminal-exhaustion reasons, and the parsed-only privacy boundary.
 - Internal test seams and the unit and integration validation contracts.
 
 ## Out Of Scope
 
 - Retention, rotation, and size caps for the transcript tree; every cycle file is kept.
+- Index backfilling for historical game runs, and index reconstruction after a crash between a turn write and its
+  index update: an index covers only the cycles recorded in its own process run.
+- Capturing raw provider-wire payloads, raw representations, additional properties, credentials, or headers;
+  diagnostics describe parsed responses only.
+- Changing model prompts, response validation or acceptance semantics, recovery budgets, cancellation, or provider
+  behaviour; AI-002 remains authoritative for those contracts.
 - Streaming-response rendering: files are written from settled cycle data, not incrementally rendered partial
   responses.
 - Capturing non-AgenticMind AI traffic, such as STT or TTS provider traffic.
@@ -154,6 +224,16 @@ recording.
 4. With the toggle disabled — or absent because game configuration is unavailable — no transcript files are written
    and session behaviour is unchanged.
 5. A recording failure during play surfaces only as a warning log, and the session continues normally.
+6. With the toggle enabled, each character folder's `index.md` lists every recorded cycle of that game run in
+   ascending per-character turn-number order: each entry links to its turn page with a relative link, shows the
+   same full tool invocation blocks as the turn page, and cycles without tool invocations still appear under their
+   linked headings — verified across multiple turns, multiple invocations, no-tool cycles, and separate
+   characters, with earlier entries preserved after mind re-creation within one process.
+7. An invalid-response cycle is annotated with a specific branch reason instead of a generic description:
+   argument-schema mismatches identify the failing property path and expected constraint, the finish reason and
+   parsing-error detail appear when supplied and are omitted gracefully when not, and recovery annotations and the
+   terminal budget-exhaustion outcome carry the same specific reasons — derived solely from the parsed response,
+   with no transcript sharing or raw provider payload required.
 
 ### Technical Requirements
 
@@ -177,6 +257,16 @@ recording.
    (TR-6, TR-7, TR-14).
 6. Tests verify both test seams are internal-only: no public API and no game-configuration switch redirects the
    recorder root or resets counters (TR-12).
+7. Tests verify the index contract (TR-15–TR-19): `index.md` created per character folder under the documented
+   layout; ascending turn-number order across multiple cycles, separate characters, and a simulated mind
+   re-creation with earlier entries retained; relative turn-page links for every cycle and its invocation events,
+   with no-tool cycles still linked; invocation parity with turn pages through shared rendering; serialised
+   per-character updates that neither lose nor reorder entries; and an injected index-write failure that warns,
+   leaves the turn page available, and preserves the previously written index.
+8. Tests cover every existing validation branch deterministically with its specific diagnostic reason
+   (TR-20–TR-23), including argument-schema mismatch paths with expected constraints, finish reason surfaced when
+   supplied and omitted gracefully when absent, and recovery annotations plus the terminal exhaustion outcome
+   carrying specific reasons — while accepted-response behaviour, recovery outcomes, and budgets remain unchanged.
 
 ## References
 
@@ -186,6 +276,12 @@ recording.
   content the recorder captures
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md) — validated character local `Id`
 - `game/src/Mind/AI/AgentSessionRunner.cs` — request-cycle loop and optional-dependency injection pattern
+- `game/src/Mind/AI/MindSessionTranscriptRecorder.cs` — per-character process-wide recording, counter retention
+  across mind re-creation, and contained write failures backing TR-15–TR-19
+- `game/src/Mind/AI/MindSessionTranscriptFormatter.cs` — shared turn-page rendering that index invocation blocks
+  reuse (TR-17) and response-section rendering (TR-22)
+- `game/src/Mind/AI/MindSessionCycleTranscript.cs` — per-cycle capture objects, including the retained parsed
+  response from which diagnostics derive (TR-20–TR-23)
 - `game/src/Mind/AI/AgenticMind.cs` — composition point owning character identity and diagnostics settings
 - `game/src/Mind/AI/AIDiagnosticsOptions.cs` — `Diagnostics:AI` binding and fail-closed pattern
 - `game/src/Common/PseudoXmlFormatter.cs` — pseudo-XML block format and tag-name sanitisation

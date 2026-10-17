@@ -7,7 +7,9 @@ namespace AlleyCat.Mind.AI;
 
 /// <summary>
 /// Filesystem recorder writing one self-contained Markdown transcript file per provider request cycle under
-/// <c>user://logs/mind/&lt;game-run-start-timestamp&gt;/&lt;character-id&gt;/turn-NNNN.md</c> (AI-011 TR-2–TR-5).
+/// <c>user://logs/mind/&lt;game-run-start-timestamp&gt;/&lt;character-id&gt;/turn-NNNN.md</c> (AI-011 TR-2–TR-5), and
+/// maintaining each character folder's chronological <c>index.md</c> alongside those turn pages (AI-011
+/// TR-15–TR-19).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,6 +17,13 @@ namespace AlleyCat.Mind.AI;
 /// is created lazily on the recorder's first recorded write (TR-2/TR-3). Turn numbering is a per-character,
 /// process-wide monotonic counter that starts at one and survives mind node re-creation within the same game run
 /// (TR-4). Writes are sequential: the runner reports each cycle once its outcome has resolved.
+/// </para>
+/// <para>
+/// The index derives its entries from the live cycle objects at record time — never by reparsing rendered turn
+/// Markdown — and its per-character entry state is process-wide like the turn counter, so entries survive mind
+/// re-creation (TR-18). Index updates are serialised, rendered, and written replacement-safe under the state lock:
+/// entries are neither lost nor reordered, a turn page already written stays available when its index update fails,
+/// and a failed update leaves the previously written index intact (TR-19).
 /// </para>
 /// <para>
 /// Recording is fully contained (TR-7): every failure is logged as a warning and never propagates into the session
@@ -31,12 +40,18 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
 
     private const string TurnFileNameExtension = ".md";
 
+    private const string IndexFileName = "index.md";
+
+    private const string IndexTemporarySuffix = ".tmp";
+
     private const int TurnNumberMinimumDigits = 4;
 
     private const string RunTimestampFormat = "yyyy-MM-dd-HH-mm-ss";
 
     private static readonly Lock _stateLock = new();
     private static readonly Dictionary<string, int> _nextTurnNumbers = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, List<MindTranscriptIndexEntry>> _indexEntries = new(
+        StringComparer.Ordinal);
     private static readonly HashSet<MindSessionTranscriptRecorder> _activeRecorders = [];
     private static string? _runTimestamp;
     private static string? _rootPathOverride;
@@ -91,22 +106,91 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
             int turnNumber = TakeNextTurnNumber(_characterId);
             string contents = MindSessionTranscriptFormatter.Render(cycle, turnNumber, _characterId);
             File.WriteAllText(Path.Combine(directory, CreateTurnFileName(turnNumber)), contents);
+
+            // The index update follows the successful turn write (AI-011 TR-19): its failure is contained
+            // separately, so the turn page stays available and the previously written index survives.
+            try
+            {
+                UpdateIndex(directory, turnNumber, cycle);
+            }
+            catch (Exception exception)
+            {
+                TryLogContainedFailure(exception, "Failed to update the mind session transcript index");
+            }
         }
         catch (Exception exception)
         {
             // A recording failure never disturbs the running session (AI-011 TR-7): it surfaces as a warning only,
             // and even a throwing warning logger stays contained.
-            TryLogContainedFailure(exception);
+            TryLogContainedFailure(exception, "Failed to record the mind session transcript");
         }
     }
 
-    private void TryLogContainedFailure(Exception exception)
+    /// <summary>
+    /// Appends one settled cycle's entry to the character's process-wide index state and rewrites the character
+    /// folder's <c>index.md</c> (AI-011 TR-15–TR-19). State mutation, rendering, and the replacement-safe write all
+    /// happen under the state lock, so concurrent updates of one character are serialised and entries are neither
+    /// lost nor reordered.
+    /// </summary>
+    private void UpdateIndex(string characterDirectory, int turnNumber, MindSessionCycleTranscript cycle)
+    {
+        lock (_stateLock)
+        {
+            if (!_indexEntries.TryGetValue(_characterId, out List<MindTranscriptIndexEntry>? entries))
+            {
+                entries = [];
+                _indexEntries[_characterId] = entries;
+            }
+
+            entries.Add(new MindTranscriptIndexEntry(
+                turnNumber,
+                cycle.Outcome,
+                [.. cycle.ToolInvocations]));
+            // Turn numbers are monotonic per character, so ordering by turn number keeps the index chronological
+            // regardless of the interleaving of concurrent records. Rendering and writing stay inside the lock so
+            // an older render can never overwrite a newer index.
+            string indexContents = MindSessionTranscriptFormatter.RenderIndex(
+                _characterId,
+                [.. entries.OrderBy(static entry => entry.TurnNumber)]);
+            WriteReplacementSafe(Path.Combine(characterDirectory, IndexFileName), indexContents);
+        }
+    }
+
+    /// <summary>
+    /// Writes one file replacement-safely (AI-011 TR-19): the content is written to a sibling temporary file first
+    /// and moved over the target only once complete, so a failed update cannot destroy the previously written file.
+    /// </summary>
+    private static void WriteReplacementSafe(string path, string contents)
+    {
+        string temporaryPath = path + IndexTemporarySuffix;
+        try
+        {
+            File.WriteAllText(temporaryPath, contents);
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch (Exception)
+        {
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception)
+            {
+                // Cleaning up the abandoned temporary file is best-effort; the containment wrapper reports the
+                // original failure (AI-011 TR-7).
+            }
+
+            throw;
+        }
+    }
+
+    private void TryLogContainedFailure(Exception exception, string messagePrefix)
     {
         try
         {
             _logger.LogWarning(
                 exception,
-                "Failed to record the mind session transcript of character '{CharacterId}'.",
+                $"{messagePrefix} of character '{{CharacterId}}'.",
                 _characterId);
         }
         catch (Exception)
@@ -141,15 +225,16 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
     }
 
     /// <summary>
-    /// Internal test seam (AI-011 TR-12): clears every per-character turn counter so tests start from a known
-    /// turn-numbering state, and deactivates every live recorder of a previous scope. Not public API and not game
-    /// configuration.
+    /// Internal test seam (AI-011 TR-12/TR-19): clears every per-character turn counter and index state so tests
+    /// start from a known turn-numbering state, and deactivates every live recorder of a previous scope. Not public
+    /// API and not game configuration.
     /// </summary>
     internal static void ResetTurnCountersForTesting()
     {
         lock (_stateLock)
         {
             _nextTurnNumbers.Clear();
+            _indexEntries.Clear();
             DeactivateAllRecordersLocked();
         }
     }

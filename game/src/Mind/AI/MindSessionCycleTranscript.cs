@@ -119,6 +119,17 @@ internal sealed class MindTranscriptToolInvocation(
 }
 
 /// <summary>
+/// One chronological index entry derived from a recorded cycle at record time (AI-011 TR-18): the entry holds only
+/// the data the index renders — the per-character turn number, the resolved outcome, and the terminal invocation
+/// objects whose blocks the index shares with the turn page. Full request/response graphs are never retained for
+/// the index.
+/// </summary>
+internal sealed record MindTranscriptIndexEntry(
+    int TurnNumber,
+    MindTranscriptCycleOutcome Outcome,
+    IReadOnlyList<MindTranscriptToolInvocation> ToolInvocations);
+
+/// <summary>
 /// Mutable capture of one provider request cycle (AI-011 TR-6): the runner fills it while the cycle runs and reports
 /// it to <see cref="IAgentSessionTranscriptSink" /> once the cycle's outcome resolves.
 /// </summary>

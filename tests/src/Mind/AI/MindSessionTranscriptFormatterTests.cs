@@ -580,6 +580,126 @@ public sealed class MindSessionTranscriptFormatterTests
         Assert.Contains("- **Outcome:** Accepted" + LineFeed, markdown);
     }
 
+    /// <summary>
+    /// The response section surfaces the parsed response's finish reason when the provider supplied one and omits
+    /// it gracefully when absent (AI-011 TR-22).
+    /// </summary>
+    [Fact]
+    public void Render_SurfacesParsedFinishReasonWhenSuppliedAndOmitsItWhenAbsent()
+    {
+        ChatResponse withFinishReason = new(new ChatMessage(ChatRole.Assistant, "ordinary text"))
+        {
+            FinishReason = new ChatFinishReason("length"),
+        };
+
+        string supplied = RenderDefaultCycle(response: withFinishReason);
+        Assert.Contains("**Finish Reason:** length" + LineFeed, supplied);
+
+        string absent = RenderDefaultCycle();
+        Assert.DoesNotContain("**Finish Reason:**", absent);
+    }
+
+    /// <summary>
+    /// A function call carrying a parsing exception surfaces its detail in the response section, and the detail is
+    /// omitted when no exception is present (AI-011 TR-22).
+    /// </summary>
+    [Fact]
+    public void Render_SurfacesFunctionCallParseErrorDetailWhenPresent()
+    {
+        ChatResponse withParseError = new(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent("call-1", "speak", new Dictionary<string, object?>())
+            {
+                Exception = new InvalidOperationException("the provider's function-call payload was malformed"),
+            }]));
+
+        string supplied = RenderDefaultCycle(response: withParseError);
+        Assert.Contains("**Function Call Parse Error:** the provider's function-call payload was malformed", supplied);
+
+        ChatResponse withoutParseError = new(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent("call-1", "speak", new Dictionary<string, object?>())]));
+
+        string absent = RenderDefaultCycle(response: withoutParseError);
+        Assert.DoesNotContain("**Function Call Parse Error:**", absent);
+    }
+
+    /// <summary>
+    /// The index links every recorded cycle in per-character turn order with relative turn-page links — including
+    /// cycles without tool invocations — and each invocation event links to its associated turn page
+    /// (AI-011 TR-15/TR-16).
+    /// </summary>
+    [Fact]
+    public void RenderIndex_LinksEveryCycleInTurnOrderIncludingNoToolCycles()
+    {
+        MindTranscriptToolInvocation invocation = new(
+            "speak",
+            "call-1",
+            new Dictionary<string, object?> { ["speech"] = "Hello" })
+        {
+            Status = MindTranscriptToolInvocationStatus.Completed,
+            Result = "Spoken.",
+        };
+        MindTranscriptToolInvocation laterInvocation = new(
+            "wait",
+            "call-9",
+            new Dictionary<string, object?>())
+        {
+            Status = MindTranscriptToolInvocationStatus.SkippedByInvalidation,
+            Result = AgentSessionRunner.CancelledActionResult,
+        };
+
+        string index = MindSessionTranscriptFormatter.RenderIndex(
+            "luna",
+            [
+                new MindTranscriptIndexEntry(1, MindTranscriptCycleOutcome.Accepted, [invocation]),
+                new MindTranscriptIndexEntry(
+                    2,
+                    MindTranscriptCycleOutcome.InvalidResponseRecoveryScheduled,
+                    []),
+                new MindTranscriptIndexEntry(3, MindTranscriptCycleOutcome.Accepted, [laterInvocation]),
+            ]);
+
+        Assert.StartsWith("# Mind Session Transcript Index — luna", index);
+        Assert.Contains("- **Character:** luna", index);
+        Assert.Contains("## [Turn 0001](turn-0001.md) — Accepted", index);
+        Assert.Contains("## [Turn 0002](turn-0002.md) — Invalid Response — Recovery Scheduled", index);
+        Assert.Contains("## [Turn 0003](turn-0003.md) — Accepted", index);
+        Assert.Contains("_(no tool invocations)_", index);
+        Assert.Contains("### [speak — call `call-1`](turn-0001.md)", index);
+        Assert.Contains("### [wait — call `call-9` (skipped — batch invalidated)](turn-0003.md)", index);
+        Assert.Contains("**Arguments**", index);
+        Assert.Contains("**Result**", index);
+    }
+
+    /// <summary>
+    /// The index's invocation blocks are byte-identical to the corresponding turn-page blocks below their headings,
+    /// proving the shared rendering path rather than a divergent index representation (AI-011 TR-17).
+    /// </summary>
+    [Fact]
+    public void RenderIndex_SharesTheTurnPageInvocationBlockRendering()
+    {
+        MindSessionCycleTranscript cycle = CreateCycle();
+        cycle.ToolInvocations.Add(new MindTranscriptToolInvocation(
+            "speak",
+            "call-7",
+            new Dictionary<string, object?> { ["speech"] = "Hello there." })
+        {
+            Status = MindTranscriptToolInvocationStatus.Completed,
+            Result = "Spoken.",
+        });
+
+        string turnPage = MindSessionTranscriptFormatter.Render(cycle, turnNumber: 1, characterId: "luna");
+        string index = MindSessionTranscriptFormatter.RenderIndex(
+            "luna",
+            [new MindTranscriptIndexEntry(1, cycle.Outcome, cycle.ToolInvocations)]);
+
+        string invocationBlockBody = turnPage[turnPage.IndexOf("**Arguments**", StringComparison.Ordinal)..]
+            .TrimEnd();
+        Assert.Contains(invocationBlockBody, index);
+        Assert.Contains("**Result**" + LineFeed + LineFeed + "Spoken.", index);
+    }
+
     private static string RenderDefaultCycle(
         IReadOnlyList<ChatMessage>? requestMessages = null,
         ChatResponse? response = null)

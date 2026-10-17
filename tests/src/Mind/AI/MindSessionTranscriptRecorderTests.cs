@@ -17,6 +17,11 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$", RegexOptions.CultureInvariant)]
     private static partial Regex SortableRunTimestamp();
 
+    [GeneratedRegex(
+        @"^## \[Turn (\d{4,})\]\(turn-\d{4,}\.md\)",
+        RegexOptions.CultureInvariant | RegexOptions.Multiline)]
+    private static partial Regex IndexTurnHeadings();
+
     private readonly string _rootDirectory = Path.Combine(
         Path.GetTempPath(),
         "AlleyCat.MindSessionTranscriptRecorderTests",
@@ -64,7 +69,7 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
         string characterDirectory = Assert.Single(Directory.GetDirectories(Assert.Single(Directory.GetDirectories(_rootDirectory))));
         Assert.Equal(
             ["turn-0001.md", "turn-0002.md", "turn-0003.md"],
-            Directory.GetFiles(characterDirectory).Select(Path.GetFileName).OrderBy(static name => name));
+            Directory.GetFiles(characterDirectory, "turn-*.md").Select(Path.GetFileName).OrderBy(static name => name));
         Assert.Contains("# Mind Session Transcript — Turn 0003", File.ReadAllText(Path.Combine(characterDirectory, "turn-0003.md")));
     }
 
@@ -82,7 +87,7 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
         CreateRecorder("luna").Record(CreateCycle(cycleIndex: 6));
 
         string characterDirectory = Assert.Single(Directory.GetDirectories(Assert.Single(Directory.GetDirectories(_rootDirectory))));
-        Assert.Equal(["turn-0001.md"], Directory.GetFiles(characterDirectory).Select(Path.GetFileName));
+        Assert.Equal(["turn-0001.md"], Directory.GetFiles(characterDirectory, "turn-*.md").Select(Path.GetFileName));
         Assert.Contains("- **Request Cycle:** 6", File.ReadAllText(Path.Combine(characterDirectory, "turn-0001.md")));
     }
 
@@ -104,7 +109,9 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
             Directory.GetDirectories(runDirectory).Select(Path.GetFileName).OrderBy(static name => name));
         Assert.Equal(
             ["turn-0001.md", "turn-0002.md"],
-            Directory.GetFiles(Path.Combine(runDirectory, "luna")).Select(Path.GetFileName).OrderBy(static name => name));
+            Directory.GetFiles(Path.Combine(runDirectory, "luna"), "turn-*.md")
+                .Select(Path.GetFileName)
+                .OrderBy(static name => name));
     }
 
     /// <summary>The file name zero-pads the turn number to at least four digits (AI-011 TR-2).</summary>
@@ -165,6 +172,145 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
         Assert.Contains("## Request Transcript", contents);
         Assert.Contains("## Response", contents);
         Assert.Contains("## Tool Invocations", contents);
+    }
+
+    /// <summary>
+    /// The character folder carries a chronological <c>index.md</c> (AI-011 UR-6, TR-15–TR-17): every recorded
+    /// cycle appears in ascending turn order under a heading linked to its turn page by a relative link — including
+    /// cycles without tool invocations — and each cycle's invocation blocks are the same rendering as the turn
+    /// page's, with every invocation event likewise linked to its turn page.
+    /// </summary>
+    [Fact]
+    public void Record_MaintainsAChronologicalLinkedIndexWithInvocationParity()
+    {
+        MindSessionCycleTranscript withInvocations = CreateCycle();
+        withInvocations.ToolInvocations.Add(new MindTranscriptToolInvocation(
+            "speak",
+            "call-1",
+            new Dictionary<string, object?> { ["speech"] = "Hello" })
+        {
+            Status = MindTranscriptToolInvocationStatus.Completed,
+            Result = "Spoken.",
+        });
+        withInvocations.ToolInvocations.Add(new MindTranscriptToolInvocation(
+            "wait",
+            "call-2",
+            new Dictionary<string, object?>())
+        {
+            Status = MindTranscriptToolInvocationStatus.SkippedByInvalidation,
+            Result = AgentSessionRunner.CancelledActionResult,
+        });
+
+        CreateRecorder("luna").Record(withInvocations);
+        CreateRecorder("luna").Record(CreateCycle());
+        // Separate characters keep separate folders and separate indexes.
+        CreateRecorder("moss").Record(CreateCycle());
+
+        string lunaDirectory = GetCharacterDirectory("luna");
+        string index = File.ReadAllText(Path.Combine(lunaDirectory, "index.md"));
+
+        Assert.StartsWith("# Mind Session Transcript Index — luna", index);
+        Assert.Contains("- **Character:** luna", index);
+        // Ascending turn order with relative turn-page links; the no-tool cycle stays listed.
+        Assert.Contains("## [Turn 0001](turn-0001.md) — Accepted", index);
+        Assert.Contains("## [Turn 0002](turn-0002.md) — Accepted", index);
+        Assert.Contains("_(no tool invocations)_", index);
+        Assert.True(
+            index.IndexOf("](turn-0001.md)", StringComparison.Ordinal)
+                < index.IndexOf("](turn-0002.md)", StringComparison.Ordinal));
+        // Invocation events link to their own turn page and keep the turn page's block rendering (TR-16/TR-17).
+        Assert.Contains("### [speak — call `call-1`](turn-0001.md)", index);
+        Assert.Contains("### [wait — call `call-2` (skipped — batch invalidated)](turn-0001.md)", index);
+        // Byte parity with the turn page's first invocation block: from its arguments to before the next
+        // invocation heading, the index renders the identical text.
+        string turnPage = File.ReadAllText(Path.Combine(lunaDirectory, "turn-0001.md"));
+        int argumentsStart = turnPage.IndexOf("**Arguments**", StringComparison.Ordinal);
+        int nextHeading = turnPage.IndexOf("\n### ", argumentsStart, StringComparison.Ordinal);
+        string invocationBlockBody = turnPage[argumentsStart..nextHeading].TrimEnd();
+        Assert.Contains(invocationBlockBody, index);
+
+        // The other character's index is an independent file listing only its own cycle.
+        string mossIndex = File.ReadAllText(Path.Combine(GetCharacterDirectory("moss"), "index.md"));
+        Assert.StartsWith("# Mind Session Transcript Index — moss", mossIndex);
+        Assert.DoesNotContain("turn-0002.md", mossIndex);
+    }
+
+    /// <summary>
+    /// Index state is process-wide like the turn counter (AI-011 TR-18): a re-created recorder for the same
+    /// character appends after the earlier entries, and the counter-reset seam restores a known index state
+    /// (TR-12/TR-19).
+    /// </summary>
+    [Fact]
+    public void Record_IndexState_SurvivesMindReCreationAndCounterReset()
+    {
+        CreateRecorder("luna").Record(CreateCycle());
+        CreateRecorder("luna").Record(CreateCycle());
+
+        Assert.Contains("## [Turn 0002](turn-0002.md)", ReadIndex("luna"));
+
+        MindSessionTranscriptRecorder.ResetTurnCountersForTesting();
+        CreateRecorder("luna").Record(CreateCycle());
+
+        string resetIndex = ReadIndex("luna");
+        Assert.Contains("## [Turn 0001](turn-0001.md)", resetIndex);
+        Assert.DoesNotContain("turn-0002.md", resetIndex);
+    }
+
+    /// <summary>
+    /// Concurrent index updates of one character are serialised: no entry is lost and the index stays in ascending
+    /// per-character turn order (AI-011 TR-19).
+    /// </summary>
+    [Fact]
+    public async Task Record_ConcurrentIndexUpdates_AreSerialisedWithoutLossOrReordering()
+    {
+        MindSessionTranscriptRecorder recorder = CreateRecorder("luna");
+        var first = Task.Run(() => RecordCycles(recorder, 5));
+        var second = Task.Run(() => RecordCycles(recorder, 5));
+        await Task.WhenAll(first, second);
+
+        string characterDirectory = GetCharacterDirectory("luna");
+        Assert.Equal(10, Directory.GetFiles(characterDirectory, "turn-*.md").Length);
+        string index = File.ReadAllText(Path.Combine(characterDirectory, "index.md"));
+        Assert.Equal(
+            Enumerable.Range(1, 10),
+            IndexTurnHeadings().Matches(index).Select(static match => int.Parse(match.Groups[1].Value)));
+    }
+
+    /// <summary>
+    /// A failing index update is contained (AI-011 TR-19): the already-written turn page stays available, the
+    /// previously written index survives the failed replacement, the failure warns without throwing, and the entry
+    /// retained in index state reaches the index once writes succeed again.
+    /// </summary>
+    [Fact]
+    public void Record_WhenIndexWriteFails_PreservesTheTurnPageAndThePreviousIndex()
+    {
+        MindSessionTranscriptRecorder recorder = CreateRecorder("luna");
+        recorder.Record(CreateCycle());
+        string characterDirectory = GetCharacterDirectory("luna");
+        string indexAfterFirstCycle = File.ReadAllText(Path.Combine(characterDirectory, "index.md"));
+        Assert.Contains("## [Turn 0001](turn-0001.md)", indexAfterFirstCycle);
+
+        // A directory at the replacement-safety temporary path makes every later index write fail while turn pages
+        // keep writing.
+        string blockingTemporary = Path.Combine(characterDirectory, "index.md.tmp");
+        _ = Directory.CreateDirectory(blockingTemporary);
+        recorder.Record(CreateCycle());
+
+        Assert.True(File.Exists(Path.Combine(characterDirectory, "turn-0002.md")));
+        Assert.Equal(indexAfterFirstCycle, File.ReadAllText(Path.Combine(characterDirectory, "index.md")));
+        Assert.Contains(
+            _logger.Entries,
+            static entry => entry.Message.Contains(
+                "Failed to update the mind session transcript index",
+                StringComparison.Ordinal));
+
+        // With the obstruction removed, the retained entries — including the failed update's — render completely.
+        Directory.Delete(blockingTemporary);
+        recorder.Record(CreateCycle());
+        string recoveredIndex = ReadIndex("luna");
+        Assert.Contains("## [Turn 0001](turn-0001.md)", recoveredIndex);
+        Assert.Contains("## [Turn 0002](turn-0002.md)", recoveredIndex);
+        Assert.Contains("## [Turn 0003](turn-0003.md)", recoveredIndex);
     }
 
     /// <summary>
@@ -274,6 +420,20 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
         => new(characterId, () => throw new InvalidOperationException(
             "The root-path override must keep unit-test writes away from user:// resolution."),
             _logger);
+
+    private string GetCharacterDirectory(string characterId)
+        => Assert.Single(Directory.GetDirectories(Assert.Single(Directory.GetDirectories(_rootDirectory)), characterId));
+
+    private string ReadIndex(string characterId)
+        => File.ReadAllText(Path.Combine(GetCharacterDirectory(characterId), "index.md"));
+
+    private static void RecordCycles(MindSessionTranscriptRecorder recorder, int count)
+    {
+        for (int index = 0; index < count; index++)
+        {
+            recorder.Record(CreateCycle());
+        }
+    }
 
     private static MindSessionCycleTranscript CreateCycle(int cycleIndex = 4)
         => new()
