@@ -1,6 +1,7 @@
 using System.ClientModel;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
+using AlleyCat.Testing;
 using Godot;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -57,6 +58,18 @@ public partial class OpenAIClientProvider : ClientProvider
     /// <inheritdoc />
     public override IChatClient CreateChatClient()
     {
+        // Fail closed in integration-test sessions: a scene-started mind defaults to this provider, so an
+        // ordinary test session must never reach production settings loading or transport construction — only
+        // the separate AITest path used by explicitly opted-in live tests may construct live clients
+        // (TEST-001 UR-7).
+        if (RuntimeContext.IsIntegrationTest())
+        {
+            throw new InvalidOperationException(
+                "Production AI chat clients are disabled in integration-test sessions. Scene-started minds "
+                + "must inject an offline ClientProvider; opt-in live LLM tests must use the AITest "
+                + "configuration boundary through LiveLLMClientFactory.");
+        }
+
         OpenAIClientProviderSettings settings = _settings ??= OpenAIClientProviderSettings.Load(ConfigPath);
         return CreateChatClient(ChatClientKind, settings);
     }

@@ -227,6 +227,17 @@ accurately.
     contribute nothing and are never fabricated from token counts, metadata, or encrypted content; summary-only and
     content-only responses are the single-source cases of the same rule.
 
+### Integration Provider Boundary
+
+34. In integration contexts — the existing `RuntimeContext.IsIntegrationTest()` seam — the instance production
+    client construction path (`OpenAIClientProvider.CreateChatClient`) fails closed before production settings
+    loading or transport construction, with a fixed, secret-free, contained diagnostic. Normal gameplay keeps this
+    construction path unchanged. The guard is unconditional inside the integration context: `--live-llm`, test
+    selection, and configuration never bypass it. Explicit live test clients use the separate static construction
+    path behind TEST-001's `AITest` configuration boundary, and injected offline `ClientProvider` subclasses remain
+    unaffected so scripted sessions keep dispatching and completing. TEST-001 owns the framework-side gate,
+    configuration boundary, and acceptance coverage this boundary serves.
+
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, tool-only validation, and contained retry/recovery.
@@ -247,7 +258,8 @@ accurately.
 - Provider-boundary normalisation of recognised returned reasoning content: summary text, recognised `reasoning_text`
   content parts, or both, surfaced through the same parsed-only AI-011 path in returned order without fabrication or
   duplication (TR-31–TR-33).
-
+- Integration-context fail-closed production client construction (TR-34): the unconditional guard, normal gameplay
+  unchanged, and the preserved offline injected-provider and `AITest` live pathways under TEST-001.
 
 ## Out Of Scope
 
@@ -362,7 +374,10 @@ accurately.
     content, multiple reasoning items in response order, empty or absent parts, and preserved protected data that
     never appears as reasoning text, with existing continuation and cancellation settlement controls unchanged
     (TR-28, TR-30–TR-33).
-
+22. Integration-context tests prove production client construction fails closed before production settings loading
+    or transport creation with the contained, secret-free diagnostic across the complete ordinary fixture
+    lifecycle, while injected offline providers still construct, dispatch, and complete sessions in the same runs
+    (TR-34). Framework-side selection, opt-in, and `AITest` acceptance coverage is TEST-001's normative layer.
 
 ## References
 
@@ -374,3 +389,6 @@ accurately.
   reasoning-content rendering, and invocation index normative for reasoning-summary and returned-content surfacing
   (TR-31, TR-32)
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
+- [TEST-001: Integration Test Framework](../../testing/001-test-framework/index.md) — integration-session opt-in
+  gate, `AITest` configuration boundary, and framework-side acceptance coverage normative for TR-34's testing
+  obligations

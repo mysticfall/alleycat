@@ -10,7 +10,11 @@ title: Integration Test Framework
 Provide a dependable integration test framework for behaviours requiring Godot runtime APIs. It must support local and
 headless execution, selective runs, stable test identity, actionable diagnostics, and materially faster full-suite
 execution through persistent reusable runtime sessions. Integration tests that call live external LLM services must be
-opt-in so default runs need no credentials and incur no provider cost. The same opt-in boundary authorises live LLM
+opt-in so default runs need no credentials and incur no provider cost. The boundary is structural as well as
+selective: ordinary integration sessions never construct a production AI client, including through minds that scenes
+start themselves, so default scene composition cannot make a billable provider call; injected offline providers keep
+scripted Mind coverage, and only the opted-in `AITest` pathway contacts real providers. The same opt-in boundary
+authorises live LLM
 experiment harnesses: bounded, caller-declared scenarios that may make several provider requests and offer tools,
 capture inspectable evidence traces, and aggregate a fixed trial batch into one reported outcome.
 
@@ -48,6 +52,9 @@ evidence to design production APIs, then lock behaviour down with deterministic 
     valid-but-unsuccessful, invalid evaluation, and execution failure — so a passing result never hides dropped trials.
 13. Trial evidence — requests, tool exchanges, responses, and their ordering — must remain inspectable after the run so
     contributors can diagnose behaviour without re-running providers.
+14. Default integration scene composition must never make a billable provider call: a mind that a test scene starts
+    itself cannot construct a production AI client in an integration session, regardless of selection or flags,
+    while offline scripted providers keep covering real session dispatch and completion.
 
 ## Technical Requirements
 
@@ -129,6 +136,15 @@ evidence to design production APIs, then lock behaviour down with deterministic 
     must cover the entire declared batch, as defined in [Live LLM Testing](#live-llm-testing).
 28. Evaluation dependencies are permitted only in the integration-test project; the game project must not reference
     `Microsoft.Extensions.AI.Evaluation.Quality` or its evaluation-core transitives.
+29. In integration contexts — the existing `RuntimeContext.IsIntegrationTest()` seam — production AI client
+    construction fails closed before production settings loading or transport construction, with a fixed,
+    secret-free, contained diagnostic; the normative contract for that production boundary is AI-002's
+    [Integration Provider Boundary](../../ai/002-agent-runtime/index.md#integration-provider-boundary). Neither
+    `--live-llm` nor any selection mode bypasses the guard (TR-17–TR-20).
+30. The guard must preserve offline coverage: injected offline `ClientProvider` subclasses still construct, dispatch,
+    and complete real Mind sessions in integration runs, and the explicit live `AITest` factory keeps its separate
+    static construction path (TR-20). Wholesale provider suppression in the harness is not an acceptable substitute
+    for the scoped guard.
 
 ## In Scope
 
@@ -143,6 +159,9 @@ evidence to design production APIs, then lock behaviour down with deterministic 
   boundary, the reusable live client and evaluation support layer, and the experiment harness contracts: bounded
   multi-request scenarios, tool-bearing exchanges, caller-owned client lifetimes, evidence traces, and fixed-batch
   trial aggregation.
+- The integration-session production AI boundary: fail-closed rejection of production client construction in
+  integration contexts (normative contract in AI-002), preserved offline injected-provider coverage, and no
+  `--live-llm` bypass of the production guard.
 
 ## Out Of Scope
 
@@ -158,6 +177,8 @@ evidence to design production APIs, then lock behaviour down with deterministic 
   batch report, and the local trace artefacts.
 - Divergent target/judge provider configuration; the injectable client pair is the seam, but both clients use the
   same `AITest` settings today.
+- General network isolation: the guarantee is the scoped production construction boundary plus the `[LiveLlm]` gate,
+  not that arbitrary code can never reach the network.
 
 ## Session Execution Model
 
@@ -330,6 +351,9 @@ live-LLM experiment methodology in the `llm-experiment-driven-development` skill
   launch; it can never be reported as passed.
 - `--live-llm` only permits; it never excludes ordinary tests. `--headless`, selector precedence, session lifecycle,
   preflight, and result semantics are unchanged by the flag.
+- `--live-llm` never enables production AI clients in integration sessions: with or without the flag, ordinary scene
+  composition cannot construct one; the flag admits only live-marked tests through the `AITest` pathway
+  (see [Configuration Boundary](#configuration-boundary)).
 
 ### Configuration Boundary
 
@@ -348,9 +372,11 @@ live-LLM experiment methodology in the `llm-experiment-driven-development` skill
   message: missing or blank `Host`, `Model`, or `ApiKey`; a `Host` that is not an absolute HTTP(S) URL; a `Host`
   without an API base path; and a non-positive `Timeout`. Test-local clients disable SDK retries
   (`ClientRetryPolicy(0)`) and message-content logging without changing production logging.
-- The game's production `AI` loading paths are unchanged; the arbitrary-section settings loader is an internal
-  overload of `OpenAIClientProvider.OpenAIClientProviderSettings`
-  (`game/src/Mind/AI/Provider/OpenAIClientProvider.cs`).
+- Normal gameplay keeps the game's production `AI` loading paths unchanged; the arbitrary-section settings loader
+  remains an internal overload of `OpenAIClientProvider.OpenAIClientProviderSettings`
+  (`game/src/Mind/AI/Provider/OpenAIClientProvider.cs`). Integration contexts are deliberately different: the
+  production instance construction boundary fails closed there before settings loading or transport creation
+  (AI-002), so only this `AITest` factory or injected offline providers construct clients in tests.
 
 ### Experiment Execution Model
 
@@ -452,7 +478,8 @@ live-LLM experiment methodology in the `llm-experiment-driven-development` skill
 - `--headless` — forces all tests to run in headless mode. Overrides per-test and per-class `HeadlessAttribute`
   settings. Intended for tests known to be safe without renderer-backed behaviour.
 - `--live-llm` — permits integration tests marked `[LiveLlm]` to run; live-marked tests stay excluded without this
-  flag. Takes no arguments and never excludes ordinary tests; see [Live LLM Testing](#live-llm-testing).
+  flag. Takes no arguments, never excludes ordinary tests, and never enables production AI clients in integration
+  sessions; see [Live LLM Testing](#live-llm-testing).
 
 **Selector lists:** each selection option takes one value that may be a comma-separated list of exact, fully
 qualified selectors, selecting the union of all matches; a single selector behaves exactly as before. Every
@@ -527,8 +554,18 @@ all-empty list (for example `","`) is rejected during validation.
     exceptions appear in traces or assertion output.
 23. The single-shot evaluation helper remains an actively-used composition of the execution, evaluation, and
     aggregation contracts, and its single-request and text-only restrictions are documented as fixture-specific.
-24. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-23
-    additionally verify User Requirements 7-13 and Technical Requirements 17-28.
+24. Through the complete ordinary fixture lifecycle — scene construction, settled background mind work, teardown,
+    and baseline restoration — production client construction fails closed before production settings loading or
+    transport creation, proven by the positive contained secret-free diagnostic and its ordering rather than by
+    absent log lines; no external production request is possible through that path.
+25. Injected offline providers still construct, dispatch, and complete Mind sessions across the auto-start and
+    relevant manual-start fixtures, proving the boundary preserves scripted coverage instead of suppressing it.
+26. Deterministic tests prove live-marked tests stay excluded without `--live-llm` and are admitted only with it,
+    opted-in execution still cannot construct a production AI client, and the explicit `AITest` factory remains
+    constructible through deterministic local seams with no billable call.
+27. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-23
+    additionally verify User Requirements 7-13 and Technical Requirements 17-28. Criteria 24-26 verify User
+    Requirement 14 and Technical Requirements 29-30.
 
 ## References
 
@@ -543,5 +580,7 @@ all-empty list (for example `","`) is rejected during validation.
 - @integration-tests/src/Support/AI/LiveLLMClientPair.cs
 - @integration-tests/src/Support/AI/LiveLLMEvaluation.cs
 - @integration-tests/src/Mind/AI/LiveRoleplayIntegrationTests.cs
+- @integration-tests/src/Mind/AI/ProductionAIProviderBoundaryIntegrationTests.cs
 - @game/src/Testing/TestRuntimeRunner.cs
+- @specs/ai/002-agent-runtime/index.md
 - @specs/index.md
