@@ -40,6 +40,19 @@ accurately.
     clock as its event history.
 11. An NPC can read discovered lore before choosing an action; retrieved knowledge remains available to subsequent
     reasoning without creating remembered events or changing the world.
+12. The user can configure AgenticMind's reasoning effort and reasoning summary verbosity through the `AI` section of
+    the shipped `AlleyCat.yaml`, and override both settings per user through `user://AlleyCat.yaml` under CORE-006's
+    merge precedence: reasoning effort accepts `none`, `low`, `medium`, `high`, or `xhigh`, shaping how much
+    computation the model invests before answering; reasoning summary verbosity accepts `auto`, `concise`, or
+    `detailed`, shaping the detail level of the reasoning summary the provider is asked to return alongside its
+    answer — it requests summary detail only and neither requests nor limits reasoning content the provider may
+    return separately; and unset settings defer to provider defaults. Neither setting directly controls answer
+    length, NPC speech frequency, or tool-use frequency; unchanged model outputs or behaviour are not guaranteed.
+    Returned reasoning — a summary, reasoning content the provider returned directly, or both — is the provider's
+    own text, surfaced as returned and never fabricated, and never a guarantee of raw or internal chain-of-thought.
+13. A blank user override clears a shipped setting, and a configured value governs every provider request of the
+    session, including retries and continuations. A misconfigured nonblank value fails locally with a diagnostic
+    naming the configuration key and the permitted values.
 
 ## Technical Requirements
 
@@ -146,6 +159,74 @@ accurately.
     a later call in the same provider response cannot reason over a result not yet received. Retrieval is not mandatory
     before every action, and `speak`/`wait` guidance and disposal remain unchanged.
 
+### Reasoning Effort and Reasoning Summary Configuration
+
+26. `AIOptions` owns two optional settings — `AI:ReasoningEffort` and `AI:ReasoningVerbosity` — bound by the AI
+    subsystem from the core-provided `IConfiguration` under CORE-006, whose sourcing, merge precedence, and
+    subsystem ownership rules (UR-1–3, TR-2–4, TR-6–7) are normative here. The shipped `res://AlleyCat.yaml` documents
+    both settings through comments only, with neither set by default, so unconfigured installations defer entirely to
+    provider defaults, and `user://AlleyCat.yaml` overrides take standard merge precedence. No other key aliases these
+    settings, and no answer-length control exists.
+27. Configured values are trimmed and parsed case-insensitively. Reasoning effort accepts `none`, `low`, `medium`,
+    `high`, or `xhigh`; reasoning summary verbosity accepts `auto`, `concise`, or `detailed`. Unset or blank values
+    are omitted from provider requests — no corresponding field is sent — and a blank user override clears a shipped
+    value. An unrecognised nonblank value is rejected locally, before any provider request, with a diagnostic naming
+    the configuration key and the permitted values.
+28. Configured values take effect at AI provider/client construction and remain in force for that client's lifetime:
+    every provider request made through the configured client is built under them, including exact transport retries
+    and continuation requests, on both the Responses and Chat Completions paths, with per-protocol field emission and
+    unsupported-setting handling defined by TR-29. An unset setting defers to the provider default by sending no
+    field.
+29. Emitted request fields follow each endpoint's documented shape and nothing else: Responses carries
+    `reasoning.effort` and, when a summary value is configured, `reasoning.summary`; Chat Completions carries
+    top-level `reasoning_effort`. Values are emitted in the lowercase vocabulary of TR-27. Chat Completions support
+    for a reasoning-summary field is not established: if the endpoint documents an exact equivalent, it is emitted
+    with the configured value unchanged; otherwise a configured summary value fails containment locally before
+    dispatch with a diagnostic naming the setting and the unsupported path — no invented field, no silent omission,
+    and no effect when the summary setting is unset. Neither `text.verbosity` nor Chat Completions top-level
+    `verbosity` is ever emitted by these controls. The emission mechanism — typed options, raw-representation
+    policy, or patch-style hooks — is an implementation choice, but it must be lossless: the emitted value equals
+    the configured value from the TR-27 vocabulary, and remapping it through a coarser intermediary vocabulary is
+    not an acceptable substitute.
+30. The settings change only these request fields. Stateless Responses configuration (`store=false` with no
+    `previous_response_id`), exact retry and recovery semantics, continuation and failure handling, tool-only
+    validation, context materialisation, diagnostics, cancellation, and timeouts are unchanged. Forwarding a value is
+    not a guarantee of backend support, of summary production, or of any model behaviour: backend rejection of an
+    explicitly configured setting follows the existing contained provider-failure behaviour (TR-12) rather than
+    silent omission, and no reasoning, speech, or tool-use frequency change is promised or verified.
+31. Reasoning summaries returned by the provider are parsed-response data only. When the configured client receives a
+    non-empty reasoning summary, it flows through the existing response-content handling and appears in AI-011
+    session transcripts under AI-011's parsed-only privacy boundary, its distinctly marked reasoning-content
+    rendering, and its per-character invocation index, which are normative here and unchanged. An absent or empty
+    reasoning summary is never fabricated, synthesised, or reconstructed from token counts or any other response
+    metadata, and no reasoning text is invented where the provider returned none: all transcript and diagnostic
+    reasoning text comes only from reasoning the provider itself returned — summary text and recognised reasoning
+    content parts (TR-32–TR-33). A returned summary is the provider's rendering of its reasoning — not raw or
+    internal chain-of-thought — and no provider is guaranteed to produce summaries or reasoning content for any
+    request.
+
+### Returned Reasoning Content
+
+32. Recognised provider-returned reasoning content is first-class reasoning text, not metadata. On the Responses
+    path, a reasoning response item's content parts of type `reasoning_text` carry reasoning text the provider
+    returned directly, independently of any configured summary setting; the AI-owned provider layer normalises
+    recognised content into the parsed reasoning content before any runner handling, diagnostics, or recording. The
+    mechanism is an implementation choice — supported SDK access or a narrow AI-owned mapping over the response the
+    client already parsed — provided it preserves the underlying response items' identity, protected data such as
+    encrypted content, and response order, with no dependency upgrade, protocol switch, request-field change, or
+    runtime replay-policy change. It applies whether or not `AI:ReasoningEffort` or `AI:ReasoningVerbosity` is
+    configured, and reasoning content keeps its existing place in accepted assistant messages (TR-19), so
+    continuation, disposal, and replay semantics are unchanged.
+33. Parsed reasoning content assembles both returned sources without loss: already-surfaced summary text keeps its
+    place, and recognised content parts follow in their original part order, with explicit textual separation
+    between the summary text and the content parts and between consecutive parts — the exact separator is an
+    implementation choice, provided tests can assert each part's boundary. When the complete recognised content
+    text is exactly identical to the already-surfaced summary text, no second copy is added; substring overlap,
+    intentionally repeated distinct content parts, and multi-part or multi-item responses are never deduplicated,
+    paraphrased, or reordered, and multiple reasoning items keep their response order. Empty or absent parts
+    contribute nothing and are never fabricated from token counts, metadata, or encrypted content; summary-only and
+    content-only responses are the single-source cases of the same rule.
+
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, tool-only validation, and contained retry/recovery.
@@ -159,6 +240,14 @@ accurately.
 - Continuation admission and confirmation settlement.
 - Composition-time binding of watch tools with AI-010.
 - Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
+- Optional user-configured reasoning effort and reasoning summary verbosity: AI-owned configuration under CORE-006,
+  value normalisation and validation, exact request-field emission per protocol with contained Chat Completions
+  unsupported-summary handling, lifetime application across retries and continuations, and parsed-only reasoning
+  summary surfacing through AI-011 without fabrication.
+- Provider-boundary normalisation of recognised returned reasoning content: summary text, recognised `reasoning_text`
+  content parts, or both, surfaced through the same parsed-only AI-011 path in returned order without fabrication or
+  duplication (TR-31–TR-33).
+
 
 ## Out Of Scope
 
@@ -168,6 +257,15 @@ accurately.
   per AI-010's current contracts.
 - Watch-exchange disposal, a separate lore working-memory subsystem, and new retry subsystems.
 - Final timeout, threshold, and retry tuning values.
+- Hot reload, in-game configuration UI, and model switching for these settings; configured values apply at provider
+  construction and remain fixed for the client's lifetime.
+- Guaranteeing backend or model support for the emitted parameters, that any provider returns reasoning summaries or
+  reasoning content at all, or that either exposes raw or internal chain-of-thought; and live-model behaviour
+  experiments. Provider-specific reasoning-content behaviour beyond the captured evidence — for example
+  DeepSeek-specific shapes — remains unverified. Acceptance verifies emitted requests, contained local failure
+  paths, and parsed-only transcript surfacing, not provider outcomes.
+- New raw-reasoning round-trip features, re-dispatching returned reasoning content to the provider, or changing
+  retention, replay, or continuation policy because reasoning text is now surfaced (TR-32–TR-33 preserve them).
 
 ## Acceptance Criteria
 
@@ -192,6 +290,14 @@ accurately.
     its event timestamps.
 8. A deterministic provider fixture requests lore, consumes its returned bodies on the next reasoning request, and then
    chooses an action without lore retrieval producing remembered events (UR-11).
+9. Acceptance shows configured reasoning-effort and reasoning-summary settings govern the session's provider
+   requests, including retries and continuations, that unconfigured sessions send neither field, and that a
+   misconfigured nonblank value is rejected locally with a diagnostic naming the key and permitted values
+   (UR-12, UR-13).
+10. With AI-011 session transcripts enabled, a provider-returned reasoning summary appears as distinctly marked
+    parsed summary content, provider-returned reasoning content appears as distinctly marked reasoning text in its
+    returned order, and a cycle whose response carries neither — even with reasoning token usage present — shows no
+    fabricated reasoning text (UR-12).
 
 ### Technical Requirements
 
@@ -226,6 +332,37 @@ accurately.
     follows AI-004's single/batch, missing-result, formatting, isolation, and cancellation contracts (TR-23).
 15. Tests verify no retrieval observations, retained results on the next provider request, whole mixed-batch retention,
     unchanged `speak`/`wait` disposal, and guidance on retrieval before a subsequent action decision (TR-24–TR-25).
+16. Tests load shipped-style and user YAML through the real configuration binding: user values override matching
+    shipped settings, omitted keys retain defaults, blank user overrides clear shipped values, and both settings are
+    unset by default with the shipped file documenting them through comments only (TR-26).
+17. Tests cover trimming and case-insensitive parsing of every permitted value for both settings, omission of unset
+    and blank values from requests, and local rejection diagnostics naming the configuration key and permitted values
+    for unrecognised nonblank values (TR-27).
+18. Captured-request tests exercise the production provider construction path on both Responses and Chat Completions:
+    effort fields located and valued exactly (`reasoning.effort`; top-level `reasoning_effort`), a configured summary
+    value emitting `reasoning.summary` with the exact configured value on Responses and following TR-29's Chat
+    Completions branch — documented-exact emission or contained pre-dispatch failure — on that endpoint, no fields
+    emitted when unset, partial configuration emitting only the configured field, and preservation of tools,
+    stateless Responses fields, and representative unrelated payload fields; `text.verbosity` and Chat Completions
+    top-level `verbosity` are never emitted (TR-29).
+19. Tests verify configured settings persist on successive requests through the existing exact-retry and continuation
+    seams, and that the settings change no stateless Responses configuration, context materialisation, scheduling, or
+    failure and cancellation behaviour (TR-28, TR-30).
+20. Tests cover the parsed-summary diagnostic path: a fixture returning a non-empty SDK-parsed reasoning summary
+    surfaces that content through AI-011 transcript rendering, and recognised `reasoning_text` content surfaces
+    through the same rendering with order, separation, and no duplication (TR-32–TR-33), while an absent or empty
+    summary — including a response carrying reasoning token usage without summary or content text — produces no
+    fabricated reasoning content from token counts, other metadata, or encrypted content (TR-31).
+21. A fixed full-cycle regression exercises the production provider, SDK, runner, and settled AI-011 recorder with
+    the captured response shape: provider-returned reasoning content text appears distinctly, in returned order, and
+    exactly once in the settled turn without duplication, while the outgoing request keeps its exact configured
+    effort and summary values, stateless Responses fields, and tool configuration, and the character index links the
+    turn. The regression is proven failing on the uncorrected mapping path and passes unchanged on the corrected
+    candidate. The same cycle matrix covers mixed summary-and-content, content-only, summary-only, multi-part
+    content, multiple reasoning items in response order, empty or absent parts, and preserved protected data that
+    never appears as reasoning text, with existing continuation and cancellation settlement controls unchanged
+    (TR-28, TR-30–TR-33).
+
 
 ## References
 
@@ -233,3 +370,7 @@ accurately.
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-010: Agent Watches](../010-agent-watches/index.md)
+- [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — parsed-only transcript diagnostics,
+  reasoning-content rendering, and invocation index normative for reasoning-summary and returned-content surfacing
+  (TR-31, TR-32)
+- [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)

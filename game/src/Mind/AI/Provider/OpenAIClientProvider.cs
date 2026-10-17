@@ -69,49 +69,152 @@ public partial class OpenAIClientProvider : ClientProvider
         ArgumentNullException.ThrowIfNull(settings);
         return chatClientKind switch
         {
-            OpenAIChatClientKind.ChatCompletions => settings.CreateChatClient(clientOptions).AsIChatClient(),
+            OpenAIChatClientKind.ChatCompletions => CreateChatCompletionsChatClient(settings, clientOptions),
             OpenAIChatClientKind.Responses => CreateResponsesChatClient(settings, clientOptions),
             _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{chatClientKind}'."),
         };
     }
 
+    private static IChatClient CreateChatCompletionsChatClient(
+        OpenAIClientProviderSettings settings,
+        OpenAIClientOptions? clientOptions)
+    {
+        // The Chat Completions protocol documents no reasoning-summary field, so a configured summary value must
+        // fail containment locally before any request rather than silently disappearing or inventing a field.
+        return settings.ReasoningVerbosity is { } summary
+            ? throw new InvalidOperationException(
+                $"Config key '{settings.SectionName}/ReasoningVerbosity' ('{summary}') is not supported on the "
+                + "Chat Completions endpoint, which has no reasoning-summary setting. Unset it to use Chat "
+                + "Completions, or use the Responses endpoint.")
+            : new ChatClientBuilder(settings.CreateChatClient(clientOptions).AsIChatClient())
+            .ConfigureOptions(options => ApplyReasoningEffort(options, settings))
+            .Build();
+    }
+
+    /// <summary>
+    /// Applies the configured reasoning effort to one request's options. The Chat Completions path carries no
+    /// summary control: a configured summary never reaches it.
+    /// </summary>
+    private static void ApplyReasoningEffort(ChatOptions options, OpenAIClientProviderSettings settings)
+    {
+        if (settings.ReasoningEffortLevel is { } effort)
+        {
+            options.Reasoning = new ReasoningOptions { Effort = effort };
+        }
+    }
 #pragma warning disable OPENAI001 // The OpenAI Responses APIs are experimental in the SDK.
     private static IChatClient CreateResponsesChatClient(
         OpenAIClientProviderSettings settings,
         OpenAIClientOptions? clientOptions)
     {
         ResponsesClient responsesClient = settings.CreateOpenAIClient(clientOptions).GetResponsesClient();
-        return CreateStatelessResponsesChatClient(responsesClient, settings.Model);
+        return CreateStatelessResponsesChatClient(
+            responsesClient,
+            settings.Model,
+            settings.ReasoningEffortLevel,
+            settings.ReasoningVerbosity);
     }
 
     internal static IChatClient CreateStatelessResponsesChatClient(
         ResponsesClient responsesClient,
-        string model)
+        string model,
+        ReasoningEffort? reasoningEffort = null,
+        string? reasoningSummary = null)
     {
         ArgumentNullException.ThrowIfNull(responsesClient);
         ArgumentException.ThrowIfNullOrWhiteSpace(model);
 
-        return new ChatClientBuilder(responsesClient.AsIChatClient(model))
-            .ConfigureOptions(options =>
-            {
-                // Explicit raw options keep Responses stateless and force the MEAI adapter to
-                // replay supplied history rather than deriving a previous_response_id.
-                options.ConversationId = null;
-                options.RawRepresentationFactory = _ => new CreateResponseOptions
+        return new ResponsesReasoningTextNormalisingChatClient(
+            new ChatClientBuilder(responsesClient.AsIChatClient(model))
+                .ConfigureOptions(options =>
                 {
-                    PreviousResponseId = null,
-                    StoredOutputEnabled = false,
-                };
-            })
-            .Build();
+                    // Explicit raw options keep Responses stateless and force the MEAI adapter to
+                    // replay supplied history rather than deriving a previous_response_id. The raw
+                    // representation is also the single owner of the reasoning object: mixing the MEAI
+                    // abstraction's Reasoning with it clobbers fields, and its Output vocabulary
+                    // (none/summary/full) cannot express every documented summary value.
+                    options.ConversationId = null;
+                    options.RawRepresentationFactory = _ => CreateReasoningResponsesRepresentation(
+                        reasoningEffort,
+                        reasoningSummary);
+                })
+                .Build());
     }
+
+    private static CreateResponseOptions CreateReasoningResponsesRepresentation(
+        ReasoningEffort? reasoningEffort,
+        string? reasoningSummary)
+    {
+        CreateResponseOptions raw = new()
+        {
+            PreviousResponseId = null,
+            StoredOutputEnabled = false,
+        };
+
+        if (reasoningEffort is null && reasoningSummary is null)
+        {
+            return raw;
+        }
+
+        raw.ReasoningOptions = new ResponseReasoningOptions();
+        if (reasoningEffort is { } effort)
+        {
+            ApplyResponsesEffort(raw, effort);
+        }
+
+        if (reasoningSummary is { } summary)
+        {
+            raw.ReasoningOptions.ReasoningSummaryVerbosity = summary switch
+            {
+                "auto" => ResponseReasoningSummaryVerbosity.Auto,
+                "concise" => ResponseReasoningSummaryVerbosity.Concise,
+                "detailed" => ResponseReasoningSummaryVerbosity.Detailed,
+                _ => throw new InvalidOperationException(
+                    $"Unsupported reasoning summary verbosity '{summary}'."),
+            };
+        }
+
+        return raw;
+    }
+
+#pragma warning disable SCME0001 // The System.ClientModel JSON patch API is experimental.
+    private static void ApplyResponsesEffort(CreateResponseOptions raw, ReasoningEffort effort)
+    {
+        switch (effort)
+        {
+            case ReasoningEffort.None:
+                raw.ReasoningOptions.ReasoningEffortLevel = ResponseReasoningEffortLevel.None;
+                break;
+            case ReasoningEffort.Low:
+                raw.ReasoningOptions.ReasoningEffortLevel = ResponseReasoningEffortLevel.Low;
+                break;
+            case ReasoningEffort.Medium:
+                raw.ReasoningOptions.ReasoningEffortLevel = ResponseReasoningEffortLevel.Medium;
+                break;
+            case ReasoningEffort.High:
+                raw.ReasoningOptions.ReasoningEffortLevel = ResponseReasoningEffortLevel.High;
+                break;
+            case ReasoningEffort.ExtraHigh:
+                // The typed level has no member for the documented 'xhigh' value, so the JSON patch carries that
+                // one verbatim; the initialised parent reasoning object keeps the patch anchored.
+                raw.Patch.Set(ReasoningEffortJsonPath, "xhigh");
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported reasoning effort '{effort}'.");
+        }
+    }
+#pragma warning restore SCME0001
+
+    private static ReadOnlySpan<byte> ReasoningEffortJsonPath => "$.reasoning.effort"u8;
 #pragma warning restore OPENAI001
 
     internal sealed record OpenAIClientProviderSettings(
         string Host,
         string? ApiKey,
         string Model,
-        int? TimeoutSeconds)
+        int? TimeoutSeconds,
+        ReasoningEffort? ReasoningEffortLevel = null,
+        string? ReasoningVerbosity = null)
     {
         public string GetApiKeyOrDefault()
             => string.IsNullOrWhiteSpace(ApiKey) ? DefaultCompatibleBackendApiKey : ApiKey.Trim();
@@ -149,7 +252,7 @@ public partial class OpenAIClientProvider : ClientProvider
         private OpenAIClientOptions CreateClientOptions()
             => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds);
 
-        private string SectionName { get; init; } = ConfigSection;
+        internal string SectionName { get; init; } = ConfigSection;
 
         private string ConfigPathDescription { get; init; } = DefaultConfigPath;
 
@@ -160,15 +263,24 @@ public partial class OpenAIClientProvider : ClientProvider
         {
             ArgumentNullException.ThrowIfNull(options);
 
-            return new OpenAIClientProviderSettings(
+            return Load(options, configPathDescription, ConfigSection);
+        }
+
+        private static OpenAIClientProviderSettings Load(
+            AIOptions options,
+            string configPathDescription,
+            string sectionName)
+            => new(
                 Clean(options.Host) ?? string.Empty,
                 Clean(options.ApiKey),
                 Clean(options.Model) ?? DefaultModel,
-                options.Timeout)
+                options.Timeout,
+                ParseReasoningEffort(Clean(options.ReasoningEffort), sectionName),
+                ParseReasoningVerbosity(Clean(options.ReasoningVerbosity), sectionName))
             {
                 ConfigPathDescription = configPathDescription,
+                SectionName = sectionName,
             };
-        }
 
         internal static OpenAIClientProviderSettings Load(
             string configPath,
@@ -196,10 +308,7 @@ public partial class OpenAIClientProvider : ClientProvider
 
             AIOptions options = new();
             configuration.GetSection(sectionName).Bind(options);
-            return Load(options, configPathDescription) with
-            {
-                SectionName = sectionName,
-            };
+            return Load(options, configPathDescription, sectionName);
         }
 
         private static IConfiguration LoadConfiguration(string configPath)
@@ -224,6 +333,39 @@ public partial class OpenAIClientProvider : ClientProvider
             string? text = value?.Trim();
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
+
+        /// <summary>
+        /// Parses the configured reasoning effort case-insensitively, mapping <c>xhigh</c> onto the SDK's
+        /// <see cref="ReasoningEffort.ExtraHigh" /> wire value.
+        /// </summary>
+        private static ReasoningEffort? ParseReasoningEffort(string? value, string sectionName)
+            => value?.ToLowerInvariant() switch
+            {
+                null => null,
+                "none" => ReasoningEffort.None,
+                "low" => ReasoningEffort.Low,
+                "medium" => ReasoningEffort.Medium,
+                "high" => ReasoningEffort.High,
+                "xhigh" => ReasoningEffort.ExtraHigh,
+                _ => throw new InvalidOperationException(
+                    $"Config key '{sectionName}/ReasoningEffort' must be one of 'none', 'low', 'medium', 'high', or "
+                    + $"'xhigh'. Got '{value}'."),
+            };
+
+        /// <summary>
+        /// Parses the configured reasoning-summary verbosity case-insensitively into its canonical lowercase wire
+        /// value. The vocabulary follows the Responses endpoint's documented <c>reasoning.summary</c> values, so an
+        /// effort-style value such as <c>medium</c> is rejected.
+        /// </summary>
+        private static string? ParseReasoningVerbosity(string? value, string sectionName)
+            => value?.ToLowerInvariant() switch
+            {
+                null => null,
+                "auto" or "concise" or "detailed" => value.ToLowerInvariant(),
+                _ => throw new InvalidOperationException(
+                    $"Config key '{sectionName}/ReasoningVerbosity' must be one of 'auto', 'concise', or "
+                    + $"'detailed'. Got '{value}'."),
+            };
 
     }
 }

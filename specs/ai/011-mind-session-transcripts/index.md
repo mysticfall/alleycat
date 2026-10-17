@@ -175,7 +175,9 @@ transcripts or capturing provider-wire payloads.
     function-call parsing-error details when present; unavailable metadata is omitted gracefully (TR-8). All
     diagnostics derive exclusively from the parsed response objects the runner already holds: the recorder never
     captures raw provider-wire payloads, raw representations, additional properties, credentials, or headers, and
-    diagnostic labels must not imply raw provider-wire capture.
+    diagnostic labels must not imply raw provider-wire capture. Recorded reasoning content is the parsed reasoning
+    text exactly as the AI provider boundary supplied it (AI-002 TR-32–TR-33): the recorder neither normalises
+    provider reasoning shapes itself nor labels reasoning text with its summary-versus-content provenance.
 23. Specific reasons persist everywhere the generic description appeared: per-cycle recovery annotations and the
     terminal invalid-response outcome on recovery-budget exhaustion both carry the branch-specific reason and the
     exhaustion state. Logging or rendering of diagnostics remains contained by TR-7.
@@ -202,6 +204,9 @@ transcripts or capturing provider-wire payloads.
   index update: an index covers only the cycles recorded in its own process run.
 - Capturing raw provider-wire payloads, raw representations, additional properties, credentials, or headers;
   diagnostics describe parsed responses only.
+- Labelling where recorded reasoning text originated — summary versus content parts — or interpreting provider
+  reasoning shapes in the recorder: provider-boundary normalisation is AI-002's contract (AI-002 TR-32–TR-33), and
+  the recorder renders parsed reasoning text as supplied.
 - Changing model prompts, response validation or acceptance semantics, recovery budgets, cancellation, or provider
   behaviour; AI-002 remains authoritative for those contracts.
 - Streaming-response rendering: files are written from settled cycle data, not incrementally rendered partial
@@ -244,8 +249,9 @@ transcripts or capturing provider-wire payloads.
    headings with no raw tags — including the timeline message's `Established Event History` and
    `New Since Your Previous Response` sections — keeps single-newline line structure visible through hard line breaks
    while leaving fenced code blocks unmodified, renders role-labelled messages including the prefix timeline and
-   scene-status messages, marks reasoning content distinctly, and renders tool blocks with pretty-printed JSON
-   arguments and results (TR-8–TR-11).
+   scene-status messages, marks reasoning content distinctly — including parsed reasoning text that combines summary
+   and content portions, rendered in order with its textual separation preserved — and renders tool blocks with
+   pretty-printed JSON arguments and results (TR-8–TR-11).
 3. Tests verify the disabled path injects a null-object sink, performs no file input or output, and leaves existing
    runner behaviour unchanged (TR-5).
 4. Tests verify path and counter naming: `turn-` numbers zero-padded to at least four digits, one lazily created run
@@ -271,7 +277,8 @@ transcripts or capturing provider-wire payloads.
 ## References
 
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md) — request-cycle loop, fresh-turn invalidation
-  (TR-4/TR-5), tool-exchange disposal (TR-17–TR-22)
+  (TR-4/TR-5), tool-exchange disposal (TR-17–TR-22), and provider-boundary returned-reasoning-content normalisation
+  (TR-32–TR-33)
 - [AI-003: Prompt API](../003-prompt-api/index.md) — static instruction and per-request scene status whose rendered
   content the recorder captures
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md) — validated character local `Id`

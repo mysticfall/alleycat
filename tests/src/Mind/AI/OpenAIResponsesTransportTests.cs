@@ -22,6 +22,10 @@ public sealed class OpenAIResponsesTransportTests
     /// <summary>
     /// The session uses stateless Responses calls with required tools and full local replay.
     /// </summary>
+    /// <remarks>
+    /// Unset request controls are omitted from the wire entirely: no reasoning or answer-text verbosity fields are
+    /// sent.
+    /// </remarks>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -62,6 +66,8 @@ public sealed class OpenAIResponsesTransportTests
             Assert.Equal(Instructions, root.GetProperty("instructions").GetString());
             Assert.Equal("required", root.GetProperty("tool_choice").GetString());
             Assert.Equal(allowMultipleToolCalls, root.GetProperty("parallel_tool_calls").GetBoolean());
+            Assert.False(root.TryGetProperty("reasoning", out _));
+            Assert.False(root.TryGetProperty("text", out _));
             Assert.False(root.TryGetProperty("text", out JsonElement text)
                 && text.TryGetProperty("format", out JsonElement format)
                 && format.GetProperty("type").GetString() == "json_schema");
@@ -96,6 +102,213 @@ public sealed class OpenAIResponsesTransportTests
     }
 
     /// <summary>
+    /// Configured request controls are forwarded on every stateless request as the documented nested Responses
+    /// fields — <c>reasoning.effort</c> and <c>reasoning.summary</c> — alongside the preserved stateless payload,
+    /// with neither answer-text verbosity field emitted.
+    /// </summary>
+    [Fact]
+    public async Task SessionResponses_WithConfiguredRequestControls_EmitsControlsOnEveryStatelessRequest()
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateSpeakCallResponse("resp_sanitised_tool", CallID, "Hello"),
+            CreateSpeakCallResponse("resp_sanitised_second", "call_sanitised_2", "Again"));
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, ReasoningEffort.High, "detailed");
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation);
+
+        // Two scripted responses served, plus the third request whose cancellation ends the session: every request
+        // through the configured client — including the transcript-replay continuation — carries the controls.
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.All(handler.Requests, capture => Assert.Equal("/v1/responses", capture.Path));
+        foreach (CapturedRequest capture in handler.Requests)
+        {
+            using var request = JsonDocument.Parse(capture.Body);
+            JsonElement root = request.RootElement;
+            Assert.Equal("high", root.GetProperty("reasoning").GetProperty("effort").GetString());
+            Assert.Equal("detailed", root.GetProperty("reasoning").GetProperty("summary").GetString());
+            Assert.False(root.TryGetProperty("text", out _));
+            Assert.False(root.TryGetProperty("verbosity", out _));
+            Assert.False(root.GetProperty("store").GetBoolean());
+            Assert.False(root.TryGetProperty("previous_response_id", out _));
+            Assert.Equal(Instructions, root.GetProperty("instructions").GetString());
+            Assert.Equal("required", root.GetProperty("tool_choice").GetString());
+            Assert.Equal(
+                ["speak"],
+                root.GetProperty("tools").EnumerateArray().Select(tool => tool.GetProperty("name").GetString()));
+        }
+    }
+
+    /// <summary>
+    /// Every permitted reasoning-effort value reaches the wire exactly, with no summary field when the summary
+    /// setting is unset.
+    /// </summary>
+    [Theory]
+    [InlineData(ReasoningEffort.None, "none")]
+    [InlineData(ReasoningEffort.Low, "low")]
+    [InlineData(ReasoningEffort.Medium, "medium")]
+    [InlineData(ReasoningEffort.High, "high")]
+    [InlineData(ReasoningEffort.ExtraHigh, "xhigh")]
+    public async Task SessionResponses_EveryEffortValue_EmitsExactWireValue(
+        ReasoningEffort configured,
+        string expectedWireValue)
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateSpeakCallResponse("resp_sanitised_tool", CallID, "Hello"));
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, configured);
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation);
+
+        Assert.Equal(2, handler.Requests.Count);
+        foreach (CapturedRequest capture in handler.Requests)
+        {
+            using var request = JsonDocument.Parse(capture.Body);
+            JsonElement root = request.RootElement;
+            Assert.Equal(expectedWireValue, root.GetProperty("reasoning").GetProperty("effort").GetString());
+            Assert.False(root.GetProperty("reasoning").TryGetProperty("summary", out _));
+            Assert.False(root.TryGetProperty("text", out _));
+            Assert.False(root.TryGetProperty("verbosity", out _));
+        }
+    }
+
+    /// <summary>
+    /// Every permitted reasoning-summary value reaches the wire exactly and independently of effort, with the
+    /// effort field absent when effort is unset.
+    /// </summary>
+    [Theory]
+    [InlineData("auto")]
+    [InlineData("concise")]
+    [InlineData("detailed")]
+    public async Task SessionResponses_EverySummaryValue_EmitsExactWireValueIndependently(string configuredSummary)
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateSpeakCallResponse("resp_sanitised_tool", CallID, "Hello"));
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, reasoningSummary: configuredSummary);
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation);
+
+        Assert.Equal(2, handler.Requests.Count);
+        foreach (CapturedRequest capture in handler.Requests)
+        {
+            using var request = JsonDocument.Parse(capture.Body);
+            JsonElement root = request.RootElement;
+            Assert.Equal(configuredSummary, root.GetProperty("reasoning").GetProperty("summary").GetString());
+            Assert.False(root.GetProperty("reasoning").TryGetProperty("effort", out _));
+            Assert.False(root.TryGetProperty("text", out _));
+            Assert.False(root.TryGetProperty("verbosity", out _));
+        }
+    }
+
+    /// <summary>
+    /// Partially configured request controls send exactly the configured control and omit the other's field.
+    /// </summary>
+    [Theory]
+    [InlineData(ReasoningEffort.ExtraHigh, null)]
+    [InlineData(null, "concise")]
+    public async Task SessionResponses_WithPartialRequestControls_SendsOnlyTheConfiguredControl(
+        ReasoningEffort? reasoningEffort,
+        string? reasoningSummary)
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateSpeakCallResponse("resp_sanitised_tool", CallID, "Hello"));
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, reasoningEffort, reasoningSummary);
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation);
+
+        Assert.Equal(2, handler.Requests.Count);
+        foreach (CapturedRequest capture in handler.Requests)
+        {
+            using var request = JsonDocument.Parse(capture.Body);
+            JsonElement root = request.RootElement;
+            if (reasoningEffort is null)
+            {
+                Assert.False(root.GetProperty("reasoning").TryGetProperty("effort", out _));
+                Assert.Equal("concise", root.GetProperty("reasoning").GetProperty("summary").GetString());
+            }
+            else
+            {
+                Assert.Equal("xhigh", root.GetProperty("reasoning").GetProperty("effort").GetString());
+                Assert.False(root.GetProperty("reasoning").TryGetProperty("summary", out _));
+            }
+
+            Assert.False(root.TryGetProperty("text", out _));
+            Assert.False(root.TryGetProperty("verbosity", out _));
+            Assert.False(root.GetProperty("store").GetBoolean());
+            Assert.False(root.TryGetProperty("previous_response_id", out _));
+        }
+    }
+
+    /// <summary>
+    /// Configured request controls persist across an exact transport retry: the retried request is byte-identical
+    /// and every request still carries both controls and the stateless payload.
+    /// </summary>
+    [Fact]
+    public async Task SessionResponses_ConfiguredRequestControls_PersistAcrossExactTransportRetries()
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateSpeakCallResponse("resp_sanitised_tool", CallID, "Hello"),
+            CreateSpeakCallResponse("resp_sanitised_second", "call_sanitised_2", "Again"))
+        {
+            LeadingTransportFailures = 1,
+        };
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, ReasoningEffort.Medium, "auto");
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation,
+            retryDelays: [TimeSpan.Zero]);
+
+        // One reset connection retried, two scripted responses served, plus the cancelled third request.
+        Assert.Equal(4, handler.Requests.Count);
+        Assert.Equal(handler.Requests[0].Body, handler.Requests[1].Body);
+        Assert.All(handler.Requests, capture => Assert.Equal("/v1/responses", capture.Path));
+        foreach (CapturedRequest capture in handler.Requests)
+        {
+            using var request = JsonDocument.Parse(capture.Body);
+            JsonElement root = request.RootElement;
+            Assert.Equal("medium", root.GetProperty("reasoning").GetProperty("effort").GetString());
+            Assert.Equal("auto", root.GetProperty("reasoning").GetProperty("summary").GetString());
+            Assert.False(root.TryGetProperty("text", out _));
+            Assert.False(root.TryGetProperty("verbosity", out _));
+            Assert.False(root.GetProperty("store").GetBoolean());
+            Assert.False(root.TryGetProperty("previous_response_id", out _));
+            Assert.Equal("required", root.GetProperty("tool_choice").GetString());
+        }
+    }
+
+    /// <summary>
     /// The provider defaults to Responses and rejects unknown adapter values instead of silently falling back.
     /// </summary>
     [Fact]
@@ -120,7 +333,8 @@ public sealed class OpenAIResponsesTransportTests
         IChatClient client,
         AIFunction speak,
         bool allowMultipleToolCalls,
-        CancellationTokenSource sessionCancellation)
+        CancellationTokenSource sessionCancellation,
+        IReadOnlyList<TimeSpan>? retryDelays = null)
     {
         AgentSessionRunner runner = new(
             client,
@@ -128,21 +342,27 @@ public sealed class OpenAIResponsesTransportTests
             [new ChatMessage(ChatRole.User, AgenticMind.SessionBootstrapInput)],
             [speak],
             allowMultipleToolCalls,
-            NullLogger.Instance);
+            NullLogger.Instance,
+            retryDelays: retryDelays);
         await runner.RunAsync(sessionCancellation.Token);
     }
 
-    private static IChatClient CreateClient(HttpClient httpClient)
+    private static IChatClient CreateClient(
+        HttpClient httpClient,
+        ReasoningEffort? reasoningEffort = null,
+        string? reasoningSummary = null)
     {
         Assert.Equal(OpenAIChatClientKind.Responses, OpenAIClientProvider.DefaultChatClientKind);
         return OpenAIClientProvider.CreateChatClient(
             OpenAIClientProvider.DefaultChatClientKind,
-            CreateSettings(),
+            CreateSettings(reasoningEffort, reasoningSummary),
             CreateClientOptions(httpClient));
     }
 
-    private static OpenAIClientProvider.OpenAIClientProviderSettings CreateSettings()
-        => new("https://unit.test/v1", "not-a-live-key", "test-model", null);
+    private static OpenAIClientProvider.OpenAIClientProviderSettings CreateSettings(
+        ReasoningEffort? reasoningEffort = null,
+        string? reasoningSummary = null)
+        => new("https://unit.test/v1", "not-a-live-key", "test-model", null, reasoningEffort, reasoningSummary);
 
     private static OpenAIClientOptions CreateClientOptions(HttpClient httpClient)
         => new()
@@ -195,6 +415,14 @@ public sealed class OpenAIResponsesTransportTests
     {
         private readonly Queue<string> _responses = new(responses);
 
+        /// <summary>
+        /// Number of leading requests that fail with a transient transport error before scripted responses serve.
+        /// </summary>
+        public int LeadingTransportFailures
+        {
+            get; init;
+        }
+
         public List<CapturedRequest> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -207,6 +435,11 @@ public sealed class OpenAIResponsesTransportTests
                 request.Method,
                 request.RequestUri.AbsolutePath,
                 await request.Content.ReadAsStringAsync(cancellationToken)));
+
+            if (Requests.Count <= LeadingTransportFailures)
+            {
+                throw new HttpRequestException("reset");
+            }
 
             if (_responses.Count == 0)
             {

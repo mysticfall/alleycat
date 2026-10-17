@@ -51,6 +51,15 @@ public sealed class OpenAIChatCompletionsTransportTests
         // Two scripted responses served, plus the third request whose cancellation ends the session.
         Assert.Equal(3, handler.RequestBodies.Count);
         Assert.All(handler.Paths, path => Assert.Equal("/v1/chat/completions", path));
+        // Unset request controls are omitted from the wire entirely: no control field is sent.
+        Assert.All(
+            handler.RequestBodies,
+            body =>
+            {
+                using var document = JsonDocument.Parse(body);
+                AssertNoChatCompletionsSummaryOrVerbosityField(document.RootElement);
+                Assert.False(document.RootElement.TryGetProperty("reasoning_effort", out _));
+            });
         using var firstRequest = JsonDocument.Parse(handler.RequestBodies[0]);
         JsonElement[] firstMessages = [.. firstRequest.RootElement.GetProperty("messages").EnumerateArray()];
         Assert.Equal(["system", "user"], firstMessages.Select(message => message.GetProperty("role").GetString()));
@@ -100,12 +109,190 @@ public sealed class OpenAIChatCompletionsTransportTests
         Assert.Equal(2, handler.RequestBodies.Count);
     }
 
+    /// <summary>
+    /// A configured reasoning effort is forwarded on every chat-completions request as the documented top-level
+    /// <c>reasoning_effort</c> field alongside the preserved strict tool-only payload, with no verbosity or summary
+    /// field of any shape.
+    /// </summary>
+    [Fact]
+    public async Task SessionChatCompletions_WithConfiguredReasoningEffort_EmitsEffortOnEveryRequest()
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateToolCallResponse("chatcmpl-tool", "call-1", /*lang=json,strict*/ "{\"speech\":\"Hello\"}"),
+            CreateToolCallResponse("chatcmpl-second", "call-2", /*lang=json,strict*/ "{\"speech\":\"Again\"}"));
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, ReasoningEffort.Medium);
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation);
+
+        // Two scripted responses served, plus the third request whose cancellation ends the session: every request
+        // through the configured client — including the transcript-replay continuation — carries the control.
+        Assert.Equal(3, handler.RequestBodies.Count);
+        Assert.All(handler.Paths, path => Assert.Equal("/v1/chat/completions", path));
+        foreach (string body in handler.RequestBodies)
+        {
+            using var request = JsonDocument.Parse(body);
+            JsonElement root = request.RootElement;
+            Assert.Equal("medium", root.GetProperty("reasoning_effort").GetString());
+            AssertNoChatCompletionsSummaryOrVerbosityField(root);
+            AssertStrictToolOnlyRequest(root, allowMultipleToolCalls: false);
+            Assert.Equal(Instructions, root.GetProperty("messages")[0].GetProperty("content").GetString());
+        }
+
+        using var secondRequest = JsonDocument.Parse(handler.RequestBodies[1]);
+        JsonElement[] messages = [.. secondRequest.RootElement.GetProperty("messages").EnumerateArray()];
+        Assert.Equal(
+            ["system", "user", "assistant", "tool"],
+            messages.Select(message => message.GetProperty("role").GetString()));
+    }
+
+    /// <summary>
+    /// Every permitted reasoning-effort value reaches the Chat Completions wire exactly as top-level
+    /// <c>reasoning_effort</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(ReasoningEffort.None, "none")]
+    [InlineData(ReasoningEffort.Low, "low")]
+    [InlineData(ReasoningEffort.Medium, "medium")]
+    [InlineData(ReasoningEffort.High, "high")]
+    [InlineData(ReasoningEffort.ExtraHigh, "xhigh")]
+    public async Task SessionChatCompletions_EveryEffortValue_EmitsExactWireValue(
+        ReasoningEffort configured,
+        string expectedWireValue)
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateToolCallResponse("chatcmpl-tool", "call-1", /*lang=json,strict*/ "{\"speech\":\"Hello\"}"));
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, configured);
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation);
+
+        Assert.Equal(2, handler.RequestBodies.Count);
+        foreach (string body in handler.RequestBodies)
+        {
+            using var request = JsonDocument.Parse(body);
+            Assert.Equal(
+                expectedWireValue,
+                request.RootElement.GetProperty("reasoning_effort").GetString());
+        }
+    }
+
+    /// <summary>
+    /// The Chat Completions endpoint documents no reasoning-summary setting, so a configured summary value fails
+    /// closed at client construction — before any request — with a diagnostic naming the setting and the
+    /// unsupported path.
+    /// </summary>
+    [Fact]
+    public void CreateChatClient_ConfiguredSummaryOnChatCompletions_FailsClosedBeforeDispatch()
+    {
+        var handler = new CancellingHandler(CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None));
+        using var httpClient = new HttpClient(handler);
+        OpenAIClientProvider.OpenAIClientProviderSettings settings = CreateSettings(ReasoningEffort.Medium, "detailed");
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            CreateClient(httpClient, ReasoningEffort.Medium, "detailed"));
+
+        Assert.Equal(
+            "Config key 'AI/ReasoningVerbosity' ('detailed') is not supported on the Chat Completions endpoint, "
+            + "which has no reasoning-summary setting. Unset it to use Chat Completions, or use the Responses "
+            + "endpoint.",
+            error.Message);
+        Assert.Empty(handler.RequestBodies);
+        Assert.Equal(ReasoningEffort.Medium, settings.ReasoningEffortLevel);
+    }
+
+    /// <summary>
+    /// A custom configuration section's name reaches the Chat Completions unsupported-summary diagnostic.
+    /// </summary>
+    [Fact]
+    public void CreateChatClient_ConfiguredSummaryOnChatCompletions_NamesCustomSection()
+    {
+        var handler = new CancellingHandler(CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None));
+        using var httpClient = new HttpClient(handler);
+        OpenAIClientProvider.OpenAIClientProviderSettings settings = CreateSettings(ReasoningEffort.Medium, "concise") with
+        {
+            SectionName = "CustomAI"
+        };
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OpenAIClientProvider.CreateChatClient(
+                OpenAIChatClientKind.ChatCompletions,
+                settings,
+                new OpenAIClientOptions
+                {
+                    Endpoint = new Uri("https://unit.test/v1"),
+                    Transport = new HttpClientPipelineTransport(httpClient),
+                }));
+
+        Assert.StartsWith(
+            "Config key 'CustomAI/ReasoningVerbosity' ('concise') is not supported",
+            error.Message,
+            StringComparison.Ordinal);
+        Assert.Empty(handler.RequestBodies);
+    }
+
+    /// <summary>
+    /// A configured reasoning effort persists across an exact transport retry: the retried request is
+    /// byte-identical and every request still carries the control and the strict tool-only payload.
+    /// </summary>
+    [Fact]
+    public async Task SessionChatCompletions_ConfiguredReasoningEffort_PersistsAcrossExactTransportRetries()
+    {
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateToolCallResponse("chatcmpl-tool", "call-1", /*lang=json,strict*/ "{\"speech\":\"Hello\"}"),
+            CreateToolCallResponse("chatcmpl-second", "call-2", /*lang=json,strict*/ "{\"speech\":\"Again\"}"))
+        {
+            LeadingTransportFailures = 1,
+        };
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient, ReasoningEffort.High);
+
+        await RunSessionAsync(
+            client,
+            AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
+            allowMultipleToolCalls: false,
+            sessionCancellation,
+            retryDelays: [TimeSpan.Zero]);
+
+        // One reset connection retried, two scripted responses served, plus the cancelled third request.
+        Assert.Equal(4, handler.RequestBodies.Count);
+        Assert.Equal(handler.RequestBodies[0], handler.RequestBodies[1]);
+        foreach (string body in handler.RequestBodies)
+        {
+            using var request = JsonDocument.Parse(body);
+            Assert.Equal("high", request.RootElement.GetProperty("reasoning_effort").GetString());
+        }
+    }
+
+    private static void AssertNoChatCompletionsSummaryOrVerbosityField(JsonElement root)
+    {
+        Assert.False(root.TryGetProperty("verbosity", out _));
+        Assert.False(root.TryGetProperty("reasoning", out _));
+        Assert.False(root.TryGetProperty("reasoning_summary", out _));
+        Assert.False(root.TryGetProperty("summary", out _));
+    }
+
     private static async Task RunSessionAsync(
         IChatClient client,
         AIFunction speak,
         bool allowMultipleToolCalls,
         CancellationTokenSource sessionCancellation,
-        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null)
+        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null,
+        IReadOnlyList<TimeSpan>? retryDelays = null)
     {
         AgentSessionRunner runner = new(
             client,
@@ -114,11 +301,15 @@ public sealed class OpenAIChatCompletionsTransportTests
             [speak],
             allowMultipleToolCalls,
             NullLogger.Instance,
+            retryDelays: retryDelays,
             invalidResponseRecoveryPolicy: invalidResponseRecoveryPolicy);
         await runner.RunAsync(sessionCancellation.Token);
     }
 
-    private static IChatClient CreateClient(HttpClient httpClient)
+    private static IChatClient CreateClient(
+        HttpClient httpClient,
+        ReasoningEffort? reasoningEffort = null,
+        string? reasoningSummary = null)
     {
         OpenAIClientOptions clientOptions = new()
         {
@@ -129,12 +320,19 @@ public sealed class OpenAIChatCompletionsTransportTests
             "https://unit.test/v1",
             "not-a-live-key",
             "test-model",
-            null);
+            null,
+            reasoningEffort,
+            reasoningSummary);
         return OpenAIClientProvider.CreateChatClient(
             OpenAIChatClientKind.ChatCompletions,
             settings,
             clientOptions);
     }
+
+    private static OpenAIClientProvider.OpenAIClientProviderSettings CreateSettings(
+        ReasoningEffort? reasoningEffort = null,
+        string? reasoningSummary = null)
+        => new("https://unit.test/v1", "not-a-live-key", "test-model", null, reasoningEffort, reasoningSummary);
 
     private static void AssertStrictToolOnlyRequest(JsonElement root, bool allowMultipleToolCalls)
     {
@@ -181,6 +379,14 @@ public sealed class OpenAIChatCompletionsTransportTests
     {
         private readonly Queue<string> _responses = new(responses);
 
+        /// <summary>
+        /// Number of leading requests that fail with a transient transport error before scripted responses serve.
+        /// </summary>
+        public int LeadingTransportFailures
+        {
+            get; init;
+        }
+
         public List<string> RequestBodies { get; } = [];
 
         public List<string> Paths { get; } = [];
@@ -193,6 +399,11 @@ public sealed class OpenAIChatCompletionsTransportTests
             Assert.NotNull(request.RequestUri);
             Paths.Add(request.RequestUri.AbsolutePath);
             RequestBodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
+
+            if (RequestBodies.Count <= LeadingTransportFailures)
+            {
+                throw new HttpRequestException("reset");
+            }
 
             if (_responses.Count == 0)
             {

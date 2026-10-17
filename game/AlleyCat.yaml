@@ -29,6 +29,15 @@ AI:
     Host: "https://openrouter.ai/api/v1"
     Model: google/gemma-4-31b-it
     Timeout: 30
+    # Optional reasoning-effort control forwarded on every mind request to the configured backend.
+    # Accepted values: none, low, medium, high, xhigh. This is a provider request parameter, not
+    # a guarantee of reasoning behaviour: backends and models vary in the levels they accept.
+    #ReasoningEffort: "medium"
+    # Optional reasoning-summary detail requested from the provider on every mind request.
+    # Accepted values: auto, concise, detailed. Only the Responses endpoint supports this setting; a
+    # configured value is rejected before dispatch when Chat Completions is selected. Returned summaries
+    # are diagnostic provider renderings, not guaranteed reasoning: backends may return none at all.
+    #ReasoningVerbosity: "detailed"
 
 # Live LLM test backend settings, read only by opt-in integration tests run with --live-llm.
 # Supply real values through the user override (user://AlleyCat.yaml) instead of committing them

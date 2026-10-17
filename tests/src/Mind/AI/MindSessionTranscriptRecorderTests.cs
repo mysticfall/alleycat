@@ -12,6 +12,7 @@ namespace AlleyCat.Tests.Mind.AI;
 /// per-process run directory, per-character monotonic turn numbering across mind re-creation, the internal test
 /// seams, and write-failure containment.
 /// </summary>
+[Collection(MindSessionTranscriptSeamCollection.Name)]
 public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
 {
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$", RegexOptions.CultureInvariant)]

@@ -1,6 +1,7 @@
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.Transcription;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -92,6 +93,130 @@ public sealed class ConfigurationConsumerSettingsTests
         Assert.Equal("https://ai.example/v1", settings.Host);
         Assert.Equal("gpt-4o-mini", settings.Model);
         Assert.Equal("test-key", settings.ApiKey);
+        Assert.Null(settings.ReasoningEffortLevel);
+        Assert.Null(settings.ReasoningVerbosity);
+    }
+
+    /// <summary>
+    /// Request controls parse case-insensitively after trimming, mapping <c>xhigh</c> onto the SDK's ExtraHigh value.
+    /// </summary>
+    [Theory]
+    [InlineData("none", ReasoningEffort.None)]
+    [InlineData("low", ReasoningEffort.Low)]
+    [InlineData("medium", ReasoningEffort.Medium)]
+    [InlineData("high", ReasoningEffort.High)]
+    [InlineData("xhigh", ReasoningEffort.ExtraHigh)]
+    [InlineData(" NONE ", ReasoningEffort.None)]
+    [InlineData("Low", ReasoningEffort.Low)]
+    [InlineData(" Medium ", ReasoningEffort.Medium)]
+    [InlineData("HIGH", ReasoningEffort.High)]
+    [InlineData(" XHIGH ", ReasoningEffort.ExtraHigh)]
+    public void OpenAIClientProviderSettings_LoadFromOptions_ParsesReasoningEffortCaseInsensitively(
+        string configured,
+        ReasoningEffort expected)
+    {
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+            new AIOptions { ReasoningEffort = configured },
+            "typed-options");
+
+        Assert.Equal(expected, settings.ReasoningEffortLevel);
+    }
+
+    /// <summary>
+    /// Reasoning-summary verbosity parses case-insensitively after trimming into its canonical lowercase wire
+    /// value. The vocabulary is the Responses endpoint's summary scale — effort-style values are not accepted.
+    /// </summary>
+    [Theory]
+    [InlineData("auto", "auto")]
+    [InlineData("concise", "concise")]
+    [InlineData("detailed", "detailed")]
+    [InlineData(" AUTO ", "auto")]
+    [InlineData("Concise", "concise")]
+    [InlineData(" DETAILED ", "detailed")]
+    public void OpenAIClientProviderSettings_LoadFromOptions_ParsesReasoningVerbosityCaseInsensitively(
+        string configured,
+        string expected)
+    {
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+            new AIOptions { ReasoningVerbosity = configured },
+            "typed-options");
+
+        Assert.Equal(expected, settings.ReasoningVerbosity);
+    }
+
+    /// <summary>
+    /// Blank request controls normalise to null so the request omits them entirely.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromOptions_BlankRequestControlsNormaliseToNull()
+    {
+        var settings = OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+            new AIOptions
+            {
+                ReasoningEffort = " \t ",
+                ReasoningVerbosity = "  ",
+            },
+            "typed-options");
+
+        Assert.Null(settings.ReasoningEffortLevel);
+        Assert.Null(settings.ReasoningVerbosity);
+    }
+
+    /// <summary>
+    /// Unrecognised nonblank reasoning effort fails closed, naming the configuration key and permitted values.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromOptions_InvalidReasoningEffortFailsClosed()
+    {
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+                new AIOptions { ReasoningEffort = "ultra" },
+                "typed-options"));
+
+        Assert.Equal(
+            "Config key 'AI/ReasoningEffort' must be one of 'none', 'low', 'medium', 'high', or 'xhigh'. Got 'ultra'.",
+            error.Message);
+    }
+
+    /// <summary>
+    /// Unrecognised nonblank reasoning-summary verbosity fails closed, naming the configuration key and permitted
+    /// values. Effort-scale values such as <c>medium</c> are rejected rather than remapped.
+    /// </summary>
+    [Theory]
+    [InlineData("verbose")]
+    [InlineData("medium")]
+    [InlineData("low")]
+    public void OpenAIClientProviderSettings_LoadFromOptions_InvalidReasoningVerbosityFailsClosed(string configured)
+    {
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+                new AIOptions { ReasoningVerbosity = configured },
+                "typed-options"));
+
+        Assert.Equal(
+            $"Config key 'AI/ReasoningVerbosity' must be one of 'auto', 'concise', or 'detailed'. Got '{configured}'.",
+            error.Message);
+    }
+
+    /// <summary>
+    /// Named-section loads carry the section name into request-control diagnostics.
+    /// </summary>
+    [Fact]
+    public void OpenAIClientProviderSettings_LoadFromNamedSection_InvalidRequestControlNamesSectionKey()
+    {
+        IConfiguration configuration = BuildConfiguration(
+            ("AITest:Host", "https://live.example/v1"),
+            ("AITest:ReasoningEffort", "max"));
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OpenAIClientProvider.OpenAIClientProviderSettings.Load(
+                configuration,
+                "unit-config",
+                "AITest"));
+
+        Assert.Equal(
+            "Config key 'AITest/ReasoningEffort' must be one of 'none', 'low', 'medium', 'high', or 'xhigh'. Got 'max'.",
+            error.Message);
     }
 
     /// <summary>
