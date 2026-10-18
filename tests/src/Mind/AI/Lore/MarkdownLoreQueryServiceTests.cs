@@ -529,6 +529,115 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
+    /// The user-supplied internal reference syntax reduces to its label text with the entry-ID annotation
+    /// retained: <c>[Title](../relative_path_to_another_page)(`target_entry_id`)</c> becomes
+    /// <c>Title(`target_entry_id`)</c>, and no source path reaches the body.
+    /// </summary>
+    [Fact]
+    public void ParseDocument_ReducesSuppliedInternalReferenceSyntaxToLabelAndIDAnnotation()
+    {
+        const string markdown = """
+            ---
+            id: test.page
+            title: Test Page
+            ---
+            See [Title](../relative_path_to_another_page)(`target_entry_id`) now.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(markdown, SourcePath);
+
+        Assert.NotNull(document);
+        Assert.Equal("See Title(`target_entry_id`) now.", document.Body);
+    }
+
+    /// <summary>
+    /// The authored Obsidian wikilink reference form <c>[[../relative_path_to_another_page|Title]](`target_entry_id`)</c>
+    /// must reach lore as <c>Title(`target_entry_id`)</c>: the label and backtick ID annotation are retained and no
+    /// path or wiki-style pipe corruption remains. This is the on-disk source form of the user-reported reference
+    /// corruption; the criterion is the user's exact expected output.
+    /// </summary>
+    [Fact]
+    public void ParseDocument_ReducesWikilinkInternalReferenceToLabelAndIDAnnotation()
+    {
+        const string markdown = """
+            ---
+            id: test.page
+            title: Test Page
+            ---
+            See [[../relative_path_to_another_page|Title]](`target_entry_id`) now.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(markdown, SourcePath);
+
+        Assert.NotNull(document);
+        Assert.Equal("See Title(`target_entry_id`) now.", document.Body);
+    }
+
+    /// <summary>
+    /// A pipe wiki link without an annotation is a plain wiki link and passes through untouched.
+    /// </summary>
+    [Fact]
+    public void ParseDocument_LeavesUnannotatedPipeWikiLinksUntouched()
+    {
+        const string markdown = """
+            ---
+            id: test.page
+            title: Test Page
+            ---
+            See [[wiki/world/slaves/Rules|Rules]] as written.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(markdown, SourcePath);
+
+        Assert.NotNull(document);
+        Assert.Equal("See [[wiki/world/slaves/Rules|Rules]] as written.", document.Body);
+    }
+
+    /// <summary>
+    /// An annotated pipe wiki reference reduces to its exact alias — including spaces and punctuation — with the
+    /// annotation kept verbatim and the vault path omitted, matching the authored perspective-page form.
+    /// </summary>
+    [Fact]
+    public void ParseDocument_ReducesAnnotatedPipeWikiReferenceWithSpacedAlias()
+    {
+        const string markdown = """
+            ---
+            id: test.page
+            title: Test Page
+            ---
+            See [[perspectives/char/mali/world/slaves/Slaves|What I Am Now]](`mali.slaves`) now.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(markdown, SourcePath);
+
+        Assert.NotNull(document);
+        Assert.Equal("See What I Am Now(`mali.slaves`) now.", document.Body);
+    }
+
+    /// <summary>
+    /// An embed (<c>![[...]]</c>) is not a reference: wiki syntax preceded by an exclamation mark stays as
+    /// written, mirroring the image-syntax guard.
+    /// </summary>
+    [Fact]
+    public void ParseDocument_LeavesWikiEmbedsUntouched()
+    {
+        const string markdown = """
+            ---
+            id: test.page
+            title: Test Page
+            ---
+            An embed ![[wiki/world/slaves/Rules|Rules]](`target_entry_id`) stays as written.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(markdown, SourcePath);
+
+        Assert.NotNull(document);
+        Assert.Equal(
+            "An embed ![[wiki/world/slaves/Rules|Rules]](`target_entry_id`) stays as written.",
+            document.Body);
+    }
+
+    /// <summary>
     /// Reference links are reduced to their label text and their definition lines are dropped.
     /// </summary>
     [Fact]

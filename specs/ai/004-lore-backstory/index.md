@@ -70,6 +70,9 @@ lore-management workflows in this slice.
     narrow a broader character, location, or world profile.
 20. All 15 existing default lore pages receive scope-preview descriptions without changing facts or essential flags;
     canonical descriptions remain authoring-only at runtime.
+21. Annotated pipe wiki references authored in lore bodies reach prompt consumers and `read_lore` results as
+    ``Title(`target_entry_id`)`` — the reference title plus exact backtick-annotated entry ID, with no source path —
+    so consumers can retrieve the referenced entry by its exact ID.
 
 ## Technical Requirements
 
@@ -161,12 +164,16 @@ lore-management workflows in this slice.
     `<!-- /lore:ignore -->` (both marker lines inclusive) is removed from the body. Markers must sit on their own
     lines.
 39. All remaining bare HTML comments are stripped from bodies everywhere outside fenced code blocks.
-40. Link syntax is reduced to its label text at parse time, outside fenced code blocks:
+40. Link syntax is reduced at parse time, outside fenced code blocks:
     - Inline links: `[label](target)` becomes `label`.
     - Reference links: `[label][ref]` becomes `label`, and `[ref]: …` definition lines are dropped.
     - Collapsed references: `[label][]` becomes `label`.
     - Autolinks: `<url>` becomes `url`.
-    - Bare `[label]` with no following `(` or `[`, image syntax, and `[[…]]` wiki links are left untouched.
+    - Annotated pipe wiki references: ``[[path|Title]](`target_entry_id`)`` becomes ``Title(`target_entry_id`)``. The
+      reduction is textual: the source path is dropped and the title plus exact backtick-annotated entry ID are
+      preserved verbatim, with no link resolution or content lookup.
+    - Bare `[label]` with no following `(` or `[`, image syntax, and unannotated `[[…]]` wiki links are left
+      untouched.
 41. An `id`-bearing page whose body is empty after parse-time cleaning is excluded from query results with a logged
      warning, not an error.
 
@@ -236,7 +243,8 @@ lore-management workflows in this slice.
 - H1-less entry authoring: body content starts directly after frontmatter and authored sections start at `#`, with
   entry titles rendered into prompts by the Markdown lore formatter.
 - Read-time page triage and parse-time body cleaning in the Markdown lore backend: `id`-based inclusion,
-  `lore:ignore` omission, bare HTML comment stripping, and link-label reduction before entry construction.
+  `lore:ignore` omission, bare HTML comment stripping, and link-label reduction, including annotated pipe wiki
+  references, before entry construction.
 - Optional descriptions, grouped session-start discovery, scoped unique entry IDs, and asynchronous batch retrieval.
 - Scope-preview descriptions on all 15 default pages, preserving facts, perspective boundaries, and essential
   flags.
@@ -252,6 +260,8 @@ lore-management workflows in this slice.
   the first-slice query contract.
 - Omniscient/system lore channels, narrator/game-master lore channels, or canonical prompt fallback pathways beyond the
   explicit no-fallback contract for this slice.
+- General wiki-link resolution or wiki-link rewriting beyond the annotated pipe reference reduction in technical
+  requirement 40, including any canonical content fallback for wiki references.
 - Episodic memory, relationship state, or model-directed lore mutation during gameplay.
 - Dynamic writes, save snapshots, memory curator/auditor workflows, and automated canonical-to-perspective conversion
   tooling.
@@ -325,14 +335,16 @@ lore-management workflows in this slice.
     the frontmatter and authored sections start at `#` at authoring time.
 28. Authoring-time content never reaches prompts: pages without a frontmatter `id` (including files with no frontmatter
     block), `lore:ignore` blocks, bare HTML comments, and original link syntax are absent from formatted prompt lore,
-    and reduced links appear as their label text.
+    and reduced links appear as their label text, with annotated pipe wiki references appearing as
+    ``Title(`target_entry_id`)`` — title plus exact backtick-annotated entry ID, no source path.
 29. Co-located authoring files cannot break runtime queries: files with no frontmatter block, frontmatter without an
     `id`, and unterminated frontmatter blocks never cause query failures, and the unterminated and empty-body cases
     log warnings.
 30. Unit or integration tests exercise every read-time triage outcome and every parse-time cleaning form: silent
     skips, warned skips, `lore:ignore` omission, bare-comment stripping, inline, reference, collapsed, and autolink
-    reduction, the untouched forms (bare `[label]`, image syntax, `[[…]]` wiki links), fenced-code-block
-    pass-through, and the empty-body exclusion.
+    reduction, annotated pipe wiki reference reduction to ``Title(`target_entry_id`)``, the untouched forms (bare
+    `[label]`, image syntax, unannotated `[[…]]` wiki links), fenced-code-block pass-through, and the empty-body
+    exclusion.
 31. Frontmatter validation on `id`-bearing pages remains fail-hard: invalid `title`, `subject_id`, `essential`, or
     `priority` values throw rather than skip.
 32. The default lore formatter's output contract is unchanged by parse-time cleaning: the requirement 21 formatting
@@ -367,6 +379,10 @@ lore-management workflows in this slice.
     with internal diagnostics only, and cancellation without partial success (TR-43, TR-47–TR-49).
 39. AI-002 and AI-003 acceptance verifies trusted tool binding, retained retrieval reaching the next provider request,
     no observations, unchanged action disposal, and shared retrieval guidance (TR-50).
+40. An end-to-end regression proves an authored annotated pipe wiki reference renders as ``Title(`target_entry_id`)``
+    with no source path or residual wiki brackets in both the automatically injected opening request payload and the
+    retrieved `read_lore` result replayed to the next provider request; the same reference inside a fenced code block
+    passes through verbatim. This verifies user requirement 21 and TR-40.
 
 ## References
 

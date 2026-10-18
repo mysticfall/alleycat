@@ -629,7 +629,8 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
 
     /// <summary>
     /// Reduces link syntax to its label text outside fenced code blocks: inline, reference, collapsed, and
-    /// autolink forms are reduced, and reference definition lines are dropped.
+    /// autolink forms are reduced, annotated pipe wiki references reduce to their label with the annotation
+    /// retained, and reference definition lines are dropped.
     /// </summary>
     private static string ReduceLinks(string body)
     {
@@ -683,8 +684,10 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
 
     /// <summary>
     /// Reduces the link forms in a single line: <c>[label](target)</c>, <c>[label][ref]</c>, <c>[label][]</c>,
-    /// and autolinks become their label or URL text. Bare <c>[label]</c>, image syntax, and <c>[[wiki]]</c>
-    /// links have no following <c>(</c> or <c>[</c> or are preceded by <c>!</c> and pass through untouched.
+    /// and autolinks become their label or URL text, and an annotated pipe wiki reference
+    /// <c>[[target|label]](annotation)</c> becomes its label with the annotation retained verbatim. Bare
+    /// <c>[label]</c>, image syntax, and wiki links without an annotation have no following <c>(</c> or
+    /// <c>[</c> or are preceded by <c>!</c> and pass through untouched.
     /// </summary>
     private static string ReduceLinksInLine(string line)
     {
@@ -696,7 +699,14 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             char current = line[index];
             if (current == '[' && (index == 0 || line[index - 1] != '!'))
             {
-                if (TryReduceBracketLink(line, index, out string? label, out int end))
+                if (TryReduceAnnotatedWikiReference(line, index, out string? label, out int end))
+                {
+                    _ = result.Append(label);
+                    index = end;
+                    continue;
+                }
+
+                if (TryReduceBracketLink(line, index, out label, out end))
                 {
                     _ = result.Append(label);
                     index = end;
@@ -718,6 +728,59 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Attempts to reduce an annotated pipe wiki reference starting at <paramref name="openIndex" />: an
+    /// Obsidian-style pipe wiki link <c>[[target|label]]</c> immediately followed by a complete parenthesised
+    /// annotation yields its alias text (everything after the first pipe) with the annotation appended
+    /// verbatim, and the index past the reduced span. Pipe wiki links without an annotation, pipe-less wiki
+    /// links, and embeds (preceded by <c>!</c>) are not this construct and are left to the remaining rules.
+    /// </summary>
+    private static bool TryReduceAnnotatedWikiReference(
+        string line,
+        int openIndex,
+        [NotNullWhen(true)] out string? label,
+        out int end)
+    {
+        label = null;
+        end = 0;
+
+        // A wiki link opens with two consecutive brackets; a single bracket is ordinary link syntax.
+        if (openIndex + 1 >= line.Length || line[openIndex + 1] != '[')
+        {
+            return false;
+        }
+
+        int close = FindMatchingBracket(line, openIndex);
+        if (close < 1 || line[close - 1] != ']')
+        {
+            return false;
+        }
+
+        // The annotation must be a complete parenthesised span on the same line.
+        if (close + 1 >= line.Length || line[close + 1] != '(')
+        {
+            return false;
+        }
+
+        int annotationClose = FindMatchingParen(line, close + 1);
+        if (annotationClose < 0)
+        {
+            return false;
+        }
+
+        string content = line[(openIndex + 2)..(close - 1)];
+        int separator = content.IndexOf('|');
+        if (separator < 0)
+        {
+            return false;
+        }
+
+        label = content[(separator + 1)..] + line[(close + 1)..(annotationClose + 1)];
+        end = annotationClose + 1;
+
+        return true;
     }
 
     /// <summary>
