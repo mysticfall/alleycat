@@ -331,7 +331,7 @@ public sealed class OpenAITranscriberTests : IDisposable
         Assert.NotNull(modelLine);
 
         string model = modelLine!.Split(':', 2)[1].Trim().Trim('"');
-        Assert.Equal("small", model);
+        Assert.Equal("whisper-1", model);
         Assert.False(model.EndsWith(".en", StringComparison.Ordinal), $"The shipped STT model must be multilingual, got '{model}'.");
     }
 
