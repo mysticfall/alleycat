@@ -11,7 +11,9 @@ The system must provide a fully offline text-to-speech backend as a new
 SupertonicSpeechGenerator component extending the abstract SpeechGenerator
 contract (SPCH-004), performing local ONNX inference with no network transport
 and returning valid native 44.1 kHz PCM16 mono WAV output without generator-side
-resampling.
+resampling. During gameplay the generator synthesises in the spoken language
+selected through the content pack system (CORE-008) without scene-by-scene
+editor configuration.
 
 ## Goal
 
@@ -20,7 +22,9 @@ MIT-licensed Supertonic ONNX pipeline, so generated dialogue works without
 network connectivity or API keys while inheriting the shared generation
 lifecycle (Enabled gating, single in-flight behaviour, and failure signalling).
 The generator preserves native 44.1 kHz output; lip-sync adapts only its
-inference input where required.
+inference input where required. The synthesis language follows the selected
+content pack automatically during gameplay; the exported `Language` property
+remains the deliberate standalone and fixture path.
 
 ## User Requirements
 
@@ -33,6 +37,10 @@ inference input where required.
    unknown or missing voice still produces speech by falling back to the
    default style rather than failing generation.
 4. Failures must be logged and handled gracefully without crashing the game.
+5. When the selected content pack declares a spoken language (CORE-008), NPC dialogue is synthesised in that
+   language without scene-by-scene editor configuration; built-in and fallback content synthesise English. Malformed
+   or unsupported declared language metadata fails startup through CORE-008 rather than silently speaking another
+   language.
 
 ## Technical Requirements
 
@@ -118,6 +126,17 @@ inference input where required.
     integration-tests/src/.
 14. Errors must be handled via `ILogger`; failures log a diagnostic and emit
     the failure signal without crashing.
+15. Effective language resolution: during gameplay the wiring that prepares
+    synthesis supplies the spoken language resolved from the current content
+    context (CORE-008) to the generator before its first generation, on the
+    Godot thread, and it stays fixed for the generator's lifetime. A supplied
+    pack language takes precedence over the exported `Language` property and
+    reaches the inference pipeline as its existing `Language` parameter
+    unchanged. When no pack language is supplied — standalone component
+    instances, fixtures, and direct tests — the exported `Language` property
+    (default `en`) remains authoritative, preserving the deliberate standalone
+    path. Both paths supply one canonical language code; no per-character
+    language variants and no automatic language detection are introduced.
 
 ## In Scope
 
@@ -141,12 +160,17 @@ inference input where required.
 - Error handling via `ILogger` with failure signalling.
 - Model and voice-style asset layout under game/models/supertonic-3/.
 - Unit tests (Godot-free) and integration test coverage at the specified paths.
+- Automatic effective language from the selected content pack (CORE-008):
+  precedence over the exported `Language` property during gameplay, with the
+  standalone-component path preserved.
 
 ## Out Of Scope
 
 - Chunked/streaming synthesis (whole-utterance delivery only).
 - Expression tags such as `<laugh>`.
-- Per-character languages or automatic language detection.
+- Per-character language variants or automatic language detection; language is
+  one value per selected content pack (in scope above), never per character or
+  auto-detected.
 - Generator-side sample-rate conversion or changes to lip-sync resampling
   quality. The required integration contract remains: the generator returns
   native 44100 Hz WAV output, while LipSyncPlayer adapts only its inference copy
@@ -198,6 +222,17 @@ general PCK packaging solution is deferred.
     integration-tests/src/ (technical layer).
 14. `dotnet format --verify-no-changes AlleyCat.sln` and
     `dotnet build AlleyCat.sln -warnaserror` pass (technical layer).
+15. With an English pack selected, synthesis runs with `en`; with a Korean pack
+    selected, synthesis runs with `ko` — in both cases without any scene-editor
+    language change, and the language stays fixed for the generator's lifetime
+    (user and technical layers, TR-15).
+16. A standalone component instance or fixture that receives no pack language
+    synthesises with the exported `Language` default `en`, unchanged from the
+    previous contract (technical layer, TR-15).
+17. Representative runtime evidence records English and Korean synthesis
+    producing playable speech in the respective language, with retained audio
+    and listening evidence that identifies the listener and any linguistic
+    validation limitations (user layer, UR-5).
 
 ## References
 
@@ -214,6 +249,7 @@ general PCK packaging solution is deferred.
 - SPCH-004: Speech Generator Component
 - SPCH-005: Voice Component
 - CORE-007: Microsoft Logging Integration
+- CORE-008: Content Pack Resolution
 - SPCH-001: Wav2Arkit LipSync Player
 - SPCH-002: Audio2Face LipSync Player
 

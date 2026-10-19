@@ -7,15 +7,16 @@ title: Content Pack Resolution
 
 ## Requirement
 
-The platform must resolve current content identity and root paths, then start the game from either built-in fallback
-content or an optional content pack with a safe start-scene fallback.
+The platform must resolve current content identity, root paths, and the selected content's spoken language, then start
+the game from either built-in fallback content or an optional content pack with a safe start-scene fallback.
 
 ## Goal
 
 Enable a public build that launches without any additional content while exposing a generic current-content context for
 systems that need to load content-relative resources. Optional packs can declare a start scene through a manifest and
-override the default. CORE remains decoupled from specific content domains while failing fast when an explicitly
-requested pack cannot start.
+override the default. Each pack may also declare exactly one spoken language through an optional per-pack manifest, so
+gameplay speech automatically follows the pack selected at startup while English remains the default. CORE remains
+decoupled from specific content domains while failing fast when an explicitly requested pack cannot start.
 
 ## User Requirements
 
@@ -37,6 +38,13 @@ requested pack cannot start.
    resolution work, and opted-in debug logging reports content resolution once rather than on every read.
 9. A player or operator can bypass any configured or requested content pack via a launch switch and start with the
    built-in default content. When no content pack is configured or requested, behaviour is unchanged.
+10. When the selected content declares a spoken language, gameplay speech recognition and NPC speech synthesis follow
+    it automatically, without player, operator, or scene-editor configuration; built-in fallback content speaks
+    English.
+11. A selected pack whose manifest is malformed or declares an unsupported spoken language reports a clear, actionable
+    startup failure instead of silently running in another spoken language.
+12. After a one-time multilingual backend setup, selecting an English or Korean content pack across game launches
+    requires no Docker configuration changes, container restart, or container recreation.
 
 ## Technical Requirements
 
@@ -45,8 +53,9 @@ requested pack cannot start.
 3. A content pack is a subdirectory identified by `pack-id` at `res://content/<pack-id>/`. Its content identity is
    `<pack-id>` and its content root is `res://content/<pack-id>/`.
 4. Content identity is mandatory for every resolved current-content context.
-5. CORE must expose a generic current-content context API containing at least the current content id and root path.
-   Consumers can combine the root path with domain-specific relative paths without adding domain-specific roots to CORE.
+5. CORE must expose a generic current-content context API containing at least the current content id, root path, and
+   effective spoken language. Consumers can combine the root path with domain-specific relative paths without adding
+   domain-specific roots to CORE.
 6. A content pack's start scene is the fixed file `start.tscn` at `res://content/<pack-id>/start.tscn`.
 7. A manifest resource `res://content/manifest.tres` of Godot `Resource` type `ContentManifest` exposes
    `DefaultPackId` (string). A missing manifest means no default pack is declared.
@@ -89,6 +98,32 @@ requested pack cannot start.
     With no pack requested or configured, resolution is unchanged.
 18. When the skip switch is active, resolution must emit one Information-level log notice that configured content
     packs are skipped, so an operator can determine from the logs why a configured pack did not load.
+19. The selection manifest (`ContentManifest` at `res://content/manifest.tres`) remains the only pack-selection
+    contract and carries no language metadata. Each content pack may additionally declare metadata through a distinct
+    optional per-pack manifest resource `ContentPackManifest` (Godot `Resource`) at
+    `res://content/<pack-id>/manifest.tres`, initially exposing one optional `Language` string export that defaults
+    to `en`.
+20. Language declaration is optional and backward-compatible. The resolver must check that the per-pack manifest path
+    exists before loading it: a missing per-pack manifest, a missing `res://content/` directory, or an omitted or
+    blank `Language` value resolves to `en` as a normal startup path without Godot missing-resource errors or
+    warnings.
+21. Declared language values are normalised before use: outer whitespace is trimmed, matching is case-insensitive,
+    and a tag maps to the spoken-language code of its primary sublanguage (for example `en-GB` resolves to `en`).
+    The supported set is evidence-gated against the deployed speech backends and is initially `en` and `ko`; the
+    context stores the normalised lowercase code. Unsupported primary sublanguages are rejected per Technical
+    Requirement 23 rather than being silently remapped.
+22. The effective language belongs to the selected content and follows the Technical Requirement 9 selection order:
+    the requested pack, otherwise the manifest default pack, otherwise built-in fallback content. Built-in fallback
+    content, the integration-test bypass, and `--no-content-pack` all resolve `en`. The language resolves once
+    together with the context and is cached under the same process-lifetime lazy initialisation as Technical
+    Requirement 15.
+23. A per-pack manifest that exists but cannot be loaded as `ContentPackManifest`, or a declared language whose
+    primary sublanguage is unsupported, must fail content resolution with an actionable exception naming the pack id,
+    the manifest path, the declared value, and the supported set. The failure reuses the Technical Requirement 15
+    failure semantics: it throws without caching so the next call retries, and the game reports a startup failure
+    instead of silently speaking another language.
+24. Language metadata stays infrastructure-independent: packs never declare speech models, endpoints, or credentials,
+    and CORE performs no mapping from language to infrastructure beyond the Technical Requirement 21 normalisation.
 
 ## In Scope
 
@@ -96,6 +131,8 @@ requested pack cannot start.
 - Generic current-content context API with no lore-specific paths.
 - Optional content root location and pack directory layout (`res://content/<pack-id>/start.tscn`).
 - `ContentManifest` resource contract with `DefaultPackId`.
+- Optional per-pack `ContentPackManifest` resource with spoken-language metadata: existence-checked loading,
+  normalisation, supported-set validation, and selected-content language exposure.
 - `ContentResolver` resolution algorithm and its integration-test bypass via `RuntimeContext`.
 - Missing manifest handling before Godot resource loading.
 - Command-line argument handling for `--content-pack`.
@@ -107,9 +144,11 @@ requested pack cannot start.
 ## Out Of Scope
 
 - Authoring tooling, packaging, or distribution of content packs.
-- Validation, signing, or versioning of content pack manifests.
+- General validation, signing, or versioning of content pack manifests beyond the spoken-language checks above.
 - Content-specific gameplay behaviour inside any start scene.
-- User-facing UI for selecting a content pack at runtime.
+- User-facing UI for selecting a content pack or language at runtime.
+- In-process pack or language switching; language metadata applies to the pack selected at startup.
+- Automatic translation of content into the declared language.
 
 ## Acceptance Criteria
 
@@ -149,6 +188,22 @@ requested pack cannot start.
 15. The skip switch does not activate when passed before the `--` separator (Technical Requirement 16).
 16. Resolution emits one Information-level notice when the skip switch is active, and the Debug resolution templates
     render the `contentPackSkipped` field (Technical Requirements 15 and 18).
+17. The current-content context exposes the effective spoken language alongside identity and root: a pack whose
+    manifest declares `en` resolves `en`, a pack declaring `ko` resolves `ko`, and an explicit `--content-pack`
+    request overrides the manifest default pack with the language following the requested pack (User Requirement 10,
+    Technical Requirements 19, 21, and 22).
+18. Packs without a per-pack manifest, manifests omitting `Language`, the built-in fallback content,
+    integration-test runs, and `--no-content-pack` all resolve `en` without missing-resource errors (User
+    Requirement 10, Technical Requirements 20 and 22).
+19. A per-pack manifest that exists but cannot be loaded reports a startup failure naming the pack and manifest path
+    instead of silently resolving `en` (User Requirement 11, Technical Requirement 23).
+20. A declared language outside the supported set reports a startup failure naming the pack, the declared value, and
+    the supported set (User Requirement 11, Technical Requirements 21 and 23).
+21. Case and regional variants of a supported language (for example `en-GB`) normalise to the supported code
+    (Technical Requirement 21).
+22. Pack selection and its language require no configuration beyond the selection manifest, launch arguments, and
+    per-pack manifests; packs carry no speech-model, endpoint, or credential metadata (User Requirement 12,
+    Technical Requirements 19 and 24; end-to-end runtime evidence is defined in SPCH-003).
 
 ## References
 
@@ -156,9 +211,13 @@ requested pack cannot start.
 
 - @game/src/Core/Content/ContentResolver.cs
 - @game/src/Core/Content/ContentManifest.cs
+- @game/src/Core/Content/ContentPackManifest.cs
+- @game/src/Core/Content/ContentContext.cs
 - @game/src/Core/Content/ContentPaths.cs
 - @game/src/Game.cs
 
 ### Related Specs
 
 - [CORE-001: Global Singleton](../../core/001-global-scene/index.md)
+- [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
+- [SPCH-007: Supertonic Speech Generator Component](../../speech/007-supertonic-speech-generator/index.md)

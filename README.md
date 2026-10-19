@@ -28,6 +28,12 @@ This project uses assets from the following Godot addons:
 - [Mirror3D](https://godotengine.org/asset-library/asset/3983) — A customisable 3D mirror addon using a SubViewport.
 - [HumanShaders](https://github.com/matmadness/HumanShaders) — A set of shaders for Godot to create realistic humanoid characters.
 
+## 🧩 Content Packs
+
+Optional content packs supply the start scene and declare the spoken language (English or Korean) that player
+speech recognition and NPC speech synthesis follow automatically. See [Content Packs](docs/content-packs.md) for
+authoring and operation, and [Docker Services](docker/README.md) for the one-time multilingual backend setup.
+
 ## 🧹 C# Linting and Formatting
 
 This repository uses Roslyn analysers, Microsoft.CodeAnalysis.NetAnalyzers, and `dotnet format`.

@@ -19,6 +19,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     private ILogger<SupertonicSpeechGenerator>? _logger;
     private ISupertonicInferencePipeline? _pipeline;
     private Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> _pipelineFactory = CreatePipeline;
+    private string? _suppliedContentLanguage;
     private string? _globalisedModelDirectory;
     private string? _globalisedVoiceStylesDirectory;
     private bool _disposed;
@@ -116,6 +117,46 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     }
 
     /// <summary>
+    /// Supplies the spoken language resolved from the current content context (CORE-008) to this generator.
+    /// </summary>
+    /// <remarks>
+    /// The supplied language takes precedence over the exported <see cref="Language" /> property and stays fixed for
+    /// the generator's lifetime: a second supply must repeat the same value. The wiring that prepares synthesis calls
+    /// this once on the Godot thread before the first generation; standalone instances, fixtures, and direct tests
+    /// that supply no language keep the exported property authoritative. Internal so the supply stays a wiring hook
+    /// rather than a public runtime-switching API.
+    /// </remarks>
+    /// <param name="language">Canonical spoken-language code, for example <c>en</c> or <c>ko</c>.</param>
+    internal void SupplyContentLanguage(string language)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        string canonical = language.Trim();
+
+        lock (_pipelineLock)
+        {
+            if (_suppliedContentLanguage is { } existing)
+            {
+                if (!string.Equals(existing, canonical, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Supertonic speech language is fixed for the generator's lifetime; cannot change "
+                        + $"'{existing}' to '{canonical}'.");
+                }
+
+                return;
+            }
+
+            _suppliedContentLanguage = canonical;
+        }
+    }
+
+    /// <summary>
+    /// Language reaching the inference pipeline: the supplied content-pack language when gameplay wiring supplied
+    /// one, otherwise the exported <see cref="Language" /> property. Narrow internal seam for lifecycle coverage.
+    /// </summary>
+    internal string EffectiveLanguage => (_suppliedContentLanguage ?? Language).Trim();
+
+    /// <summary>
     /// Temporarily replaces the resolved logger for an isolated test instance.
     /// </summary>
     /// <remarks>
@@ -178,6 +219,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
         string modelDirectory = _globalisedModelDirectory ??= ProjectSettings.GlobalizePath(ModelDirectoryPath);
         string voiceStylesDirectory =
             _globalisedVoiceStylesDirectory ??= ProjectSettings.GlobalizePath(VoiceStylesDirectoryPath);
+        string effectiveLanguage = EffectiveLanguage;
 
         Stopwatch backendStopwatch = PipelineDebugLog.StartTimer();
 
@@ -188,7 +230,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
 
             float[] samples = pipeline.Synthesise(new SupertonicSynthesisRequest(
                 text,
-                Language.Trim(),
+                effectiveLanguage,
                 voiceStyle,
                 QualitySteps,
                 SpeedRatio));

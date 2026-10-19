@@ -1,0 +1,8 @@
+# Integration-test fixture: a configured STT language that the content-pack language must override.
+STT:
+    Host: "https://stt-language-override.test/v1"
+    Model: small
+    Language: fr
+    Prompt: Preserve this hint
+    Hotwords: AlleyCat, Mira
+    Timeout: 30

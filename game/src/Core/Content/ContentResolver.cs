@@ -40,7 +40,8 @@ public partial class ContentResolver : IContentResolver
     /// <inheritdoc />
     public string ResolveStartScenePath(string fallbackStartScenePath)
     {
-        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
+        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists, _) =
+            ReadRuntimeContentInputs();
         string? defaultPackId = _defaultPackId;
 
         string resolved = SelectStartScenePath(
@@ -97,7 +98,8 @@ public partial class ContentResolver : IContentResolver
     /// </remarks>
     private ContentContext ResolveContentContext()
     {
-        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
+        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists, Func<string, string> resolvePackLanguage) =
+            ReadRuntimeContentInputs();
         string? defaultPackId = _defaultPackId;
 
         ContentContext context = SelectCurrentContentContext(
@@ -105,7 +107,8 @@ public partial class ContentResolver : IContentResolver
             defaultPackId,
             isIntegrationTest,
             skipContentPack,
-            sceneExists);
+            sceneExists,
+            resolvePackLanguage);
 
         if (skipContentPack)
         {
@@ -134,11 +137,20 @@ public partial class ContentResolver : IContentResolver
     /// coverage can substitute the runtime reads and count resolution attempts.
     /// </summary>
     /// <returns>
-    /// Integration-test flag, optional requested pack identifier, content-pack skip flag, and start-scene
-    /// existence probe.
+    /// Integration-test flag, optional requested pack identifier, content-pack skip flag, start-scene existence
+    /// probe, and per-pack spoken-language resolver.
     /// </returns>
-    internal virtual (bool IsIntegrationTest, string? RequestedPackId, bool SkipContentPack, Func<string, bool> SceneExists) ReadRuntimeContentInputs()
-        => (RuntimeContext.IsIntegrationTest(), ReadRequestedPackId(), ContainsSkipContentPackSwitch(OS.GetCmdlineUserArgs()), static path => ResourceLoader.Exists(path));
+    internal virtual (
+        bool IsIntegrationTest,
+        string? RequestedPackId,
+        bool SkipContentPack,
+        Func<string, bool> SceneExists,
+        Func<string, string> ResolvePackLanguage) ReadRuntimeContentInputs()
+        => (RuntimeContext.IsIntegrationTest(),
+            ReadRequestedPackId(),
+            ContainsSkipContentPackSwitch(OS.GetCmdlineUserArgs()),
+            static path => ResourceLoader.Exists(path),
+            static packId => LoadPackLanguage(packId, ContentPaths.GetPackManifestPath(packId)));
 
     /// <summary>
     /// Determines whether the supplied command-line user arguments contain the content-pack skip switch.
@@ -199,6 +211,7 @@ public partial class ContentResolver : IContentResolver
         bool isIntegrationTest,
         bool skipContentPack,
         Func<string, bool> sceneExists,
+        Func<string, string>? resolvePackLanguage = null,
         string contentRoot = ContentPaths.ContentRoot,
         string startSceneFileName = ContentPaths.StartSceneFileName)
     {
@@ -213,7 +226,10 @@ public partial class ContentResolver : IContentResolver
         {
             string path = contentRoot + requestedPackId + "/" + startSceneFileName;
             return sceneExists(path)
-                ? new ContentContext(requestedPackId, contentRoot + requestedPackId + "/")
+                ? new ContentContext(
+                    requestedPackId,
+                    contentRoot + requestedPackId + "/",
+                    ResolvePackLanguageOrDefault(requestedPackId, resolvePackLanguage))
                 : throw CreateMissingRequestedPackSceneException(requestedPackId, path);
         }
 
@@ -222,12 +238,59 @@ public partial class ContentResolver : IContentResolver
             string path = contentRoot + defaultPackId + "/" + startSceneFileName;
             if (sceneExists(path))
             {
-                return new ContentContext(defaultPackId, contentRoot + defaultPackId + "/");
+                return new ContentContext(
+                    defaultPackId,
+                    contentRoot + defaultPackId + "/",
+                    ResolvePackLanguageOrDefault(defaultPackId, resolvePackLanguage));
             }
         }
 
         return ContentContext.Default;
     }
+
+    /// <summary>
+    /// Resolves a selected pack's declared spoken language through the Godot resource boundary: a missing manifest
+    /// is a normal English startup path, while an unloadable manifest or unsupported language throws an actionable
+    /// error naming the pack, path, declared value, and supported set.
+    /// </summary>
+    /// <remarks>
+    /// Internal static with an explicit manifest path so integration coverage can exercise real manifest resources.
+    /// </remarks>
+    internal static string LoadPackLanguage(string packId, string manifestPath)
+    {
+        if (!ResourceLoader.Exists(manifestPath))
+        {
+            return ContentPackManifest.DefaultLanguage;
+        }
+
+        ContentPackManifest? manifest;
+        try
+        {
+            manifest = GD.Load<ContentPackManifest>(manifestPath);
+        }
+        catch (Exception ex)
+        {
+            throw CreateInvalidPackManifestException(packId, manifestPath, ex);
+        }
+
+        return manifest is null
+            ? throw CreateInvalidPackManifestException(packId, manifestPath)
+            : ContentPackManifest.ResolveDeclaredLanguage(manifest.Language, packId, manifestPath);
+    }
+
+    private static string ResolvePackLanguageOrDefault(string packId, Func<string, string>? resolvePackLanguage)
+        => resolvePackLanguage?.Invoke(packId) ?? ContentPackManifest.DefaultLanguage;
+
+    private static InvalidOperationException CreateInvalidPackManifestException(
+        string packId,
+        string manifestPath,
+        Exception? innerException = null)
+        => new(
+            $"Content pack '{packId}' has a per-pack manifest at '{manifestPath}' that could not be loaded as a "
+            + $"{nameof(ContentPackManifest)} resource. Verify the resource text file references the "
+            + "ContentPackManifest script. The declared Language value is unavailable because the resource could "
+            + $"not be loaded. Supported languages: {string.Join(", ", ContentPackManifest.SupportedLanguages)}.",
+            innerException);
 
     private static InvalidOperationException CreateMissingRequestedPackSceneException(
         string requestedPackId,

@@ -6,9 +6,11 @@
 # should change.
 
 # Speech-to-text backend settings (OpenAI-SDK-compatible REST), read by the player template's OpenAITranscriber.
+# The spoken language of the selected content pack overrides Language at runtime (CORE-008); Model must stay a
+# multilingual variant so non-English packs transcribe in their own language.
 STT:
     Host: "http://localhost:8000/v1"
-    Model: small.en
+    Model: whisper-1
     ApiKey: ""
     Language: en
     Prompt: "Transcribe the player's speech clearly."

@@ -3,6 +3,7 @@ using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Text.Json;
 using AlleyCat.Core.Configuration;
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
 using Godot;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +36,19 @@ public partial class OpenAITranscriber : Transcriber
     private AudioClient? _audioClient;
     private ILogger<OpenAITranscriber>? _logger;
 
+    // Instance-local dependency seams retain the production lifecycle and request preparation in service-free tests.
+    internal Func<ContentContext> ContentContextLoader
+    {
+        private get;
+        set;
+    } = () => Game.Instance.GetRequiredService<IContentResolver>().GetCurrentContentContext();
+
+    internal PipelineTransport? RequestTransport
+    {
+        private get;
+        set;
+    }
+
     /// <summary>
     /// Config file used to resolve OpenAI-compatible speech settings.
     /// </summary>
@@ -51,10 +65,22 @@ public partial class OpenAITranscriber : Transcriber
         base._Ready();
         _logger = GameLoggerResolver.ResolveRequired<OpenAITranscriber>();
 
+        // The pack language is resolved on the Godot thread before the immutable request settings are published, so
+        // resolution failures (malformed pack metadata, unsupported language) fail loudly at startup instead of being
+        // absorbed into the silent broken-configuration path below.
+        string contentLanguage = ContentContextLoader().Language;
+
         try
         {
-            _settings = OpenAITranscriberSettings.Load(ConfigPath);
-            _audioClient = _settings.CreateAudioClient(GameLoggerResolver.ResolveFactoryRequired());
+            _settings = OpenAITranscriberSettings.Load(ConfigPath) with
+            {
+                Language = contentLanguage
+            };
+            _audioClient = _settings.CreateAudioClient(GameLoggerResolver.ResolveFactoryRequired(), RequestTransport);
+            _logger.LogDebug(
+                "STT requests will use the content pack language {Language} with model {Model}.",
+                contentLanguage,
+                _settings.Model);
         }
         catch (Exception ex)
         {
@@ -63,6 +89,12 @@ public partial class OpenAITranscriber : Transcriber
             _audioClient = null;
         }
     }
+
+    /// <summary>
+    /// Effective spoken language carried by prepared request settings, or null when settings were not initialised.
+    /// Narrow internal seam for lifecycle coverage of the pack-language override.
+    /// </summary>
+    internal string? EffectiveRequestLanguage => _settings?.Language;
 
     /// <inheritdoc />
     public override Task<string> Transcribe(RecordedAudioData recording)
@@ -193,8 +225,16 @@ public partial class OpenAITranscriber : Transcriber
         public AudioClient CreateAudioClient()
             => new(Model, new ApiKeyCredential(GetApiKeyOrDefault()), CreateClientOptions());
 
-        internal AudioClient CreateAudioClient(ILoggerFactory loggerFactory)
-            => new(Model, new ApiKeyCredential(GetApiKeyOrDefault()), CreateClientOptions(loggerFactory));
+        internal AudioClient CreateAudioClient(ILoggerFactory loggerFactory, PipelineTransport? transport = null)
+        {
+            OpenAIClientOptions options = CreateClientOptions(loggerFactory);
+            if (transport is not null)
+            {
+                options.Transport = transport;
+            }
+
+            return new AudioClient(Model, new ApiKeyCredential(GetApiKeyOrDefault()), options);
+        }
 
         public Uri CreateEndpointUri()
         {

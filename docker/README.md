@@ -53,10 +53,26 @@ Environment variables:
 
 | Variable | Value | Purpose |
 | --- | --- | --- |
-| `WHISPERLIVE_MODEL` | `small.en` | Recognition model preloaded and served for every request. |
-| `WHISPERLIVE_LANGUAGE` | `en` | Default recognition language. |
+| `WHISPERLIVE_MODEL` | `small` | Multilingual recognition model; the server-side default applies only to requests that omit a model. |
+| `WHISPERLIVE_LANGUAGE` | `auto` | Default recognition language; applies only to requests that omit `language`. Gameplay requests always send the explicit language resolved from the selected content pack, so this default is a fallback for non-game clients. |
 | `WHISPERLIVE_API_KEY` | *(empty)* | Local unauthenticated use; empty disables API-key enforcement. |
 | `WHISPERLIVE_DISABLE_USAGE_COUNTS` | `1` | Disables anonymous usage counting. |
 
 See the [image documentation](https://github.com/hwdsl2/docker-whisper-live) for the full environment-variable
 reference.
+
+### One-Time Multilingual Migration
+
+The compose defaults ship the multilingual `small` model with per-request language selection, so an English or
+Korean content pack can be selected at each game launch with **no Docker configuration change, container restart,
+or container recreation** after this one-time migration:
+
+1. Apply the environment-variable change above to your `docker/docker-compose.yml` (this repository already ships
+   it; only deployments created from an older revision need the edit).
+2. Recreate the WhisperLive service once: `docker compose up -d whisper-api`. The first multilingual start
+   downloads the `small` model into the persisted `whisper-data` volume cache, which can take a few minutes.
+3. From then on, switch spoken language by selecting a different content pack at game launch. The game sends the
+   pack-resolved language and model on every transcription request, and later pack selections require no container
+   changes.
+
+See [Content Packs](../docs/content-packs.md) for how each pack declares its spoken language.

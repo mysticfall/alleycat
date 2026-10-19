@@ -264,6 +264,78 @@ public sealed class OpenAITranscriberTests : IDisposable
     }
 
     /// <summary>
+    /// Manual and automatic requests share one multipart contract, so both dispatch modes must carry the resolved
+    /// pack language while every unrelated field — model, prompt, hotwords, response format — stays preserved and
+    /// the model is carried unchanged with no per-language substitution.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_BothDispatchModes_CarryResolvedLanguageAndPreserveOtherFields()
+    {
+        byte[] pcmData = [0x34, 0x12, 0x78, 0x56];
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(
+            language: "ko",
+            prompt: "Transcribe clearly.",
+            hotwords: "felis catus");
+        settings = settings with
+        {
+            Model = "small"
+        };
+        using CapturingTranscriptionHandler handler = new();
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
+
+        string manualText = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData(pcmData, sampleRate: 16000, channelCount: 1),
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.ManualDispatchSource);
+        string automaticText = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData(pcmData, sampleRate: 16000, channelCount: 1),
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.AutomaticDispatchSource);
+
+        Assert.Equal("synthetic transcript", manualText);
+        Assert.Equal("synthetic transcript", automaticText);
+        Assert.Equal(2, handler.RequestBodies.Count);
+        Assert.All(
+            handler.RequestBodies,
+            body =>
+            {
+                Assert.Contains("name=language\r\n\r\nko\r\n"u8, body);
+                Assert.Contains("name=model\r\n\r\nsmall\r\n"u8, body);
+                Assert.DoesNotContain("small.en"u8, body);
+                Assert.Contains("name=prompt\r\n\r\nTranscribe clearly.\r\n"u8, body);
+                Assert.Contains("name=hotwords\r\n\r\nfelis catus\r\n"u8, body);
+                Assert.Contains("name=response_format\r\n\r\njson\r\n"u8, body);
+            });
+    }
+
+    /// <summary>
+    /// The shipped STT configuration must select the multilingual model — never an English-only variant such as
+    /// <c>small.en</c> — so non-English packs transcribe in their own language while requests carry the configured
+    /// model unchanged (SPCH-003 TR-31, AC-20).
+    /// </summary>
+    [Fact]
+    public void ShippedConfig_SelectsMultilingualModel_NeverEnglishOnlyVariant()
+    {
+        string[] lines = File.ReadAllLines(RepositoryPath.Get("game", "AlleyCat.yaml"));
+        int sttSectionIndex = Array.FindIndex(lines, static line => line.TrimEnd().Equals("STT:", StringComparison.Ordinal));
+        Assert.True(sttSectionIndex >= 0, "The shipped configuration must define an STT section.");
+
+        string? modelLine = Array.Find(
+            lines[(sttSectionIndex + 1)..],
+            static line => line.Contains("Model:", StringComparison.Ordinal));
+        Assert.NotNull(modelLine);
+
+        string model = modelLine!.Split(':', 2)[1].Trim().Trim('"');
+        Assert.Equal("small", model);
+        Assert.False(model.EndsWith(".en", StringComparison.Ordinal), $"The shipped STT model must be multilingual, got '{model}'.");
+    }
+
+    /// <summary>
     /// Blank optional fields must be omitted from the multipart body entirely.
     /// </summary>
     [Fact]

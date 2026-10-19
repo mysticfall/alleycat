@@ -1,7 +1,9 @@
 using System.Reflection;
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.Generation.Supertonic;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.Logging;
@@ -477,6 +479,146 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             generator.QueueFree();
             await WaitForFramesAsync(sceneTree, 2);
         }
+    }
+
+    /// <summary>
+    /// A content-pack language supplied through the gameplay wiring hook must reach the inference pipeline on every
+    /// generation with precedence over the exported <c>Language</c> property, in both English and Korean
+    /// (SPCH-007 TR-15, AC-15).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task Generate_SelectedContentThroughAIVoice_ReachesPipelineWithLifetimePrecedence()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        foreach (string language in new[] { "en", "ko" })
+        {
+            ContentContext selected = SpeechContentSelection.Select(language);
+            int contextReads = 0;
+            FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cuda);
+            SupertonicSpeechGenerator generator = CreatePipelineBackedGenerator(
+                language + "-generator", language == "en" ? "ko" : "en");
+            AIVoice voice = new()
+            {
+                SpeechGenerator = generator,
+                ContentContextLoader = () =>
+                {
+                    contextReads++;
+                    return selected;
+                },
+            };
+            using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+                (modelDirectory, requestedBackend) =>
+                {
+                    pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                    return pipeline;
+                });
+
+            voice.AddChild(generator);
+            sceneTree.Root.AddChild(voice);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            try
+            {
+                Assert.Equal(language, generator.EffectiveLanguage);
+                _ = await generator.Generate(language == "en" ? "Hello there, friend." : "안녕하세요, 친구.");
+                generator.Language = language == "en" ? "ko" : "en";
+                selected = ContentContext.Default with
+                {
+                    Language = generator.Language
+                };
+                _ = await generator.Generate("Second request");
+
+                Assert.Equal(1, contextReads);
+                Assert.Equal(2, pipeline.SynthesisRequests.Count);
+                Assert.All(pipeline.SynthesisRequests, request => Assert.Equal(language, request.Language));
+                Assert.Equal(language, generator.EffectiveLanguage);
+                Assert.Equal("M1", generator.Voice);
+                Assert.All(pipeline.SynthesisRequests, request => AssertFixtureVoiceStyle(request.VoiceStyle));
+            }
+            finally
+            {
+                voice.QueueFree();
+                await WaitForFramesAsync(sceneTree, 2);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Without a supplied content language, the exported <c>Language</c> property stays authoritative after the
+    /// generator enters the tree, preserving the standalone component and fixture path (SPCH-007 TR-15, AC-16).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task Generate_WithoutSuppliedContentLanguage_KeepsExportedLanguageAuthoritative()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cuda);
+        SupertonicSpeechGenerator generator = CreatePipelineBackedGenerator("standalone-generator", "ko");
+        using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+            (modelDirectory, requestedBackend) =>
+            {
+                pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                return pipeline;
+            });
+
+        sceneTree.Root.AddChild(generator);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            string readyLanguage = generator.EffectiveLanguage;
+            _ = await generator.Generate("안녕하세요.");
+
+            SupertonicSynthesisRequest request = Assert.Single(pipeline.SynthesisRequests);
+            Assert.Equal("ko", request.Language);
+            Assert.Equal("ko", readyLanguage);
+            Assert.Equal("ko", generator.EffectiveLanguage);
+        }
+        finally
+        {
+            await FreeGeneratorsAsync(sceneTree, generator);
+        }
+    }
+
+    /// <summary>
+    /// The supplied language is fixed for the generator's lifetime: an identical re-supply is a no-op, a
+    /// conflicting re-supply throws, and a blank supply is rejected.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public void SupplyContentLanguage_IsFixedForLifetime_WithIdenticalResupplyNoOpAndConflictRejection()
+    {
+        SupertonicSpeechGenerator generator = new();
+
+        generator.SupplyContentLanguage("ko");
+        generator.SupplyContentLanguage("ko");
+
+        Assert.Equal("ko", generator.EffectiveLanguage);
+        _ = Assert.Throws<InvalidOperationException>(() => generator.SupplyContentLanguage("en"));
+        _ = Assert.Throws<ArgumentException>(() => generator.SupplyContentLanguage("  "));
+        Assert.Equal("ko", generator.EffectiveLanguage);
+    }
+
+    private static SupertonicSpeechGenerator CreatePipelineBackedGenerator(string name, string exportedLanguage)
+        => new()
+        {
+            Name = name,
+            ModelDirectoryPath = FixtureModelDirectoryPath,
+            VoiceStylesDirectoryPath = FixtureVoiceStylesDirectoryPath,
+            Language = exportedLanguage,
+        };
+
+    private static async Task FreeGeneratorsAsync(SceneTree sceneTree, params SupertonicSpeechGenerator[] generators)
+    {
+        foreach (SupertonicSpeechGenerator generator in generators)
+        {
+            generator.GetParent()?.RemoveChild(generator);
+            generator._ExitTree();
+            generator.Free();
+        }
+
+        await WaitForFramesAsync(sceneTree, 2);
     }
 
     private static async Task InvokeGenerationAsync(SpeechGenerator speechGenerator, string text, string? instruction = null)

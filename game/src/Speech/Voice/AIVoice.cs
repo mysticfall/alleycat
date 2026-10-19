@@ -1,10 +1,12 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Speech.Voice;
@@ -56,6 +58,13 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     private LipSyncPlayer? _playbackWatchPlayer;
     private ILogger<AIVoice>? _logger;
 
+    // Instance-local context dependency; normal gameplay resolves the process-lifetime selected pack through DI.
+    internal Func<ContentContext> ContentContextLoader
+    {
+        private get;
+        set;
+    } = () => Game.Instance.GetRequiredService<IContentResolver>().GetCurrentContentContext();
+
     /// <summary>
     /// Speech generator used to create spoken audio bytes.
     /// </summary>
@@ -84,6 +93,19 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             {
                 return _pumpSettlement?.Task ?? Task.CompletedTask;
             }
+        }
+    }
+
+    /// <inheritdoc />
+    public override void _Ready()
+    {
+        base._Ready();
+
+        // Owning an AI voice is the gameplay opt-in. Standalone generators retain their deliberate export, in
+        // production as well as tests. Resolve on the Godot thread before any voice request can reach a worker.
+        if (SpeechGenerator is SupertonicSpeechGenerator supertonic)
+        {
+            supertonic.SupplyContentLanguage(ContentContextLoader().Language);
         }
     }
 

@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="ContentManifest" format=3]
+
+[ext_resource type="Script" uid="uid://i1ay4ab4y0b5" path="res://src/Core/Content/ContentManifest.cs" id="1_selectionmanifest"]
+
+[resource]
+script = ExtResource("1_selectionmanifest")
+DefaultPackId = "wrong-script-pack"

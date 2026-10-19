@@ -317,6 +317,148 @@ public sealed class ContentResolverTests
     }
 
     /// <summary>
+    /// A selected pack context must carry the language resolved from the per-pack manifest resolver.
+    /// </summary>
+    [Fact]
+    public void SelectCurrentContentContext_ResolvesPackLanguage_FromLanguageResolver()
+    {
+        ContentContext requestedContext = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "req",
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: _ => true,
+            resolvePackLanguage: packId => packId == "req" ? "ko" : "en",
+            contentRoot: ContentRoot);
+
+        Assert.Equal("req", requestedContext.ContentID);
+        Assert.Equal("ko", requestedContext.Language);
+
+        ContentContext defaultContext = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: null,
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: _ => true,
+            resolvePackLanguage: packId => packId == "def" ? "ko" : "en",
+            contentRoot: ContentRoot);
+
+        Assert.Equal("def", defaultContext.ContentID);
+        Assert.Equal("ko", defaultContext.Language);
+    }
+
+    /// <summary>
+    /// An explicitly requested pack must take priority over the manifest default pack for language, mirroring the
+    /// start-scene selection order.
+    /// </summary>
+    [Fact]
+    public void SelectCurrentContentContext_LanguageFollowsRequestedPack_OverDefaultPack()
+    {
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "korean-pack",
+            defaultPackId: "english-pack",
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: _ => true,
+            resolvePackLanguage: static packId => packId == "korean-pack" ? "ko" : "en",
+            contentRoot: ContentRoot);
+
+        Assert.Equal("korean-pack", context.ContentID);
+        Assert.Equal("ko", context.Language);
+    }
+
+    /// <summary>
+    /// A pack without a language resolver must resolve English: missing per-pack language metadata is a
+    /// backward-compatible default, not an error.
+    /// </summary>
+    [Fact]
+    public void SelectCurrentContentContext_WithoutLanguageResolver_ResolvesEnglish()
+    {
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "req",
+            defaultPackId: null,
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: _ => true,
+            contentRoot: ContentRoot);
+
+        Assert.Equal("req", context.ContentID);
+        Assert.Equal("en", context.Language);
+        Assert.Equal("en", ContentContext.Default.Language);
+    }
+
+    /// <summary>
+    /// The integration-test bypass and the skip switch must resolve English built-in content without probing any
+    /// pack manifest for language.
+    /// </summary>
+    [Fact]
+    public void SelectCurrentContentContext_BypassPaths_ResolveEnglishWithoutProbing()
+    {
+        foreach (bool bypass in new[] { true, false })
+        {
+            ContentContext context = ContentResolver.SelectCurrentContentContext(
+                requestedPackId: "req",
+                defaultPackId: "def",
+                isIntegrationTest: bypass,
+                skipContentPack: !bypass,
+                sceneExists: _ => throw new InvalidOperationException("Bypass paths should not probe pack scenes."),
+                resolvePackLanguage: static _ => throw new InvalidOperationException(
+                    "Bypass paths should not resolve pack language."),
+                contentRoot: ContentRoot);
+
+            Assert.Equal(ContentContext.Default, context);
+            Assert.Equal("en", context.Language);
+        }
+    }
+
+    /// <summary>
+    /// A language-resolution failure must not poison the context cache; the next call retries the resolution.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_RetriesResolution_WhenPackLanguageResolutionFails()
+    {
+        int languageResolutionCount = 0;
+        StubContentResolver resolver = new(
+            requestedPackId: "req",
+            sceneExists: _ => true,
+            resolvePackLanguage: () => ++languageResolutionCount > 1 ? "ko" : throw new InvalidOperationException(
+                "unsupported language"));
+
+        _ = Assert.Throws<InvalidOperationException>(resolver.GetCurrentContentContext);
+
+        ContentContext context = resolver.GetCurrentContentContext();
+
+        Assert.Equal(2, languageResolutionCount);
+        Assert.Equal("req", context.ContentID);
+        Assert.Equal("ko", context.Language);
+    }
+
+    /// <summary>
+    /// The pack language must resolve once together with the content context and reuse the cached context on later
+    /// calls.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_ResolvesLanguageOnce_AndCachesItWithTheContext()
+    {
+        int languageResolutionCount = 0;
+        StubContentResolver resolver = new(
+            requestedPackId: "req",
+            sceneExists: _ => true,
+            resolvePackLanguage: () =>
+            {
+                languageResolutionCount++;
+                return "ko";
+            });
+
+        ContentContext first = resolver.GetCurrentContentContext();
+        ContentContext second = resolver.GetCurrentContentContext();
+
+        Assert.Same(first, second);
+        Assert.Equal(1, languageResolutionCount);
+        Assert.Equal("ko", first.Language);
+    }
+
+    /// <summary>
     /// A resolver running in integration-test mode must resolve the built-in context, ignoring packs.
     /// </summary>
     [Fact]
@@ -497,6 +639,7 @@ public sealed class ContentResolverTests
         string? requestedPackId = null,
         string? defaultPackId = null,
         Func<string, bool>? sceneExists = null,
+        Func<string>? resolvePackLanguage = null,
         ILogger<ContentResolver>? logger = null) : ContentResolver(logger, defaultPackId)
     {
         public int RuntimeInputReadCount
@@ -504,10 +647,20 @@ public sealed class ContentResolverTests
             get; private set;
         }
 
-        internal override (bool IsIntegrationTest, string? RequestedPackId, bool SkipContentPack, Func<string, bool> SceneExists) ReadRuntimeContentInputs()
+        internal override (
+            bool IsIntegrationTest,
+            string? RequestedPackId,
+            bool SkipContentPack,
+            Func<string, bool> SceneExists,
+            Func<string, string> ResolvePackLanguage) ReadRuntimeContentInputs()
         {
             RuntimeInputReadCount++;
-            return (isIntegrationTest, requestedPackId, skipContentPack, sceneExists ?? (static _ => false));
+            return (
+                isIntegrationTest,
+                requestedPackId,
+                skipContentPack,
+                sceneExists ?? (static _ => false),
+                _ => resolvePackLanguage?.Invoke() ?? ContentPackManifest.DefaultLanguage);
         }
     }
 

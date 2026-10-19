@@ -17,6 +17,9 @@ public static class ContentPaths
     /// <summary>Resource path of the content manifest describing the default pack.</summary>
     public const string ManifestPath = "res://content/manifest.tres";
 
+    /// <summary>File name of the per-pack metadata manifest inside a content-pack folder.</summary>
+    public const string PackManifestFileName = "manifest.tres";
+
     /// <summary>File name of the start scene inside a content-pack folder.</summary>
     public const string StartSceneFileName = "start.tscn";
 
@@ -30,4 +33,9 @@ public static class ContentPaths
     /// Returns the root resource path for an optional content pack.
     /// </summary>
     public static string GetPackRootPath(string packID) => ContentRoot + packID + "/";
+
+    /// <summary>
+    /// Returns the resource path of a content pack's optional metadata manifest.
+    /// </summary>
+    public static string GetPackManifestPath(string packID) => ContentRoot + packID + "/" + PackManifestFileName;
 }

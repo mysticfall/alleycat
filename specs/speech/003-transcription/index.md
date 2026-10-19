@@ -15,7 +15,8 @@ server, issuing one whole-recording REST transcription request per manual record
 automatic segment (SPCH-008) through a custom multipart form. The backend serves both the manual hold-to-speak path
 and the automatic hands-free path (SPCH-008), settles automatic segment outcomes in speaking order per speech group,
 and emits one notification-eligible STT dispatch marker under the Speech-owned `AlleyCat.Pipeline.STT` child
-category (TR-27).
+category (TR-27). Gameplay requests additionally carry the spoken language selected through the content pack system
+(CORE-008), so transcription follows the selected pack automatically.
 
 ## Goal
 
@@ -23,7 +24,8 @@ Enable voice input capture and transcription in the VR experience with both manu
 hands-free input (SPCH-008) served by one deployed REST-only WhisperLive server and one config-driven transcriber,
 using a concrete implementation that can be extended to other STT backends. Automatic speech is finalised
 pause-delimited: each endpoint-closed segment is dispatched immediately as one whole-segment REST request, without
-streaming transcription or per-word drafts.
+streaming transcription or per-word drafts. The effective spoken language follows the selected content pack
+(CORE-008) rather than per-launch operator configuration.
 
 ## User Requirements
 
@@ -61,6 +63,13 @@ streaming transcription or per-word drafts.
 16. **UR-16:** Developers can opt into a debug-oriented notification that fires when audio is dispatched to the STT
      backend. It appears immediately before the request, carries only non-sensitive operational metadata, and never
      contains transcript text, audio, prompts, hotwords, credentials, or endpoint details.
+17. **UR-17:** When the selected content pack declares a spoken language (CORE-008), both manual and automatic gameplay
+     transcription use that language without player or operator configuration. Built-in and fallback content
+     transcribe English.
+18. **UR-18:** A selected pack with malformed language metadata or an unsupported declared language produces a clear,
+     actionable startup failure instead of silently transcribing in another spoken language.
+19. **UR-19:** After a one-time multilingual backend setup, switching between English and Korean content packs across
+     game launches requires no Docker configuration change, container restart, or container recreation.
 
 ## Technical Requirements
 
@@ -205,6 +214,28 @@ streaming transcription or per-word drafts.
     exactly one terminal outcome. The notification is textless, never invents transcript content, and is the manual
     counterpart of automatic group abandonment (TR-16), following the same Godot-thread signal pattern as
     `TranscriptionCompleted`/`TranscriptionFailed`.
+29. **TR-29:** Effective gameplay language. The transcriber's request settings carry the spoken language selected by
+    the content pack system: the language resolved from the current content context (CORE-008) overrides the
+    configured `STT` `Language` value for both manual and automatic requests, with built-in fallback content, the
+    integration-test bypass, and `--no-content-pack` resolving `en`. The effective language is resolved once when
+    request settings are prepared on the Godot thread and becomes part of the immutable managed settings state
+    (TR-12); workers never re-resolve it and read no Godot resources. The `STT` configuration section shape (TR-8)
+    is unchanged.
+30. **TR-30:** Language normalisation and backend mapping. The declared language is normalised per CORE-008
+    (whitespace-trimmed, case-insensitive, mapped to its primary sublanguage code), and the multipart `language`
+    field (TR-19) carries that normalised code. The supported set is evidence-gated against the deployed backend and
+    is initially `en` and `ko`; unsupported declared languages fail at content resolution with an actionable error
+    (CORE-008) rather than reaching the backend.
+31. **TR-31:** Multilingual model alignment. The shipped `STT` `Model` setting must select a multilingual model —
+    never an English-only variant such as `small.en` — so Korean audio can be transcribed as Korean. Requests carry
+    the configured model unchanged: the transcriber performs no per-language model substitution, because pack
+    language metadata stays infrastructure-independent (CORE-008).
+32. **TR-32:** Deployment defaults. The supplied `docker/docker-compose.yml` ships `WHISPERLIVE_MODEL=small` and
+    `WHISPERLIVE_LANGUAGE=auto`. The server-side `auto` default applies only to requests that omit `language`;
+    gameplay requests always send the explicit resolved language (TR-29). Deployment documentation must state the
+    one-time migration: the first multilingual start downloads the multilingual model into the persisted cache
+    volume, and later pack selection requires no container changes. The client model alignment (TR-31) and these
+    server defaults change once at feature delivery, never per pack selection.
 
 ## In Scope
 
@@ -223,6 +254,10 @@ streaming transcription or per-word drafts.
 - Whole-segment mono 16 kHz finalisation of automatic recordings, dispatched at segment closure (SPCH-008).
 - Structured segment completion/failure metadata and ordered per-group settlement of concurrent segment requests.
 - `Prompt` and `Hotwords` hint options on every REST request.
+- Effective pack-language resolution for gameplay requests: content-context precedence over the configured `STT`
+  `Language` for manual and automatic input (CORE-008).
+- Language normalisation with an evidence-gated supported set, multilingual model alignment, and the supplied
+  deployment defaults for the multilingual backend.
 - One deployed REST-only WhisperLive server serving both paths.
 - Error handling contract using `ILogger` and the failure signal.
 - Optional transcript notification toggle for diagnostics and debug builds.
@@ -249,6 +284,8 @@ streaming transcription or per-word drafts.
   resampling, and duration limits.
 - Feature-level input-mode, segment-lifecycle, and failure policies, which SPCH-008 owns and this spec references
   normatively.
+- Automatic spoken-language detection of input audio: gameplay requests always declare the resolved pack language.
+- In-process language switching or caller-supplied per-request language overrides.
 
 ## Design Decisions
 
@@ -461,11 +498,30 @@ per-word, or draft mechanism exists on either path.
       replacement or disconnection, and disabled/cancelled manual capture — emits exactly one `RecordingAbandoned`
       notification with no completion or failure for that session, and that ordinary manual blank and failure
       completions settle without any abandonment notification, satisfying TR-28 and cross-referencing SPCH-005 TR-36.
+18. **AC-18:** Request-level tests verify manual and automatic requests send the resolved pack language: an English
+      pack resolves `en`, a Korean pack resolves `ko`, an explicit pack request follows the requested pack, and
+      fallback, integration-test, and `--no-content-pack` runs resolve `en`; unrelated multipart fields — `model`,
+      `prompt`, `hotwords`, `response_format` — remain preserved, satisfying UR-17 and TR-29.
+19. **AC-19:** Normalisation tests verify case and regional variants map to supported codes and that an unsupported
+      declared language fails at content resolution with the actionable CORE-008 error instead of a request reaching
+      the backend, satisfying UR-18 and TR-30.
+20. **AC-20:** Configuration tests verify the shipped `STT` `Model` is not an English-only variant and that requests
+      carry it unchanged with no per-language substitution, satisfying TR-31.
+21. **AC-21:** Deployment verification confirms the supplied compose defaults are `WHISPERLIVE_MODEL=small` and
+      `WHISPERLIVE_LANGUAGE=auto` and that the one-time multilingual migration is documented, satisfying TR-32.
+22. **AC-22:** Representative runtime evidence records English and Korean speech transcribed in its original language
+      through the production request path against the same running backend container, including container identity,
+      known intended utterances, observed results, and confirmation that Korean is not translated to English,
+      satisfying UR-17.
+23. **AC-23:** Runtime evidence records English-to-Korean and Korean-to-English pack selection across game launches
+      against an unchanged backend container, capturing container identity, restart state, and resolved gameplay
+      settings, with no Docker edits or container recreation after the initial setup, satisfying UR-19.
 
 **Traceability Map:** UR-1–UR-7 and TR-1–TR-2, TR-5–TR-11 → AC-1; UR-8 and TR-3, TR-12–TR-13 → AC-2–AC-3;
 UR-9 and TR-4, TR-14 → AC-4; TR-15–TR-16 → AC-5–AC-6; out-of-scope guard → AC-7; TR-17 → AC-8; UR-10 and
 TR-18–TR-19 → AC-9; UR-11 and TR-20 → AC-10; UR-6, UR-13 and TR-7–TR-8, TR-19 → AC-11; UR-12 and TR-21–TR-22, TR-25 →
-AC-12; UR-14 and TR-24 → AC-13; TR-23 → AC-14; UR-15 and TR-26 → AC-15; UR-16 and TR-27 → AC-16; TR-28 → AC-17.
+AC-12; UR-14 and TR-24 → AC-13; TR-23 → AC-14; UR-15 and TR-26 → AC-15; UR-16 and TR-27 → AC-16; TR-28 → AC-17;
+UR-17 and TR-29 → AC-18; UR-18 and TR-30 → AC-19; TR-31 → AC-20; TR-32 → AC-21; UR-17 → AC-22; UR-19 → AC-23.
 
 ## References
 
@@ -492,6 +548,7 @@ AC-12; UR-14 and TR-24 → AC-13; TR-23 → AC-14; UR-15 and TR-26 → AC-15; UR
 - `@tests/src/Core/Logging/PipelineDebugLogTests.cs`
 - `@integration-tests/src/Speech/TranscriberIntegrationTests.cs`
 - `@integration-tests/src/Core/Logging/PipelineNotificationRoutingIntegrationTests.cs`
+- `@docker/docker-compose.yml`
 
 ### Related Specs
 
@@ -503,6 +560,7 @@ AC-12; UR-14 and TR-24 → AC-13; TR-23 → AC-14; UR-15 and TR-26 → AC-15; UR
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
 - [CORE-007: Microsoft Logging Integration](../../core/007-microsoft-logging-integration/index.md)
+- [CORE-008: Content Pack Resolution](../../core/008-content-pack-resolution/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
 
