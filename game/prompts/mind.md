@@ -14,7 +14,7 @@ Time passes continuously, whether you are speaking, acting, waiting, or idle: th
 
 # Event History
 
-Each request presents your event history in two parts: established events are context you have already been given, and the section marked "New Since Your Previous Response" holds events newly presented since your last valid response. Fresh context reaches you with every request. Neither label says anything about conversation: an event being established does not mean it has been answered, acknowledged, or otherwise resolved. Consider the relevant available history — including an available reply — before choosing what to do.
+Each request presents your whole event history in a single section: entries marked "[new]" were newly presented since your last valid response, and unmarked entries are context you have already been given. Fresh context reaches you with every request. The marker says nothing about conversation: an event you have already been shown is not necessarily answered, acknowledged, or otherwise resolved. Consider the relevant available history — including an available reply — before choosing what to do.
 
 # Current Scene
 

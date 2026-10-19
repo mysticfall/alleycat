@@ -129,6 +129,39 @@ public sealed class EventHistoryIntegrationTests
         Assert.DoesNotContain("private-group", rendered, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Watermark-aware rendering marks every entry beyond the confirmed watermark on its complete rendered line,
+    /// and a joined speech group is marked when any contributing segment lies beyond it (AI-002 TR-3).
+    /// </summary>
+    [Fact]
+    public async Task RenderAsync_ConfirmedWatermark_MarksNewlyPresentedEntriesAndJoinedGroups()
+    {
+        AcceptedObservationEntry[] timeline =
+        [
+            CreateEntry(1, new TestObservation("world.settled")),
+            CreateEntry(2, new ObservedSpeech("char:rin", "earlier"), new SpeechObservationTransport("private-voice", "private-group", 0)),
+            CreateEntry(3, new ObservedSpeech("char:rin", "later"), new SpeechObservationTransport("private-voice", "private-group", 1, continued: true)),
+            CreateEntry(4, new TestObservation("world.changed")),
+        ];
+        ObservationHistoryRenderer renderer = CreateRenderer();
+
+        // Entries 1–2 are confirmed; the joined group's latest segment and the trailing event are newly presented,
+        // so the joined line carries the marker through the OR of its segments.
+        string output = await renderer.RenderAsync(timeline, confirmedSequenceWatermark: 2);
+
+        Assert.Equal(
+            "((Received world.settled event.))\n"
+                + "[new] Heard char:rin say: earlier … later\n"
+                + "[new] ((Received world.changed event.))",
+            output);
+        // With every entry confirmed, the same projection renders wholly unmarked.
+        Assert.Equal(
+            "((Received world.settled event.))\n"
+                + "Heard char:rin say: earlier … later\n"
+                + "((Received world.changed event.))",
+            await renderer.RenderAsync(timeline, confirmedSequenceWatermark: 4));
+    }
+
     /// <summary>Timestamp framing is invariant even when the active process culture is not.</summary>
     [Fact]
     public async Task RenderAsync_UsesInvariantTimestampFramingAndOmitsUnstampedSuffixes()

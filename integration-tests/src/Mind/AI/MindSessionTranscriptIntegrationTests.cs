@@ -100,11 +100,10 @@ public sealed partial class MindSessionTranscriptIntegrationTests
             Assert.Contains("### Message 1 of 3 — user", firstCycle);
             Assert.Contains("### Message 2 of 3 — user", firstCycle);
             Assert.Contains("### Message 3 of 3 — user", firstCycle);
-            // The timeline message body renders its pseudo-XML sections as headings with no raw tags visible
+            // The timeline message body renders its pseudo-XML section as a heading with no raw tags visible
             // (AI-011 TR-9).
-            Assert.Contains("#### Established Event History", firstCycle);
-            Assert.Contains("#### New Since Your Previous Response", firstCycle);
-            Assert.DoesNotContain("<Established Event History>", firstCycle);
+            Assert.Contains("#### Event History", firstCycle);
+            Assert.DoesNotContain("<Event History>", firstCycle);
             Assert.Contains(AgenticMind.SessionBootstrapInput, firstCycle);
             Assert.Contains(SceneStatusText, firstCycle);
             Assert.Contains("## Request Options", firstCycle);

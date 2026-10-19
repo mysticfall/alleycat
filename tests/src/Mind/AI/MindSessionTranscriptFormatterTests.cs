@@ -281,8 +281,8 @@ public sealed class MindSessionTranscriptFormatterTests
     {
         ChatMessage timeline = new(
             ChatRole.User,
-            "<Established Event History>" + LineFeed + "- sunrise" + LineFeed + "- footsteps" + LineFeed
-            + "</Established Event History>");
+            "<Event History>" + LineFeed + "- sunrise" + LineFeed + "- footsteps" + LineFeed
+            + "</Event History>");
         ChatMessage call = new(
             ChatRole.Assistant,
             [new FunctionCallContent("call-1", "speak", new Dictionary<string, object?> { ["speech"] = "Hello" })]);
@@ -296,7 +296,7 @@ public sealed class MindSessionTranscriptFormatterTests
         Assert.Contains("### Message 3 of 3 — tool" + LineFeed, markdown);
         // Real newlines from the live message text stay visible: the body's section renders as a heading and its
         // list entries render as clean list items — no break markers on block-boundary lines (AI-011 TR-8/TR-9).
-        Assert.Contains("#### Established Event History", markdown);
+        Assert.Contains("#### Event History", markdown);
         Assert.Contains("- sunrise" + LineFeed + "- footsteps", markdown);
         string html = RenderHtml(markdown);
         Assert.Contains("<li>sunrise</li>", html);
@@ -343,18 +343,18 @@ public sealed class MindSessionTranscriptFormatterTests
     {
         ChatMessage timeline = new(
             ChatRole.User,
-            "<Established Event History>" + LineFeed + "- sunrise" + LineFeed + "- footsteps" + LineFeed
-            + "</Established Event History>" + LineFeed + LineFeed
-            + "<New Since Your Previous Response>" + LineFeed + "First light broke over the ridge." + LineFeed
+            "<Event History>" + LineFeed + "- sunrise" + LineFeed + "- footsteps" + LineFeed
+            + "</Event History>" + LineFeed + LineFeed
+            + "<Garden Notes>" + LineFeed + "First light broke over the ridge." + LineFeed
             + "Footsteps crossed the yard." + LineFeed
-            + "</New Since Your Previous Response>");
+            + "</Garden Notes>");
 
         string markdown = RenderDefaultCycle(requestMessages: [timeline]);
 
-        Assert.Contains("#### Established Event History", markdown);
-        Assert.Contains("#### New Since Your Previous Response", markdown);
-        Assert.DoesNotContain("<Established Event History>", markdown);
-        Assert.DoesNotContain("</New Since Your Previous Response>", markdown);
+        Assert.Contains("#### Event History", markdown);
+        Assert.Contains("#### Garden Notes", markdown);
+        Assert.DoesNotContain("<Event History>", markdown);
+        Assert.DoesNotContain("</Garden Notes>", markdown);
         // List entries stay clean list items — never carrying a break marker that would render as punctuation.
         Assert.Contains("- sunrise" + LineFeed + "- footsteps", markdown);
         // Plain-text paragraph lines inside a section keep their single-newline join visible as a hard break.

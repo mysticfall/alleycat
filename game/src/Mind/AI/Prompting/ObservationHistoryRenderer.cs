@@ -10,6 +10,9 @@ namespace AlleyCat.Mind.AI.Prompting;
 /// </summary>
 internal sealed class ObservationHistoryRenderer(ICharacter character)
 {
+    /// <summary>Prefix marking a timeline line as newly presented since the last confirmed response (AI-002 TR-3).</summary>
+    private const string NewlyPresentedPrefix = "[new] ";
+
     /// <summary>Renders ordered observation records through their type-owned canonical text.</summary>
     /// <param name="observations">Observation records in timeline order.</param>
     /// <returns>The rendered event-history text for the supplied records.</returns>
@@ -35,6 +38,14 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
         IReadOnlyList<AcceptedObservationEntry> timeline)
         => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations));
 
+    /// <summary>
+    /// Renders the complete accepted timeline for the per-request event-history section: every event beyond the
+    /// confirmed watermark carries the newly-presented prefix on its complete rendered line, including any
+    /// timestamp suffix (AI-002 TR-3).
+    /// </summary>
+    public ValueTask<string> RenderAsync(IReadOnlyList<AcceptedObservationEntry> timeline, long confirmedSequenceWatermark)
+        => RenderProjectedAsync(ContinuationProjection.Project(timeline, confirmedSequenceWatermark: confirmedSequenceWatermark));
+
     /// <summary>Renders pre-projected model events through their type-owned canonical text.</summary>
     internal ValueTask<string> RenderProjectedAsync(IReadOnlyList<ContinuationProjection.Event> events)
     {
@@ -44,7 +55,15 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
             ? string.Empty
             : string.Join(
                 '\n',
-                events.Select(@event => (@event.Observation ?? throw new ArgumentException(
-                    "Events contain a null observation.", nameof(events))).Render(character))));
+                events.Select(RenderLine)));
+
+        string RenderLine(ContinuationProjection.Event @event)
+        {
+            AgentObservation observation = @event.Observation ?? throw new ArgumentException(
+                "Events contain a null observation.", nameof(events));
+            return @event.IsNewlyPresented
+                ? NewlyPresentedPrefix + observation.Render(character)
+                : observation.Render(character);
+        }
     }
 }

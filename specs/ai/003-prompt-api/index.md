@@ -61,13 +61,16 @@ information it has already been supplied.
 
 8. Event-history rendering is separate from both prompt stacks. It projects the selected persistent event timeline,
    invokes each observation's canonical renderer with owner context, and joins entries with exactly one newline for
-   the sections of AI-002's per-request timeline message.
+   the single section of AI-002's per-request timeline message.
 9. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
    `TypeKey`-only base fallback, and shared timestamp suffix. No `event_history.md` asset, event-history parser,
    fragment catalogue, `EventHistoryPath`, or authored `TypeKey` dispatch exists.
 10. Speech rendering remains actor-relative and must not render raw `VoiceId` or continuation transport metadata.
-    `ContinuationProjection` remains responsible only for speech-segment grouping, ordering, correlation, and
-    latest-event placement; projected speech uses the same observation-owned rendering contract.
+    `ContinuationProjection` remains responsible for speech-segment grouping, ordering, correlation, latest-event
+    placement, and per-entry newly-presented marking derived from the caller-supplied confirmed watermark: a
+    projected entry is newly presented when it lies beyond that watermark, and a joined speech group is newly
+    presented iff any contributing segment lies beyond it (AI-002 TR-3); projected speech uses the same
+    observation-owned rendering contract.
 11. Event rendering receives only the event records selected by its caller: AI-002's watermark rules for the canonical
     per-request timeline message. Prompt stacks must not accept observations as general render-context values.
 
@@ -78,10 +81,9 @@ information it has already been supplied.
     current-scene interpretation, action selection, available watch tools, and lore discovery/retrieval. These are
     mandatory content; exact prose stays tunable. Guidance must not contradict AI-002's automatic per-request delivery,
     payload-free wait semantics, or tool-exchange disposal (AI-002 TR-17–TR-22).
-13. Event-history guidance must match AI-002's timeline-message contract: the `Established Event History` section
-    holds prior context, the `New Since Your Previous Response` section marks entries presented since the NPC's
-    previous valid response, and neither section alone means a conversational contribution has been answered or
-    resolved.
+13. Event-history guidance must match AI-002's timeline-message contract: a single `Event History` section holds the
+    whole timeline, `[new] `-prefixed entries were newly presented since the NPC's previous valid response, unmarked
+    entries were already shown, and neither status means a conversational contribution has been answered or resolved.
 14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
     absence, and historical events do not establish current positions. It must not contradict the common game clock or
@@ -162,8 +164,9 @@ information it has already been supplied.
 5. Tests verify event rendering invokes observation-owned canonical text, applies exactly one newline between entries,
    and has no standalone event-history asset or parser, `EventHistoryPath`, fragment catalogue, authored `TypeKey`
    dispatch, or `ObservedWatchOutcome` requirement.
-6. Tests verify continuation projection preserves segment grouping, ordering, correlation, and latest-event placement
-   while projected speech uses canonical observation-owned text.
+6. Tests verify continuation projection preserves segment grouping, ordering, correlation, and latest-event placement,
+   derives newly-presented marking from the caller-supplied confirmed watermark with the group-OR rule for joined
+   speech groups (AI-002 TR-3), while projected speech uses canonical observation-owned text.
 7. Tests verify the authored shared instruction contains guidance covering each required concept — history
     interpretation, current-scene evidence limits and timestamps, action selection, watches, and lore retrieval — and
     stays consistent with AI-002's automatic per-request delivery, payload-free wait semantics, and disposal.

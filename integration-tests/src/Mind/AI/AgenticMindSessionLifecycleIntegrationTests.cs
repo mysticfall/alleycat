@@ -122,13 +122,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => tool.CapturedContexts.Count == 1);
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             IReadOnlyList<ChatMessage> nextRequest = clientProvider.Requests[1];
-            // The naturally-next request puts its newly rendered event timeline and current scene ahead of bootstrap
-            // and the accepted replay. Scheduling contributed no observation payload (AI-002 TR-2/7–10).
+            // The naturally-next request puts its rendered event timeline and current scene ahead of bootstrap
+            // and the accepted replay; the mid-generation event is marked newly presented in the single section.
+            // Scheduling contributed no observation payload (AI-002 TR-2/7–10).
             Assert.Equal(
                 [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
                 nextRequest.Select(message => message.Role));
-            Assert.Contains("<New Since Your Previous Response>", nextRequest[0].Text, StringComparison.Ordinal);
-            Assert.Contains("- bridge", nextRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("<Event History>", nextRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("[new] - bridge", nextRequest[0].Text, StringComparison.Ordinal);
             Assert.Equal(AgenticMind.SessionBootstrapInput, nextRequest[2].Text);
 
             // Node exit ends the held second request quietly.
@@ -183,8 +184,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Equal(
                 [ChatRole.User, ChatRole.User, ChatRole.User],
                 freshRequest.Select(message => message.Role));
-            Assert.Contains("<New Since Your Previous Response>", freshRequest[0].Text, StringComparison.Ordinal);
-            Assert.Contains("Heard char:someone-else say: You there?", freshRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("<Event History>", freshRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("[new] Heard char:someone-else say: You there?", freshRequest[0].Text, StringComparison.Ordinal);
             Assert.Equal(AgenticMind.SessionBootstrapInput, freshRequest[2].Text);
 
             // Node exit ends the held replacement request quietly.
@@ -753,7 +754,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             {
                 ChatMessage joined = Assert.Single(
                     clientProvider.Requests[replacementIndex],
-                    message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                    message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
                 Assert.Contains("Heard char:speaker say: shared room words", joined.Text, StringComparison.Ordinal);
                 Assert.Equal(1, CountOccurrences(joined.Text, "Heard char:speaker say: shared room words"));
             }
@@ -871,7 +872,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 observation => observation is ObservedSpeech speech && speech.ActorId == owner.FullId);
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
         }
         finally
@@ -971,7 +972,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(joined.Text, "I said: Greetings"));
             _ = Assert.Single(percepts, percept => percept.Content == "player words");
@@ -1073,7 +1074,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
             Assert.Contains("Heard char:unrelated say: unrelated chatter", joined.Text, StringComparison.Ordinal);
         }
@@ -1154,7 +1155,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
         }
         finally
@@ -1242,6 +1243,84 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                     mind.GetTimelineForTest(),
                     observation => observation is ObservedSpeech speech && speech.ActorId == owner.FullId));
             Assert.Equal("Committed", retained.Content);
+        }
+        finally
+        {
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// After the NPC's committed first speech on an empty prior timeline, the next request's timeline message is
+    /// exactly one <c>Event History</c> section whose only speech entry reads <c>[new] I said: …</c> on its
+    /// complete rendered line, and no assistant turn survives the disposed speak exchange (AI-002
+    /// TR-3/TR-21/TR-22). Verifies the deterministic request shape only, not model behaviour.
+    /// </summary>
+    [Fact]
+    public async Task CommittedFirstSpeech_EmptyPriorTimeline_RendersNewMarkedInSingleEventHistorySection()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Hearing hearing = new();
+        ControllableFallbackVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(
+            new FunctionCallContent("speak-call", "speak", new Dictionary<string, object?> { ["speech"] = "Committed" }));
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 1);
+            await ownerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // Playback hand-off commits the NPC's first speech — the only speech on an empty prior timeline.
+            ownerVoice.CompleteHandOff();
+            await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest().Any(
+                observation => observation is ObservedSpeech speech && speech.ActorId == owner.FullId));
+
+            // A fresh-turn observation requests the next turn; it contributes no second speech entry.
+            mind.ObserveForTest(new TestObservation(1f, "a door creaked", Fresh: true));
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
+
+            IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
+            // The settled speak exchange was disposed: no assistant turn survives and the tail is the bootstrap
+            // input alone (AI-002 TR-21/TR-22).
+            Assert.Equal(
+                [ChatRole.User, ChatRole.User, ChatRole.User],
+                replacement.Select(static message => message.Role));
+            Assert.Equal(AgenticMind.SessionBootstrapInput, replacement[2].Text);
+
+            ChatMessage eventTimeline = GetEventTimelineMessage(replacement);
+            // Exactly one Event History section holds the whole timeline.
+            Assert.StartsWith("<Event History>\n", eventTimeline.Text, StringComparison.Ordinal);
+            Assert.True(
+                eventTimeline.Text.EndsWith("\n</Event History>", StringComparison.Ordinal),
+                $"The timeline message must close its single section: '{eventTimeline.Text}'");
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "<Event History>"));
+            // The section's only speech entry is the committed first speech, marked newly presented on its
+            // complete rendered line including its timestamp suffix (AI-002 TR-3).
+            string body = eventTimeline.Text["<Event History>\n".Length..^"\n</Event History>".Length];
+            string speechLine = Assert.Single(
+                body.Split('\n'),
+                static line => line.Contains("I said:", StringComparison.Ordinal));
+            Assert.Matches(@"^\[new\] I said: Committed \(at \d+\.\ds game time\)$", speechLine);
         }
         finally
         {
@@ -1369,7 +1448,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("first continuation … second continuation", joined.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(joined.Text, "first continuation … second continuation"));
         }
@@ -1426,6 +1505,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 4);
             await fourthRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(2, tool.CapturedContexts.Count);
+            // The accepted third response confirmed the accepted prefix's watermark: the held request renders it
+            // unmarked in its single section (AI-002 TR-3).
+            ChatMessage heldTimeline = GetEventTimelineMessage(clientProvider.Requests[3]);
+            Assert.Contains(
+                "\nHeard char:speaker say: accepted prefix",
+                heldTimeline.Text,
+                StringComparison.Ordinal);
 
             source.EmitSpeechResumed(new SpeechSegmentMetadata("causal", 1));
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
@@ -1439,11 +1525,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 continuedRequest.Select(message => message.Role));
             ChatMessage eventTimeline = GetEventTimelineMessage(continuedRequest);
             Assert.Contains("accepted prefix … later continuation", eventTimeline.Text, StringComparison.Ordinal);
-            const string NewHistorySectionOpen = "<New Since Your Previous Response>";
-            string newHistory = eventTimeline.Text[(eventTimeline.Text.IndexOf(
-                NewHistorySectionOpen, StringComparison.Ordinal)
-                + NewHistorySectionOpen.Length)..];
-            Assert.Equal(1, CountOccurrences(newHistory, "accepted prefix … later continuation"));
+            // The joined utterance renders exactly once in the single section and is marked newly presented — its
+            // accepted prefix segment was already confirmed, but its latest segment lies beyond the watermark
+            // (AI-002 TR-3).
+            Assert.Contains(
+                "[new] Heard char:speaker say: accepted prefix … later continuation",
+                eventTimeline.Text,
+                StringComparison.Ordinal);
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "accepted prefix … later continuation"));
             _ = Assert.IsType<FunctionCallContent>(Assert.Single(continuedRequest[5].Contents));
             _ = Assert.IsType<FunctionResultContent>(Assert.Single(continuedRequest[6].Contents));
         }
@@ -1511,7 +1600,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(afterCancelledWait.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()));
             ChatMessage delivery = Assert.Single(
                 afterCancelledWait,
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("wait prefix … wait continuation", delivery.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(delivery.Text, "wait prefix … wait continuation"));
 
@@ -1722,7 +1811,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             ChatMessage delivered = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
             Assert.Contains("ordinary external speech", delivered.Text, StringComparison.Ordinal);
             _ = Assert.Single(mind.GetTimelineForTest().OfType<ObservedSpeech>());
         }
@@ -2261,12 +2350,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// The per-request event-timeline message uses the shared pseudo-XML section format: the established section
-    /// first, then the new-events section with exactly one blank line between the blocks, entries joined by single
-    /// newlines, and an empty part still emitting its section with `(none)` (AI-002 TR-3).
+    /// The per-request event-timeline message is one user message of a single pseudo-XML section: every entry in
+    /// timeline order on lines joined by exactly one newline, entries beyond the confirmed watermark marked newly
+    /// presented on their complete rendered lines, and an empty timeline still emitting the section with `(none)`
+    /// (AI-002 TR-3).
     /// </summary>
     [Fact]
-    public async Task Session_TimelineMessage_UsesPseudoXmlSectionsWithOneBlankLineBetweenBlocks()
+    public async Task Session_TimelineMessage_UsesSinglePseudoXmlSectionWithNewlyPresentedMarkers()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         TestCharacter owner = new();
@@ -2290,32 +2380,34 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // The held first request's empty timeline still emits the single section with (none).
+            ChatMessage emptyTimeline = GetEventTimelineMessage(clientProvider.Requests[0]);
+            Assert.Equal("<Event History>\n(none)\n</Event History>", emptyTimeline.Text);
+
             mind.ObserveForTest(new TestObservation(1f, "first-event"));
             mind.ObserveForTest(new TestObservation(1f, "second-event"));
             _ = releaseGeneration.TrySetResult();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
 
             ChatMessage timeline = GetEventTimelineMessage(clientProvider.Requests[1]);
-            Assert.StartsWith("<Established Event History>", timeline.Text, StringComparison.Ordinal);
-            // Exactly one blank line separates the two blocks.
-            Assert.Contains(
-                "</Established Event History>\n\n<New Since Your Previous Response>",
-                timeline.Text,
-                StringComparison.Ordinal);
-            // The empty established part still emits its section with (none).
-            Assert.Contains(
-                "<Established Event History>\n(none)\n</Established Event History>",
-                timeline.Text,
-                StringComparison.Ordinal);
-            // Entries within a section are joined with exactly one newline (each entry may carry its own timestamp
-            // suffix, so the join is asserted structurally between the two entries).
+            // The message is exactly one section block.
+            Assert.StartsWith("<Event History>", timeline.Text, StringComparison.Ordinal);
+            Assert.True(
+                timeline.Text.EndsWith("</Event History>", StringComparison.Ordinal),
+                $"The timeline message must close its single section: '{timeline.Text}'");
+            Assert.Equal(1, CountOccurrences(timeline.Text, "<Event History>"));
+            // Entries are joined with exactly one newline (each entry may carry its own timestamp suffix, so the
+            // join is asserted structurally between the two entries).
             int firstEvent = timeline.Text.IndexOf("- first-event", StringComparison.Ordinal);
             int secondEvent = timeline.Text.IndexOf("- second-event", StringComparison.Ordinal);
             Assert.True(
                 firstEvent >= 0 && secondEvent > firstEvent,
                 $"Both events must render in timeline order: '{timeline.Text}'");
             Assert.Equal(1, CountOccurrences(timeline.Text[firstEvent..secondEvent], "\n"));
-            Assert.DoesNotContain("New Since Your Previous Response ---", timeline.Text, StringComparison.Ordinal);
+            // Both events arrived after the first response confirmed an empty watermark: their complete rendered
+            // lines carry the newly presented prefix.
+            Assert.Contains("[new] - first-event", timeline.Text, StringComparison.Ordinal);
+            Assert.Contains("[new] - second-event", timeline.Text, StringComparison.Ordinal);
 
             // Node exit ends the still-held replacement request quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -2490,7 +2582,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         => Assert.Single(
             request,
             static message => message.Role == ChatRole.User
-                && message.Text.StartsWith("<Established Event History>", StringComparison.Ordinal));
+                && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
 
     private static IReadOnlyList<string> TimelineValues(TestAgenticMind mind)
         => [.. mind.GetTimelineForTest().Cast<TestObservation>().Select(static observation => observation.Value)];

@@ -273,9 +273,9 @@ transcripts or capturing provider-wire payloads.
    fails closed through `LoadOrDefault` without game configuration, independently of `EnableRequestResponseLogging`.
 2. Tests verify the formatter accepts lax section names (spaces, tabs, mixed case, and sanitised characters), demotes
    internal Markdown headings below their section heading, renders pseudo-XML sections inside message bodies as
-   headings with no raw tags — including the timeline message's `Established Event History` and
-   `New Since Your Previous Response` sections — keeps single-newline line structure visible through hard line breaks
-   while leaving fenced code blocks unmodified, renders role-labelled messages including the prefix timeline and
+   headings with no raw tags — including the timeline message's `Event History` section — keeps single-newline line
+   structure visible through hard line breaks while leaving fenced code blocks unmodified, renders role-labelled
+   messages including the prefix timeline and
    scene-status messages, marks reasoning content distinctly — including parsed reasoning text that combines summary
    and content portions, rendered in order with its textual separation preserved — and renders tool blocks with
    pretty-printed JSON arguments and results (TR-8–TR-11, TR-24).

@@ -680,21 +680,15 @@ public partial class AgenticMind : MindBase
                     confirmed = _confirmedEventSequenceID;
                 }
 
-                List<AcceptedObservationEntry> established = [];
-                List<AcceptedObservationEntry> newlyObserved = [];
-                foreach (AcceptedObservationEntry entry in timeline)
-                {
-                    (entry.SequenceID <= confirmed ? established : newlyObserved).Add(entry);
-                }
-
-                string establishedText = await RenderTimelineAsync(established, timeline);
-                string newText = await RenderTimelineAsync(newlyObserved, timeline);
+                // The confirmed watermark only decides per-entry newly-presented marking; every entry is presented
+                // in one section (AI-002 TR-3).
+                string timelineText = await RenderTimelineAsync(timeline, confirmed);
                 string sceneStatus = await mind.RenderCurrentSceneStatusAsync(session, cancellationToken);
                 long schedulingWatermark = accepted.Count == 0 ? 0 : accepted[^1].SequenceID;
                 var confirmation = new Confirmation(eventWatermark, schedulingWatermark);
                 return new AgentRequestContext(
                     [
-                        new ChatMessage(ChatRole.User, BuildTimelineMessage(establishedText, newText)),
+                        new ChatMessage(ChatRole.User, BuildTimelineMessage(timelineText)),
                         new ChatMessage(ChatRole.User, sceneStatus),
                     ],
                     confirmation);
@@ -726,22 +720,22 @@ public partial class AgenticMind : MindBase
         }
 
         private async Task<string> RenderTimelineAsync(
-            IReadOnlyList<AcceptedObservationEntry> entries,
-            IReadOnlyList<AcceptedObservationEntry> completeTimeline)
-            => entries.Count == 0
+            IReadOnlyList<AcceptedObservationEntry> timeline,
+            long confirmedSequenceWatermark)
+            => timeline.Count == 0
                 ? "(none)"
-                : await new ObservationHistoryRenderer(session.Context.Character).RenderAsync(entries, completeTimeline);
+                : await new ObservationHistoryRenderer(session.Context.Character)
+                    .RenderAsync(timeline, confirmedSequenceWatermark);
 
         /// <summary>
-        /// Builds the per-request timeline message as one user message of two sections in the shared pseudo-XML
-        /// block format — the established history first, then the new events — with exactly one blank line between
-        /// the blocks and every part always emitting its section (AI-002 TR-3).
+        /// Builds the per-request timeline message as one user message of a single pseudo-XML block section holding
+        /// every selected entry in timeline order, with newly presented entries marked on their rendered lines
+        /// (AI-002 TR-3).
         /// </summary>
-        private static string BuildTimelineMessage(string established, string newlyObserved)
+        private static string BuildTimelineMessage(string timeline)
         {
             StringBuilder builder = new();
-            PseudoXmlFormatter.AppendBlock(builder, "Established Event History", established, "Timeline sections");
-            PseudoXmlFormatter.AppendBlock(builder, "New Since Your Previous Response", newlyObserved, "Timeline sections");
+            PseudoXmlFormatter.AppendBlock(builder, "Event History", timeline, "Timeline sections");
             return builder.ToString().Trim();
         }
 

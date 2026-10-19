@@ -21,18 +21,17 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 /// <summary>
 /// Godot-runtime coverage proving the authored shared guidance and the corrected tool metadata actually reach the
 /// model together with the context they describe: one captured provider request carries the rendered shared
-/// instruction, a new player reply in the event-timeline tail, fresh current-scene status, and the corrected
-/// session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15).
+/// instruction, a new player reply marked newly presented in the event timeline, fresh current-scene status, and
+/// the corrected session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15).
 /// </summary>
 [Headless]
 public sealed partial class SharedGuidanceDeliveryIntegrationTests
 {
     private const string CurrentScenePromptPath = "res://assets/characters/prompts/current_scene.tres";
-    private const string NewHistorySectionOpen = "<New Since Your Previous Response>";
 
     /// <summary>
     /// A fresh player reply during held generation produces a replacement request whose options carry the rendered
-    /// shared instruction and tool metadata, and whose messages lead with the canonical timeline tail and
+    /// shared instruction and tool metadata, and whose messages lead with the canonical timeline message and
     /// current-scene status.
     /// </summary>
     [Fact]
@@ -89,16 +88,17 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
                 [ChatRole.User, ChatRole.User, ChatRole.User],
                 freshRequest.Messages.Select(static message => message.Role));
             string timeline = freshRequest.Messages[0].Text;
-            Assert.StartsWith("<Established Event History>", timeline, StringComparison.Ordinal);
-            int tailStart = timeline.IndexOf(NewHistorySectionOpen, StringComparison.Ordinal);
-            Assert.True(tailStart >= 0, "The timeline message must carry the new-history section.");
-            string established = timeline[..tailStart];
-            string tail = timeline[(tailStart + NewHistorySectionOpen.Length)..];
+            Assert.StartsWith("<Event History>", timeline, StringComparison.Ordinal);
+            // The fresh player reply renders exactly once in the single section, marked newly presented on its
+            // complete rendered line (AI-002 TR-3).
             Assert.Contains(
-                "Heard char:fixture_player say: I am heading to the market now.",
-                tail,
+                "[new] Heard char:fixture_player say: I am heading to the market now.",
+                timeline,
                 StringComparison.Ordinal);
-            Assert.DoesNotContain("Heard char:fixture_player say:", established, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "\nHeard char:fixture_player say:",
+                timeline,
+                StringComparison.Ordinal);
 
             // Fresh current-scene status accompanies the timeline on the same request, stating its snapshot's
             // current game time unconditionally — including with an attended character present.
