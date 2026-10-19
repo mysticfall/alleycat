@@ -1082,14 +1082,14 @@ public sealed partial class MindSessionTranscriptIntegrationTests
     /// never depend on the merged production configuration.
     /// </summary>
     private static TestAgenticMind CreateTranscriptMind(
-        TestCharacter owner,
+        ICharacter owner,
         FixturePlayerCharacter player,
         ScriptedSessionClientProvider clientProvider,
         params AgentTool[] tools)
         => CreateTranscriptMind(owner, player, clientProvider, tools, enableTranscriptLogging: true);
 
     private static TestAgenticMind CreateTranscriptMind(
-        TestCharacter owner,
+        ICharacter owner,
         FixturePlayerCharacter player,
         ScriptedSessionClientProvider clientProvider,
         AgentTool[] tools,

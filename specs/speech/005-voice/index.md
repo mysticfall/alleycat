@@ -177,8 +177,9 @@ speaking-window continuity and per-segment publication for automatic voice input
     spatially attached to the voice origin.
 21. After CORE-005 target-scene precedence resolves the final `Character.Id`, generic character installation must assign
     every character-owned Voice local `Id` to that exact value. The resulting canonical voice identity is
-    `voice:<character-id>`. Template placeholder voice IDs must be valid lower `snake_case`; installation replaces them
-    before voice identity is exposed and validates the assigned voice identity at the final installation boundary.
+    `voice:<character-id>`. Template placeholder voice IDs must be valid under the shared CORE-009 local-ID grammar —
+    ASCII lower `snake_case` or an accepted Unicode local ID; installation replaces them before voice identity is
+    exposed and validates the assigned voice identity at the final installation boundary.
     AI-001 may use the local ID for operational attribution; another source presenting the same ID is an accepted
     limitation rather than authenticated ownership.
 22. `Voiceprint` is a listener-recognition key. Matching or possessing it does not prove that a voice is owned by a
@@ -512,10 +513,10 @@ speaking-window continuity and per-segment publication for automatic voice input
     `LipSyncPlayer`.
 12. Tests verify `PlayerVoice` forwards each nonblank settled segment transcription in order, ignores blank
      transcripts, honours `Enabled`, and disconnects on exit.
-13. Generic installation replaces each valid lower-`snake_case` character-owned voice placeholder ID with the final
-    exact `Character.Id` after target-scene precedence, validates `voice:<character-id>` before identity exposure, and
-    supports configured attribution without claiming authenticated provenance or rejecting a source that presents the
-    same ID.
+13. Generic installation replaces each character-owned voice placeholder ID valid under the shared CORE-009 local-ID
+    grammar — ASCII lower `snake_case` or an accepted Unicode local ID — with the final exact `Character.Id` after
+    target-scene precedence, validates `voice:<character-id>` before identity exposure, and supports configured
+    attribution without claiming authenticated provenance or rejecting a source that presents the same ID.
 14. Acceptance verifies both user-visible FIFO speech — complete utterances heard in order, never cut by a queued
     successor — and failure isolation plus the validation, admission, serialisation, gated hand-off, queue-flush,
     per-instance isolation, cancellation, listener, and node-lifetime contracts.

@@ -12,6 +12,20 @@ namespace AlleyCat.Tests.SceneSystem;
 /// </summary>
 public sealed class SceneContextTests
 {
+    /// <summary>CORE-009 TR-13: no NFC merging, while exact duplicate registration still fails.</summary>
+    [Fact]
+    public void Constructor_UnicodeIdentitiesRemainOrdinallyDistinctAndExactDuplicatesFail()
+    {
+        var composed = new FakeCharacter("é");
+        var decomposed = new FakeCharacter("e\u0301");
+        var duplicate = new FakeCharacter("é");
+        var context = new SceneContext([composed, decomposed]);
+        Assert.Same(composed, context.Resolve("char:é"));
+        Assert.Same(decomposed, context.Resolve("char:e\u0301"));
+        ArgumentException error = Assert.Throws<ArgumentException>(() => new SceneContext([composed, duplicate]));
+        Assert.Contains("duplicate exact character identity", error.Message);
+    }
+
     /// <summary>Valid lower snake_case character IDs are registered with their canonical FullId.</summary>
     [Fact]
     public void Constructor_AcceptsCharacterLowerSnakeCaseIdAndExposesFullId()
@@ -35,7 +49,7 @@ public sealed class SceneContextTests
             () => new SceneContext([new FakeCharacter(id)]));
 
         Assert.Contains("invalid identity", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("lower snake_case", exception.Message);
+        Assert.Contains("Unicode letter", exception.Message);
     }
 
     /// <summary>Invalid character types are rejected before scene exposure.</summary>

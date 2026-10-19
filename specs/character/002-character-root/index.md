@@ -106,13 +106,15 @@ or component path exists.
 26. Character roots that should appear in scene context must be authored into the Godot `Actors` group.
 27. `Actors` is reserved for strict character discovery; every member must implement `ICharacter`.
 28. Items and other non-character nodes must not be added to `Actors`.
-29. Character identity semantics defer normatively to CORE-009. `Character` implements `IIdentifiable`: `Id` is a local
-    lower `snake_case` identifier, `Type` is `char`, and external or cross-object context uses canonical `FullId`.
+29. Character identity semantics defer normatively to CORE-009. `Character` implements `IIdentifiable`: `Id` is a
+    local identifier valid under the CORE-009 grammar — ASCII lower `snake_case` or an accepted Unicode local ID —
+    `Type` is `char`, and external or cross-object context uses canonical `FullId`.
 30. After CORE-005 target-scene precedence resolves the final `Character.Id`, installation must assign every
     character-owned Voice local `Id` to that exact value. This creates canonical `voice:<character-id>` identity while
     preserving the raw local voice ID solely as operational attribution, not authenticated character provenance.
-    Template placeholder voice IDs must be valid lower `snake_case`; installers must replace them and validate the
-    resulting voice identity at the final installation boundary before exposure to scene consumers.
+    Template placeholder voice IDs must be valid under the shared CORE-009 local-ID grammar — ASCII lower
+    `snake_case` or an accepted Unicode local ID; installers must replace them and validate the resulting voice
+    identity at the final installation boundary before exposure to scene consumers.
 31. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
 32. The lowest shared male/female character bases must author `Actors` membership and `VisualSubjects` membership.
     Both bases must be valid `IVisualSubject` scan members. Higher role templates and concrete scenes must not add
@@ -251,12 +253,14 @@ or component path exists.
     into the character root.
 16. Character roots intended for scene context are members of `Actors`, and no item or non-`ICharacter` node is accepted
     as valid `Actors` membership.
-17. `Character` implements CORE-009 `IIdentifiable`: its local lower `snake_case` `Id` has `Type` `char`, and
-    cross-object context uses canonical `FullId`.
+17. `Character` implements CORE-009 `IIdentifiable`: its local `Id` is valid under the CORE-009 grammar — ASCII
+    lower `snake_case` or an accepted Unicode local ID — has `Type` `char`, and cross-object context uses canonical
+    `FullId`.
 18. After target-scene precedence, installation assigns every character-owned Voice local `Id` to the final exact
-    `Character.Id`, validates canonical `voice:<character-id>` before identity exposure, and replaces only valid lower
-    `snake_case` template placeholder IDs. The raw local voice ID remains operational attribution rather than
-    authenticated provenance; Voiceprint remains recognition metadata and is not used to establish character ownership.
+    `Character.Id`, validates canonical `voice:<character-id>` before identity exposure, and replaces only template
+    placeholder IDs valid under the shared CORE-009 local-ID grammar — ASCII lower `snake_case` or an accepted
+    Unicode local ID. The raw local voice ID remains operational attribution rather than authenticated provenance;
+    Voiceprint remains recognition metadata and is not used to establish character ownership.
 19. Shared male/female bases each author `Actors` membership and `VisualSubjects` membership; each is a valid
     `IVisualSubject` scan member and higher layers do not compensate redundantly.
 20. Render context exposes characters as raw `ICharacter` values whose template surface is curated by the TMPL-001

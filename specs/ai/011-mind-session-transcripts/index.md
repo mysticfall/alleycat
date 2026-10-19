@@ -13,7 +13,8 @@ annotated first-class files, without altering request or response behaviour and 
 reaching the session. Each character folder must additionally expose a chronologically ordered Markdown index
 linking every recorded cycle — including its full tool invocations — to its turn page, and invalid-response cycles
 must carry diagnostics specific enough to locate the failure from the parsed response alone, so developers never
-need to share transcripts to debug a rejection.
+need to share transcripts to debug a rejection. Applicable JSON sections render non-ASCII text such as Korean
+literally rather than as Unicode escapes.
 
 ## Goal
 
@@ -54,6 +55,9 @@ transcripts or capturing provider-wire payloads.
    an argument-schema mismatch identifying the failing property path and expected constraint — together with the
    response's finish reason and function-call parsing-error detail when the provider supplies them. Diagnostics
    describe only the parsed response the runner already holds, so debugging never requires sharing transcripts.
+8. Readable Non-ASCII Sections: With the toggle enabled, Korean and other non-ASCII text in response function-call
+   arguments, tool-invocation arguments, and structured tool results appears literally in the turn page and index
+   JSON sections rather than as `\uXXXX` escapes, while actual requests, responses, and tool payloads are unchanged.
 
 ## Technical Requirements
 
@@ -70,8 +74,10 @@ transcripts or capturing provider-wire payloads.
 2. Transcript files live at
    `user://logs/mind/<game-run-start-timestamp>/<character-id>/turn-NNNN.md`. The run timestamp is the sortable
    process-start wall-clock time (for example `yyyy-MM-dd-HH-mm-ss`). The character folder is the owning character's
-   validated local `Id` (CORE-009): lower `snake_case` and therefore filesystem-safe. The file name is `turn-` plus
-   the cycle number, zero-padded to at least four digits, plus `.md`.
+   exact validated local `Id` (CORE-009), used verbatim as the folder name and therefore possibly non-ASCII: CORE-009
+   validation excludes whitespace, control and format characters, path punctuation, and colons, and this contract
+   makes no filesystem-portability claim beyond that validated grammar on the supported filesystem. The file name is
+   `turn-` plus the cycle number, zero-padded to at least four digits, plus `.md`.
 3. The run directory is created lazily once per process on the first recorded write; a process never creates a second
    run directory. No per-session subfolders exist: turn numbering is flat per character per game run.
 4. Turn numbering is a per-character, process-wide monotonic counter that starts at one, advances by one per recorded
@@ -120,7 +126,7 @@ transcripts or capturing provider-wire payloads.
     token usage when available); the rendered instructions; the full role-labelled request transcript including the
     per-request timeline and scene-status prefix messages; the response contents — text, distinctly marked reasoning
     content when present, and function calls — with any anomaly annotations; and one block per tool invocation
-    showing the tool name, pretty-printed JSON arguments, and the result.
+    showing the tool name, pretty-printed JSON arguments (encoded per TR-24), and the result.
 
 ### Test Seams And Validation
 
@@ -182,6 +188,20 @@ transcripts or capturing provider-wire payloads.
     terminal invalid-response outcome on recovery-budget exhaustion both carry the branch-specific reason and the
     exhaustion state. Logging or rendering of diagnostics remains contained by TR-7.
 
+### Transcript JSON Encoding
+
+24. Turn-page and index JSON rendering — response function-call arguments, tool-invocation arguments, and structured
+    tool results in every applicable section of both the turn page and the index (TR-17) — uses a transcript-local
+    JSON encoder that writes non-ASCII text such as Korean literally instead of `\uXXXX` escapes. Structural escaping
+    is preserved: quotes, backslashes, and control characters remain JSON-escaped, output stays valid round-trippable
+    JSON whenever its source value is valid JSON, ordinary non-JSON text keeps its existing rendering, and the
+    existing malformed-input fallback behaviour is unchanged.
+25. The encoder is confined to `MindSessionTranscriptFormatter` transcript output and the index rendering that shares
+    its path (TR-17). Actual LLM requests and responses, provider transports, tool-execution payloads, and global
+    JSON serialisation options are unchanged: argument and result values reach the transcript exactly as the runner
+    holds them, and validity comes from the local encoder rather than from unescaping or reinterpreting arbitrary
+    strings as JSON.
+
 ## In Scope
 
 - The `Diagnostics:AI:EnableSessionTranscriptLogging` toggle with binding and fail-closed semantics.
@@ -195,6 +215,8 @@ transcripts or capturing provider-wire payloads.
   rendering, process-wide entry retention, and replacement-safe contained index writes.
 - Specific per-branch invalid-response diagnostics with argument-schema paths, finish reason and parsing-error
   detail, recovery and terminal-exhaustion reasons, and the parsed-only privacy boundary.
+- Transcript-local JSON encoding: literal non-ASCII output with structural escaping, round-trip validity for valid
+  JSON sources, and the unchanged malformed-input fallback.
 - Internal test seams and the unit and integration validation contracts.
 
 ## Out Of Scope
@@ -209,6 +231,8 @@ transcripts or capturing provider-wire payloads.
   the recorder renders parsed reasoning text as supplied.
 - Changing model prompts, response validation or acceptance semantics, recovery budgets, cancellation, or provider
   behaviour; AI-002 remains authoritative for those contracts.
+- Re-serialising actual LLM requests or responses, provider transports, or tool-execution payloads, changing global
+  JSON options, or rewriting arbitrary string values outside transcript rendering.
 - Streaming-response rendering: files are written from settled cycle data, not incrementally rendered partial
   responses.
 - Capturing non-AgenticMind AI traffic, such as STT or TTS provider traffic.
@@ -239,6 +263,9 @@ transcripts or capturing provider-wire payloads.
    parsing-error detail appear when supplied and are omitted gracefully when not, and recovery annotations and the
    terminal budget-exhaustion outcome carry the same specific reasons — derived solely from the parsed response,
    with no transcript sharing or raw provider payload required.
+8. With the toggle enabled, Korean and other non-ASCII text in response function-call arguments, tool-invocation
+   arguments, and structured tool results appears literally in every applicable JSON section of the turn page and
+   the index rather than as Unicode escapes, without changing any actual request, response, or tool payload.
 
 ### Technical Requirements
 
@@ -251,12 +278,13 @@ transcripts or capturing provider-wire payloads.
    while leaving fenced code blocks unmodified, renders role-labelled messages including the prefix timeline and
    scene-status messages, marks reasoning content distinctly — including parsed reasoning text that combines summary
    and content portions, rendered in order with its textual separation preserved — and renders tool blocks with
-   pretty-printed JSON arguments and results (TR-8–TR-11).
+   pretty-printed JSON arguments and results (TR-8–TR-11, TR-24).
 3. Tests verify the disabled path injects a null-object sink, performs no file input or output, and leaves existing
    runner behaviour unchanged (TR-5).
 4. Tests verify path and counter naming: `turn-` numbers zero-padded to at least four digits, one lazily created run
-   directory per process, and per-character numbering that continues monotonically across a simulated mind
-   re-creation, with the reset seam restoring a known initial state between tests (TR-2–TR-4, TR-12, TR-13).
+   directory per process, per-character numbering that continues monotonically across a simulated mind re-creation,
+   the reset seam restoring a known initial state between tests, and the character folder named by the exact
+   validated local `Id`, including a non-ASCII ID (TR-2–TR-4, TR-12, TR-13).
 5. Integration tests with the scripted-client fixtures verify one file per request cycle; annotations for transport
    retry, invalid-response recovery, fresh-turn invalidation discards, and exchange disposal; capture of the prefix
    timeline and scene-status messages; and that an injected write failure is contained while the session continues
@@ -273,6 +301,12 @@ transcripts or capturing provider-wire payloads.
    (TR-20–TR-23), including argument-schema mismatch paths with expected constraints, finish reason surfaced when
    supplied and omitted gracefully when absent, and recovery annotations plus the terminal exhaustion outcome
    carrying specific reasons — while accepted-response behaviour, recovery outcomes, and budgets remain unchanged.
+9. Tests verify transcript JSON encoding (TR-24–TR-25): Korean and other non-ASCII text renders literally — no
+   `\uXXXX` escapes — in every applicable turn-page and index section; fenced argument JSON and structured-result
+   JSON parse and round-trip values, preserving quotes, backslashes, line breaks, and Unicode, while source
+   arguments, delivered tool arguments, and provider-replayed results are unchanged; malformed argument JSON keeps
+   its existing fallback rendering; ordinary non-JSON text passes through untouched; and no production provider or
+   tool serialisation changes.
 
 ## References
 

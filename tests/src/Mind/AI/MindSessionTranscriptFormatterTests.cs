@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using AlleyCat.Mind.AI;
 using Microsoft.Extensions.AI;
 using Xunit;
@@ -12,6 +14,74 @@ namespace AlleyCat.Tests.Mind.AI;
 public sealed class MindSessionTranscriptFormatterTests
 {
     private const string LineFeed = "\n";
+
+    /// <summary>AI-011 TR-24: additional scripts stay literal without corrupting JSON structure or source values.</summary>
+    [Fact]
+    public void Render_UnicodeArgumentsStayLiteralAndRoundTripStructuralEscapes()
+    {
+        const string text = "γεια \"élise\"\\文\n다음";
+        Dictionary<string, object?> arguments = new()
+        {
+            ["text"] = text
+        };
+        var call = new FunctionCallContent("call-1", "echo", arguments);
+        string rendered = RenderDefaultCycle(response: new ChatResponse(new ChatMessage(ChatRole.Assistant, [call])));
+        Match fence = Regex.Match(rendered, @"```json\n(?<json>[\s\S]*?)\n```");
+        Assert.True(fence.Success);
+        string jsonText = fence.Groups["json"].Value;
+        using var json = JsonDocument.Parse(jsonText);
+        Assert.Equal(text, json.RootElement.GetProperty("text").GetString());
+        Assert.Contains("γεια", jsonText);
+        Assert.Contains("élise", jsonText);
+        Assert.Contains("文", jsonText);
+        Assert.Contains("다음", jsonText);
+        Assert.Equal(text, arguments["text"]);
+    }
+
+    /// <summary>AI-011 TR-25: neither malformed nor valid-looking JSON string results are reinterpreted.</summary>
+    [Theory]
+    [InlineData("ordinary 강주영 text")]
+    [InlineData("{malformed 강주영")]
+    [InlineData(/*lang=json,strict*/ "{\"text\":\"\\uC548\\uB155\"}")]
+    public void Render_StringResultsRemainUninterpreted(string text)
+    {
+        MindSessionCycleTranscript cycle = CreateCycle();
+        cycle.ToolInvocations.Add(new MindTranscriptToolInvocation("echo", "call-1", null)
+        {
+            Status = MindTranscriptToolInvocationStatus.Completed,
+            Result = text,
+        });
+        string markdown = MindSessionTranscriptFormatter.Render(cycle, 1, "owner");
+        Assert.Contains("**Result**\n\n" + text + "\n\n", markdown);
+    }
+
+    /// <summary>The existing unsupported-value fallback remains contained instead of changing model/tool values.</summary>
+    [Fact]
+    public void Render_UnsupportedArgumentAndResultRetainExistingFallback()
+    {
+        var unsupported = new UnserialisableValue();
+        Dictionary<string, object?> arguments = new()
+        {
+            ["value"] = unsupported
+        };
+        MindSessionCycleTranscript cycle = CreateCycle();
+        cycle.ToolInvocations.Add(new MindTranscriptToolInvocation("echo", "call-1", arguments)
+        {
+            Status = MindTranscriptToolInvocationStatus.Completed,
+            Result = unsupported,
+        });
+        string markdown = MindSessionTranscriptFormatter.Render(cycle, 1, "owner");
+        Assert.Contains("value: fallback 강주영", markdown);
+        Assert.Contains("**Result**\n\nfallback 강주영\n\n", markdown);
+        Assert.Same(unsupported, arguments["value"]);
+    }
+
+    private sealed class UnserialisableValue
+    {
+        public Action Unsupported { get; } = () => { };
+
+        public override string ToString() => "fallback 강주영";
+    }
 
     /// <summary>Lax section names — whitespace runs, tabs, mixed case, and sanitised characters — parse as sections.</summary>
     [Fact]

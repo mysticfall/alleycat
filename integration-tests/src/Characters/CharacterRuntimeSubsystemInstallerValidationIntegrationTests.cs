@@ -26,7 +26,7 @@ namespace AlleyCat.IntegrationTests.Characters;
 /// <summary>
 /// Integration coverage for character hub validation during runtime subsystem installation.
 /// </summary>
-public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
+public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
 {
     private static readonly StringName _eyesLibraryName = new("eyes");
 
@@ -282,7 +282,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.False(result.Succeeded);
         string error = Assert.Single(result.Errors);
         Assert.Contains("template voice", error, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("lower snake_case", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unicode letter", error, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

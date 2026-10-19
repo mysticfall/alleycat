@@ -259,7 +259,7 @@ public sealed class SceneContextIntegrationTests
 
             ArgumentException exception = Assert.Throws<ArgumentException>(() => new SceneContext([character]));
 
-            Assert.Contains("non-empty lower snake_case", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Unicode letter", exception.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(typeof(CharacterHub).FullName!, exception.Message, StringComparison.Ordinal);
         }
     }

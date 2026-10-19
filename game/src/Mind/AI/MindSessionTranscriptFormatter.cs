@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Text.Unicode;
 using Microsoft.Extensions.AI;
 
 namespace AlleyCat.Mind.AI;
@@ -31,7 +33,13 @@ internal static partial class MindSessionTranscriptFormatter
 
     private const string LineFeed = "\n";
 
-    private static readonly JsonSerializerOptions _prettyJsonOptions = new() { WriteIndented = true };
+    // Local debug output only: retain JSON/HTML-sensitive escaping while making Korean and other scripts readable.
+    // Provider serializers and the captured tool values never use these options (AI-011 TR-24–TR-25).
+    private static readonly JsonSerializerOptions _prettyJsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+    };
 
     [GeneratedRegex(@"^[ \t]*<[ \t]*([^/>\s][^>]*)>[ \t]*$", RegexOptions.CultureInvariant)]
     private static partial Regex OpenTagLine();

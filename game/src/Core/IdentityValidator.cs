@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace AlleyCat.Core;
@@ -32,16 +34,31 @@ public static partial class IdentityValidator
     }
 
     /// <summary>
-    /// Validates a local lower <c>snake_case</c> identifier.
+    /// Validates a Unicode local identifier without normalising or changing its ordinal value (CORE-009 TR-2).
     /// </summary>
     public static void ValidateId(string? id, string parameterName)
-        => ValidateIdentifier(id, "ID", parameterName);
+    {
+        if (string.IsNullOrEmpty(id) || !IsValidLocalId(id))
+        {
+            throw new ArgumentException(
+                $"ID must start with a lowercase or uncased Unicode letter and contain letters, decimal digits, "
+                + $"combining marks after a letter or digit, and single underscores between non-empty segments; received '{id ?? "<null>"}'.",
+                parameterName);
+        }
+    }
 
     /// <summary>
-    /// Validates a lower <c>snake_case</c> type identifier.
+    /// Validates an ASCII lower <c>snake_case</c> type identifier.
     /// </summary>
     public static void ValidateType(string? type, string parameterName)
-        => ValidateIdentifier(type, "Type", parameterName);
+    {
+        if (string.IsNullOrEmpty(type) || !LowerSnakeCaseIdentifier().IsMatch(type))
+        {
+            throw new ArgumentException(
+                $"Type must be a non-empty ASCII lower snake_case identifier; received '{type ?? "<null>"}'.",
+                parameterName);
+        }
+    }
 
     /// <summary>
     /// Validates a canonical typed identity in <c>Type:Id</c> form.
@@ -62,16 +79,40 @@ public static partial class IdentityValidator
         ValidateId(fullId[(separator + 1)..], parameterName);
     }
 
-    private static void ValidateIdentifier(string? value, string label, string parameterName)
+    private static bool IsValidLocalId(string value)
     {
-        if (string.IsNullOrEmpty(value) || !LowerSnakeCaseIdentifier().IsMatch(value))
+        bool first = true;
+        bool segmentHasBase = false;
+        // Rune categories are culture-independent and support supplementary-plane letters. Invalid UTF-16
+        // enumerates as the replacement rune, which is not in any accepted category.
+        foreach (Rune rune in value.EnumerateRunes())
         {
-            throw new ArgumentException(
-                $"{label} must be a non-empty lower snake_case identifier; received '{value ?? "<null>"}'.",
-                parameterName);
+            UnicodeCategory category = Rune.GetUnicodeCategory(rune);
+            if (category is UnicodeCategory.LowercaseLetter or UnicodeCategory.ModifierLetter or UnicodeCategory.OtherLetter
+                || (!first && category == UnicodeCategory.DecimalDigitNumber))
+            {
+                segmentHasBase = true;
+            }
+            else if (segmentHasBase && category is UnicodeCategory.NonSpacingMark
+                or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark)
+            {
+                // A sequence of marks retains the preceding base in this segment.
+            }
+            else if (rune.Value == '_' && segmentHasBase)
+            {
+                segmentHasBase = false;
+            }
+            else
+            {
+                return false;
+            }
+
+            first = false;
         }
+
+        return segmentHasBase;
     }
 
-    [GeneratedRegex("^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\A[a-z][a-z0-9]*(?:_[a-z0-9]+)*\z", RegexOptions.CultureInvariant)]
     private static partial Regex LowerSnakeCaseIdentifier();
 }
