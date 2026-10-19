@@ -28,8 +28,11 @@ public partial class SpeechTool : AgentTool
         ToolName = ProductionToolName;
         ToolDescription = "Speak the supplied text aloud through your voice. The text must contain only the spoken "
             + "words themselves — no emotes, stage directions, narration, or markup. Keep each utterance short, "
-            + "around twenty words; for longer speech, split it and call this tool once per part. Speaking is "
-            + "optional and repeatable.";
+            + "around twenty words. When one contribution runs longer, split it into several short consecutive "
+            + "speak calls with no wait in between — this is strongly recommended, because shorter parts begin "
+            + "being spoken sooner and this allows later parts to be prepared while earlier speech plays. "
+            + "These calls deliver a single contribution: once it is finished, normally yield and give the other "
+            + "person room to reply as the situation warrants. Speaking is optional and repeatable.";
         // Committed speech reaches the model through its persisted timeline event; the settled exchange itself is
         // protocol bookkeeping a later request never replays.
         DisposesExchangeOnCompletion = true;
