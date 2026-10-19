@@ -1292,6 +1292,13 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
                 upstream.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual;
                 upstream.Play("Neutral");
                 upstream.Advance(0);
+                // CharacterIK attaches its begin/provider runtime stages lazily from _PhysicsProcess
+                // (TryInitialiseRuntimeBindings; the _Ready path only runs outside the tree), so a
+                // process-frame-only wait cannot guarantee attachment before the first manual flush —
+                // physics ticks are wall-clock paced and may not land within those frames. Guarantee
+                // one physics tick, then keep the process-frame wait for the deferred-call flush that
+                // follows tree entry.
+                await WaitForPhysicsFramesAsync(rig._tree, 1);
                 await WaitForFramesAsync(rig._tree, 2);
             }
             else

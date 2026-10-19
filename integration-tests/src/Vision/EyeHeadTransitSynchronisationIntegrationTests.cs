@@ -35,6 +35,12 @@ namespace AlleyCat.IntegrationTests.Vision;
 /// between the eye-gaze composition and the skeleton-modifier solve, which needs the real frame loop
 /// with an active renderer.
 /// </para>
+/// <para>
+/// All acceptance timing bounds are asserted in the frame domain — presented frames from the
+/// assignment at the authored 90 fps cadence — because the transit is frame-quantised: slower
+/// renderer pacing (for example software rendering under host load) inflates wall time without
+/// changing per-frame behaviour, so host wall time must not gate a frozen seconds deadline.
+/// </para>
 /// </remarks>
 public sealed class EyeHeadTransitSynchronisationIntegrationTests
 {
@@ -49,6 +55,15 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
     private const float MaxCounterRotationDurationMilliseconds = 150f;
     private const float MaxCentringSeconds = 0.8f;
 
+    // The frozen timing bounds expressed in the frame domain at the authored cadence: the transit
+    // is frame-quantised (one presented frame per sample), so acceptance measures presented frames —
+    // 72 frames = 0.8 s, 36 frames = 0.4 s, 13.5 frames = 150 ms at 90 fps — never host wall time.
+    private const double MaxCentringFrames = MaxCentringSeconds * TargetFps;
+    private const double MaxCounterRotationDurationFrames =
+        MaxCounterRotationDurationMilliseconds / 1000 * TargetFps;
+    private const double DirectFixationCompletionDeadlineFrames =
+        DirectFixationAcceptance.CompletionDeadlineSeconds * TargetFps;
+
     private const int TargetFps = 90;
     private const int WarmUpTimeoutMilliseconds = 8000;
     private const int SampleFrameCount = 140;
@@ -62,8 +77,9 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
     /// During the 40° transit the eyes respond within two frames, never overshoot the true anchor
     /// residual by more than four degrees, keep the signed gaze error against the anchor bearing from
     /// deepening against the head motion beyond half a degree of excursion or 150 ms, centre the turn
-    /// within 0.8 s of the actual assignment, and — through the settled hold — both eyes acquire the
-    /// independently derived constrained direction within 0.4 s of the assignment and keep ≤0.5°
+    /// within 0.8 s (72 presented frames at the authored cadence) of the actual assignment, and —
+    /// through the settled hold — both eyes acquire the independently derived constrained direction
+    /// within 0.4 s (36 presented frames at the authored cadence) of the assignment and keep ≤0.5°
     /// alignment afterwards.
     /// </summary>
     [Fact]
@@ -184,7 +200,7 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
             int responseFrames = AssertEyeResponseWithinFrozenLatency(preAssignment, samples);
             AssertEyeOvershootWithinFrozenBound(samples);
             AssertGazeErrorNeverDeepensAgainstHeadMotion(samples, responseFrames);
-            AssertTurnCentresWithinFrozenDeadline(samples, assignmentTimeSeconds);
+            AssertTurnCentresWithinFrozenDeadline(samples, assignmentSequence);
             AssertDirectFixationWindow(window);
         }
         finally
@@ -302,7 +318,8 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
     /// neutral-stripped composed world gaze yaw minus the anchor bearing yaw from the current face
     /// origin — must not deepen against the head motion while the head advances, scanning after the
     /// approved response ramp. The neutral stripping uses the immutable authored eye neutral, not live
-    /// calibration. Bounds are unchanged.
+    /// calibration. Bounds are unchanged; the continuous-run duration is measured in presented frames
+    /// at the authored cadence (13.5 frames = 150 ms at 90 fps).
     /// </summary>
     private static void AssertGazeErrorNeverDeepensAgainstHeadMotion(
         IReadOnlyList<TransitSample> samples,
@@ -312,8 +329,8 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
         Assert.True(Mathf.Abs(motionDirection) > 0.5f, "The head did not turn during the sampled transit.");
 
         float opposedExcursion = 0f;
-        float longestOpposedMilliseconds = 0f;
-        double runStartSeconds = 0;
+        long longestOpposedFrames = 0;
+        long runStartSequence = 0;
         bool inOpposedRun = false;
 
         for (int index = Math.Max(responseFrames, 1); index < samples.Count; index++)
@@ -331,12 +348,10 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
                 if (!inOpposedRun)
                 {
                     inOpposedRun = true;
-                    runStartSeconds = previous.TimeSeconds;
+                    runStartSequence = previous.Sequence;
                 }
 
-                longestOpposedMilliseconds = MathF.Max(
-                    longestOpposedMilliseconds,
-                    (float)((current.TimeSeconds - runStartSeconds) * 1000d));
+                longestOpposedFrames = Math.Max(longestOpposedFrames, current.Sequence - runStartSequence);
             }
             else
             {
@@ -349,28 +364,34 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
             $"The gaze error deepened {opposedExcursion:F2}° against the head motion during the "
             + $"transit, beyond the frozen {MaxCounterRotationExcursionDegrees}° excursion bound.");
         Assert.True(
-            longestOpposedMilliseconds <= MaxCounterRotationDurationMilliseconds,
-            $"The gaze error deepened against the head motion for {longestOpposedMilliseconds:F0} ms "
-            + $"continuously, beyond the frozen {MaxCounterRotationDurationMilliseconds} ms bound.");
+            longestOpposedFrames <= MaxCounterRotationDurationFrames,
+            $"The gaze error deepened against the head motion for {longestOpposedFrames} presented frames "
+            + $"(~{longestOpposedFrames / (double)TargetFps * 1000d:F0} ms at the authored {TargetFps} fps "
+            + $"cadence) continuously, beyond the frozen {MaxCounterRotationDurationMilliseconds} ms "
+            + $"({MaxCounterRotationDurationFrames:F1} frames) bound.");
     }
 
     /// <summary>
     /// The 40° turn must centre within the frozen 0.8 s deadline measured from the ACTUAL assignment,
-    /// never from the first post-assignment sample.
+    /// never from the first post-assignment sample. The deadline is asserted as presented frames from
+    /// the assignment at the authored cadence (72 frames = 0.8 s at 90 fps), so slower renderer
+    /// pacing under host load cannot inflate it while per-frame behaviour is unchanged.
     /// </summary>
     private static void AssertTurnCentresWithinFrozenDeadline(
         IReadOnlyList<TransitSample> samples,
-        double assignmentTimeSeconds)
+        long assignmentSequence)
     {
         for (int index = 0; index < samples.Count; index++)
         {
             if (samples[index].Residual <= CentredResidualDegrees)
             {
-                float centredSeconds = (float)(samples[index].TimeSeconds - assignmentTimeSeconds);
+                long centredFrames = samples[index].Sequence - assignmentSequence;
                 Assert.True(
-                    centredSeconds <= MaxCentringSeconds,
-                    $"The 40° turn reached {CentredResidualDegrees}° residual after {centredSeconds:F3} s "
-                    + $"from assignment, beyond the frozen {MaxCentringSeconds} s deadline.");
+                    centredFrames <= MaxCentringFrames,
+                    $"The 40° turn reached {CentredResidualDegrees}° residual after {centredFrames} presented "
+                    + $"frames (~{centredFrames / (double)TargetFps:F3} s at the authored {TargetFps} fps "
+                    + $"cadence) from assignment, beyond the frozen {MaxCentringSeconds} s "
+                    + $"({MaxCentringFrames:F0} frames) deadline.");
                 return;
             }
         }
@@ -381,8 +402,10 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
 
     /// <summary>
     /// Direct-fixation oracle verdicts over the complete window: onset ≤2 eligible presented frames,
-    /// acquisition completion ≤0.4 s from actual assignment for BOTH eyes against their independently
-    /// derived constrained directions, then maintained ≤0.5° alignment through the settled hold.
+    /// acquisition completion ≤0.4 s (36 presented frames at the authored cadence) from actual
+    /// assignment for BOTH eyes against their independently derived constrained directions, then
+    /// maintained ≤0.5° alignment through the settled hold. The completion deadline is asserted on
+    /// the oracle's eligible-frame count so renderer pacing under host load cannot inflate it.
     /// </summary>
     private static void AssertDirectFixationWindow(FixationAcquisitionWindow window)
     {
@@ -393,11 +416,12 @@ public sealed class EyeHeadTransitSynchronisationIntegrationTests
             result.IsOnsetWithinBound,
             $"Fixation onset must occur within {DirectFixationAcceptance.MaxOnsetEligibleFrames} eligible "
             + $"presented frames, but occurred at frame {result.OnsetFrame}.");
-        _ = Assert.NotNull(result.CompletionSeconds);
+        _ = Assert.NotNull(result.CompletionFrame);
         Assert.True(
-            result.IsCompletionWithinDeadline,
-            $"Both eyes must acquire within {DirectFixationAcceptance.CompletionDeadlineSeconds} s of the "
-            + $"actual assignment, but completed at {result.CompletionSeconds.Value:F4} s.");
+            result.CompletionFrame <= DirectFixationCompletionDeadlineFrames,
+            $"Both eyes must acquire within {DirectFixationAcceptance.CompletionDeadlineSeconds} s "
+            + $"({DirectFixationCompletionDeadlineFrames:F0} presented frames at the authored {TargetFps} fps "
+            + $"cadence) of the actual assignment, but completed at eligible frame {result.CompletionFrame}.");
         Assert.True(
             result.IsFixationMaintained,
             $"Both eyes must maintain ≤{DirectFixationAcceptance.AlignmentToleranceDegrees}° alignment after "

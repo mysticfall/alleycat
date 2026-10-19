@@ -439,8 +439,9 @@ original criteria, with any reclassification identified separately.
   [VISION-001 TR50–52 and Acceptance Criteria 66–70](../../vision/001-eyes/index.md#acceptance-criteria).
   Both eyes must complete acquisition within 0.4 s of actual assignment and maintain fixation thereafter under the
   [eye-acquisition decision](../../vision/001-eyes/index.md#acquisition-completion-decision). Target/head motion must
-  not reset acquisition. Head centring ≤0.8 s remains mandatory and is not an eye-acquisition completion deadline.
-  Apply VISION-001's normative
+  not reset acquisition. Head centring ≤0.8 s remains mandatory and is not an eye-acquisition completion deadline; its
+  clock basis (engine time at the authored target cadence, never wall-clock time) is normative in
+  [VISION-001 TR52](../../vision/001-eyes/index.md#technical-requirements). Apply VISION-001's normative
   [assignment/presentation ordering](../../vision/001-eyes/index.md#assignment-and-presentation-ordering)
   for frame 1 and boundary replays: eligibility follows rendered-state sampling after assignment, not callback time.
 - Phase-align only bounded initial setup if needed. Glance return/clear occurs on its predefined schedule within 0.6 s

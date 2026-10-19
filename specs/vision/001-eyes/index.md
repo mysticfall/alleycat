@@ -284,8 +284,13 @@ Provide a reusable eye component system that:
     reference, exact assignment timestamps, [presentation ordering](#assignment-and-presentation-ordering) and complete
     post-draw baseline,
     acquisition, transit, centring and settled windows in both isolated and migrated transit suites. Response and
-    acquisition-completion and centring deadlines start at actual assignment, not a later sample. Observe acquisition
-    from assignment; never wait for software-declared success to begin recording or discard a failed interval.
+    acquisition-completion and centring deadlines start at actual assignment, not a later sample. These frozen
+    deadlines are expressed in engine time at the authored target cadence — equivalently, presented frames at the
+    authored fps — measured from actual assignment, never wall-clock elapsed time. That clock basis is a measurement
+    convention, not product scheduling grace: the product must still meet each deadline at its operating cadence, and
+    slow test-environment rendering (for example software rendering under a virtual framebuffer) affects the
+    frame-to-wall-clock mapping only, never the bound. Observe acquisition from assignment; never wait for
+    software-declared success to begin recording or discard a failed interval.
     Cover fixed and moving targets,
     head compensation, mixed yaw/pitch and out-of-range directions in both backends. Validate direct-error sensitivity
     with independent geometry, stale frames, drift across the 0.5° boundary, acquisition-onset/completion/overshoot
