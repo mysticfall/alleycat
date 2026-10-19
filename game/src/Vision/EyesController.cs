@@ -118,16 +118,26 @@ public sealed class EyesController
     }
 
     /// <summary>
-    /// Advances look smoothing and autonomous blinking.
+    /// Advances look smoothing and autonomous blinking in the caller's process pass.
     /// </summary>
     public void Update(double deltaSeconds, Vector3 lookPointGlobalPosition)
     {
         float delta = (float)Math.Max(0.0, deltaSeconds);
-        WriteLookBlendAmounts();
-        ResolveTargetLookWeights(lookPointGlobalPosition);
-        UpdateLook(delta);
-        UpdateBlink(delta);
+        AdvanceLook(delta, lookPointGlobalPosition);
+        AdvanceBlink(delta);
     }
+
+    /// <summary>
+    /// Advances look smoothing and target resolution without touching blink timing. The
+    /// transform-driven backend composes its gaze in a post-skeleton-solve late pass so it
+    /// consumes the same-frame solved head pose the renderer presents (VISION-001 TR 50), while
+    /// blinking keeps its process-pass cadence in both backends.
+    /// </summary>
+    public void UpdateLook(double deltaSeconds, Vector3 lookPointGlobalPosition)
+        => AdvanceLook((float)Math.Max(0.0, deltaSeconds), lookPointGlobalPosition);
+
+    /// <summary>Advances autonomous blink timing only.</summary>
+    public void UpdateBlink(double deltaSeconds) => AdvanceBlink((float)Math.Max(0.0, deltaSeconds));
 
     private void ResolveTargetLookWeights(Vector3 lookPointGlobalPosition)
     {
@@ -175,8 +185,11 @@ public sealed class EyesController
         return EyesLookMath.BuildGazeRotation(horizontalAngle, verticalAngle);
     }
 
-    private void UpdateLook(float delta)
+    private void AdvanceLook(float delta, Vector3 lookPointGlobalPosition)
     {
+        WriteLookBlendAmounts();
+        ResolveTargetLookWeights(lookPointGlobalPosition);
+
         if (LookSmoothingTime <= 0f)
         {
             CurrentHorizontalSeekTime = _targetHorizontalSeekTime;
@@ -195,7 +208,7 @@ public sealed class EyesController
         }
     }
 
-    private void UpdateBlink(float delta)
+    private void AdvanceBlink(float delta)
     {
         if (_isBlinking)
         {

@@ -35,10 +35,19 @@ public sealed class HeadHipsIKIntegrationTests
     private const float MinimumDistanceImprovement = 0.004f;
     private const float MinimumDirectionalAlignment = 0.0f;
     private const float MinimumExpectedMovement = 0.0004f;
-    private const float MinimumStoopForwardConstrainedMovement = 0.004f;
-    private const float MinimumStoopForwardAbsoluteDirectionalAlignment = 0.6f;
-    private const float MinimumStoopForwardDirectionalAlignmentFloor = -0.75f;
     private const string StoopForwardPoseName = "TargetStoopForward";
+
+    // Compare travel only after independently verifying cap contact for both saturated inputs.
+    // The ordinary forward and stoop markers are not assumed to saturate the current chain.
+    private const float MaximumStoopForwardSaturatedTravelMetres = 0.001f;
+
+    // Engagement teeth for the stoop pose: the curl itself must be solver-driven, not a resting
+    // skeleton. The end-chain bones must sit measurably off their engine rest pose toward the stoop
+    // demand. A dead or
+    // unbound solver leaves the bones at rest (0 m) and fails; the sibling poses' positive-signal
+    // assertions (Left/Right/LeanBack) additionally pin solver liveness in both pose-order variants.
+    private const float MinimumStoopForwardRestTravelMetres = 0.05f;
+    private const float MinimumStoopForwardRestTravelAlignment = 0.6f;
 
     private static readonly string[] _requiredPoseMarkerNames =
     [
@@ -100,6 +109,9 @@ public sealed class HeadHipsIKIntegrationTests
 
         IReadOnlyList<int> trackedBoneIndices = ResolveTrackedBoneIndices(skeleton, ikNode);
         SkeletonModifier3D neckSpineIK = Assert.IsAssignableFrom<SkeletonModifier3D>(ikNode);
+        Dictionary<int, Vector3> restBonePositions = CaptureRestBoneWorldPositions(skeleton, trackedBoneIndices);
+        int headBoneIndex = RequireTrackedBoneIndex(skeleton, trackedBoneIndices, _headBoneNameCandidates);
+        int neckBoneIndex = RequireTrackedBoneIndex(skeleton, trackedBoneIndices, _neckBoneNameCandidates);
 
         await AssertStaleSignalTimeTargetIsRejectedAsync(
             sceneTree,
@@ -115,7 +127,128 @@ public sealed class HeadHipsIKIntegrationTests
                 headTarget,
                 poseMarkers,
                 poseOrder,
-                trackedBoneIndices);
+                trackedBoneIndices,
+                restBonePositions,
+                headBoneIndex,
+                neckBoneIndex);
+        }
+
+        await AssertSaturatedTravelAsync(sceneTree, skeleton, headTarget, poseMarkers[StoopForwardPoseName],
+            trackedBoneIndices, restBonePositions, headBoneIndex, neckBoneIndex);
+    }
+
+    private static async Task AssertSaturatedTravelAsync(
+        SceneTree sceneTree,
+        Skeleton3D skeleton,
+        Node3D headTarget,
+        Node3D stoopMarker,
+        IReadOnlyList<int> trackedBoneIndices,
+        IReadOnlyDictionary<int, Vector3> restBonePositions,
+        int headBoneIndex,
+        int neckBoneIndex)
+    {
+        string[] jointNames = ["Spine", "Chest", "UpperChest", "Neck"];
+        float[] halfCapsDegrees = [8f, 8f, 14f, 16f];
+        // Native limits constrain deviation from the frozen incoming pose, not authored rest
+        // (IK-001 TR 6). This is a cap-contact prerequisite, not rest-relative safety acceptance.
+        Basis[] incomingBases = [.. jointNames.Select(name =>
+        {
+            int bone = skeleton.FindBone(name);
+            return (skeleton.GetBoneGlobalPose(skeleton.GetBoneParent(bone)).AffineInverse()
+                * skeleton.GetBoneGlobalPose(bone)).Basis;
+        })];
+        int spineIndex = skeleton.FindBone("Spine");
+        Vector3 origin = restBonePositions[spineIndex];
+        // In the reference rig avatar-forward is skeleton +Z. A down/forward ray lies beyond
+        // the entire 46-degree cumulative pitch envelope. Both demands exceed the chain's
+        // total rest length; neither is derived from solved bones. Increasing distance along
+        // this ray must not recruit further bend once all four pitch caps are engaged.
+        Vector3 direction = (skeleton.GlobalBasis.Orthonormalized() * new Vector3(0f, -1f, 1f)).Normalized();
+        float chainLength = 0f;
+        int child = headBoneIndex;
+        while (child != spineIndex)
+        {
+            int parent = skeleton.GetBoneParent(child);
+            Assert.True(parent >= 0, "Expected Head to descend from Spine.");
+            chainLength += skeleton.GetBoneGlobalRest(child).Origin.DistanceTo(
+                skeleton.GetBoneGlobalRest(parent).Origin);
+            child = parent;
+        }
+
+        using Node3D marker = new();
+        skeleton.AddChild(marker);
+        marker.GlobalBasis = stoopMarker.GlobalBasis;
+        Dictionary<int, Vector3>? saturatedPositions = null;
+        var observations = new List<(float[] Pitches, Dictionary<int, Vector3> Positions)>();
+        void CaptureSaturatedOutput()
+        {
+            float[] pitches = new float[jointNames.Length];
+            for (int joint = 0; joint < jointNames.Length; joint++)
+            {
+                int bone = skeleton.FindBone(jointNames[joint]);
+                Transform3D local = skeleton.GetBoneGlobalPose(skeleton.GetBoneParent(bone)).AffineInverse()
+                    * skeleton.GetBoneGlobalPose(bone);
+                Basis deviation = incomingBases[joint].Inverse() * local.Basis;
+                Vector3 up = deviation.Orthonormalized() * Vector3.Up;
+                pitches[joint] = Mathf.RadToDeg(Mathf.Atan2(up.Z, up.Y));
+            }
+
+            observations.Add((pitches, CaptureTrackedBoneWorldPositions(skeleton, trackedBoneIndices)));
+        }
+
+        try
+        {
+            // Two distinct unreachable inputs, each with the existing four-step observation window.
+            foreach (float distance in new[] { 10f, 20f })
+            {
+                marker.GlobalPosition = origin + (direction * distance);
+                Assert.True(distance > chainLength, "Saturated input must lie beyond total chain length.");
+                observations.Clear();
+                skeleton.SkeletonUpdated += CaptureSaturatedOutput;
+                Dictionary<int, Vector3> positions;
+                try
+                {
+                    positions = await SetHeadTargetToMarkerAsync(
+                        sceneTree, skeleton, headTarget, marker, trackedBoneIndices);
+                }
+                finally
+                {
+                    skeleton.SkeletonUpdated -= CaptureSaturatedOutput;
+                }
+
+                Assert.Equal(SyntheticSolveStepsPerPose, observations.Count);
+                foreach ((float[] pitches, Dictionary<int, Vector3> sample) in observations)
+                {
+                    RecordMeasurement($"saturation,{distance},pitch-degrees,{string.Join(';', pitches.Select(value => value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))}");
+                    for (int joint = 0; joint < jointNames.Length; joint++)
+                    {
+                        Assert.True(Mathf.Abs(pitches[joint] - halfCapsDegrees[joint]) <= 0.1f,
+                            $"Saturation premise: {jointNames[joint]} forward pitch {pitches[joint]:F6}° must contact " +
+                            $"its authored {halfCapsDegrees[joint]:F1}° half-cap (±0.1°).");
+                    }
+
+                    if (saturatedPositions is not null)
+                    {
+                        foreach (int bone in trackedBoneIndices)
+                        {
+                            float travel = saturatedPositions[bone].DistanceTo(sample[bone]);
+                            RecordMeasurement(FormattableString.Invariant($"saturation,{distance},{skeleton.GetBoneName(bone)},travel-metres,{travel:R}"));
+                            Assert.True(travel <= MaximumStoopForwardSaturatedTravelMetres,
+                                $"Saturated demand must preserve '{skeleton.GetBoneName(bone)}': " +
+                                $"travel {travel:F6} m exceeds {MaximumStoopForwardSaturatedTravelMetres:F4} m.");
+                        }
+                    }
+                }
+
+                AssertStoopForwardSolverDrivenCurl(positions, restBonePositions, direction, headBoneIndex, "end (Head)");
+                AssertStoopForwardSolverDrivenCurl(positions, restBonePositions, direction, neckBoneIndex, "distal (Neck)");
+                saturatedPositions ??= positions;
+            }
+
+        }
+        finally
+        {
+            skeleton.RemoveChild(marker);
         }
     }
 
@@ -125,7 +258,10 @@ public sealed class HeadHipsIKIntegrationTests
         Node3D headTarget,
         IReadOnlyDictionary<string, Node3D> poseMarkers,
         IReadOnlyList<string> poseOrder,
-        IReadOnlyList<int> trackedBoneIndices)
+        IReadOnlyList<int> trackedBoneIndices,
+        IReadOnlyDictionary<int, Vector3> restBonePositions,
+        int headBoneIndex,
+        int neckBoneIndex)
     {
         Dictionary<int, Vector3> neutralBonePositions = await SetHeadTargetToMarkerAsync(
             sceneTree,
@@ -168,7 +304,10 @@ public sealed class HeadHipsIKIntegrationTests
                 markerPosition,
                 neutralBonePositions,
                 posedBonePositions,
-                trackedBoneIndices);
+                trackedBoneIndices,
+                restBonePositions,
+                headBoneIndex,
+                neckBoneIndex);
         }
     }
 
@@ -306,7 +445,10 @@ public sealed class HeadHipsIKIntegrationTests
         Vector3 posedMarkerPosition,
         IReadOnlyDictionary<int, Vector3> neutralBonePositions,
         IReadOnlyDictionary<int, Vector3> posedBonePositions,
-        IReadOnlyList<int> trackedBoneIndices)
+        IReadOnlyList<int> trackedBoneIndices,
+        IReadOnlyDictionary<int, Vector3> restBonePositions,
+        int headBoneIndex,
+        int neckBoneIndex)
     {
         bool improvedDistance = posedDistance < baselineDistance - MinimumDistanceImprovement;
 
@@ -321,23 +463,21 @@ public sealed class HeadHipsIKIntegrationTests
 
         if (string.Equals(markerName, StoopForwardPoseName, StringComparison.Ordinal))
         {
-            bool hasConstrainedStoopMovement = HasStoopForwardConstrainedMovement(
-                neutralMarkerPosition,
-                posedMarkerPosition,
-                neutralBonePositions,
+            // These ordinary markers retain meaningful engagement coverage independently of the
+            // separate cap-contact saturation scenario; neither marker is presumed saturated.
+            Vector3 markerDelta = posedMarkerPosition - neutralMarkerPosition;
+            AssertStoopForwardSolverDrivenCurl(
                 posedBonePositions,
-                trackedBoneIndices,
-                out float stoopLargestMovementMagnitude,
-                out float stoopLargestDirectionalAlignment);
-
-            Assert.True(
-                improvedDistance || hasConstrainedStoopMovement,
-                $"Pose '{markerName}' must retain a measurable constrained response by either reducing closest tracked-bone distance " +
-                $"by more than {MinimumDistanceImprovement:F4} (baseline {baselineDistance:F4} -> posed {posedDistance:F4}) " +
-                $"or moving at least one tracked bone with magnitude >= {MinimumStoopForwardConstrainedMovement:F4}, " +
-                $"absolute alignment >= {MinimumStoopForwardAbsoluteDirectionalAlignment:F2}, " +
-                $"and alignment >= {MinimumStoopForwardDirectionalAlignmentFloor:F2}. " +
-                $"Observed max movement={stoopLargestMovementMagnitude:F6}, max alignment={stoopLargestDirectionalAlignment:F6}.");
+                restBonePositions,
+                markerDelta,
+                headBoneIndex,
+                "end (Head)");
+            AssertStoopForwardSolverDrivenCurl(
+                posedBonePositions,
+                restBonePositions,
+                markerDelta,
+                neckBoneIndex,
+                "distal (Neck)");
             return;
         }
 
@@ -347,6 +487,66 @@ public sealed class HeadHipsIKIntegrationTests
             $"by more than {MinimumDistanceImprovement:F4} (baseline {baselineDistance:F4} -> posed {posedDistance:F4}) " +
             $"or moving at least one tracked bone with magnitude >= {MinimumExpectedMovement:F4} and alignment >= {MinimumDirectionalAlignment:F2}. " +
             $"Observed max movement={largestMovementMagnitude:F6}, max alignment={largestDirectionalAlignment:F6}.");
+    }
+
+    private static void AssertStoopForwardSolverDrivenCurl(
+        IReadOnlyDictionary<int, Vector3> posedBonePositions,
+        IReadOnlyDictionary<int, Vector3> restBonePositions,
+        Vector3 markerDelta,
+        int boneIndex,
+        string roleLabel)
+    {
+        if (markerDelta.LengthSquared() <= Mathf.Epsilon)
+        {
+            throw new Xunit.Sdk.XunitException(
+                $"Pose '{StoopForwardPoseName}' has a degenerate marker delta; the stoop contract cannot be evaluated.");
+        }
+
+        Vector3 restTravel = posedBonePositions[boneIndex] - restBonePositions[boneIndex];
+        float alignment = restTravel.Normalized().Dot(markerDelta.Normalized());
+        RecordMeasurement(FormattableString.Invariant($"engagement,{roleLabel},rest-travel-metres,{restTravel.Length():R},alignment,{alignment:R}"));
+        Assert.True(
+            restTravel.Length() >= MinimumStoopForwardRestTravelMetres && alignment >= MinimumStoopForwardRestTravelAlignment,
+            $"Pose '{StoopForwardPoseName}' must sit solver-driven off its engine rest pose toward the stoop demand: " +
+            $"{roleLabel} bone rest travel {restTravel.Length():F4} m (required >= {MinimumStoopForwardRestTravelMetres:F4}), " +
+            $"alignment {alignment:F4} (required >= {MinimumStoopForwardRestTravelAlignment:F2}).");
+    }
+
+    private static void RecordMeasurement(string measurement)
+    {
+        // Optional numerical evidence for targeted fixture verification; ordinary suite runs do not write files.
+        string? path = System.Environment.GetEnvironmentVariable("ALLEYCAT_HEADHIPS_MEASUREMENTS");
+        if (!string.IsNullOrEmpty(path))
+        {
+            File.AppendAllText(path, measurement + System.Environment.NewLine);
+        }
+    }
+
+    private static Dictionary<int, Vector3> CaptureRestBoneWorldPositions(
+        Skeleton3D skeleton,
+        IReadOnlyList<int> trackedBoneIndices)
+    {
+        Dictionary<int, Vector3> restPositions = new(trackedBoneIndices.Count);
+        foreach (int trackedBoneIndex in trackedBoneIndices)
+        {
+            restPositions[trackedBoneIndex] =
+                skeleton.GlobalTransform * skeleton.GetBoneGlobalRest(trackedBoneIndex).Origin;
+        }
+
+        return restPositions;
+    }
+
+    private static int RequireTrackedBoneIndex(
+        Skeleton3D skeleton,
+        IReadOnlyList<int> trackedBoneIndices,
+        string[] boneNameCandidates)
+    {
+        int boneIndex = TryFindBoneIndexFromCandidates(skeleton, boneNameCandidates);
+        Assert.True(
+            boneIndex >= 0 && trackedBoneIndices.Contains(boneIndex),
+            $"Expected a tracked chain bone from candidates ({string.Join(", ", boneNameCandidates)}) " +
+            "for the stoop solver-driven curl assertion.");
+        return boneIndex;
     }
 
     private static bool HasDirectionalMovementTowardsMarker(
@@ -424,62 +624,6 @@ public sealed class HeadHipsIKIntegrationTests
         if (float.IsNegativeInfinity(largestDirectionalAlignment))
         {
             largestDirectionalAlignment = 0.0f;
-        }
-
-        return false;
-    }
-
-    private static bool HasStoopForwardConstrainedMovement(
-        Vector3 neutralMarkerPosition,
-        Vector3 posedMarkerPosition,
-        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
-        IReadOnlyDictionary<int, Vector3> posedBonePositions,
-        IReadOnlyList<int> trackedBoneIndices,
-        out float largestMovementMagnitude,
-        out float strongestDirectionalAlignment)
-    {
-        Vector3 markerDelta = posedMarkerPosition - neutralMarkerPosition;
-        largestMovementMagnitude = 0.0f;
-        strongestDirectionalAlignment = 0.0f;
-
-        if (markerDelta.LengthSquared() <= Mathf.Epsilon)
-        {
-            return false;
-        }
-
-        Vector3 expectedDirection = markerDelta.Normalized();
-        float strongestAbsoluteAlignment = 0.0f;
-
-        foreach (int trackedBoneIndex in trackedBoneIndices)
-        {
-            Vector3 neutralBonePosition = neutralBonePositions[trackedBoneIndex];
-            Vector3 posedBonePosition = posedBonePositions[trackedBoneIndex];
-            Vector3 trackedBoneDelta = posedBonePosition - neutralBonePosition;
-
-            float movementMagnitude = trackedBoneDelta.Length();
-            if (movementMagnitude > largestMovementMagnitude)
-            {
-                largestMovementMagnitude = movementMagnitude;
-            }
-
-            if (movementMagnitude < MinimumStoopForwardConstrainedMovement)
-            {
-                continue;
-            }
-
-            float directionalAlignment = trackedBoneDelta.Normalized().Dot(expectedDirection);
-            float absoluteDirectionalAlignment = Mathf.Abs(directionalAlignment);
-            if (absoluteDirectionalAlignment > strongestAbsoluteAlignment)
-            {
-                strongestAbsoluteAlignment = absoluteDirectionalAlignment;
-                strongestDirectionalAlignment = directionalAlignment;
-            }
-
-            if (absoluteDirectionalAlignment >= MinimumStoopForwardAbsoluteDirectionalAlignment &&
-                directionalAlignment >= MinimumStoopForwardDirectionalAlignmentFloor)
-            {
-                return true;
-            }
         }
 
         return false;

@@ -26,16 +26,16 @@ Radius = 0.05
 metadata/_custom_type_script = "uid://b8340t35vo8cv"
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_55bxu"]
-angle = 0.87266463
+angle = 0.27925268
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_yku3b"]
-angle = 0.7853982
+angle = 0.27925268
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_5j0ty"]
-angle = 0.7853982
+angle = 0.48869219
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_n6ra7"]
-angle = 0.34906584
+angle = 0.55850536
 
 [node name="Male" unique_id=504240789 node_paths=PackedStringArray("Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 Eyes = NodePath("Eyes")
@@ -379,6 +379,14 @@ settings/0/additive = false
 script = ExtResource("7_5rn12")
 ColliderProfile = ExtResource("3_sypgb")
 metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
+
+[node name="Neck" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="29" unique_id=521097343]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.50345, 0.014949)
+bone_name = "Neck"
+bone_idx = 45
+
+[node name="NeckPivot" type="Marker3D" parent="Male/GeneralSkeleton/Neck" index="0" unique_id=521097344]
+unique_name_in_owner = true
 
 [node name="AnimationPlayer" parent="." index="1" unique_id=1193931353]
 libraries/idle = ExtResource("13_4p0d3")

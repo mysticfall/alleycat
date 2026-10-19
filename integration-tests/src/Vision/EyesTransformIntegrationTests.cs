@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Reflection;
+using System.Text.Json;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
 using Godot;
@@ -17,6 +20,268 @@ public sealed class EyesTransformIntegrationTests
     private const float HorizontalLimitRadians = 0.6108652f;
     private const float VerticalLimitRadians = 0.4363323f;
     private const float AngleToleranceRadians = 0.001f;
+
+    // TR50: observe the real CallDeferred queue through three idle boundaries with automatic
+    // processing disabled. Reflection seeds and observes private clocks; it never invokes
+    // the deferred callback or replaces production scheduling.
+    /// <summary>Pending gaze must not write or age after its behaviour leaves the tree.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenRemove_DoesNotWriteOrAdvance()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.Root.RemoveChild(rig.Eyes);
+        Transform3D left = rig.LeftEye.Transform;
+        Transform3D right = rig.RightEye.Transform;
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 3);
+            Assert.Equal(left, rig.LeftEye.Transform);
+            Assert.Equal(right, rig.RightEye.Transform);
+            Assert.Equal(1f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        }
+        finally
+        {
+            rig.Eyes.Free();
+        }
+    }
+
+    /// <summary>Freeing the behaviour cancels its pending eye writes.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenFreeBehaviour_DoesNotWrite()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.Eyes.Free();
+        Transform3D left = rig.LeftEye.Transform;
+        Transform3D right = rig.RightEye.Transform;
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.False(GodotObject.IsInstanceValid(rig.Eyes));
+        Assert.Equal(left, rig.LeftEye.Transform);
+        Assert.Equal(right, rig.RightEye.Transform);
+    }
+
+    /// <summary>A freed required eye pair invalidates pending temporal advancement.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenFreeEyePair_DoesNotAdvance()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.LeftEye.Free();
+        rig.RightEye.Free();
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.False(GodotObject.IsInstanceValid(rig.LeftEye));
+        Assert.False(GodotObject.IsInstanceValid(rig.RightEye));
+        Assert.Equal(1f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+    }
+
+    /// <summary>Rebinding cannot transfer a previous binding's queued delta to new eyes.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenRebind_InvalidatesOldDelta()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        Node3D leftReplacement = rig.AddReplacementEye("LifecycleLeft", new Vector3(-0.03f, 0f, 0f));
+        Node3D rightReplacement = rig.AddReplacementEye("LifecycleRight", new Vector3(0.03f, 0f, 0f));
+        rig.Eyes.LeftEye = leftReplacement;
+        rig.Eyes.RightEye = rightReplacement;
+        rig.Eyes.RefreshLookParametersDeferred();
+        rig.Eyes.RefreshLookParametersDeferred();
+        rig.Eyes.SetProcess(false);
+        Transform3D oldLeft = rig.LeftEye.Transform;
+        Transform3D oldRight = rig.RightEye.Transform;
+        Transform3D newLeft = leftReplacement.Transform;
+        Transform3D newRight = rightReplacement.Transform;
+        float clock = ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll");
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.Equal(oldLeft, rig.LeftEye.Transform);
+        Assert.Equal(oldRight, rig.RightEye.Transform);
+        Assert.Equal(clock, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        Assert.Equal(newLeft, leftReplacement.Transform);
+        Assert.Equal(newRight, rightReplacement.Transform);
+    }
+
+    /// <summary>Zero-delta refreshes preserve exactly one scheduled temporal advancement.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionWithRecomposition_AdvancesExactlyOnce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        object controller = ReadPrivate<object>(rig.Eyes, "_controller");
+        float blinkClock = ReadPrivate<float>(controller, "_timeUntilBlink");
+        float horizontal = rig.Eyes.GetHorizontalLookSeekTime();
+        float vertical = rig.Eyes.GetVerticalLookSeekTime();
+        rig.Eyes._Process(0.125d);
+        rig.Eyes.RefreshLookParametersDeferred();
+        rig.Eyes.RefreshLookParametersDeferred();
+        Assert.Equal(1f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        Assert.Equal(horizontal, rig.Eyes.GetHorizontalLookSeekTime());
+        Assert.Equal(vertical, rig.Eyes.GetVerticalLookSeekTime());
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.Equal(0.875f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        Assert.Equal(blinkClock - 0.125f, ReadPrivate<float>(controller, "_timeUntilBlink"));
+        Assert.NotEqual(horizontal, rig.Eyes.GetHorizontalLookSeekTime());
+    }
+
+    /// <summary>Recomposition at a saccade boundary cannot draw randomness or restart its clock.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ZeroDeltaRecompositionAtExpiredSaccade_DoesNotConsumeRandomState()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(1d);
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.Equal(0f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        rig.Eyes.SaccadeAmplitude = 0.075f;
+        RandomNumberGenerator random = ReadPrivate<RandomNumberGenerator>(rig.Eyes, "_saccadeRandom");
+        ulong state = random.State;
+        float horizontal = rig.Eyes.GetHorizontalLookSeekTime();
+        float vertical = rig.Eyes.GetVerticalLookSeekTime();
+        rig.Eyes.RefreshLookParametersDeferred();
+        rig.Eyes.RefreshLookParametersDeferred();
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.Equal(state, random.State);
+        Assert.Equal(0f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        Assert.Equal(horizontal, rig.Eyes.GetHorizontalLookSeekTime());
+        Assert.Equal(vertical, rig.Eyes.GetVerticalLookSeekTime());
+    }
+
+    private static void PrepareLifecycleProbe(TransformGazeRig rig)
+    {
+        rig.Eyes.SetProcess(false);
+        rig.Eyes.SetPhysicsProcess(false);
+        rig.Eyes.LookSmoothingTime = 0.08f;
+        rig.Eyes.SaccadeInterval = 1f;
+        rig.Eyes.SetLookTarget(rig.GazeTarget);
+        _ = PlaceGazeTarget(rig, new Vector3(0.3f, 0.1f, -1f));
+        SetPrivate(rig.Eyes, "_hasSaccadeAnchor", true);
+        SetPrivate(rig.Eyes, "_timeUntilSaccadeAnchorPoll", 1f);
+        object controller = ReadPrivate<object>(rig.Eyes, "_controller");
+        SetPrivate(controller, "_timeUntilBlink", 10f);
+        Assert.False(ReadPrivate<bool>(rig.Eyes, "_lateGazeCompositionScheduled"));
+    }
+
+    /// <summary>A freed AnimationTree rejects the pending look update before any eye write or ageing.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenFreeAnimationTree_DoesNotWriteOrAdvance()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.Tree.Free();
+        Transform3D left = rig.LeftEye.Transform;
+        Transform3D right = rig.RightEye.Transform;
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.False(GodotObject.IsInstanceValid(rig.Tree));
+        Assert.Equal(left, rig.LeftEye.Transform);
+        Assert.Equal(right, rig.RightEye.Transform);
+        Assert.Equal(1f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+    }
+
+    /// <summary>A freed required origin cannot turn stale queued work into an identity-frame gaze update.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenFreeOrigin_DoesNotWriteOrAdvance()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.EyeOrigin.Free();
+        Transform3D left = rig.LeftEye.Transform;
+        Transform3D right = rig.RightEye.Transform;
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.False(GodotObject.IsInstanceValid(rig.EyeOrigin));
+        Assert.Equal(left, rig.LeftEye.Transform);
+        Assert.Equal(right, rig.RightEye.Transform);
+        Assert.Equal(1f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+    }
+
+    /// <summary>QueueFree invalidates pending output even before exit/free notifications occur.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_ScheduledCompositionThenQueueFreeBehaviour_DoesNotWrite()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.Eyes.QueueFree();
+        Assert.True(GodotObject.IsInstanceValid(rig.Eyes));
+        Assert.True(rig.Eyes.IsQueuedForDeletion());
+        Transform3D left = rig.LeftEye.Transform;
+        Transform3D right = rig.RightEye.Transform;
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.False(GodotObject.IsInstanceValid(rig.Eyes));
+        Assert.Equal(left, rig.LeftEye.Transform);
+        Assert.Equal(right, rig.RightEye.Transform);
+    }
+
+    /// <summary>Old lifetime callbacks cannot cancel or advance the work queued after reinsertion.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_RemoveReinsertThenSchedule_ConsumesOnlyNewLifetimeDelta()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.Root.RemoveChild(rig.Eyes);
+        rig.Root.AddChild(rig.Eyes);
+        rig.Eyes.SetProcess(false);
+        rig.Eyes.SetPhysicsProcess(false);
+        rig.Eyes._Process(0.25d);
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.Equal(0.75f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        Assert.False(ReadPrivate<bool>(rig.Eyes, "_lateGazeCompositionScheduled"));
+    }
+
+    /// <summary>Old binding callbacks cannot consume or cancel a replacement binding's pending work.</summary>
+    [Headless]
+    [Fact]
+    public async Task Lifecycle_RebindThenSchedule_ConsumesOnlyNewBindingDelta()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree);
+        PrepareLifecycleProbe(rig);
+        rig.Eyes._Process(0.125d);
+        rig.Eyes.LeftEye = rig.AddReplacementEye("GenerationLeft", Vector3.Zero);
+        rig.Eyes.RightEye = rig.AddReplacementEye("GenerationRight", Vector3.Zero);
+        rig.Eyes.RefreshLookParametersDeferred();
+        rig.Eyes.SetProcess(false);
+        rig.Eyes._Process(0.25d);
+        await WaitForFramesAsync(sceneTree, 3);
+        Assert.Equal(0.75f, ReadPrivate<float>(rig.Eyes, "_timeUntilSaccadeAnchorPoll"));
+        Assert.False(ReadPrivate<bool>(rig.Eyes, "_lateGazeCompositionScheduled"));
+        Assert.Equal(rig.LeftEyeAuthoredLocal, rig.LeftEye.Transform);
+        Assert.Equal(rig.RightEyeAuthoredLocal, rig.RightEye.Transform);
+    }
+
+    private static T ReadPrivate<T>(object instance, string name)
+        => (T)(instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Missing lifecycle observation field {name}.")).GetValue(instance)!;
+
+    private static void SetPrivate<T>(object instance, string name, T value)
+        => (instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Missing lifecycle observation field {name}.")).SetValue(instance, value);
 
     /// <summary>
     /// Verifies that authoring no eye-node references keeps the blendshape backend: look blends stay 1,
@@ -437,6 +702,146 @@ public sealed class EyesTransformIntegrationTests
     }
 
     /// <summary>
+    /// VISION-001 TR3/4/51/52: the same assigned node moves slowly between presentations. This complete
+    /// fixed window isolates live target refresh from random offsets without bypassing the gaze pipeline.
+    /// </summary>
+    [Fact]
+    public async Task TransformGaze_SameAssignedMovingTarget_MaintainsBilateralLiveFixation()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await using TransformGazeRig rig = await TransformGazeRig.CreateAsync(sceneTree,
+            new RigOptions { LookSmoothingTime = 0.08f, SaccadeInterval = 1f });
+        string evidence = ProjectSettings.GlobalizePath("res://temp/ai-009-design-review/moving-eyes/"
+            + (System.Environment.GetEnvironmentVariable("ALLEYCAT_MOVING_EYES_EVIDENCE")
+                ?? (DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture) + "-baseline")));
+        _ = Directory.CreateDirectory(evidence);
+        Assert.Equal(1f, rig.Eyes.SaccadeInterval);
+        Assert.Equal(0f, rig.Eyes.SaccadeAmplitude);
+        Assert.Equal(0.6f, rig.Eyes.SaccadeSpeed);
+        Assert.Equal(0.08f, rig.Eyes.LookSmoothingTime);
+        Assert.Equal(35f, rig.Eyes.MaxHorizontalAngleDegrees);
+        Assert.Equal(25f, rig.Eyes.MaxVerticalAngleDegrees);
+
+        // Immutable fixture authoring, NOT observed neutral output or production gaze-helper answers.
+        Quaternion leftNeutral = Quaternion.FromEuler(new Vector3(0, 0, 0.3f))
+            * Quaternion.FromEuler(new Vector3(-0.08f, 0.12f, 0.05f));
+        Quaternion rightNeutral = Quaternion.FromEuler(new Vector3(-0.22f, 0.15f, 0))
+            * Quaternion.FromEuler(new Vector3(0.1f, -0.14f, -0.05f));
+        Vector3 leftOptical = rig.Head.GlobalBasis.GetRotationQuaternion() * (leftNeutral * DirectFixationGeometry.OpticalForward);
+        Vector3 rightOptical = rig.Head.GlobalBasis.GetRotationQuaternion() * (rightNeutral * DirectFixationGeometry.OpticalForward);
+        FieldInfo anchorField = typeof(EyesBehaviour).GetField("_saccadeAnchorGlobalPosition", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Missing passive poll-anchor observation field.");
+        FieldInfo pollField = typeof(EyesBehaviour).GetField("_timeUntilSaccadeAnchorPoll", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Missing passive poll-clock observation field.");
+
+        _ = await sceneTree.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        Vector3 leftBefore = rig.LeftEye.GlobalBasis * DirectFixationGeometry.OpticalForward;
+        Vector3 rightBefore = rig.RightEye.GlobalBasis * DirectFixationGeometry.OpticalForward;
+        rig.GazeTarget.GlobalPosition = PathPosition(0);
+        long sequence = 0;
+        double assigned = Now();
+        rig.Eyes.SetLookTarget(rig.GazeTarget);
+        ulong identity = rig.GazeTarget.GetInstanceId();
+        var acquisition = new FixationAcquisitionWindow(assigned, sequence, leftBefore, rightBefore);
+        var rows = new List<MovingTargetRow>();
+        double appliedMotionTime = 0;
+        do
+        {
+            _ = await sceneTree.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+            double now = Now();
+            sequence++;
+            Transform3D origin = rig.EyeOrigin.GlobalTransform;
+            Quaternion sharedRotation = origin.Basis.GetRotationQuaternion();
+            Vector3 liveTarget = rig.GazeTarget.GlobalPosition;
+            Quaternion expectedDelta = DirectFixationGeometry.ConstrainedGazeRotation(sharedRotation.Inverse() * (liveTarget - origin.Origin));
+            Vector3 leftExpected = DirectFixationGeometry.ExpectedEyeDirection(sharedRotation, expectedDelta, leftOptical);
+            Vector3 rightExpected = DirectFixationGeometry.ExpectedEyeDirection(sharedRotation, expectedDelta, rightOptical);
+            Vector3 leftActual = rig.LeftEye.GlobalBasis * DirectFixationGeometry.OpticalForward;
+            Vector3 rightActual = rig.RightEye.GlobalBasis * DirectFixationGeometry.OpticalForward;
+            var presentation = new FixationPresentation(now, sequence,
+                new EyeFixationSample(leftActual, leftExpected), new EyeFixationSample(rightActual, rightExpected));
+            acquisition.AddPresentation(presentation);
+            rows.Add(new MovingTargetRow(presentation, (long)Engine.GetProcessFrames(), now - assigned, appliedMotionTime,
+                liveTarget, origin.Origin, (Vector3)anchorField.GetValue(rig.Eyes)!, (float)pollField.GetValue(rig.Eyes)!,
+                rig.Eyes.LookTarget?.GetInstanceId() ?? 0UL));
+
+            if (now - assigned >= 2.5)
+            {
+                break;
+            }
+
+            appliedMotionTime = Math.Clamp(Now() - assigned - 0.4, 0, 2.1);
+            rig.GazeTarget.GlobalPosition = PathPosition(appliedMotionTime);
+        } while (true);
+
+        FixationWindowResult result = acquisition.Evaluate();
+        float overshoot = rows.Where(r => r.Elapsed <= 0.4).Select(r => MathF.Max(
+            DirectFixationGeometry.AngleBetweenDegrees(leftBefore, r.Presentation.Left.ActualDirection)
+                - DirectFixationGeometry.AngleBetweenDegrees(leftBefore, r.Presentation.Left.ExpectedDirection),
+            DirectFixationGeometry.AngleBetweenDegrees(rightBefore, r.Presentation.Right.ActualDirection)
+                - DirectFixationGeometry.AngleBetweenDegrees(rightBefore, r.Presentation.Right.ExpectedDirection))).DefaultIfEmpty(0).Max();
+        WriteMovingTargetEvidence(evidence, rows, assigned, identity, result, MathF.Max(0, overshoot));
+        Assert.All(rows, r => Assert.Equal(identity, r.TargetIdentity));
+        Assert.True(result.IsOnsetWithinBound, $"Onset {result.OnsetFrame} must be ≤2 eligible frames.");
+        Assert.True(result.IsCompletionWithinDeadline, $"Acquisition {result.CompletionSeconds:F6}s must be ≤0.4s.");
+        Assert.True(overshoot <= 4, $"Acquisition overshoot {overshoot:F6}° must be ≤4°.");
+        Assert.True(result.IsFixationMaintained,
+            $"Both eyes must fixate the CURRENT same assigned target throughout the complete window: max error {result.MaxPostCompletionErrorDegrees:F6}° >0.5°. Evidence: {evidence}");
+
+        Vector3 PathPosition(double t)
+        {
+            float yaw = Mathf.DegToRad((float)(5 + (2.4 * t)));
+            float pitch = Mathf.DegToRad((float)(2 + (1.8 * t)));
+            var ray = new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch), Mathf.Sin(pitch), -Mathf.Cos(yaw) * Mathf.Cos(pitch));
+            return rig.EyeOrigin.GlobalPosition + (rig.EyeOrigin.GlobalBasis.GetRotationQuaternion() * (ray * 6));
+        }
+
+        static double Now()
+        {
+            return Time.GetTicksUsec() / 1e6;
+        }
+    }
+
+    private sealed record MovingTargetRow(FixationPresentation Presentation, long Frame, double Elapsed, double MotionTime,
+        Vector3 Target, Vector3 Origin, Vector3 PollAnchor, float PollRemaining, ulong TargetIdentity);
+
+    private static void WriteMovingTargetEvidence(string directory, List<MovingTargetRow> rows, double assignment,
+        ulong identity, FixationWindowResult result, float overshoot)
+    {
+        using (StreamWriter writer = new(Path.Combine(directory, "presentations.csv")))
+        {
+            writer.WriteLine("sequence,frame,time_s,elapsed_s,applied_motion_s,target_identity,poll_remaining,target_x,target_y,target_z,origin_x,origin_y,origin_z,poll_x,poll_y,poll_z,left_actual_x,left_actual_y,left_actual_z,left_expected_x,left_expected_y,left_expected_z,right_actual_x,right_actual_y,right_actual_z,right_expected_x,right_expected_y,right_expected_z,left_error_deg,right_error_deg");
+            foreach (MovingTargetRow row in rows)
+            {
+                FixationPresentation p = row.Presentation;
+                writer.WriteLine(FormattableString.Invariant($"{p.Sequence},{row.Frame},{p.TimeSeconds:R},{row.Elapsed:R},{row.MotionTime:R},{row.TargetIdentity},{row.PollRemaining:R},")
+                    + string.Join(",", new[] { row.Target, row.Origin, row.PollAnchor, p.Left.ActualDirection, p.Left.ExpectedDirection,
+                        p.Right.ActualDirection, p.Right.ExpectedDirection }.SelectMany(v => new[] { v.X, v.Y, v.Z })
+                        .Select(v => v.ToString("R", CultureInfo.InvariantCulture)))
+                    + FormattableString.Invariant($",{p.Left.ErrorDegrees:R},{p.Right.ErrorDegrees:R}"));
+            }
+        }
+
+        File.WriteAllText(Path.Combine(directory, "runtime-result.json"), JsonSerializer.Serialize(new
+        {
+            assignment_time_s = assignment,
+            assignment_sequence = 0,
+            target_identity = identity,
+            end_time_s = rows[^1].Presentation.TimeSeconds,
+            observed_duration_s = rows[^1].Elapsed,
+            saccade_interval_s = 1,
+            saccade_amplitude_m = 0,
+            smoothing_s = 0.08,
+            clamps_deg = new[] { 35, 25 },
+            device = RenderingServer.GetVideoAdapterName(),
+            result,
+            acquisition_overshoot_deg = overshoot,
+            max_left_motion_error_deg = rows.Where(r => r.Elapsed >= 0.4).Max(r => r.Presentation.Left.ErrorDegrees),
+            max_right_motion_error_deg = rows.Where(r => r.Elapsed >= 0.4).Max(r => r.Presentation.Right.ErrorDegrees)
+        }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    /// <summary>
     /// Verifies replacing the eye pair at runtime restores the previously controlled eyes' exact neutral
     /// transforms while the new pair becomes gaze-controlled.
     /// </summary>
@@ -830,7 +1235,8 @@ public sealed class EyesTransformIntegrationTests
         float LookSmoothingTime = 0f,
         float MinimumBlinkInterval = 2.5f,
         float MaximumBlinkInterval = 6f,
-        float BlinkDuration = 0.3f);
+        float BlinkDuration = 0.3f,
+        float SaccadeInterval = 0f);
 
     /// <summary>
     /// A minimal synthetic transform-gaze rig: a rotated head holding two differently parented eye nodes with
@@ -972,7 +1378,7 @@ public sealed class EyesTransformIntegrationTests
                 EyeOrigin = eyeOrigin,
                 MaxHorizontalAngleDegrees = 35f,
                 MaxVerticalAngleDegrees = 25f,
-                SaccadeInterval = 0f,
+                SaccadeInterval = options.SaccadeInterval,
                 SaccadeAmplitude = 0f,
                 LookSmoothingTime = options.LookSmoothingTime,
                 MinimumBlinkInterval = options.MinimumBlinkInterval,
@@ -1050,7 +1456,10 @@ public sealed class EyesTransformIntegrationTests
         public async ValueTask DisposeAsync()
         {
             Root.QueueFree();
-            Tree.QueueFree();
+            if (GodotObject.IsInstanceValid(Tree))
+            {
+                Tree.QueueFree();
+            }
             await WaitForNextFrameAsync(GetSceneTree());
         }
 

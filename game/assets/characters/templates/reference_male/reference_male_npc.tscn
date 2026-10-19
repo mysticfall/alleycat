@@ -155,9 +155,10 @@ metadata/_custom_type_script = "uid://cd3tvaw7tff12"
 script = ExtResource("attention_gaze_selector_1")
 metadata/_custom_type_script = "uid://dudl5uhyyp755"
 
-[node name="OrientingController" type="Node" parent="Mind" node_paths=PackedStringArray("Viewpoint")]
+[node name="OrientingController" type="Node" parent="Mind" node_paths=PackedStringArray("Viewpoint", "NeckPivot")]
 script = ExtResource("orienting_controller_1")
 Viewpoint = NodePath("../../Male/GeneralSkeleton/Head/Viewpoint")
+NeckPivot = NodePath("../../Male/GeneralSkeleton/Neck/NeckPivot")
 metadata/_custom_type_script = "uid://r0roprsf0efd"
 
 [node name="Hearing" type="Node" parent="."]

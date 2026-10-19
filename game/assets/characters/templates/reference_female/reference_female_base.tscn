@@ -26,16 +26,16 @@ Radius = 0.05
 metadata/_custom_type_script = "uid://b8340t35vo8cv"
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_55bxu"]
-angle = 0.87266463
+angle = 0.27925268
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_yku3b"]
-angle = 0.7853982
+angle = 0.27925268
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_5j0ty"]
-angle = 0.7853982
+angle = 0.48869219
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_n6ra7"]
-angle = 0.34906584
+angle = 0.55850536
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
@@ -120,21 +120,21 @@ settings/0/extend_end_bone = false
 settings/0/joint_count = 5
 settings/0/joints/0/rotation_axis = 0
 settings/0/joints/0/limitation = SubResource("JointLimitationCone3D_55bxu")
-settings/0/joints/0/limitation/right_axis = 2
-settings/0/joints/0/limitation/rotation_offset = Quaternion(-0.087156, 0, 0, 0.996195)
+settings/0/joints/0/limitation/right_axis = 0
+settings/0/joints/0/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
 settings/0/joints/1/rotation_axis = 0
 settings/0/joints/1/limitation = SubResource("JointLimitationCone3D_yku3b")
-settings/0/joints/1/limitation/right_axis = 2
-settings/0/joints/1/limitation/rotation_offset = Quaternion(-0.087156, 0, 0, 0.996195)
+settings/0/joints/1/limitation/right_axis = 0
+settings/0/joints/1/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
 settings/0/joints/2/rotation_axis = 3
 settings/0/joints/2/limitation = SubResource("JointLimitationCone3D_5j0ty")
-settings/0/joints/2/limitation/right_axis = 2
-settings/0/joints/2/limitation/rotation_offset = Quaternion(-0.087156, 0, 0, 0.996195)
+settings/0/joints/2/limitation/right_axis = 0
+settings/0/joints/2/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
 settings/0/joints/3/rotation_axis = 3
 settings/0/joints/3/limitation = SubResource("JointLimitationCone3D_n6ra7")
-settings/0/joints/3/limitation/right_axis = 2
-settings/0/joints/3/limitation/rotation_offset = Quaternion(0.258819, 0, 0, 0.965926)
-settings/0/joints/4/rotation_axis = 3
+settings/0/joints/3/limitation/right_axis = 0
+settings/0/joints/3/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
+settings/0/joints/4/rotation_axis = 0
 settings/0/joints/4/limitation = null
 
 [node name="HeadCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="13" unique_id=1092458642]
@@ -382,6 +382,14 @@ settings/0/additive = false
 script = ExtResource("3_2a5tg")
 ColliderProfile = ExtResource("4_2a5tg")
 metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
+
+[node name="Neck" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="29" unique_id=521097341]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.355218, -0.001094)
+bone_name = "Neck"
+bone_idx = 47
+
+[node name="NeckPivot" type="Marker3D" parent="Female/GeneralSkeleton/Neck" index="0" unique_id=521097342]
+unique_name_in_owner = true
 
 [node name="IKTargets" type="Node3D" parent="." index="1" unique_id=546537465]
 

@@ -115,6 +115,7 @@ public sealed class RigInstallerIntegrationTests
         Assert.True(second.Succeeded, string.Join('\n', second.Errors));
         Assert.False(fixture.Root.HasNode("Female/GeneralSkeleton"));
         AssertInstalledAttachment(fixture.Skeleton, "Head");
+        AssertInstalledAttachment(fixture.Skeleton, "Neck");
         AssertInstalledAttachment(fixture.Skeleton, "LeftHand");
         AssertInstalledAttachment(fixture.Skeleton, "RightHand");
 
@@ -122,7 +123,11 @@ public sealed class RigInstallerIntegrationTests
         Marker3D viewpoint = head.GetNode<Marker3D>("Viewpoint");
         Assert.Same(head, viewpoint.GetParent());
         Assert.NotEqual(Vector3.Zero, viewpoint.Transform.Origin);
+        BoneAttachment3D neck = fixture.Skeleton.GetNode<BoneAttachment3D>("Neck");
+        Marker3D neckPivot = neck.GetNode<Marker3D>("NeckPivot");
+        Assert.Same(neck, neckPivot.GetParent());
         Assert.Equal(1, CountDirectChildren(fixture.Skeleton, "Head"));
+        Assert.Equal(1, CountDirectChildren(fixture.Skeleton, "Neck"));
         Assert.Equal(1, CountDirectChildren(fixture.Skeleton, "LeftHand"));
         Assert.Equal(1, CountDirectChildren(fixture.Skeleton, "RightHand"));
     }
@@ -1884,6 +1889,7 @@ public sealed class RigInstallerIntegrationTests
         rigRoot.AddChild(skeleton);
         rigRoot.Owner = root;
         skeleton.Owner = root;
+        AddBone(skeleton, "Neck", new Vector3(0.0f, 1.45f, 0.0f));
         AddBone(skeleton, "Head", new Vector3(0.0f, 1.6f, 0.0f));
         AddBone(skeleton, "LeftHand", new Vector3(-0.45f, 1.1f, 0.0f));
         AddBone(skeleton, "RightHand", new Vector3(0.45f, 1.1f, 0.0f));
@@ -1896,6 +1902,7 @@ public sealed class RigInstallerIntegrationTests
         CharacterFixture fixture = CreateAliceFixture();
         Skeleton3D skeleton = fixture.Skeleton;
         skeleton.ClearBones();
+        AddBone(skeleton, "Neck", new Vector3(0.0f, 1.45f, 0.0f));
         AddBone(skeleton, "Head", new Vector3(0.0f, 1.6f, 0.0f));
 
         // RIG-002 TR1: one direct LowerArm -> ForearmTwist -> Hand chain per side.

@@ -977,6 +977,8 @@ public partial class CharacterIK : Node3D
             : null;
     }
 
+    private ulong _headBeginSequence;
+
     private void OnBeginStage(double delta)
     {
         ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
@@ -987,6 +989,12 @@ public partial class CharacterIK : Node3D
         }
 
         BeforeProviderTargetProcessing();
+        IKTargetIntentProvider? headProvider = ResolveValidTargetIntentProvider(HeadTargetIntentProvider, HeadFallbackIntentProvider);
+        if (headProvider is IIKBeginEvaluable evaluable)
+        {
+            evaluable.EvaluateAtBegin(GetResolvedSkeleton(), delta, ++_headBeginSequence);
+        }
+
         HeadTargetPipelineDebugState = _headTargetPipeline?.Run(delta) ?? HeadTargetPipelineDebugState;
         ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
         AfterProviderTargetProcessing(GetResolvedSkeleton(), delta);
@@ -1819,12 +1827,14 @@ public partial class CharacterIK : Node3D
         IKTargetIntentProvider? fallbackProvider,
         Transform3D safeFallbackTransform)
     {
-        return provider is not null && IsInstanceValid(provider)
-            ? provider.GetTargetIntent()
-            : fallbackProvider is not null && IsInstanceValid(fallbackProvider)
-            ? fallbackProvider.GetTargetIntent()
-            : new IKTargetIntent(safeFallbackTransform, 0.0f);
+        return ResolveValidTargetIntentProvider(provider, fallbackProvider)?.GetTargetIntent()
+            ?? new IKTargetIntent(safeFallbackTransform, 0.0f);
     }
+
+    private static IKTargetIntentProvider? ResolveValidTargetIntentProvider(
+        IKTargetIntentProvider? provider, IKTargetIntentProvider? fallbackProvider)
+        => provider is not null && IsInstanceValid(provider) ? provider
+            : fallbackProvider is not null && IsInstanceValid(fallbackProvider) ? fallbackProvider : null;
 
     /// <summary>
     /// Applies provider influence to all direct and side-effect modifiers for a limb.

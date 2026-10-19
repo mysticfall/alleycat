@@ -25,6 +25,9 @@ public partial class EyesBehaviour : Node, IVision
     private VisualCue? _lookTarget;
     private bool _lookTargetExplicitlyAssigned;
     private bool _deferredRefreshScheduled;
+    private bool _lateGazeCompositionScheduled;
+    private double _lateGazeDeltaSeconds;
+    private long _bindingGeneration;
     private readonly RandomNumberGenerator _saccadeRandom = new();
     private Vector3 _saccadeAnchorGlobalPosition = new(0f, 0f, -1f);
     private Vector3 _currentSaccadeOffsetGlobal;
@@ -71,6 +74,11 @@ public partial class EyesBehaviour : Node, IVision
         get;
         set
         {
+            if (!AreSameNode(field, value))
+            {
+                InvalidatePendingGazeWork();
+            }
+
             field = value;
             ScheduleDeferredRefresh();
         }
@@ -326,6 +334,9 @@ public partial class EyesBehaviour : Node, IVision
     }
 
     /// <inheritdoc />
+    public override void _ExitTree() => InvalidatePendingGazeWork();
+
+    /// <inheritdoc />
     public override void _Ready()
     {
         ValidateVisualSurveyInterval(VisualSurveyIntervalSeconds);
@@ -402,12 +413,47 @@ public partial class EyesBehaviour : Node, IVision
     }
 
     /// <inheritdoc />
-    public override void _Process(double delta) => ProcessLookAndBlink(delta);
+    public override void _Process(double delta)
+    {
+        if (_transformGaze is not null)
+        {
+            // Transform backend: the gaze composition reads and writes against the solved head
+            // pose, which the skeleton modifiers solve after every regular process callback. The
+            // composition is therefore deferred to the end-of-frame late pass — after the solve,
+            // before presentation — so the eyes consume the same-frame solved head pose the
+            // renderer presents instead of a one-frame-stale one (VISION-001 TR 50). Blink keeps
+            // its process-pass cadence in both backends.
+            EnsureActiveController();
+            if (_controller is null)
+            {
+                return;
+            }
+
+            _controller.UpdateBlink(delta);
+            ScheduleLateGazeComposition(delta);
+            return;
+        }
+
+        ProcessLookAndBlink(delta);
+    }
 
     /// <inheritdoc />
     public override void _PhysicsProcess(double delta) => ProcessVisualSurvey(delta);
 
     private void ProcessLookAndBlink(double delta)
+    {
+        EnsureActiveController();
+        if (_controller is not EyesController controller)
+        {
+            return;
+        }
+
+        PublishEyeOriginToController(controller);
+        Vector3 lookPoint = UpdateSaccadeLookPoint(delta);
+        controller.Update(delta, lookPoint);
+    }
+
+    private void EnsureActiveController()
     {
         if (_controller is not null && !IsInstanceValid(_controller.AnimationTree))
         {
@@ -416,27 +462,79 @@ public partial class EyesBehaviour : Node, IVision
         }
 
         TryInitialiseController();
-        if (_controller is null)
+    }
+
+    private void PublishEyeOriginToController(EyesController controller)
+    {
+        if (EyeOrigin is not Node3D eyeOrigin)
         {
             return;
         }
 
-        Transform3D eyeOriginGlobalTransform = Transform3D.Identity;
-        if (EyeOrigin is Node3D eyeOrigin)
+        controller.EyeOriginGlobalTransform = IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
+            ? eyeOrigin.GlobalTransform
+            : Transform3D.Identity;
+    }
+
+    private void ScheduleLateGazeComposition(double deltaSeconds)
+    {
+        _lateGazeDeltaSeconds = deltaSeconds;
+        if (_lateGazeCompositionScheduled)
         {
-            eyeOriginGlobalTransform = IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
-                ? eyeOrigin.GlobalTransform
-                : Transform3D.Identity;
-            _controller.EyeOriginGlobalTransform = eyeOriginGlobalTransform;
+            return;
         }
 
-        Vector3 lookPoint = UpdateSaccadeLookPoint(delta);
-        _controller.Update(delta, lookPoint);
+        _lateGazeCompositionScheduled = true;
+        _ = CallDeferred(MethodName.RunScheduledLateGazeComposition, _bindingGeneration);
+    }
 
-        if (_transformGaze is EyesTransformGaze transformGaze)
+    /// <summary>
+    /// Deferred entry point of the per-frame transform-backend gaze composition; runs after the
+    /// frame's skeleton-modifier solve.
+    /// </summary>
+    private void RunScheduledLateGazeComposition(long bindingGeneration)
+    {
+        // An obsolete callback must not consume or cancel a new binding's pending work.
+        if (bindingGeneration != _bindingGeneration || !_lateGazeCompositionScheduled)
         {
-            transformGaze.ApplyGaze(eyeOriginGlobalTransform, _controller.ResolveCurrentGazeDelta());
+            return;
         }
+
+        _lateGazeCompositionScheduled = false;
+        ApplyLateGazeComposition(_lateGazeDeltaSeconds);
+    }
+
+    /// <summary>
+    /// Composes the transform-backend gaze against the current solved head pose: resolves the
+    /// eye-origin transform, advances the saccade and smoothing state by the supplied delta, and
+    /// writes both eye-node transforms. Called in the post-skeleton-solve late pass so every read
+    /// and write uses the same-frame solved head pose the renderer presents (VISION-001 TR 50).
+    /// </summary>
+    private void ApplyLateGazeComposition(double deltaSeconds)
+    {
+        if (!IsInsideTree() || IsQueuedForDeletion()
+            || _controller is not EyesController controller || _transformGaze is not EyesTransformGaze transformGaze
+            || !IsLiveGazeNode(controller.AnimationTree)
+            || !IsLiveGazeNode(EyeOrigin) || !IsLiveGazeNode(LeftEye) || !IsLiveGazeNode(RightEye)
+            || !EyeOrigin!.IsInsideTree() || !LeftEye!.IsInsideTree() || !RightEye!.IsInsideTree())
+        {
+            return;
+        }
+
+        PublishEyeOriginToController(controller);
+        Vector3 lookPoint = UpdateSaccadeLookPoint(deltaSeconds);
+        controller.UpdateLook(deltaSeconds, lookPoint);
+        transformGaze.ApplyGaze(controller.EyeOriginGlobalTransform, controller.ResolveCurrentGazeDelta());
+    }
+
+    private static bool IsLiveGazeNode(Node? node) => IsValidNode(node) && !node!.IsQueuedForDeletion();
+
+    private void InvalidatePendingGazeWork()
+    {
+        _bindingGeneration++;
+        _lateGazeCompositionScheduled = false;
+        _deferredRefreshScheduled = false;
+        _lateGazeDeltaSeconds = 0d;
     }
 
     /// <summary>
@@ -444,7 +542,7 @@ public partial class EyesBehaviour : Node, IVision
     /// </summary>
     protected virtual Vector3 ResolveWorldLookPoint()
     {
-        if (_lookTarget is Node3D lookTarget && IsValidNode(lookTarget) && lookTarget.IsInsideTree())
+        if (ResolveLiveLookTargetNode() is { } lookTarget)
         {
             return lookTarget.GlobalPosition;
         }
@@ -621,12 +719,26 @@ public partial class EyesBehaviour : Node, IVision
         }
     }
 
+    private Node3D? ResolveLiveLookTargetNode()
+        => _lookTarget is Node3D lookTarget && IsValidNode(lookTarget) && lookTarget.IsInsideTree()
+            ? lookTarget
+            : null;
+
     private Vector3 UpdateSaccadeLookPoint(double deltaSeconds)
     {
         float delta = (float)Math.Max(0.0, deltaSeconds);
+        // The live target (or head-relative fallback) is independent of the random offset cadence.
+        // Resolve it once per gaze evaluation; only offset selection remains on the polling clock.
+        _saccadeAnchorGlobalPosition = ResolveWorldLookPoint();
+        if (delta <= 0f)
+        {
+            // Recomposition follows the live anchor without selecting or ageing a saccade.
+            return _saccadeAnchorGlobalPosition
+                + (SaccadeAmplitude <= 0f || SaccadeSpeed <= 0f ? Vector3.Zero : _currentSaccadeOffsetGlobal);
+        }
+
         if (!_hasSaccadeAnchor || _timeUntilSaccadeAnchorPoll <= 0f)
         {
-            _saccadeAnchorGlobalPosition = ResolveWorldLookPoint();
             _hasSaccadeAnchor = true;
             _timeUntilSaccadeAnchorPoll = SaccadeInterval;
             _targetSaccadeOffsetGlobal = ResolveNextSaccadeOffset();
@@ -722,6 +834,7 @@ public partial class EyesBehaviour : Node, IVision
 
     private void DeactivateController()
     {
+        InvalidatePendingGazeWork();
         if (_transformGaze is EyesTransformGaze transformGaze)
         {
             transformGaze.RestoreNeutralTransforms();
@@ -824,6 +937,14 @@ public partial class EyesBehaviour : Node, IVision
             return;
         }
 
+        if (_transformGaze is not null)
+        {
+            // The transform backend recomposes against the current solved head pose without
+            // advancing the smoothing or saccade state.
+            ApplyLateGazeComposition(0d);
+            return;
+        }
+
         ProcessLookAndBlink(0d);
     }
 
@@ -835,7 +956,15 @@ public partial class EyesBehaviour : Node, IVision
         }
 
         _deferredRefreshScheduled = true;
-        _ = CallDeferred(MethodName.RefreshLookParametersDeferred);
+        _ = CallDeferred(MethodName.RunScheduledRefresh, _bindingGeneration);
+    }
+
+    private void RunScheduledRefresh(long bindingGeneration)
+    {
+        if (bindingGeneration == _bindingGeneration && _deferredRefreshScheduled)
+        {
+            RefreshLookParametersDeferred();
+        }
     }
 
     /// <summary>

@@ -20,6 +20,29 @@ namespace AlleyCat.IntegrationTests.Mind.Attention;
 /// </summary>
 public sealed class OrientingControllerIntegrationTests
 {
+    /// <summary>AC11: defaults and both installed NPC configurations retain secondary-glance timing headroom.</summary>
+    [Headless]
+    [Fact]
+    public void DefaultCentringDelay_ExceedsConfiguredSecondaryDwell()
+    {
+        using AttentionGazeTargetSelector selector = new();
+        Assert.True(OrientingSettings.Default.CentringDelaySeconds > selector.SecondaryDwellSeconds);
+        foreach (string path in new[] { FemaleNpcTemplatePath, MaleNpcTemplatePath })
+        {
+            Node npc = LoadPackedScene(path).Instantiate();
+            try
+            {
+                OrientingController controller = npc.GetNode<OrientingController>("Mind/OrientingController");
+                AttentionGazeTargetSelector configured = npc.GetNode<AttentionGazeTargetSelector>("Mind/AttentionGazeTargetSelector");
+                Assert.True(controller.CentringDelaySeconds > configured.SecondaryDwellSeconds);
+            }
+            finally
+            {
+                npc.Free();
+            }
+        }
+    }
+
     private const string FemaleNpcTemplatePath =
         "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
 
@@ -95,7 +118,7 @@ public sealed class OrientingControllerIntegrationTests
 
     /// <summary>
     /// The NPC installer installs the template-authored controller into the character and rebinds its wiring to the
-    /// installed character's own solved head viewpoint, without making it a character component.
+    /// installed character's own solved head viewpoint and neck pivot, without making it a character component.
     /// </summary>
     [Headless]
     [Fact]
@@ -117,6 +140,7 @@ public sealed class OrientingControllerIntegrationTests
             Assert.NotNull(root.GetNode("Mind/AttentionGazeTargetSelector"));
             Assert.False(controller is IComponent);
             Assert.Same(root.GetNode("Female/GeneralSkeleton/Head/Viewpoint"), controller.Viewpoint);
+            Assert.Same(root.GetNode("Female/GeneralSkeleton/Neck/NeckPivot"), controller.NeckPivot);
             Assert.Equal(0f, controller.GetTargetIntent().DesiredInfluence);
         }
         finally
@@ -203,9 +227,14 @@ public sealed class OrientingControllerIntegrationTests
             PlaceAnchorAtLocalAngles(anchor, head, viewpoint, localYawDegrees: -8f, localPitchDegrees: 0f);
             vision.LookTarget = anchor;
             RunFramesWithFollowedHead(controller, head, 20);
+            // HEAD-2 rationale: release eases toward the upstream (authored rest) pose, so the pose held
+            // through the re-assignment glance is ≈ the rest orientation rather than world-forward; the
+            // anchor sits 8° local from it, so the held measurement reads ≈8° rather than the scalar-era
+            // ≈22°. The invariant under test — the timer restarts and the new anchor is not centred before
+            // the engagement timing elapses — is the well-clear-of-centring bound.
             Assert.True(
-                AngleToAnchorDegrees(controller, anchor, viewpoint) > 8f,
-                "Re-assignment after a clear should restart the centring timer and hold the last sustained aim "
+                AngleToAnchorDegrees(controller, anchor, viewpoint) > FullCentringMinimumDegrees,
+                "Re-assignment after a clear should restart the centring timer and hold the released pose "
                 + $"instead of centring immediately (found {AngleToAnchorDegrees(controller, anchor, viewpoint):F2}° off).");
             RunFramesWithFollowedHead(controller, head, 90);
             AssertCentredOn(controller, anchor, viewpoint);
@@ -336,6 +365,10 @@ public sealed class OrientingControllerIntegrationTests
             sceneText,
             StringComparison.Ordinal);
         Assert.Contains(
+            $"NeckPivot = NodePath(\"../../{bodyName}/GeneralSkeleton/Neck/NeckPivot\")",
+            sceneText,
+            StringComparison.Ordinal);
+        Assert.Contains(
             "HeadTargetIntentProvider = NodePath(\"../Mind/OrientingController\")",
             sceneText,
             StringComparison.Ordinal);
@@ -352,6 +385,7 @@ public sealed class OrientingControllerIntegrationTests
             CharacterIK characterIk = template.GetNode<CharacterIK>("CharacterIK");
             Assert.Same(controller, characterIk.HeadTargetIntentProvider);
             Assert.Same(template.GetNode($"{bodyName}/GeneralSkeleton/Head/Viewpoint"), controller.Viewpoint);
+            Assert.Same(template.GetNode($"{bodyName}/GeneralSkeleton/Neck/NeckPivot"), controller.NeckPivot);
         }
         finally
         {
@@ -519,6 +553,329 @@ public sealed class OrientingControllerIntegrationTests
         {
             root.QueueFree();
         }
+    }
+
+    /// <summary>
+    /// The published intent basis stays roll-free across frames measured against the character-stable up — not
+    /// world up — even when the solved head is externally rolled between frames: transient solved-head roll (idle
+    /// sway, twist redistribution, CCDIK roll) must decay instead of being absorbed into the neutral reference and
+    /// republished forever (AI-009 TR 19–20, acceptance criterion 15; diagnostic baseline: −11.97° sustained roll
+    /// over a 3.2 s lateral hold).
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task IntentBasis_StaysRollFreeWhenSolvedHeadIsExternallyRolled()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 1);
+        var root = new Node3D { Name = "OrientingControllerRollFixture" };
+        sceneTree.Root.AddChild(root);
+        try
+        {
+            // The character frame is deliberately yawed and rolled so the roll-free construction is verified
+            // against the character-stable up: an implementation that measured roll against world up would read
+            // the character's 10° roll in every published frame.
+            TestVision vision = new();
+            TestCharacter character = new(hasComponentProjection: true, vision)
+            {
+                GlobalTransform = new Transform3D(
+                    Basis.FromEuler(
+                        new Vector3(0f, (float)DegreesToRadians(20d), (float)DegreesToRadians(10d))),
+                    Vector3.Zero),
+            };
+            Vector3 characterUp = character.GlobalTransform.Basis.Y;
+            TestMind mind = new(character);
+            MutableSceneContext scene = new();
+            mind.SetSceneContextLoaderForTesting(() => scene);
+            root.AddChild(mind);
+
+            var head = new Node3D { Name = "Head" };
+            root.AddChild(head);
+            var viewpoint = new Marker3D
+            {
+                Name = "Viewpoint",
+                Transform = new Transform3D(Basis.Identity, new Vector3(0f, 0.1f, 0f)),
+            };
+            head.AddChild(viewpoint);
+            var anchor = new StaticVisualCue { Name = "Anchor" };
+            root.AddChild(anchor);
+
+            var controller = new OrientingController { Name = "OrientingController", Viewpoint = viewpoint };
+            mind.AddChild(controller);
+            await WaitForFramesAsync(sceneTree, 1);
+
+            // Sustained lateral anchor — the diagnostic defect scenario.
+            PlaceAnchorAtLocalAngles(anchor, head, viewpoint, localYawDegrees: 30f, localPitchDegrees: 0f);
+            vision.LookTarget = anchor;
+
+            const int firstKickFrame = 150;
+            const int secondKickFrame = 260;
+            const float firstKickDegrees = 8f;
+            const float secondKickDegrees = -10f;
+            float maxAbsRollDegrees = 0f;
+            bool observedRollKick = false;
+            for (int frame = 0; frame < 360; frame++)
+            {
+                controller._Process(FrameDelta);
+                IKTargetIntent intent = controller.GetTargetIntent();
+                if (intent.DesiredInfluence > 0.5f)
+                {
+                    maxAbsRollDegrees = Mathf.Max(
+                        maxAbsRollDegrees,
+                        Mathf.Abs(MeasureRollDegrees(intent.WorldTransform.Basis, characterUp)));
+                }
+
+                // The solved head confirms the commanded orientation each frame; the two kicks inject external roll
+                // about the head forward axis between frames, modelling the roll idle sway, the twist disperser,
+                // and CCDIK leave on the solved head. Both kick magnitudes stay inside the neutral tracking
+                // tolerance (~11.46°) so the re-anchor genuinely runs on the rolled head.
+                Transform3D intentTransform = intent.WorldTransform;
+                if (frame is firstKickFrame or secondKickFrame)
+                {
+                    float kickDegrees = frame == firstKickFrame ? firstKickDegrees : secondKickDegrees;
+                    var kickBasis = Basis.FromEuler(new Vector3(0f, 0f, (float)DegreesToRadians(kickDegrees)));
+                    head.GlobalTransform = new Transform3D(intentTransform.Basis * kickBasis, intentTransform.Origin);
+                    observedRollKick = observedRollKick
+                        || Mathf.Abs(MeasureRollDegrees(head.GlobalBasis, characterUp)) > 5f;
+                }
+                else
+                {
+                    head.GlobalTransform = intentTransform;
+                }
+            }
+
+            Assert.True(observedRollKick, "The external roll kick never reached the solved head; the fixture is vacuous.");
+            Assert.True(
+                maxAbsRollDegrees < 1f,
+                "The published intent basis should stay roll-free against the character-stable up while the solved "
+                + $"head is externally rolled, but reached {maxAbsRollDegrees:F2}°.");
+            Assert.True(
+                controller.GetTargetIntent().DesiredInfluence > 0.99f,
+                "The roll observation window should cover an engaged, tracking head.");
+
+            // Transient roll decays rather than persisting: after both kicks the head recentres the anchor.
+            AssertCentredOn(controller, anchor, viewpoint);
+        }
+        finally
+        {
+            root.QueueFree();
+        }
+    }
+
+    /// <summary>
+    /// While a valid neck pivot is assigned, the published intent origin swings about the pivot by exactly the
+    /// commanded aim rotation — a downward aim swings the origin down about the pivot, the swing angle matches the
+    /// commanded aim, and the pivot radius is preserved — giving the Neck-Spine CCDIK chain positional error to
+    /// distribute across the neck and upper spine (AI-009 TR 21, acceptance criterion 16).
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task IntentOrigin_SwingsAboutNeckPivotByCommandedAim()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 1);
+        var root = new Node3D { Name = "OrientingControllerPivotFixture" };
+        sceneTree.Root.AddChild(root);
+        try
+        {
+            TestVision vision = new();
+            TestCharacter character = new(hasComponentProjection: true, vision);
+            TestMind mind = new(character);
+            MutableSceneContext scene = new();
+            mind.SetSceneContextLoaderForTesting(() => scene);
+            root.AddChild(mind);
+
+            var head = new Node3D { Name = "Head" };
+            root.AddChild(head);
+            var viewpoint = new Marker3D
+            {
+                Name = "Viewpoint",
+                Transform = new Transform3D(Basis.Identity, new Vector3(0f, 0.1f, 0f)),
+            };
+            head.AddChild(viewpoint);
+            var pivot = new Marker3D
+            {
+                Name = "NeckPivot",
+                Transform = new Transform3D(Basis.Identity, new Vector3(0f, -0.15f, 0f)),
+            };
+            head.AddChild(pivot);
+            var anchor = new StaticVisualCue { Name = "Anchor" };
+            root.AddChild(anchor);
+
+            var controller = new OrientingController
+            {
+                Name = "OrientingController",
+                Viewpoint = viewpoint,
+                NeckPivot = pivot,
+            };
+            mind.AddChild(controller);
+            await WaitForFramesAsync(sceneTree, 1);
+
+            // Sustained anchor exactly 25° below the face forward axis — the stoop scenario. The head fixture
+            // follows the commanded orientation but keeps its bone origin fixed, modelling a skeleton that has not
+            // yet solved the published positional drive.
+            double pitchRadians = DegreesToRadians(25d);
+            anchor.GlobalPosition = viewpoint.GlobalPosition + (new Vector3(
+                0f,
+                (float)-Math.Sin(pitchRadians),
+                (float)-Math.Cos(pitchRadians)) * AnchorDistanceMetres);
+            vision.LookTarget = anchor;
+
+            RunFramesWithFollowedHeadBasis(controller, head, 200);
+
+            IKTargetIntent intent = controller.GetTargetIntent();
+            Assert.True(intent.DesiredInfluence > 0.99f, "The pivot fixture never reached engaged influence.");
+            AssertCentredOn(controller, anchor, viewpoint);
+
+            // The commanded aim is measured geometrically from the authored initial forward (straight ahead) to the
+            // centred intent forward, independently of the controller's internal aim state.
+            Vector3 initialForward = new(0f, 0f, -1f);
+            Vector3 intentForward = -intent.WorldTransform.Basis.Z;
+            float commandedAimDegrees = Mathf.RadToDeg(initialForward.AngleTo(intentForward));
+            Assert.True(
+                commandedAimDegrees is > 24f and < 26f,
+                $"The converged aim should pitch the face 25° downward, but measured {commandedAimDegrees:F2}°.");
+
+            Vector3 headOrigin = head.GlobalPosition;
+            Vector3 pivotPosition = pivot.GlobalPosition;
+            Vector3 publishedOrigin = intent.WorldTransform.Origin;
+            float headOffsetMetres = (headOrigin - pivotPosition).Length();
+            float publishedOffsetMetres = (publishedOrigin - pivotPosition).Length();
+            Assert.True(
+                Mathf.Abs(publishedOffsetMetres - headOffsetMetres) < 1e-3f,
+                $"Pivoting must preserve the pivot radius ({headOffsetMetres:F4} m), but the published origin sits "
+                + $"{publishedOffsetMetres:F4} m from the pivot.");
+
+            float swingDegrees = Mathf.RadToDeg((headOrigin - pivotPosition).AngleTo(publishedOrigin - pivotPosition));
+            Assert.True(
+                Mathf.Abs(swingDegrees - commandedAimDegrees) < 1f,
+                $"The origin should swing about the pivot by the commanded aim ({commandedAimDegrees:F2}°), but "
+                + $"swung {swingDegrees:F2}°.");
+
+            Assert.True(
+                publishedOrigin.Y < headOrigin.Y - 0.005f,
+                "A downward aim should swing the origin down about the pivot, but it moved "
+                + $"{(publishedOrigin.Y - headOrigin.Y) * 1000f:F1} mm vertically.");
+            Assert.True(
+                (publishedOrigin - headOrigin).Length() > 0.01f,
+                "The published origin should sit away from the solved head origin to drive the CCDIK chain.");
+        }
+        finally
+        {
+            root.QueueFree();
+        }
+    }
+
+    /// <summary>
+    /// Without a valid neck pivot — never assigned, or assigned but since freed — the published intent origin
+    /// stays at the current solved head origin (AI-009 TR 22, acceptance criterion 16), while assigning a valid
+    /// pivot moves it away from the head origin.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task IntentOrigin_FallsBackToHeadOriginWhenNeckPivotUnsetOrInvalid()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 1);
+        var root = new Node3D { Name = "OrientingControllerPivotFallbackFixture" };
+        sceneTree.Root.AddChild(root);
+        try
+        {
+            TestVision vision = new();
+            TestCharacter character = new(hasComponentProjection: true, vision);
+            TestMind mind = new(character);
+            MutableSceneContext scene = new();
+            mind.SetSceneContextLoaderForTesting(() => scene);
+            root.AddChild(mind);
+
+            var head = new Node3D { Name = "Head" };
+            root.AddChild(head);
+            var viewpoint = new Marker3D
+            {
+                Name = "Viewpoint",
+                Transform = new Transform3D(Basis.Identity, new Vector3(0f, 0.1f, 0f)),
+            };
+            head.AddChild(viewpoint);
+            var anchor = new StaticVisualCue { Name = "Anchor" };
+            root.AddChild(anchor);
+
+            var controller = new OrientingController { Name = "OrientingController", Viewpoint = viewpoint };
+            mind.AddChild(controller);
+            await WaitForFramesAsync(sceneTree, 1);
+
+            // Sustained anchor 25° below the face forward axis keeps a downward aim commanded throughout.
+            double pitchRadians = DegreesToRadians(25d);
+            anchor.GlobalPosition = viewpoint.GlobalPosition + (new Vector3(
+                0f,
+                (float)-Math.Sin(pitchRadians),
+                (float)-Math.Cos(pitchRadians)) * AnchorDistanceMetres);
+            vision.LookTarget = anchor;
+
+            RunFramesWithFollowedHeadBasis(controller, head, 120);
+            AssertOriginAtHead(controller, head, "an unset pivot");
+
+            var pivot = new Marker3D
+            {
+                Name = "NeckPivot",
+                Transform = new Transform3D(Basis.Identity, new Vector3(0f, -0.15f, 0f)),
+            };
+            head.AddChild(pivot);
+            controller.NeckPivot = pivot;
+            RunFramesWithFollowedHeadBasis(controller, head, 40);
+
+            IKTargetIntent aimedIntent = controller.GetTargetIntent();
+            Assert.True(aimedIntent.DesiredInfluence > 0.99f, "Assigning a pivot should not disengage tracking.");
+            Assert.True(
+                (aimedIntent.WorldTransform.Origin - head.GlobalPosition).Length() > 0.01f,
+                "Assigning a valid pivot should aim the origin away from the solved head origin.");
+
+            pivot.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+            RunFramesWithFollowedHeadBasis(controller, head, 10);
+            AssertOriginAtHead(controller, head, "an invalid pivot");
+        }
+        finally
+        {
+            root.QueueFree();
+        }
+    }
+
+    private static void RunFramesWithFollowedHeadBasis(OrientingController controller, Node3D head, int frameCount)
+    {
+        for (int frame = 0; frame < frameCount; frame++)
+        {
+            controller._Process(FrameDelta);
+            IKTargetIntent intent = controller.GetTargetIntent();
+            if (intent.DesiredInfluence > 0f)
+            {
+                head.GlobalBasis = intent.WorldTransform.Basis;
+            }
+        }
+    }
+
+    private static void AssertOriginAtHead(OrientingController controller, Node3D head, string pivotDescription)
+    {
+        IKTargetIntent intent = controller.GetTargetIntent();
+        Assert.True(intent.DesiredInfluence > 0.5f, $"With {pivotDescription}, tracking should stay engaged.");
+        Assert.True(
+            -intent.WorldTransform.Basis.Z.Y < -0.1f,
+            $"With {pivotDescription}, the downward aim should stay active so the fallback check is not vacuous.");
+        float originOffsetMetres = (intent.WorldTransform.Origin - head.GlobalPosition).Length();
+        Assert.True(
+            originOffsetMetres < 1e-4f,
+            $"With {pivotDescription}, the intent origin should sit at the solved head origin, but strayed "
+            + $"{originOffsetMetres * 1000f:F2} mm.");
+    }
+
+    /// <summary>
+    /// Measures how far a basis is rolled about its own forward axis relative to the given reference up: zero for a
+    /// basis whose right axis is perpendicular to the reference up (the roll-free construction), and the injected
+    /// roll angle for a basis composed with a local Z-axis roll.
+    /// </summary>
+    private static float MeasureRollDegrees(Basis basis, Vector3 referenceUp)
+    {
+        Vector3 localUp = basis.Transposed() * referenceUp.Normalized();
+        return Mathf.RadToDeg(Mathf.Atan2(localUp.X, localUp.Y));
     }
 
     private static void PlaceAnchorAtFaceFrameAngles(

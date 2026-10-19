@@ -1,604 +1,508 @@
 using AlleyCat.Mind.Attention;
+using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.Attention;
 
-/// <summary>Unit coverage for the Godot-free AI-009 head-orientation decision seam.</summary>
+/// <summary>
+/// Geometric-contract coverage for <see cref="OrientingPolicy"/> (AI-009 HEAD-2). These tests replace the
+/// scalar-era expectations carried by the unratified frame-subtraction patch: comfort classification and
+/// saturation/centring targets are now asserted against actual solved-face-local geometry through the
+/// reviewed <see cref="GeometricGazeSaturation"/> contract, never against per-axis
+/// <c>measured − commanded</c> subtraction — the recorded head-review counterexample (head pitched −40°,
+/// true solved-face-local yaw 14°, scalar reads 18.03° crossing the 17° engage bound) is asserted directly.
+/// </summary>
 public sealed class OrientingPolicyTests
 {
     private const double FrameDelta = 1d / 60d;
+    private const double Degrees = Math.PI / 180d;
 
-    /// <summary>Saturation engages only on the residual that returns the direction just inside the comfort cone.</summary>
-    [Fact]
-    public void Evaluate_SaturatesToResidualThatReachesJustInsideConeBoundary()
+    private readonly OrientingSettings _settings = OrientingSettings.Default with
     {
-        OrientingPolicy policy = new(GlanceIsolationSettings);
-        _ = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(25d)));
-        OrientingAim aim = RunFrames(policy, 180, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(25d));
+        CentringDelaySeconds = 0.2d,
+        ReactionDelaySeconds = 0.05d,
+    };
 
-        Assert.Equal(Degrees(10d), aim.HorizontalRadians, 6);
-        Assert.Equal(Degrees(15d), Degrees(25d) - aim.HorizontalRadians, 4);
-        Assert.True(aim.HorizontalRadians < Degrees(20d));
-        Assert.True(aim.Influence > 0.99d);
+    /// <summary>
+    /// Glance-regime settings: a long centring delay keeps every frame of the saturation/hysteresis/glance
+    /// tests firmly below the sustained threshold, so the observed mode cannot silently climb to centring.
+    /// </summary>
+    private readonly OrientingSettings _glanceSettings = OrientingSettings.Default with
+    {
+        CentringDelaySeconds = 5d,
+        ReactionDelaySeconds = 0.05d,
+    };
 
-        // Sign convention: the residual follows the error direction, and the vertical cone is asymmetric.
-        OrientingPolicy upward = new(GlanceIsolationSettings);
-        _ = upward.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, 0d, Degrees(25d)));
-        OrientingAim upwardAim = RunFrames(upward, 180, FrameDelta, OrientingAnchorState.SameAnchor, 0d, Degrees(25d));
-        Assert.Equal(Degrees(15d), upwardAim.VerticalRadians, 6);
+    /// <summary>
+    /// The scalar-family counterexample: with the solved head pitched −40°, an anchor whose true
+    /// solved-face-local yaw is 14° sits inside the comfort cone (engage bound 15° + 2°) and must classify
+    /// as a glance (Hold), while the scalar subtraction read 18.03° and engaged saturation.
+    /// </summary>
+    [Fact]
+    public void PitchedHead_InConeGlance_ClassifiesGeometrically()
+    {
+        OrientingPolicy policy = new(_glanceSettings);
+        Basis solvedFace = Basis.Identity.Rotated(Vector3.Right, Mathf.DegToRad(-40f)).Orthonormalized();
+        Vector3 anchorWorld = solvedFace * new Vector3(
+            -Mathf.Sin(14f * Mathf.DegToRad(1f)),
+            0,
+            -Mathf.Cos(14f * Mathf.DegToRad(1f)));
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: anchorWorld, solvedFace: solvedFace);
 
-        OrientingPolicy downward = new(GlanceIsolationSettings);
-        _ = downward.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, 0d, Degrees(-25d)));
-        OrientingAim downwardAim = RunFrames(downward, 180, FrameDelta, OrientingAnchorState.SameAnchor, 0d, Degrees(-25d));
-        Assert.Equal(Degrees(-10d), downwardAim.VerticalRadians, 6);
+        _ = Run(policy, feedback, OrientingAnchorState.NewAnchor, 1);
+        _ = Run(policy, feedback, OrientingAnchorState.SameAnchor, 30);
+
+        // In-cone glance: the aim keeps easing toward the captured pre-glance command (zero here), never
+        // toward the anchor; the scalar patch would have driven it toward the anchor's residual.
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.SameAnchor, 1);
+        Assert.True(
+            Math.Abs(aim.HorizontalRadians) < Degrees,
+            $"An in-cone glance must hold (aim {Mathf.RadToDeg((float)aim.HorizontalRadians):F2}°), "
+            + "not chase the anchor the scalar subtraction misclassified as saturated.");
+        Assert.True(aim.Influence > 0.5d, "The glance still engages influence.");
     }
 
-    /// <summary>A sustained in-cone anchor receives full centring even though the eyes alone could carry it.</summary>
+    /// <summary>Out-of-cone glances engage saturation geometrically and aim a bounded residual.</summary>
     [Fact]
-    public void Evaluate_CentresFullyOnSustainedAnchorWellInsideCone()
+    public void OutOfConeGlance_SaturatesWithBoundedResidual()
     {
-        OrientingPolicy policy = new(OrientingSettings.Default);
-        _ = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(10d)));
-        OrientingAim aim = RunFrames(policy, 30, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(10d));
-        Assert.Equal(0d, aim.HorizontalRadians, 10);
+        OrientingPolicy policy = new(_glanceSettings);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
 
-        aim = RunFrames(policy, 150, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(10d));
-        Assert.Equal(Degrees(10d), aim.HorizontalRadians, 6);
-        Assert.True(aim.Influence > 0.99d);
+        _ = Run(policy, feedback, OrientingAnchorState.NewAnchor, 1);
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.SameAnchor, 10);
+
+        Assert.True(aim.Influence > 0.5d, "Saturation engages influence.");
+        double aimYawDegrees = aim.HorizontalRadians / Degrees;
+        Assert.True(
+            aimYawDegrees is > 6d and < 20d,
+            $"Saturation must aim a bounded residual toward the anchor (aim {aimYawDegrees:F2}° for a "
+            + "30° anchor against a 15° cone), not full centring and not nothing.");
     }
 
-    /// <summary>Centring engages at exactly the centring delay of continuous same-anchor assignment, not before.</summary>
+    /// <summary>Per-axis hysteresis: engage beyond cone+margin, persist between thresholds, release inside cone−margin.</summary>
     [Fact]
-    public void Evaluate_EngagesCentringAtExactlyTheCentringDelayBoundary()
+    public void SaturationHysteresis_PersistsBetweenThresholds()
     {
-        // Binary-exact durations keep the boundary assertion free of accumulation rounding.
-        OrientingPolicy policy = new(OrientingSettings.Default with
+        OrientingPolicy policy = new(_glanceSettings);
+
+        // 30° engages well beyond the 15°+2° engage bound and the reaction delay elapses.
+        GeometricFeedbackSnapshot engaged = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
+        _ = Run(policy, engaged, OrientingAnchorState.NewAnchor, 1);
+        _ = Run(policy, engaged, OrientingAnchorState.SameAnchor, 10);
+        double assistingAim = Run(policy, engaged, OrientingAnchorState.SameAnchor, 20).HorizontalRadians;
+        Assert.True(assistingAim > 3d * Degrees, "The engaged axis must keep assisting.");
+
+        // 14° stays between release (13°) and cone (15°): the latch persists.
+        GeometricFeedbackSnapshot between = Feedback(anchorPosition: DirectionFromYawPitch(14d * Degrees, 0));
+        double heldAim = Run(policy, between, OrientingAnchorState.SameAnchor, 10).HorizontalRadians;
+        Assert.True(
+            heldAim > 3d * Degrees,
+            "Between the hysteresis thresholds the engaged state must persist, not flap.");
+
+        // 10° releases well inside.
+        GeometricFeedbackSnapshot inside = Feedback(anchorPosition: DirectionFromYawPitch(10d * Degrees, 0));
+        _ = Run(policy, inside, OrientingAnchorState.SameAnchor, 30);
+        double releasedAim = Run(policy, inside, OrientingAnchorState.SameAnchor, 1).HorizontalRadians;
+        Assert.True(
+            releasedAim < 1d * Degrees,
+            $"Deep inside the cone the latch must release and hold (aim {releasedAim / Degrees:F2}°).");
+    }
+
+    /// <summary>Sustained centring aims the head at the anchor geometrically, inside the envelope.</summary>
+    [Fact]
+    public void SustainedAnchor_CentresGeometrically()
+    {
+        OrientingPolicy policy = new(_settings);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
+
+        _ = Run(policy, feedback, OrientingAnchorState.NewAnchor, 1);
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.SameAnchor, 90);
+
+        Assert.True(aim.Influence > 0.99d, "Sustained attention reaches full influence.");
+        double aimYawDegrees = aim.HorizontalRadians / Degrees;
+        Assert.True(
+            aimYawDegrees is > 26d and < 34d,
+            $"Sustained centring must aim at the anchor (30°), got {aimYawDegrees:F2}°.");
+    }
+
+    /// <summary>
+    /// Captured-command Hold: a brief in-cone glance after sustained centring keeps easing toward the
+    /// captured pre-glance command (character-relative), never toward the glance anchor.
+    /// </summary>
+    [Fact]
+    public void BriefGlance_KeepsCapturedCommand_NeverChasesGlanceAnchor()
+    {
+        OrientingPolicy policy = new(_settings);
+        GeometricFeedbackSnapshot sustained = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
+        _ = Run(policy, sustained, OrientingAnchorState.NewAnchor, 1);
+        OrientingAim centred = Run(policy, sustained, OrientingAnchorState.SameAnchor, 90);
+        Assert.True(centred.HorizontalRadians / Degrees is > 26d and < 34d, "Premise: centred on the anchor.");
+
+        // A new anchor 5° beyond the centred head: solved-face-locally in-cone, so a glance.
+        Vector3 glanceDirection = DirectionFromYawPitch(35d * Degrees, 0);
+        GeometricFeedbackSnapshot glance = Feedback(
+            anchorPosition: glanceDirection,
+            solvedFace: YawBasis(centred.HorizontalRadians));
+        OrientingAim held = Run(policy, glance, OrientingAnchorState.NewAnchor, 25);
+
+        double heldYawDegrees = held.HorizontalRadians / Degrees;
+        Assert.True(
+            heldYawDegrees is > 26d and < 34d,
+            $"The glance must keep easing toward the captured 30° command, got {heldYawDegrees:F2}°.");
+    }
+
+    /// <summary>UR3/TR7: Saturation has its own active destination, not the older held field or eased output.</summary>
+    [Fact]
+    public void InterruptedSaturation_TwoInConeReassignments_KeepEasingToActiveDestination()
+    {
+        // Zero lever and zero pitch: a 30° target against the authored 15° comfort cone has an
+        // independent least-change destination of 15°. Advance through the existing reaction wait.
+        OrientingPolicy policy = new(_glanceSettings);
+        GeometricFeedbackSnapshot saturated = Feedback(
+            anchorPosition: DirectionFromYawPitch(30 * Degrees, 0),
+            upstreamHeadOrigin: Vector3.Zero, viewpointOffset: Vector3.Zero);
+        OrientingAim initial = policy.Evaluate(MakeEvaluation(saturated, OrientingAnchorState.NewAnchor, FrameDelta, 1));
+        for (ulong sequence = 2; sequence <= 5; sequence++)
         {
-            CentringDelaySeconds = 0.59375d,
-            ReactionDelaySeconds = 1e-6d,
-        });
+            initial = policy.Evaluate(MakeEvaluation(saturated, OrientingAnchorState.SameAnchor, FrameDelta, sequence));
+        }
+        Assert.InRange(initial.HorizontalRadians / Degrees, 0.1, 14);
 
-        _ = policy.Evaluate(Step(0.5d, OrientingAnchorState.NewAnchor, Degrees(10d)));
-
-        OrientingAim below = policy.Evaluate(Step(0.5d, OrientingAnchorState.SameAnchor, Degrees(10d)));
-        Assert.Equal(0d, below.HorizontalRadians, 10);
-
-        below = policy.Evaluate(Step(0.0625d, OrientingAnchorState.SameAnchor, Degrees(10d)));
-        Assert.Equal(0d, below.HorizontalRadians, 10);
-
-        below = policy.Evaluate(Step(0.015625d, OrientingAnchorState.SameAnchor, Degrees(10d)));
-        Assert.Equal(0d, below.HorizontalRadians, 10);
-
-        OrientingAim boundary = policy.Evaluate(Step(0.015625d, OrientingAnchorState.SameAnchor, Degrees(10d)));
-        Assert.Equal(0d, boundary.HorizontalRadians, 10);
-
-        OrientingAim moving = policy.Evaluate(Step(0.5d, OrientingAnchorState.SameAnchor, Degrees(10d)));
-        Assert.True(moving.HorizontalRadians > 0d);
-    }
-
-    /// <summary>Anchor change and clear both restart the continuous-assignment timer before centring can re-engage.</summary>
-    [Fact]
-    public void Evaluate_ResetsCentringTimingOnAnchorChangeAndClear()
-    {
-        OrientingPolicy changePolicy = new(OrientingSettings.Default);
-        _ = changePolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(12d)));
-        _ = RunFrames(changePolicy, 179, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(12d));
-
-        _ = changePolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(2d)));
-        OrientingAim glance = RunFrames(changePolicy, 29, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(2d));
-        Assert.Equal(Degrees(12d), glance.HorizontalRadians, 5);
-
-        OrientingAim recentred = RunFrames(changePolicy, 90, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(2d));
-        Assert.Equal(Degrees(2d), recentred.HorizontalRadians, 4);
-
-        OrientingPolicy clearPolicy = new(OrientingSettings.Default);
-        _ = clearPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(8d)));
-        _ = RunFrames(clearPolicy, 179, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(8d));
-
-        _ = clearPolicy.Evaluate(Step(0d, OrientingAnchorState.None, 0d));
-        _ = clearPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(3d)));
-        OrientingAim reassigned = RunFrames(clearPolicy, 29, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(3d));
-        Assert.Equal(Degrees(8d), reassigned.HorizontalRadians, 5);
-
-        OrientingAim resustained = RunFrames(clearPolicy, 90, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(3d));
-        Assert.Equal(Degrees(3d), resustained.HorizontalRadians, 4);
-    }
-
-    /// <summary>Brief in-cone glances stay eyes-only: the head holds neutral, or the last sustained aim.</summary>
-    [Fact]
-    public void Evaluate_HoldsHeadAtNeutralOrLastSustainedAimDuringInConeGlance()
-    {
-        OrientingPolicy freshPolicy = new(GlanceIsolationSettings);
-        _ = freshPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(8d)));
-        OrientingAim fresh = RunFrames(freshPolicy, 60, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(8d));
-        Assert.Equal(0d, fresh.HorizontalRadians, 10);
-        Assert.True(fresh.Influence > 0.99d);
-
-        OrientingPolicy heldPolicy = new(OrientingSettings.Default);
-        _ = heldPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(12d)));
-        _ = RunFrames(heldPolicy, 179, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(12d));
-
-        _ = heldPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(5d)));
-        OrientingAim glance = RunFrames(heldPolicy, 30, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(5d));
-        Assert.Equal(Degrees(12d), glance.HorizontalRadians, 5);
-        Assert.True(Math.Abs(glance.HorizontalRadians - Degrees(5d)) > Degrees(4d));
-    }
-
-    /// <summary>A brief out-of-cone glance moves the head only by the cone residual, never toward full centring.</summary>
-    [Fact]
-    public void Evaluate_MovesOnlyMinimalResidualForBriefOutOfConeGlance()
-    {
-        OrientingPolicy policy = new(OrientingSettings.Default);
-        _ = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(30d)));
-        OrientingAim brief = RunFrames(policy, 34, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(30d));
-        Assert.InRange(brief.HorizontalRadians, Degrees(10d), Degrees(16d));
-        Assert.True(brief.HorizontalRadians < Degrees(20d));
-
-        OrientingPolicy glancePolicy = new(GlanceIsolationSettings);
-        _ = glancePolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(30d)));
-        OrientingAim converged = RunFrames(glancePolicy, 180, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(30d));
-        Assert.Equal(Degrees(15d), converged.HorizontalRadians, 6);
-    }
-
-    /// <summary>On glance end the head eases back towards the sustained anchor, or towards neutral after a clear.</summary>
-    [Fact]
-    public void Evaluate_EasesBackAfterGlanceEndsTowardHeldAimOrNeutral()
-    {
-        OrientingPolicy clearPolicy = new(OrientingSettings.Default);
-        SustainAt(clearPolicy, Degrees(12d), 179);
-        _ = clearPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(25d)));
-        OrientingAim duringGlance = RunFrames(clearPolicy, 23, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(25d));
-        Assert.InRange(duringGlance.HorizontalRadians, Degrees(9.5d), Degrees(11.5d));
-
-        OrientingAim afterClear = RunFrames(clearPolicy, 60, FrameDelta, OrientingAnchorState.None, 0d);
-        Assert.True(Math.Abs(afterClear.HorizontalRadians) < Degrees(1d));
-        Assert.Equal(0d, afterClear.Influence, 10);
-
-        OrientingPolicy returnPolicy = new(OrientingSettings.Default);
-        SustainAt(returnPolicy, Degrees(12d), 179);
-        _ = returnPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(25d)));
-        _ = RunFrames(returnPolicy, 23, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(25d));
-        _ = returnPolicy.Evaluate(Step(0d, OrientingAnchorState.None, 0d));
-        _ = returnPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(12d)));
-        OrientingAim returned = RunFrames(returnPolicy, 60, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(12d));
-        Assert.InRange(returned.HorizontalRadians, Degrees(11.5d), Degrees(12.1d));
-        Assert.True(returned.Influence > 0.99d);
-    }
-
-    /// <summary>Clearing the anchor eases the head to neutral while the influence ramps down to exactly zero.</summary>
-    [Fact]
-    public void Evaluate_ReleasesToNeutralWithZeroInfluenceWhenAnchorClears()
-    {
-        OrientingPolicy policy = new(OrientingSettings.Default);
-        SustainAt(policy, Degrees(12d), 179);
-
-        OrientingAim easing = RunFrames(policy, 10, FrameDelta, OrientingAnchorState.None, 0d);
-        Assert.InRange(easing.HorizontalRadians, Degrees(1d), Degrees(12d));
-        Assert.InRange(easing.Influence, 0d, 0.99d);
-
-        OrientingAim released = RunFrames(policy, 120, FrameDelta, OrientingAnchorState.None, 0d);
-        Assert.True(Math.Abs(released.HorizontalRadians) < Degrees(0.1d));
-        Assert.True(Math.Abs(released.VerticalRadians) < Degrees(0.1d));
-        Assert.Equal(0d, released.Influence, 10);
-    }
-
-    /// <summary>Engage and release hysteresis keeps a boundary-hovering target from flapping the head aim.</summary>
-    [Fact]
-    public void Evaluate_KeepsSaturationStableWithHysteresisAtTheConeBoundary()
-    {
-        // From below: alternating 14°/16° never reaches the 17° engage threshold, so the head never reacts.
-        OrientingPolicy belowPolicy = new(GlanceIsolationSettings);
-        _ = belowPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(14d)));
-        double belowMaximum = 0d;
-        for (int frame = 0; frame < 60; frame++)
+        OrientingAim output = initial;
+        for (ulong sequence = 6; sequence <= 25; sequence++)
         {
-            double error = Degrees(frame % 2 == 0 ? 14d : 16d);
-            OrientingAim aim = belowPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.SameAnchor, error));
-            belowMaximum = Math.Max(belowMaximum, Math.Abs(aim.HorizontalRadians));
+            // A second new in-cone identity interrupts Hold itself halfway through the same observation.
+            double glanceYaw = sequence < 16 ? 5 : 10;
+            GeometricFeedbackSnapshot glance = Feedback(
+                anchorPosition: DirectionFromYawPitch(glanceYaw * Degrees, 0),
+                solvedFace: YawBasis(output.HorizontalRadians),
+                upstreamHeadOrigin: Vector3.Zero, viewpointOffset: Vector3.Zero);
+            OrientingAim previous = output;
+            output = policy.Evaluate(MakeEvaluation(glance,
+                sequence is 6 or 16 ? OrientingAnchorState.NewAnchor : OrientingAnchorState.SameAnchor,
+                FrameDelta, sequence));
+            Assert.True(output.HorizontalRadians > previous.HorizontalRadians,
+                "Every unfinished Hold evaluation must continue approaching the pre-glance saturation destination.");
+            Assert.InRange(output.HorizontalRadians / Degrees, 0, 15.01);
+        }
+        Assert.InRange(output.HorizontalRadians / Degrees, 14.5, 15.01);
+    }
+
+    /// <summary>Release eases toward the upstream animation pose while influence decays — never a solved-neutral re-anchor.</summary>
+    [Fact]
+    public void Release_EasesTowardUpstreamPose()
+    {
+        OrientingPolicy policy = new(_settings);
+        Basis upstreamPitched = Basis.Identity.Rotated(Vector3.Right, Mathf.DegToRad(20f)).Orthonormalized();
+        GeometricFeedbackSnapshot feedback = Feedback(upstreamFace: upstreamPitched);
+
+        _ = Run(policy, feedback, OrientingAnchorState.None, 40);
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.None, 1);
+
+        Assert.True(aim.Influence <= 0d, "Influence must decay to zero without an anchor.");
+        Assert.True(
+            aim.VerticalRadians / Degrees is > 16d and < 24d,
+            $"Release must ease toward the 20°-pitched upstream pose, got {aim.VerticalRadians / Degrees:F2}°.");
+    }
+
+    /// <summary>Clear followed by a new brief glance never revives the cleared episode's command.</summary>
+    [Fact]
+    public void Reassignment_AfterClear_NeverRevivesStaleCommand()
+    {
+        OrientingPolicy policy = new(_settings);
+        GeometricFeedbackSnapshot sustained = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
+        _ = Run(policy, sustained, OrientingAnchorState.NewAnchor, 1);
+        _ = Run(policy, sustained, OrientingAnchorState.SameAnchor, 90);
+
+        // Clear and let the release decay the command back toward the (identity) upstream pose.
+        GeometricFeedbackSnapshot cleared = Feedback();
+        _ = Run(policy, cleared, OrientingAnchorState.None, 90);
+
+        // A new brief glance: the captured command must be the post-release current state (~0°), not the
+        // cleared episode's 30°.
+        GeometricFeedbackSnapshot glance = Feedback(anchorPosition: DirectionFromYawPitch(6d * Degrees, 0));
+        OrientingAim held = Run(policy, glance, OrientingAnchorState.NewAnchor, 25);
+        double heldYawDegrees = held.HorizontalRadians / Degrees;
+        Assert.True(
+            heldYawDegrees < 5d,
+            $"A post-clear glance must not revive the stale 30° episode command, got {heldYawDegrees:F2}°.");
+    }
+
+    /// <summary>Partial influence classifies on the actual solved geometry (mid-transit observation).</summary>
+    [Fact]
+    public void PartialInfluence_ClassifiesActualSolvedGeometry()
+    {
+        OrientingPolicy policy = new(_glanceSettings);
+        // Solved head mid-transit at 20°; anchor world direction at 40° — face-locally 20°, beyond the
+        // 15°+2° engage bound regardless of the aim still ramping: the actual observation classifies.
+        GeometricFeedbackSnapshot feedback = Feedback(
+            anchorPosition: DirectionFromYawPitch(40d * Degrees, 0),
+            solvedFace: YawBasis(20d * Degrees));
+
+        _ = Run(policy, feedback, OrientingAnchorState.NewAnchor, 1);
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.SameAnchor, 7);
+
+        Assert.True(
+            aim.Influence is > 0.3d and < 1d,
+            "Premise: mid-ramp partial influence at this horizon.");
+        Assert.True(
+            aim.HorizontalRadians > 3d * Degrees,
+            "The out-of-cone classification must engage on the actual solved geometry during partial influence.");
+    }
+
+    /// <summary>
+    /// Coupled axes: a pitched solved head with a lateral out-of-cone anchor resolves through the geometric
+    /// helper — the achieved command's predicted face-local target re-enters the cone, which per-axis scalar
+    /// residuals cannot guarantee.
+    /// </summary>
+    [Fact]
+    public void CoupledAxes_SaturationResolvesThroughGeometry()
+    {
+        OrientingPolicy policy = new(_glanceSettings);
+        Basis solvedFace = Basis.Identity.Rotated(Vector3.Right, Mathf.DegToRad(-30f)).Orthonormalized();
+        Vector3 anchor = solvedFace * DirectionFromYawPitch(30d * Degrees, 10d * Degrees);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: anchor, solvedFace: solvedFace);
+
+        _ = Run(policy, feedback, OrientingAnchorState.NewAnchor, 1);
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.SameAnchor, 60);
+
+        // Independent verification: compose the achieved command with the upstream geometry and measure the
+        // anchor's face-local angles at the predicted eye origin (the reviewed prediction formula, recomputed
+        // here from first principles).
+        Basis command = GeometricGazeSaturation.ComposeCommandBasis(aim.HorizontalRadians, aim.VerticalRadians);
+        Basis upstream = Basis.Identity;
+        Vector3 pivot = Vector3.Zero;
+        Vector3 lever = new(0f, 0.06f, 0f);
+        Vector3 viewpointOffset = new(0f, 0.04f, -0.06f);
+        Vector3 predictedEye = pivot + (command * (upstream.Inverse() * lever)) + (command * viewpointOffset);
+        Vector3 faceLocal = command.Inverse() * (anchor - predictedEye).Normalized();
+        (double yaw, double pitch) = ExtractAngles(faceLocal);
+
+        Assert.True(
+            Math.Abs(yaw) <= (15d + 0.5d) * Degrees && Math.Abs(pitch) <= (15d + 0.5d) * Degrees,
+            $"The saturation command must bring the anchor back inside the cone geometrically, got face-local "
+            + $"({yaw / Degrees:F2}°, {pitch / Degrees:F2}°).");
+    }
+
+    /// <summary>A repeated evaluation sequence (zero-delta recomposition) returns the previous aim verbatim and ages nothing.</summary>
+    [Fact]
+    public void RepeatedEvaluationSequence_DoesNotAgeOrRecompute()
+    {
+        OrientingPolicy policy = new(_settings);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
+
+        OrientingAim first = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.NewAnchor, FrameDelta, 100));
+        OrientingAim repeated = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor, FrameDelta, 100));
+        Assert.Equal(first, repeated);
+
+        // Zero-delta with a fresh sequence also ages nothing: many recompositions cannot elapse the reaction
+        // delay or the centring clock.
+        for (int i = 0; i < 600; i++)
+        {
+            _ = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor, 0d, 200 + (ulong)i));
         }
 
-        Assert.Equal(0d, belowMaximum, 10);
-
-        // From above: engaged at 20°, then hovering 14°/16° stays latched at the residual instead of flapping
-        // back to the held aim of the previously sustained anchor.
-        OrientingPolicy abovePolicy = new(GlanceIsolationSettings);
-        SustainAt(abovePolicy, Degrees(12d), 719);
-        _ = abovePolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(20d)));
-        _ = RunFrames(abovePolicy, 24, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(20d));
-
-        double largestFrameStep = 0d;
-        double previous = abovePolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.SameAnchor, Degrees(14d))).HorizontalRadians;
-        for (int frame = 1; frame < 60; frame++)
-        {
-            double error = Degrees(frame % 2 == 0 ? 14d : 16d);
-            double current = abovePolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.SameAnchor, error)).HorizontalRadians;
-            largestFrameStep = Math.Max(largestFrameStep, Math.Abs(current - previous));
-            previous = current;
-        }
-
-        Assert.True(previous < Degrees(2d), $"Hovering latched aim should settle near the residual, but found '{previous}'.");
-        Assert.True(largestFrameStep < Degrees(1.5d), $"Hovering aim should not flap, but a frame moved '{largestFrameStep}'.");
-
-        // Dropping well inside the release threshold frees the latch and the head returns to the held aim.
-        OrientingAim released = RunFrames(abovePolicy, 90, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(10d));
-        Assert.InRange(released.HorizontalRadians, Degrees(11d), Degrees(13d));
+        Assert.Equal(
+            first,
+            policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor, 0d, 1000)));
     }
 
-    /// <summary>Sustained aims strain best-effort to the per-axis envelope edge, asymmetric vertically.</summary>
+    /// <summary>The reaction delay holds the aim still on fresh engagement before it starts moving.</summary>
     [Fact]
-    public void Evaluate_ClampsSustainedAimToAsymmetricOrientationEnvelope()
+    public void ReactionDelay_HoldsFreshEngagement()
     {
-        OrientingPolicy upwardPolicy = new(ResponsiveSettings);
-        _ = upwardPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(120d), Degrees(90d)));
-        OrientingAim upward = RunFrames(
-            upwardPolicy,
-            240,
-            FrameDelta,
-            OrientingAnchorState.SameAnchor,
-            Degrees(120d),
-            Degrees(90d));
-        Assert.Equal(Degrees(75d), upward.HorizontalRadians, 6);
-        Assert.Equal(Degrees(40d), upward.VerticalRadians, 6);
-        Assert.True(upward.Influence > 0.99d);
+        OrientingPolicy policy = new(_settings);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: DirectionFromYawPitch(30d * Degrees, 0));
 
-        OrientingPolicy downwardPolicy = new(ResponsiveSettings);
-        _ = downwardPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, 0d, Degrees(-90d)));
-        OrientingAim downward = RunFrames(
-            downwardPolicy,
-            240,
-            FrameDelta,
-            OrientingAnchorState.SameAnchor,
-            0d,
-            Degrees(-90d));
-        Assert.Equal(0d, downward.HorizontalRadians, 6);
-        Assert.Equal(Degrees(-55d), downward.VerticalRadians, 6);
+        OrientingAim early = Run(policy, feedback, OrientingAnchorState.NewAnchor, 2);
+        Assert.True(
+            Math.Abs(early.HorizontalRadians) < 0.5d * Degrees,
+            "The reaction delay must hold the aim before moving.");
+
+        OrientingAim moving = Run(policy, feedback, OrientingAnchorState.SameAnchor, 10);
+        Assert.True(
+            moving.HorizontalRadians > 1d * Degrees,
+            "After the reaction delay the aim must start toward the engaged target.");
     }
 
-    /// <summary>Newly engaged aims wait out the reaction delay before the head starts moving; influence does not.</summary>
+    /// <summary>Extreme anchors keep the command inside the authored envelope.</summary>
     [Fact]
-    public void Evaluate_AppliesReactionDelayBeforeNewlyEngagedAim()
+    public void ExtremeAnchor_CommandStaysInsideEnvelope()
     {
-        // Binary-exact steps: 3 × 0.0625 s of frozen frames equal the 0.1875 s reaction delay.
-        OrientingPolicy saturationPolicy = new(OrientingSettings.Default with
-        {
-            ReactionDelaySeconds = 0.1875d
-        });
-        Assert.Equal(0d, saturationPolicy.Evaluate(Step(0.0625d, OrientingAnchorState.NewAnchor, Degrees(25d))).HorizontalRadians, 10);
-        Assert.Equal(0d, saturationPolicy.Evaluate(Step(0.0625d, OrientingAnchorState.SameAnchor, Degrees(25d))).HorizontalRadians, 10);
-        OrientingAim frozen = saturationPolicy.Evaluate(Step(0.0625d, OrientingAnchorState.SameAnchor, Degrees(25d)));
-        Assert.Equal(0d, frozen.HorizontalRadians, 10);
-        Assert.True(frozen.Influence > 0d);
-        OrientingAim moving = saturationPolicy.Evaluate(Step(0.0625d, OrientingAnchorState.SameAnchor, Degrees(25d)));
-        Assert.True(moving.HorizontalRadians > 0d);
+        OrientingPolicy policy = new(_settings);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: DirectionFromYawPitch(150d * Degrees, 0));
 
-        // The centring engagement at the delay boundary also reacts before the head starts towards full centring.
-        OrientingPolicy centringPolicy = new(OrientingSettings.Default);
-        _ = centringPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(10d)));
-        _ = RunFrames(centringPolicy, 44, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(10d));
-        OrientingAim stillFrozen = centringPolicy.Evaluate(Step(FrameDelta, OrientingAnchorState.SameAnchor, Degrees(10d)));
-        Assert.Equal(0d, stillFrozen.HorizontalRadians, 10);
-        OrientingAim centring = RunFrames(centringPolicy, 3, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(10d));
-        Assert.True(centring.HorizontalRadians > 0d);
+        _ = Run(policy, feedback, OrientingAnchorState.NewAnchor, 1);
+        OrientingAim aim = Run(policy, feedback, OrientingAnchorState.SameAnchor, 120);
+
+        Assert.True(
+            Math.Abs(aim.HorizontalRadians) <= (75d * Degrees) + 1e-6d,
+            $"The command must respect the 75° envelope, got {aim.HorizontalRadians / Degrees:F2}°.");
     }
 
-    /// <summary>Aim steps never exceed the per-axis rate cap, ease below it near the target, and never overshoot.</summary>
+    /// <summary>AC11: exact eligibility boundary, with assignment and clear resetting the clock.</summary>
     [Fact]
-    public void Evaluate_RateLimitsAimTowardTheTarget()
-    {
-        // The long glance isolation keeps the anchor a saturation glance instead of a sustained centring, and the
-        // negligible reaction delay puts the rate cap within reach of the first measured frame.
-        OrientingSettings settings = GlanceIsolationSettings with
-        {
-            ReactionDelaySeconds = 1e-6d
-        };
-        OrientingPolicy policy = new(settings);
-        _ = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(40d)));
-
-        double cap = settings.MaxHorizontalRateRadiansPerSecond * FrameDelta;
-        OrientingAim first = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.SameAnchor, Degrees(40d)));
-        Assert.Equal(cap, first.HorizontalRadians, 9);
-        OrientingAim second = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.SameAnchor, Degrees(40d)));
-        Assert.Equal(2d * cap, second.HorizontalRadians, 9);
-        Assert.True(second.HorizontalRadians - first.HorizontalRadians <= cap + 1e-12d);
-
-        OrientingAim converged = RunFrames(policy, 240, FrameDelta, OrientingAnchorState.SameAnchor, Degrees(40d));
-        Assert.Equal(Degrees(25d), converged.HorizontalRadians, 6);
-        Assert.True(converged.HorizontalRadians <= Degrees(25d) + 1e-6d);
-    }
-
-    /// <summary>Influence ramps between 0 and 1 at the configured rates without stepping in either direction.</summary>
-    [Fact]
-    public void Evaluate_RampsInfluenceSmoothlyAndNeverSteps()
+    public void CentringDelay_EngagesAtExactBoundaryAndResetsOnReassignmentOrClear()
     {
         OrientingSettings settings = OrientingSettings.Default;
         OrientingPolicy policy = new(settings);
+        GeometricFeedbackSnapshot feedback = Feedback(
+            anchorPosition: DirectionFromYawPitch(10 * Degrees, 0),
+            upstreamHeadOrigin: Vector3.Zero, viewpointOffset: Vector3.Zero);
+        _ = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.NewAnchor, 0, 1));
+        double before = Math.BitDecrement(settings.CentringDelaySeconds);
+        OrientingAim held = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor, before, 2));
+        Assert.Equal(0, held.HorizontalRadians);
+        // Eligibility arms the normal reaction delay. Observe movement afterwards with zero additional
+        // assignment age beyond the reaction interval, distinguishing >= from > at the exact boundary.
+        _ = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor,
+            settings.CentringDelaySeconds - before, 3));
+        OrientingAim moving = policy.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor,
+            settings.ReactionDelaySeconds, 4));
+        Assert.True(moving.HorizontalRadians > 0);
 
-        double previous = 0d;
-        OrientingAim aim = default;
-        for (int frame = 1; frame <= 20; frame++)
+        foreach (OrientingAnchorState reset in new[] { OrientingAnchorState.NewAnchor, OrientingAnchorState.None })
         {
-            OrientingAnchorState anchorState = frame == 1 ? OrientingAnchorState.NewAnchor : OrientingAnchorState.SameAnchor;
-            aim = policy.Evaluate(Step(FrameDelta, anchorState, Degrees(25d)));
-            Assert.InRange(aim.Influence, previous, previous + (settings.InfluenceEngagePerSecond * FrameDelta) + 1e-12d);
-            previous = aim.Influence;
+            OrientingPolicy fresh = new(settings);
+            _ = fresh.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.NewAnchor, 0, 1));
+            _ = fresh.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor, before, 2));
+            _ = fresh.Evaluate(MakeEvaluation(feedback, reset, 0, 3));
+            OrientingAim afterReset = fresh.Evaluate(MakeEvaluation(feedback, OrientingAnchorState.SameAnchor,
+                settings.ReactionDelaySeconds, 4));
+            Assert.Equal(0, afterReset.HorizontalRadians);
         }
-
-        Assert.Equal(1d, aim.Influence, 10);
-
-        for (int frame = 1; frame <= 25; frame++)
-        {
-            aim = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.None, 0d));
-            Assert.InRange(aim.Influence, previous - (settings.InfluenceReleasePerSecond * FrameDelta) - 1e-12d, previous);
-            previous = aim.Influence;
-        }
-
-        Assert.Equal(0d, aim.Influence, 10);
     }
 
-    /// <summary>Settings validation passes the defaults and rejects each contract violation with a clear reason.</summary>
+    /// <summary>TR11/15: bounded steps and ramps, with identical geometric inputs reproducing every output.</summary>
     [Fact]
-    public void Settings_ValidateAcceptsDefaultsAndRejectsInvalidAuthoring()
+    public void GeometricSequence_RespectsRateAndInfluenceRampsAndIsDeterministic()
     {
-        OrientingSettingsValidation pass = OrientingSettings.Default.Validate();
-        Assert.True(pass.IsValid);
-        Assert.Null(pass.FailureReason);
-
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                ComfortConeHorizontalRadians = double.NaN
-            },
-            nameof(OrientingSettings.ComfortConeHorizontalRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                ComfortConeUpRadians = 0d
-            },
-            nameof(OrientingSettings.ComfortConeUpRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                EnvelopeDownRadians = Degrees(-5d)
-            },
-            nameof(OrientingSettings.EnvelopeDownRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                EnvelopeHorizontalRadians = OrientingSettings.Default.ComfortConeHorizontalRadians
-            },
-            "must exceed");
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                EnvelopeUpRadians = Degrees(9d)
-            },
-            nameof(OrientingSettings.EnvelopeUpRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                CentringDelaySeconds = 0d
-            },
-            nameof(OrientingSettings.CentringDelaySeconds));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                ReactionDelaySeconds = double.PositiveInfinity
-            },
-            nameof(OrientingSettings.ReactionDelaySeconds));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                MaxVerticalRateRadiansPerSecond = 0d
-            },
-            nameof(OrientingSettings.MaxVerticalRateRadiansPerSecond));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                AimSmoothingSeconds = -0.1d
-            },
-            nameof(OrientingSettings.AimSmoothingSeconds));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                InfluenceEngagePerSecond = 0d
-            },
-            nameof(OrientingSettings.InfluenceEngagePerSecond));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                SaturationReleaseMarginRadians = -0.01d
-            },
-            nameof(OrientingSettings.SaturationReleaseMarginRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                SaturationEngageMarginRadians = Degrees(6d),
-                SaturationReleaseMarginRadians = Degrees(6d),
-            },
-            "hysteresis margins");
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                ResidualEccentricityHorizontalRadians = -0.01d
-            },
-            nameof(OrientingSettings.ResidualEccentricityHorizontalRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                ResidualEccentricityHorizontalRadians = OrientingSettings.Default.ComfortConeHorizontalRadians,
-            },
-            nameof(OrientingSettings.ResidualEccentricityHorizontalRadians));
-        AssertRejected(
-            OrientingSettings.Default with
-            {
-                ResidualEccentricityVerticalRadians = Degrees(12d)
-            },
-            nameof(OrientingSettings.ResidualEccentricityVerticalRadians));
-
-        _ = Assert.Throws<InvalidOperationException>(
-            () => new OrientingPolicy(OrientingSettings.Default with { EnvelopeUpRadians = Degrees(5d) }));
+        OrientingSettings settings = OrientingSettings.Default;
+        OrientingPolicy first = new(settings);
+        OrientingPolicy second = new(settings);
+        GeometricFeedbackSnapshot feedback = Feedback(anchorPosition: DirectionFromYawPitch(40 * Degrees, -25 * Degrees));
+        OrientingAim previous = default;
+        bool moved = false;
+        for (ulong sequence = 1; sequence <= 180; sequence++)
+        {
+            OrientingAnchorState state = sequence == 1 ? OrientingAnchorState.NewAnchor
+                : sequence <= 100 ? OrientingAnchorState.SameAnchor : OrientingAnchorState.None;
+            OrientingEvaluation evaluation = MakeEvaluation(feedback, state, FrameDelta, sequence);
+            OrientingAim aim = first.Evaluate(evaluation);
+            Assert.Equal(aim, second.Evaluate(evaluation));
+            Assert.InRange(Math.Abs(aim.HorizontalRadians - previous.HorizontalRadians), 0,
+                (settings.MaxHorizontalRateRadiansPerSecond * FrameDelta) + 1e-12);
+            Assert.InRange(Math.Abs(aim.VerticalRadians - previous.VerticalRadians), 0,
+                (settings.MaxVerticalRateRadiansPerSecond * FrameDelta) + 1e-12);
+            double expectedInfluence = state == OrientingAnchorState.None
+                ? Math.Max(0, previous.Influence - (settings.InfluenceReleasePerSecond * FrameDelta))
+                : Math.Min(1, previous.Influence + (settings.InfluenceEngagePerSecond * FrameDelta));
+            Assert.Equal(expectedInfluence, aim.Influence, 12);
+            moved |= aim.HorizontalRadians > 0 && aim.VerticalRadians < 0;
+            previous = aim;
+        }
+        Assert.True(moved);
+        Assert.Equal(0, previous.Influence);
     }
 
-    /// <summary>Evaluation inputs fail clearly on non-finite or negative deltas, errors, and unknown anchor states.</summary>
+    /// <summary>AC14: invalid timing/state inputs are rejected at the pure evaluation boundary.</summary>
     [Fact]
-    public void Evaluate_ValidatesEvaluationInputs()
+    public void Evaluation_RejectsInvalidDeltaAndAnchorState()
     {
         OrientingPolicy policy = new(OrientingSettings.Default);
-
-        _ = Assert.Throws<ArgumentOutOfRangeException>(
-            () => policy.Evaluate(Step(double.NaN, OrientingAnchorState.NewAnchor, 0d)));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(
-            () => policy.Evaluate(Step(-0.01d, OrientingAnchorState.NewAnchor, 0d)));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(
-            () => policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, double.PositiveInfinity, 0d)));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(
-            () => policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, 0d, double.NaN)));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(
-            () => policy.Evaluate(new OrientingEvaluation(FrameDelta, (OrientingAnchorState)99, 0d, 0d)));
-
-        Assert.True(policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, Degrees(8d))).Influence > 0d);
-    }
-
-    /// <summary>The defaults keep centring above the AI-007 secondary glance dwell with a safe margin.</summary>
-    [Fact]
-    public void Defaults_KeepCentringDelayAboveTheSecondaryGlanceDwell()
-    {
-        // AI-007 authors a 0.5 s default secondary dwell (AttentionGazeTargetSelector.SecondaryDwellSeconds);
-        // AI-009 requires the centring-delay default to exceed it so brief secondary glances never centre.
-        const double secondaryDwellSeconds = 0.5d;
-
-        Assert.True(OrientingSettings.Default.CentringDelaySeconds >= 0.6d);
-        Assert.True(OrientingSettings.Default.CentringDelaySeconds > secondaryDwellSeconds);
-        Assert.InRange(OrientingSettings.Default.ReactionDelaySeconds, 0.15d, 0.2d);
-        Assert.Equal(Degrees(15d), OrientingSettings.Default.ComfortConeHorizontalRadians, 9);
-        Assert.Equal(Degrees(10d), OrientingSettings.Default.ComfortConeUpRadians, 9);
-        Assert.Equal(Degrees(15d), OrientingSettings.Default.ComfortConeDownRadians, 9);
-        Assert.Equal(Degrees(75d), OrientingSettings.Default.EnvelopeHorizontalRadians, 9);
-        Assert.Equal(Degrees(40d), OrientingSettings.Default.EnvelopeUpRadians, 9);
-        Assert.Equal(Degrees(55d), OrientingSettings.Default.EnvelopeDownRadians, 9);
-    }
-
-    /// <summary>Identical evaluation sequences produce bit-identical aim and influence trajectories.</summary>
-    [Fact]
-    public void Evaluate_IsDeterministicForIdenticalSequences()
-    {
-        List<OrientingEvaluation> script = BuildMixedScript();
-
-        List<OrientingAim> firstRun = RunScript(new OrientingPolicy(OrientingSettings.Default), script);
-        List<OrientingAim> secondRun = RunScript(new OrientingPolicy(OrientingSettings.Default), script);
-
-        Assert.Equal(firstRun.Count, secondRun.Count);
-        for (int frame = 0; frame < firstRun.Count; frame++)
+        foreach (double delta in new[] { double.NaN, double.PositiveInfinity, -0.01 })
         {
-            Assert.Equal(firstRun[frame].HorizontalRadians, secondRun[frame].HorizontalRadians);
-            Assert.Equal(firstRun[frame].VerticalRadians, secondRun[frame].VerticalRadians);
-            Assert.Equal(firstRun[frame].Influence, secondRun[frame].Influence);
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => policy.Evaluate(
+                MakeEvaluation(Feedback(), OrientingAnchorState.NewAnchor, delta, 1)));
         }
-
-        Assert.Contains(firstRun, aim => aim.HorizontalRadians != 0d);
-        Assert.Contains(firstRun, aim => aim.VerticalRadians != 0d);
-        Assert.Contains(firstRun, aim => aim.Influence >= 1d);
-        Assert.Contains(firstRun, aim => aim.Influence <= 0d);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => policy.Evaluate(
+            MakeEvaluation(Feedback(), (OrientingAnchorState)99, FrameDelta, 1)));
     }
 
-    private static OrientingSettings GlanceIsolationSettings
-        => OrientingSettings.Default with
+    /// <summary>AC14: defaults validate and each axis enforces an envelope larger than its comfort cone.</summary>
+    [Fact]
+    public void Settings_ValidateDefaultsEnvelopeAxesAndRateAuthoring()
+    {
+        OrientingSettings defaults = OrientingSettings.Default;
+        Assert.True(defaults.Validate().IsValid);
+        Assert.Null(defaults.Validate().FailureReason);
+        foreach (OrientingSettings invalid in new[]
+                 {
+                     defaults with { EnvelopeHorizontalRadians = defaults.ComfortConeHorizontalRadians },
+                     defaults with { EnvelopeUpRadians = defaults.ComfortConeUpRadians },
+                     defaults with { EnvelopeDownRadians = defaults.ComfortConeDownRadians },
+                     defaults with { MaxHorizontalRateRadiansPerSecond = double.PositiveInfinity },
+                     defaults with { MaxVerticalRateRadiansPerSecond = 0 },
+                 })
         {
-            CentringDelaySeconds = 10d
-        };
+            Assert.False(invalid.Validate().IsValid);
+            Assert.False(string.IsNullOrWhiteSpace(invalid.Validate().FailureReason));
+            _ = Assert.Throws<InvalidOperationException>(() => new OrientingPolicy(invalid));
+        }
+    }
 
-    private static OrientingSettings ResponsiveSettings
-        => OrientingSettings.Default with
-        {
-            ReactionDelaySeconds = 1e-6d
-        };
+    private static GeometricFeedbackSnapshot Feedback(
+        Vector3? anchorPosition = null,
+        Basis? solvedFace = null,
+        Vector3? solvedEyeOrigin = null,
+        Basis? upstreamFace = null,
+        Vector3? upstreamHeadOrigin = null,
+        Vector3? pivotPosition = null,
+        Vector3? viewpointOffset = null)
+        => new(
+            anchorPosition ?? new Vector3(0f, 0f, -1f),
+            solvedEyeOrigin ?? Vector3.Zero,
+            (solvedFace ?? Basis.Identity).Orthonormalized(),
+            upstreamHeadOrigin ?? new Vector3(0f, 0.06f, 0f),
+            pivotPosition ?? Vector3.Zero,
+            (upstreamFace ?? Basis.Identity).Orthonormalized(),
+            viewpointOffset ?? new Vector3(0f, 0.04f, -0.06f));
 
-    private static double Degrees(double degrees)
-        => degrees * Math.PI / 180d;
-
-    private static OrientingEvaluation Step(
-        double deltaSeconds,
+    private static OrientingEvaluation MakeEvaluation(
+        GeometricFeedbackSnapshot feedback,
         OrientingAnchorState anchorState,
-        double horizontalErrorRadians,
-        double verticalErrorRadians = 0d)
-        => new(deltaSeconds, anchorState, horizontalErrorRadians, verticalErrorRadians);
+        double deltaSeconds,
+        ulong sequence)
+        => new(deltaSeconds, anchorState, sequence, feedback);
 
-    private static OrientingAim RunFrames(
+    private static OrientingAim Run(
         OrientingPolicy policy,
-        int frameCount,
-        double deltaSeconds,
+        GeometricFeedbackSnapshot feedback,
         OrientingAnchorState anchorState,
-        double horizontalErrorRadians,
-        double verticalErrorRadians = 0d)
+        int frames,
+        ulong sequence = 0)
     {
         OrientingAim aim = default;
-        for (int frame = 0; frame < frameCount; frame++)
+        for (int frame = 0; frame < frames; frame++)
         {
-            aim = policy.Evaluate(Step(deltaSeconds, anchorState, horizontalErrorRadians, verticalErrorRadians));
+            ulong evaluationSequence = sequence == 0 ? (ulong)(100 + frame) : sequence;
+            aim = policy.Evaluate(MakeEvaluation(feedback, anchorState, FrameDelta, evaluationSequence));
         }
 
         return aim;
     }
 
-    private static void SustainAt(OrientingPolicy policy, double horizontalErrorRadians, int sameAnchorFrameCount)
+    private static Basis YawBasis(double yawRadians)
+        => Basis.Identity.Rotated(Vector3.Up, (float)yawRadians).Orthonormalized();
+
+    private static Vector3 DirectionFromYawPitch(double yawRadians, double pitchRadians)
     {
-        _ = policy.Evaluate(Step(FrameDelta, OrientingAnchorState.NewAnchor, horizontalErrorRadians));
-        _ = RunFrames(policy, sameAnchorFrameCount, FrameDelta, OrientingAnchorState.SameAnchor, horizontalErrorRadians);
+        double cosPitch = Math.Cos(pitchRadians);
+        return new(
+            (float)(-cosPitch * Math.Sin(yawRadians)),
+            (float)Math.Sin(pitchRadians),
+            (float)(-cosPitch * Math.Cos(yawRadians)));
     }
 
-    private static List<OrientingAim> RunScript(OrientingPolicy policy, IReadOnlyList<OrientingEvaluation> script)
+    private static (double Yaw, double Pitch) ExtractAngles(Vector3 direction)
     {
-        List<OrientingAim> aims = new(script.Count);
-        foreach (OrientingEvaluation evaluation in script)
+        double horizontal = Math.Sqrt((direction.X * direction.X) + (direction.Z * direction.Z));
+        if (horizontal < 1e-9d)
         {
-            aims.Add(policy.Evaluate(evaluation));
+            return (0d, direction.Y >= 0d ? Math.PI / 2d : -Math.PI / 2d);
         }
 
-        return aims;
-    }
-
-    private static List<OrientingEvaluation> BuildMixedScript()
-    {
-        List<OrientingEvaluation> script = [];
-
-        // Idle, then an in-cone anchor that becomes sustained.
-        AddSpan(script, 5, OrientingAnchorState.None, 0d, 0d, firstAnchorState: OrientingAnchorState.None);
-        AddSpan(script, 120, OrientingAnchorState.SameAnchor, Degrees(9d), Degrees(4d), firstAnchorState: OrientingAnchorState.NewAnchor);
-
-        // Brief out-of-cone glance, then a clear.
-        AddSpan(script, 30, OrientingAnchorState.SameAnchor, Degrees(-40d), Degrees(-30d), firstAnchorState: OrientingAnchorState.NewAnchor);
-        AddSpan(script, 10, OrientingAnchorState.None, 0d, 0d, firstAnchorState: OrientingAnchorState.None);
-
-        // Return to a sustained downward anchor that strains the vertical envelope.
-        AddSpan(script, 150, OrientingAnchorState.SameAnchor, Degrees(20d), Degrees(-80d), firstAnchorState: OrientingAnchorState.NewAnchor);
-
-        // Final glance hovering at the cone boundary, then release.
-        AddSpan(script, 40, OrientingAnchorState.SameAnchor, Degrees(16d), 0d, firstAnchorState: OrientingAnchorState.NewAnchor);
-        AddSpan(script, 30, OrientingAnchorState.None, 0d, 0d, firstAnchorState: OrientingAnchorState.None);
-
-        return script;
-    }
-
-    private static void AddSpan(
-        List<OrientingEvaluation> script,
-        int frameCount,
-        OrientingAnchorState anchorState,
-        double horizontalErrorRadians,
-        double verticalErrorRadians,
-        OrientingAnchorState firstAnchorState)
-    {
-        for (int frame = 0; frame < frameCount; frame++)
-        {
-            OrientingAnchorState state = frame == 0 ? firstAnchorState : anchorState;
-            script.Add(Step(FrameDelta, state, horizontalErrorRadians, verticalErrorRadians));
-        }
-    }
-
-    private static void AssertRejected(OrientingSettings settings, string expectedFragment)
-    {
-        OrientingSettingsValidation validation = settings.Validate();
-        Assert.False(validation.IsValid);
-        Assert.NotNull(validation.FailureReason);
-        Assert.Contains(expectedFragment, validation.FailureReason);
+        return (Math.Atan2(-direction.X, -direction.Z), Math.Atan2(direction.Y, horizontal));
     }
 }

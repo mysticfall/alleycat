@@ -28,6 +28,7 @@ Provide a reusable eye component system that:
 - Integrates with AnimationTree partial blending analogous to hand pose setup.
 - Periodically publishes a synchronous immutable survey of authored visual subjects visible to the character.
 - Publishes immutable visual-family percepts when the assigned cue changes so Mind may inspect focused subjects.
+- Keeps eye motion in step with head turns during transit, without changing gaze selection or the eye clamps.
 
 ## User Requirements
 
@@ -37,7 +38,7 @@ Provide a reusable eye component system that:
 3. Blinking must occur at random intervals with configurable timing parameters.
 4. Eye animations must blend with existing facial animations without overriding them.
 5. Left and right eyes must move together as a unit.
-6. The eyes must make bounded saccade movements around the active gaze anchor.
+6. The eyes must make bounded, finite saccade movements around the active gaze anchor and return to fixation.
 7. The gaze backend is inferred from authoring rather than selected explicitly: leaving both
    eye-node references unassigned keeps the default blendshape backend, assigning both selects
    the transform backend, and assigning exactly one is invalid authoring that must fail clearly.
@@ -58,6 +59,13 @@ Provide a reusable eye component system that:
     and eye presentation.
 17. Effective focus changes can trigger a durable description of the newly focused visual subject; clearing focus or
     repeating the same cue creates no description by itself.
+18. During fixation, both eyes continuously follow the shared gaze direction towards the target's current position
+    as the target, head or character moves, without independent vergence. Beyond anatomical reach, the eyes aim in
+    the constrained direction allowed by their rotation limits;
+    unreachable target residual is not an eye defect. Head motion must not cause recurring catch-up lag.
+19. Both eyes must acquire a genuinely new target within 0.4 s of actual assignment, then maintain fixation.
+    This brief acquisition transition is separate from continuous fixation. Intentional saccades may briefly interrupt
+    fixation; their random trajectory need not be exact.
 
 ## Technical Requirements
 
@@ -74,14 +82,18 @@ Provide a reusable eye component system that:
    - Accepts an `AnimationTree` reference or inherits from parent.
      - Exposes `LookTarget` as the assigned visual-cue gaze anchor.
      - Provides a protected target-resolution method for the world-space look point.
-     - Resolves to the assigned `LookTarget` position when present.
-     - Falls back to a point 1 metre directly in front of the eyes when no target is assigned.
-     - Owns saccade anchor polling and offset state around the resolved look point.
+      - Resolves the live assigned `LookTarget` position on every gaze evaluation when present.
+     - Falls back to a point 1 metre directly in front of the eye origin, resolved from the current eye-origin
+       transform rather than a cached world position.
+      - Owns live anchor resolution and independently timed saccade offset state around the resolved look point.
      - Remains target-policy neutral: it must not select a target or own an attention-gaze hook. AI-007 is the
        separately composed post-attention consumer that may call `IVision.SetLookTarget` or `IVision.ClearLookTarget`.
 4. Saccades are presentation movement around the active gaze anchor:
-    - Poll the protected target-resolution method at a default 1-second interval.
-    - Apply bounded offsets around the latest resolved anchor, not independent gaze selection.
+    - Resolve the protected target-resolution method on every gaze evaluation, independently of random saccade
+      timing; with no live target, resolve the fallback from the current head-relative eye origin.
+    - Apply bounded, finite offsets around the live anchor and return to fixation, without independent gaze selection.
+    - Disable saccades explicitly in precision fixation tests. Test their bounds, finiteness, return to fixation and
+      independence from target refresh separately; no exact random trajectory or new biological model is required.
     - Use constants or exported defaults for interval, speed, and amplitude tuning.
     - Keep tuning override-friendly so later emotional state can alter speed and amplitude.
 5. Implement `EyesController` as the low-level AnimationTree output owner:
@@ -237,12 +249,124 @@ Provide a reusable eye component system that:
       behaviour; it introduces no new target-selection rules. Direction conversion is
       rotation-only with `-Z` forward and `+Y` up. The same clamped, smoothed yaw/pitch delta
       is transferred into each eye's current parent frame and applied identically to both eyes,
-      giving coordinated movement with no independent vergence or convergence.
+       giving coordinated movement with no independent vergence or convergence. The normative geometry is defined in
+       [Shared-Direction Geometry](#shared-direction-geometry); bilateral precision does not add per-eye targeting.
 49. The transform backend suppresses only the horizontal and vertical blendshape gaze look
       blends by writing `0`; blink cadence, duration, time scale, and `AnimationNodeOneShot`
       requests continue unchanged. The AnimationTree, `EyeOrigin`, eye animation library, and
       blink tracks therefore remain required in both backends, because blinking depends on
       them.
+50. Eye–head turn synchronisation applies to both transform and blendshape backends: gaze composition must consume
+    the same solved head pose that the renderer presents, never a stale pose from an earlier frame. Verify actual
+    presented eye output, not only a transform callback or a TimeSeek write after animation has already consumed it.
+    Retain ordinary post-solve transform composition. Before changing blendshape scheduling, investigate native
+    animation→solve→display timing in a minimal representative fixture and independently review a bounded proposal
+    with engine evidence. Wider animation ownership or architecture changes require approval; transform-only success
+    cannot close this requirement. This gate does not prescribe an unproved blendshape scheduling implementation.
+    Advance temporal state once only for the active binding. Recomposition-only zero-delta callbacks must not advance
+    smoothing, blink/saccade clocks or random state. Deferred execution validates active lifetime, required Godot object
+    validity and binding generation; teardown/rebind invalidates pending work so old bindings receive no writes.
+51. With saccades disabled, each presented eye's direct angular alignment error against its independently derived
+    constrained direction must be at most 0.5° during fixation. Derive that direction from the current live target,
+    current solved head/eye-origin geometry and immutable authored optical references, with the existing 35° horizontal
+    / 25° vertical clamps. Use [Shared-Direction Geometry](#shared-direction-geometry), including coupled axes;
+    do not use the production gaze helper to compute the expected answer. Measure error against the constrained
+    direction, not unreachable target residual. This is the fixation acceptance metric.
+    A genuinely new target's acquisition onset must occur within 2 presented frames of assignment, with overshoot
+    at most 4°. Keep eye smoothing 0.08 for acquisition, separate from current-head compensation; ongoing target,
+    head or character movement and repeated same-target assignment must not restart acquisition or excuse fixation lag.
+    Gaze selection and yaw-dispersion breadth remain unchanged. Head centring within 0.8 s remains owned by AI-009;
+    it is not an eye-acquisition completion deadline. These bounds and complete observation windows require explicit
+    user approval supported by measurements to change. Acquisition completion must satisfy the decision below.
+52. Acceptance measures both eyes simultaneously from immutable authored neutral references, independent of controller
+    outputs. Verify optical-forward coordinate conventions; do not assume node-forward is optical-forward. Live neutral
+    recapture is diagnostic only and cannot zero acceptance error. Setup timeout fails closed. Retain a pre-assignment
+    reference, exact assignment timestamps, [presentation ordering](#assignment-and-presentation-ordering) and complete
+    post-draw baseline,
+    acquisition, transit, centring and settled windows in both isolated and migrated transit suites. Response and
+    acquisition-completion and centring deadlines start at actual assignment, not a later sample. Observe acquisition
+    from assignment; never wait for software-declared success to begin recording or discard a failed interval.
+    Cover fixed and moving targets,
+    head compensation, mixed yaw/pitch and out-of-range directions in both backends. Validate direct-error sensitivity
+    with independent geometry, stale frames, drift across the 0.5° boundary, acquisition-onset/completion/overshoot
+    boundaries and settled recurrence. Deliberately offset only one eye beyond tolerance and prove bilateral detection.
+    Replay the assignment/presentation boundaries below; no eligible presentation may be skipped or pre-assignment
+    presentation counted towards onset.
+
+### Shared-Direction Geometry
+
+This is the normative independent calculation for TR48/51–52 in both backends. All rotations below are proper,
+rotation-only bases; products apply rightmost first. Positions retain world-space distance, but scale must not distort
+direction angles. `O` is the current solved shared `EyeOrigin` position and `R` its rotation into world space.
+`T` is the live target position. Neither physical eye's position replaces `O`: near-target vergence is not required.
+
+1. Compute `(x, y, z) = inverse(R) * (T - O)`, in the shared frame with `-Z` forward, `+X` right and `+Y` up.
+   For a nonzero direction, yaw `h = atan2(x, -z)` is positive right; pitch
+   `v = atan2(y, sqrt(x² + z²))` is positive up. Extract both from the original direction before clamping either.
+2. Clamp independently: `hc = clamp(h, -35°, 35°)` and `vc = clamp(v, -25°, 25°)`.
+   Reconstruct `d = (sin(hc) cos(vc), sin(vc), -cos(hc) cos(vc))`.
+   Equivalently, `D = Ry(-hc) Rx(vc)` and `d = D * (0, 0, -1)`: pitch first, then yaw, not reversed.
+   `R*d` is the shared constrained request, not a separate ray from each physical eye to `T`.
+3. Behind targets retain their full signed yaw before clamping; do not reflect them into the forward hemisphere.
+   On the exact rear axis (`x = 0`, `z > 0`), choose `h = +180°`, regardless of signed zero.
+   On the vertical axis (`x = z = 0`, `y != 0`), choose `h = 0` and `v = sign(y)*90°`.
+   When `T = O`, no direction exists: use neutral `h = v = 0`. Non-finite inputs invalidate acceptance, not pass it.
+4. For each eye `i`, let `N_i` be its immutable authored neutral rotation in its parent frame, `P_i` the current solved
+   parent-to-world rotation and `f_i` its immutable unit optical-forward vector in authored eye-local coordinates.
+   The neutral optical direction is `n_i = P_i*N_i*f_i`; the independently expected presented direction is
+   `e_i = R*D*inverse(R)*n_i`. Thus both eyes receive the same shared request through their authored optical mappings.
+   Where neutral optical axes align with shared forward, both `e_i` equal `R*d`. Arbitrary node-axis orientation does
+   not imply a different optical forward. Preserve authored neutral offsets; do not add per-eye correction frames or
+   recapture neutral from live output to force agreement. This mapping is not physical-origin vergence.
+5. Measure the actual presented optical direction `a_i` separately for each eye, then compare
+   `acos(clamp(dot(normalise(a_i), normalise(e_i)), -1, 1))` against 0.5°.
+   Transform output uses the presented eye rotation applied to `f_i`; blendshape output requires equivalent optical
+   references on the presented deformed eye geometry. Desired angles or seek writes alone are not observations.
+   Authored references must be established independently of live gaze and production conversion helpers.
+
+#### Independently Calculable Examples
+
+These examples use `O = (0, 0, 0)`, `R = identity` and neutral optical axes aligned with `-Z`; lengths are metres.
+Values follow directly from the trigonometry above, not from production helpers.
+
+- **Mixed Axes:** `T = (1, 1, -sqrt(3))` gives `h = 30°` and `v = atan(1/2) = 26.565051°`.
+  After clamping, `(hc, vc) = (30°, 25°)` and both expected directions are approximately
+  `(0.453154, 0.422618, -0.784886)`. Reversing the rotation order does not produce this vector.
+- **Near Target:** `T = (0.03, 0, -0.1)` gives `h = atan(0.3) = 16.699244°`, `v = 0°` and
+  `d = (0.287348, 0, -0.957826)`. Even with physical eye positions at `(-0.032, 0, 0)` and `(0.032, 0, 0)`,
+  both expected directions remain `d`; computing two eye-to-target rays would wrongly introduce vergence.
+- **Authored Axis:** With `P_i = identity`, `N_i = Ry(90°)` and `f_i = (1, 0, 0)`, `n_i = (0, 0, -1)`.
+  The expected optical direction is still `d`, although the eye node's local `-Z` is not its optical forward.
+- **Rear Axis:** `T = (0, 0, 1)` gives `(hc, vc) = (35°, 0°)` and
+  `d = (0.573576, 0, -0.819152)`, not neutral forward. Pure up clamps to `(0, sin(25°), -cos(25°))`.
+
+### Assignment and Presentation Ordering
+
+Record the actual assignment event `A`, each gaze evaluation `G`, each presentation's rendered-scene-state sampling
+event `S`, and its post-draw observation `B`. A presentation is eligible for acquisition onset counting exactly when
+its `S` follows `A`. Frame 1 is the first such presentation; count every eligible presentation thereafter, even if it
+contains stale gaze. A post-draw callback observes an already sampled presentation; it does not redefine `S` or `A`.
+Use monotonic event/sequence ordering to disambiguate equal timestamps, retaining the presentation identity through
+observation. An assignment after `S` cannot make that presentation eligible merely because `B` occurs later.
+
+Boundary replays must demonstrate all three orders, including equal timestamps resolved by sequence:
+
+- `A → G → S → B`: this presentation is frame 1.
+- `G → A → S → B`: this presentation is also frame 1; stale gaze still counts against the ≤2-frame onset bound.
+- `G → S → A → B`: this presentation is pre-assignment and does not count; frame 1 is the next eligible presentation.
+
+Observe the pre-assignment reference and all eligible presentations without skipping failures. The 0.4 s completion
+deadline remains relative to actual `A`, never frame 1, `G` or `B`, with no cadence grace. Establish installed-engine
+sampling/observation ordering with evidence; if it cannot be observed reliably, report that bounded evidence gap
+rather than claim conformance or silently substitute callback timing.
+
+### Acquisition Completion Decision
+
+With saccades disabled for precision acceptance, both eyes must enter at most 0.5° angular alignment error against
+their independently derived anatomically constrained directions within 0.4 s of actual target assignment, then
+maintain fixation. Acquisition onset within 2 presented frames is distinct from completion. Measured cadence does not
+extend the completion deadline; target, head or character movement must not restart it. This behavioural acceptance
+requirement does not establish measured feasibility: report conflicts rather than relax the bound or tune smoothing.
 
 ## In Scope
 
@@ -276,6 +400,8 @@ Provide a reusable eye component system that:
   `EyeOrigin` cone evaluation, and `VisionOccluder` ray tests.
 - Cue-local `VisualBounds`, per-cue distance limits, and representative visibility sampling.
 - Awaitable cue description for transition-driven focused inspection under AI-006.
+- Continuous live-target fixation and separate bounded saccades in both backends: frame-consistent solved-head
+  composition, lifetime-safe scheduling and independent bilateral, complete-window measurement.
 
 ## Out Of Scope
 
@@ -294,6 +420,8 @@ Provide a reusable eye component system that:
 - Networked replication or multiplayer considerations.
 - IK solver modifications for eye tracking.
 - Physical eye collision or physics-response behaviour; scan-only `VisionOccluder` ray tests remain required.
+- Head-turn transit dynamics themselves — rate limits, reaction delay, and transit stalls — which remain owned by
+  [AI-009: Attention-Driven Head Orientation](../../ai/009-attention-head-orientation/index.md).
 
 ## Acceptance Criteria
 
@@ -311,9 +439,11 @@ Provide a reusable eye component system that:
 | 5  | User              | Setting a visual-cue `LookTarget` causes the eyes to orient toward that cue using |
 |    |                   | the default TimeSeek-driven blendshape animation. |
 | 6  | User              | Clearing the look target makes the eyes fall back to looking 1 metre forward. |
-| 7  | User              | Bounded saccades move around the active gaze anchor without changing focus. |
-| 8  | Technical         | Saccades poll the look-point resolver at the default 1-second interval and |
-|    |                   | use default constants or exports for interval, speed, and amplitude. |
+| 7  | User              | Bounded, finite saccades move around the live anchor and return to fixation without |
+|    |                   | changing focus; test separately from precision fixation, without an exact trajectory. |
+| 8  | Technical         | Every gaze evaluation resolves the live assigned target or current-head-relative fallback, |
+|    |                   | independently of random saccade timing. Saccade interval, speed and amplitude use default |
+|    |                   | constants or exports; saccade timing never throttles moving-target tracking. |
 | 9  | Technical         | `EyesBehaviour` owns target-node resolution, fallback, and saccade |
 |    |                   | anchor/offset state, but no gaze-selection policy or attention-gaze hook. |
 | 10 | Technical         | `EyesController` owns supplied-point conversion (TimeSeek values in blendshape |
@@ -460,6 +590,37 @@ Provide a reusable eye component system that:
 | 65 | Technical         | Tests verify `IVisualSubject` inherits `AlleyCat.Core.ISpatial`, that `ISpatial` |
 |    |                   | exposes exactly the read-only `Transform3D GlobalTransform` member, and that Vision |
 |    |                   | owns no spatial sampling or interpretation policy around it. |
+| 66 | User              | During a 40° head turn to a new sustained target (reference female), both eyes maintain |
+|    |                   | fixation within 0.5° of their independently derived constrained directions under TR51, |
+|    |                   | with saccades disabled and acquisition observed separately. The head centres within 0.8 s |
+|    |                   | (head-transit timing owned by AI-009). Target and head motion do not restart acquisition. |
+| 67 | Technical         | Tests verify the eye-gaze composition consumes the same-frame solved head pose presented |
+|    |                   | to the renderer in both backends, new-target acquisition onset stays within 2 presented |
+|    |                   | frames of actual assignment, with overshoot ≤4°. With saccades disabled, both eyes |
+|    |                   | enter ≤0.5° alignment with their independently derived constrained directions within 0.4 s |
+|    |                   | of actual assignment and maintain fixation thereafter. Acquisition smoothing remains 0.08; |
+|    |                   | measured cadence does not extend the completion deadline. |
+| 68 | Technical         | Tests verify the synchronisation requirement changes neither the eye clamps (35° |
+|    |                   | horizontal / 25° vertical) nor gaze selection or blink behaviour. Separate saccade tests |
+|    |                   | verify TR4 without relaxing precision fixation. Fixed/moving targets, head compensation, |
+|    |                   | mixed axes and out-of-range directions satisfy TR51–52. |
+| 69 | Technical         | Schedule→remove/free/rebind coverage verifies pending-work invalidation, no old-binding |
+|    |                   | writes, exactly-once temporal advancement and zero-delta recomposition without random-state |
+|    |                   | consumption. Establish a discriminating reproduction or state the runtime evidence gap |
+|    |                   | before deferred-path repair; source findings alone do not prove a runtime failure. (TR-50) |
+| 70 | Technical         | Oracles pass TR52 adversarial replays and single-eye fault detection, using both eyes' |
+|    |                   | authored references, assignment-time deadlines and complete post-draw windows. |
+|    |                   | Independently reproduce Shared-Direction Geometry examples and Assignment and Presentation |
+|    |                   | Ordering boundary replays; skip no eligible presentation and count no pre-assignment one. |
+
+Criteria 66–70 retain the original 40° reassignment and 135-frame 90 fps series with measured actual cadence, including
+all baseline, acquisition, transit, centring and settled observations. Neither suite may shorten its window
+or omit settled recurrence. The
+[AI-009 evidence contract](../../ai/009-attention-head-orientation/index.md#complete-window-evidence-contract)
+is a normative dependency for fixed glance events, immutable candidate records, at least three final stability runs
+and visual review. Backend timing must be verified against presented eye output; passing only transform mode does not
+establish blendshape conformance. Current-fixture acceptance is conditional, not historical regression resolution or
+universal animated-idle proof.
 
 ## References
 
@@ -473,6 +634,7 @@ Provide a reusable eye component system that:
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../../ai/007-attention-gaze-target-selection/index.md)
+- [AI-009: Attention-Driven Head Orientation](../../ai/009-attention-head-orientation/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/assets/characters/import/eye_animation_library_import.gd`
 - `game/src/Vision/IVision.cs`
