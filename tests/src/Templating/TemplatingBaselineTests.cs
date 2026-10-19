@@ -8,11 +8,12 @@ namespace AlleyCat.Tests.Templating;
 
 /// <summary>
 /// Golden-baseline harness for TMPL-001: proves that the migrated Fluid engine reproduces the committed
-/// Handlebars-era snapshots byte-for-byte, and can re-capture snapshots during migration windows.
+/// Handlebars-era snapshots and a test-owned synthetic expectation byte-for-byte, and can capture missing snapshots.
 /// </summary>
 /// <remarks>
-/// The baselines were captured against Handlebars.Net 2.4.3 immediately before the Fluid migration; they are
-/// frozen reference history and must never be regenerated. Capture mode is gated behind the
+/// The migration baselines were captured against Handlebars.Net 2.4.3 immediately before the Fluid migration;
+/// they must never be regenerated. The synthetic identity expectation is authored independently of the renderer,
+/// not a historical capture. Capture mode is gated behind the
 /// <see cref="CaptureEnvironmentVariable"/> environment variable, refuses to overwrite existing snapshots, skips
 /// capture sources the current engine cannot render (reporting each skip instead of failing mid-catalogue), and
 /// exists only so future deliberate re-baselinings have a single entry point.
@@ -108,8 +109,24 @@ public sealed class TemplatingBaselineTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Every successful baseline snapshot is reproduced byte-for-byte by the Fluid engine through its Liquid
-    /// translation of the authored source.
+    /// Keeps the identity regression wired to its test-owned input rather than mutable production prompt content.
+    /// </summary>
+    [Fact]
+    public void SyntheticIdentityScenarioUsesTestOwnedFixture()
+    {
+        string fixture = File.ReadAllText(
+            RepositoryPath.Get("tests", "src", "Templating", "fixtures", "synthetic_identity.md"));
+        TemplatingBaselineScenario scenario = TemplatingBaselineScenarios.All
+            .Single(scenario => scenario.Name == "synthetic_identity");
+
+        Assert.Equal(fixture, scenario.CaptureSource);
+        Assert.Equal(fixture, scenario.FluidSource);
+        Assert.False(scenario.ExpectFailure);
+    }
+
+    /// <summary>
+    /// Every successful baseline snapshot is reproduced byte-for-byte by the Fluid engine using its Liquid
+    /// source, including the independently authored synthetic identity expectation.
     /// </summary>
     [Fact]
     public async Task GoldenBaselinesMatchCommittedSnapshots()

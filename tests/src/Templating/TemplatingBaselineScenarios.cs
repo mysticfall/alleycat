@@ -3,13 +3,12 @@ using System.Globalization;
 namespace AlleyCat.Tests.Templating;
 
 /// <summary>
-/// One golden-baseline rendering scenario captured against the pre-migration Handlebars engine and later
-/// reproduced through the Fluid engine byte-for-byte.
+/// One golden-baseline rendering scenario: a pre-migration Handlebars capture or an independently authored
+/// synthetic expectation, reproduced through the Fluid engine byte-for-byte.
 /// </summary>
 /// <param name="Name">Stable snapshot file stem.</param>
 /// <param name="CaptureSource">
-/// Template source rendered when the baselines were captured, written in the Handlebars syntax that the
-/// pre-migration engine consumed.
+/// Original capture source in Handlebars syntax, or the test-owned source for a synthetic expectation.
 /// </param>
 /// <param name="FluidSource">
 /// Equivalent Liquid source rendered by the migrated Fluid engine during golden-equivalence checks.
@@ -31,8 +30,8 @@ internal sealed record TemplatingBaselineScenario(
     bool ExpectFailure = false);
 
 /// <summary>
-/// Catalogue of authored-template and built-in-tool baseline scenarios. Snapshot inputs are fixed so the
-/// Handlebars-era captures remain valid reference points for the Fluid migration.
+/// Catalogue of authored-template and built-in-tool baseline scenarios. The synthetic identity fixture is
+/// test-owned; the remaining snapshots retain their existing migration inputs and expectations.
 /// </summary>
 internal static class TemplatingBaselineScenarios
 {
@@ -55,14 +54,17 @@ internal static class TemplatingBaselineScenarios
 
     private static IEnumerable<TemplatingBaselineScenario> AuthoredTemplateScenarios()
     {
+        // Repeated member substitution and whitespace, without coupling to tunable production prompt prose.
+        string identitySource = File.ReadAllText(
+            RepositoryPath.Get("tests", "src", "Templating", "fixtures", "synthetic_identity.md"));
         yield return new TemplatingBaselineScenario(
-            "authored_mind_md",
-            ReadGameFile("prompts", "mind.md"),
-            ReadGameFile("prompts", "mind.md"),
+            "synthetic_identity",
+            identitySource,
+            identitySource,
             () => new Dictionary<string, object?>
             {
-                ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:npc_kaori" },
-                ["player"] = new Dictionary<string, object?> { ["FullId"] = "char:player_ava" },
+                ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:fixture_actor" },
+                ["player"] = new Dictionary<string, object?> { ["FullId"] = "char:fixture_partner" },
             });
 
         yield return new TemplatingBaselineScenario(

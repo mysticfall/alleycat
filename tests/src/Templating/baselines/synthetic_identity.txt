@@ -1,0 +1,4 @@
+Identity: char:fixture_actor.
+
+Partner: char:fixture_partner.
+Identity again: char:fixture_actor.
