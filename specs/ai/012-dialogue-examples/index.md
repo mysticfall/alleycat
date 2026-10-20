@@ -9,17 +9,18 @@ title: Character Dialogue Examples
 
 Per-character example-dialogue files must be injected into each NPC's session-start system instruction (the
 `AgenticMind` `SystemInstruction` stack, AI-001 and AI-003) as a distinct prompt section. The section carries its own
-static guidance, authored in a dedicated prompt file and referenced from the section, so the model imitates the
-character's mannerism and speech pattern from those examples while treating their content as never having happened;
-stacks without the section carry no dialogue instruction. Example content is data, not template source: apart from
-one sanctioned character-ID token, it reaches the instruction exactly as authored, so malformed template syntax can
-never break session start.
+static guidance, authored in a dedicated prompt file and referenced from the section, so the model uses examples as
+hints about speech style, personality, and typical words or actions, not rules or scripts. Actual circumstances
+determine responses; the example exchanges never happened. Stacks without the section carry no dialogue instruction.
+Example content is data, not template source: apart from one sanctioned character-ID token, it reaches the instruction
+exactly as authored, so malformed template syntax can never break session start.
 
 ## Goal
 
-Authors shape a character's voice through sample exchanges — the Marinara Engine / SillyTavern "example dialogue"
-technique — without those examples becoming lore, knowledge, or memory. Characters without examples start unchanged,
-and content packs can supply their own examples under the same resolution rules.
+Authors hint at a character's voice, personality, and typical responses through sample exchanges — the Marinara Engine /
+SillyTavern "example dialogue" technique — without those examples becoming lore, knowledge, memory, or fixed rules.
+Characters without examples start unchanged, and content packs can supply their own examples under the same resolution
+rules.
 
 ## User Requirements
 
@@ -27,14 +28,16 @@ and content packs can supply their own examples under the same resolution rules.
    scoped by the same observer identity as perspective lore (AI-004). Speaker labels follow the event-history
    identity convention (`Heard char:vadim say: …`): the character's own lines are labelled with the literal token
    `{{ character.FullId }}`, which the section resolves to the character's full ID, and conversational partners carry
-   valid-looking fictional full IDs such as `char:ally`.
+   valid-looking fictional full IDs such as `char:ally`. Examples may also include action descriptions.
 2. A character's examples appear in that character's session-start system instruction under a distinct
    `Dialogue Examples` section, separate from the lore sections, exactly as authored except that every authored
    `{{ character.FullId }}` label reads as the character's resolved full ID.
 3. Dialogue guidance travels with the section: when a stack includes it, the instruction explains how to treat
-   examples — imitate the character's vocabulary, rhythm, and mannerisms from them, while knowing the exchanges
-   never happened, are not lore, knowledge, or memory, and must never be recited or have their content treated as
-   fact. Stacks without the section carry no dialogue instruction.
+   examples — consult them for vocabulary, rhythm, mannerisms, personality, and typical words or actions in similar
+   situations. These are hints, not rules or scripts: the current situation, mood, event history, and other actual
+   circumstances determine responses. The exchanges never happened, are not lore, knowledge, or memory, and must
+   never be recited, quoted, or have their content treated as fact. Action descriptions grant no capabilities;
+   actual actions use only available tools. Stacks without the section carry no dialogue instruction.
 4. Characters without examples start sessions normally; the absence of examples is a normal authoring state, not an
    error.
 5. Examples never surface through lore discovery or retrieval: they appear in no lore query result, in no
@@ -59,8 +62,9 @@ and content packs can supply their own examples under the same resolution rules.
    content inside the same section wrapper; an empty or absent reference yields example content alone.
 3. The section reads the file and returns its content as authored: no parsing, no normalisation, and no format
    validation. The exchange format inside the file — SillyTavern-style `---`-separated exchanges with
-   speaker-labelled lines — is a pure authoring convention; the runtime treats the file as opaque text. Exactly one
-   substitution is sanctioned: the section itself replaces each authored `{{ character.FullId }}` occurrence with
+   speaker-labelled lines, optionally including action descriptions — is a pure authoring convention; the runtime
+   treats the file as opaque text, with no action grammar or new action support. Exactly one substitution is sanctioned:
+   the section itself replaces each authored `{{ character.FullId }}` occurrence with
    the resolved `buildContext.Character.FullId`. Everything else is data, not template source: no other template
    expression is substituted, malformed template syntax reaches the final rendered instruction literally, and it can
    never break session-start compilation.
@@ -119,8 +123,10 @@ and content packs can supply their own examples under the same resolution rules.
    inside the distinct `Dialogue Examples` section, with every authored `{{ character.FullId }}` label rendered as
    the character's full ID and everything else unchanged (UR-1, UR-2).
 2. A character without `dialogue.md` starts a session normally, with an empty section and no error (UR-4).
-3. With the section present, the rendered instruction carries every mandatory concept of user requirement 3; a stack
-   without the section renders no dialogue guidance anywhere in its instruction (UR-3).
+3. With the section present, the rendered instruction carries every mandatory concept of user requirement 3,
+   including personality and typical words or actions as adaptable hints, actual circumstances determining responses,
+   the non-factual safeguards, and the available-tool boundary. A stack without the section renders no dialogue
+   guidance anywhere in its instruction (UR-3).
 4. With `dialogue.md` present, no lore query result, session-start catalogue, or `read_lore` result contains its
    content or lists the file (UR-5).
 5. A content pack supplying `dialogue.md` for one of its characters behaves identically to a default-root example
@@ -135,7 +141,8 @@ and content packs can supply their own examples under the same resolution rules.
    root, for both the `default` root and a content pack (TR-1).
 2. Content tests verify section output equals the file content exactly except for sanctioned-token substitution:
    authored `{{ character.FullId }}` occurrences render as the resolved full ID, with no parsing, normalisation, or
-   format-driven transformation and no other expression substituted (TR-3).
+   format-driven transformation and no other expression substituted, including when examples describe actions
+   (UR-1, TR-3).
 3. Missing-file tests verify empty section content, a successful session start, and unchanged wrapper emission
    (TR-5).
 4. Invalid-identity tests verify a clear session-start failure and that identity validation happens only when the
