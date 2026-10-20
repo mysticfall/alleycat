@@ -1,12 +1,34 @@
 {
   "version": 1,
   "setupWorktree": [
-    "cp $ROOT_PROJECT_PATH/.opencode/opencode.json .opencode/",
+    "ln -s $ROOT_PROJECT_PATH/.opencode/opencode.json .opencode/opencode.json",
     "ln -s $ROOT_PROJECT_PATH/game/content game/content",
     "cp -Rf $ROOT_PROJECT_PATH/graft .",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/onnx game/models/supertonic-3",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/voice_styles game/models/supertonic-3",
     "git lfs pull",
-    "dotnet restore game/AlleyCat.csproj"
+    "dotnet restore game/AlleyCat.csproj",
+    "dotnet build AlleyCat.sln -warnaserror",
+    "godot-mono --headless --path game --xr-mode off --import"
+  ],
+  "projectActions": [
+    {
+      "id": "d4b15b78-d188-4077-ab5c-f41fa5121f86",
+      "name": "Run",
+      "command": "godot-mono --path \"game\" -- --skip-splash",
+      "icon": "play"
+    },
+    {
+      "id": "dda0ec73-5f33-4c12-ab83-0a4f373ece5b",
+      "name": "Run (No AI)",
+      "command": "godot-mono --path \"game\" -- --skip-splash --no-ai",
+      "icon": "play"
+    },
+    {
+      "id": "60591e53-bc6c-41ba-bbef-c5d32ab1d9ce",
+      "name": "Run (No AI, Default Content)",
+      "command": "godot-mono --path \"game\" -- --skip-splash --no-ai --no-content-pack",
+      "icon": "play"
+    }
   ]
 }
