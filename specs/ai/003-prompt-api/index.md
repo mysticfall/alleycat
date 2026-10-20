@@ -27,7 +27,8 @@ information it has already been supplied.
 5. The shared instruction gives each NPC character-neutral guidance sufficient to interpret its supplied context —
    established versus newly presented event history and the fresh current-scene status — without any tool call.
 6. Shared guidance distinguishes acting on an available reply from waiting for a future one: an NPC is never told that
-   waiting is necessary to receive context, while silence and waiting remain legitimate in-character choices.
+   waiting is necessary to receive context. NPCs normally make room for replies after conversational contributions,
+   while initiative, silence, and waiting remain legitimate in-character choices rather than forced alternating turns.
 7. Shared watch guidance refers to available watch tools rather than a fixed tool set and presents listed watches as
    monitoring registrations, not assertions that a condition is currently true.
 8. An NPC always sees the current game time in its current scene status — including when no character is attended — on
@@ -95,6 +96,11 @@ information it has already been supplied.
     freedom to act, speak, or stay silent according to character and scenario. It must not contradict tool-exchange
     disposal (AI-002 TR-17–TR-22): disposed `speak`/`wait` exchanges are never model-visible. Completed actions surface
     through remembered events and fresh scene status; non-opted exchanges, including lore retrieval, remain retained.
+    Guidance must distinguish provider requests from human conversational turns: ending output alone does not give
+    another person time to reply. Normally yield after a conversational contribution unless a relevant unresolved reply
+    or a concrete in-character reason supports acting now. Use history and chronology, not `[new]` alone, to distinguish
+    such replies from already-addressed speech. Startup, empty history, repeated requests, wait expiry, or silence alone
+    must not require speech or repeated prompting. Preserve initiative without fixed delays, word caps, or forced turns.
 16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
     arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
@@ -141,7 +147,11 @@ information it has already been supplied.
    evidence-limited current-scene status, and watch registration, and never states that waiting is necessary to receive
    supplied context.
 5. Acceptance shows action-selection guidance distinguishes engaging with an available reply from waiting for a future
-   one while keeping silence and waiting legitimate in-character choices.
+   one using history and chronology rather than newly-presented status or already-addressed speech. It distinguishes
+   provider requests and output completion from making room for a human reply, normally directs yielding after a
+   contribution, and does not demand speech or repeated prompting merely because of startup, empty history, repeated
+   requests, wait expiry, or silence. Character-driven initiative and exceptions remain valid without fixed delays,
+   word caps, or forced alternating turns (UR-6, TR-13–TR-15).
 6. Acceptance shows the current scene status always presents the current game time — including with an empty attended
    list — on the same clock as event timestamps, while event entries keep their original observation times.
 7. Acceptance shows the shared instruction never contradicts the common game clock, the snapshot capture of the
