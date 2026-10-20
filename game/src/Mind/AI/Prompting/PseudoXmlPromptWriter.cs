@@ -1,6 +1,7 @@
 using System.Text;
 using AlleyCat.Common;
 using AlleyCat.Core;
+using AlleyCat.Templating;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -58,6 +59,13 @@ public sealed partial class PseudoXmlPromptWriter : Resource, IPromptWriter, ISe
         CancellationToken cancellationToken)
     {
         string content = await section.GetContentAsync(buildContext, cancellationToken) ?? string.Empty;
+
+        // Opaque sections contribute authored data, not template source: their content is escaped as it enters
+        // the assembled source so the single session-start compile emits it verbatim.
+        if (section.IsTemplateOpaque)
+        {
+            content = FluidTemplateEscaping.EscapeOpeners(content);
+        }
 
         PseudoXmlFormatter.AppendBlock(builder, section.Name, content, "Prompt sections");
     }

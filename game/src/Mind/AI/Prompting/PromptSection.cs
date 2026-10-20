@@ -15,6 +15,13 @@ public abstract partial class PromptSection : Resource
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
+    /// Whether the section's content is authored data that must survive template compilation unchanged rather
+    /// than template source. Opaque sections are escaped at the prompt-writer boundary so their content
+    /// reaches the final rendered instruction verbatim; the default keeps content template-processed.
+    /// </summary>
+    public virtual bool IsTemplateOpaque => false;
+
+    /// <summary>
     /// Returns the section content contributed to a prompt stack.
     /// </summary>
     /// <param name="buildContext">Services and scene state for prompt construction.</param>

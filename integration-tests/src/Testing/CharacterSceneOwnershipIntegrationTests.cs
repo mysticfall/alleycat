@@ -258,7 +258,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
         object[] orderedSections = [.. sections.Cast<object>()];
-        Assert.Equal(5, orderedSections.Length);
+        Assert.Equal(6, orderedSections.Length);
         object instructionSection = orderedSections[0];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
@@ -284,10 +284,14 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
         Assert.Equal("AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection", orderedSections[2].GetType().FullName);
         Assert.Equal("Characters", GetPropertyValue<string>(orderedSections[2], "Name"));
-        // The grouped catalogue of remaining lore follows the automatic lore bodies (AI-003 TR-17; AI-004 TR-46).
-        Assert.Equal("AlleyCat.Mind.AI.Prompting.LoreCataloguePromptSection", orderedSections[3].GetType().FullName);
-        Assert.Equal("Lore Catalogue", GetPropertyValue<string>(orderedSections[3], "Name"));
-        object scenarioSection = orderedSections[4];
+        // The character's opaque dialogue examples follow the character lore, with only the owner label token
+        // substituted from the perspective file (AI-012 TR-3, TR-7).
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.DialogueExamplesPromptSection", orderedSections[3].GetType().FullName);
+        Assert.Equal("Dialogue Examples", GetPropertyValue<string>(orderedSections[3], "Name"));
+        // The grouped catalogue of remaining lore follows the dialogue examples (AI-003 TR-17; AI-004 TR-46).
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.LoreCataloguePromptSection", orderedSections[4].GetType().FullName);
+        Assert.Equal("Lore Catalogue", GetPropertyValue<string>(orderedSections[4], "Name"));
+        object scenarioSection = orderedSections[5];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
         Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
         Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
