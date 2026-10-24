@@ -54,7 +54,7 @@ public sealed class ReadLoreFlowIntegrationTests
             "read_lore",
             new Dictionary<string, object?>
             {
-                ["entry_ids"] = new object[] { "test.interrogation_room", "test.missing" },
+                ["entry_ids"] = new object[] { "loc:interrogation_room", "world:missing" },
             }));
         clientProvider.EnqueueCallBatch(new FunctionCallContent(
             "speak-call-1",
@@ -99,14 +99,14 @@ public sealed class ReadLoreFlowIntegrationTests
             Assert.Contains("# char:ally", opening.Instructions, StringComparison.Ordinal);
             Assert.Contains("<Lore Catalogue>", opening.Instructions, StringComparison.Ordinal);
             Assert.Contains(
-                "- `test.interrogation_room` — loc:interrogation_room — The room where they ask their questions.",
+                "- `loc:interrogation_room` — loc:interrogation_room — The room where they ask their questions.",
                 opening.Instructions,
                 StringComparison.Ordinal);
-            Assert.Contains("- `test.nonessential`", opening.Instructions, StringComparison.Ordinal);
-            Assert.DoesNotContain("- `test.stable`", opening.Instructions, StringComparison.Ordinal);
-            Assert.DoesNotContain("- `test.ally`", opening.Instructions, StringComparison.Ordinal);
-            Assert.Contains("read_lore", opening.Instructions, StringComparison.Ordinal);
-            Assert.Contains("not a subject full ID", opening.Instructions, StringComparison.Ordinal);
+            Assert.Contains("- `world:nonessential`", opening.Instructions, StringComparison.Ordinal);
+            Assert.DoesNotContain("- `world:with-id`", opening.Instructions, StringComparison.Ordinal);
+            Assert.DoesNotContain("- `char:ally`", opening.Instructions, StringComparison.Ordinal);
+            Assert.Contains("`read_lore`", opening.Instructions, StringComparison.Ordinal);
+            Assert.Contains("not subject full IDs", opening.Instructions, StringComparison.Ordinal);
             Assert.Contains("never required before every action", opening.Instructions, StringComparison.Ordinal);
             Assert.Contains("Lore Catalogue", opening.Tools["read_lore"], StringComparison.Ordinal);
 
@@ -122,12 +122,12 @@ public sealed class ReadLoreFlowIntegrationTests
                 Assert.Single(afterRetrieval.Messages[4].Contents.OfType<FunctionResultContent>()));
             Assert.Equal("lore-call-1", loreResult.CallId);
             string loreText = loreResult.Result?.ToString() ?? string.Empty;
-            Assert.Contains("Entry 'test.interrogation_room':", loreText, StringComparison.Ordinal);
+            Assert.Contains("Entry `loc:interrogation_room`:", loreText, StringComparison.Ordinal);
             Assert.Contains(
                 "loc:interrogation_room sits below the charter office.",
                 loreText,
                 StringComparison.Ordinal);
-            Assert.Contains("Entry 'test.missing': unavailable.", loreText, StringComparison.Ordinal);
+            Assert.Contains("Entry `world:missing`: unavailable.", loreText, StringComparison.Ordinal);
 
             // The static instruction — including the catalogue — is compiled once and never rebuilt by the fresh
             // per-request scene status or the retrieval (AI-003 TR-17; AI-004 requirement 46).
@@ -186,7 +186,7 @@ public sealed class ReadLoreFlowIntegrationTests
             new FunctionCallContent(
                 "lore-call-2",
                 "read_lore",
-                new Dictionary<string, object?> { ["entry_ids"] = new object[] { "test.shared" } }));
+                new Dictionary<string, object?> { ["entry_ids"] = new object[] { "world:shared" } }));
         clientProvider.EnqueueHoldForever();
         TestFlowMind mind = new(owner)
         {

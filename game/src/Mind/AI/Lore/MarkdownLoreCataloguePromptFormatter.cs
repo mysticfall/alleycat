@@ -2,8 +2,9 @@ namespace AlleyCat.Mind.AI.Lore;
 
 /// <summary>
 /// Markdown catalogue formatter: each group renders a level-one heading followed by one row per entry with its
-/// exact ID, title, and optional description, never its body or source path (AI-004 requirement 45). Groups emit
-/// in World, Characters, Locations order, empty groups are omitted, and empty input renders empty output.
+/// backticked canonical full ID, title, and optional description, never its body, source path, or authoring
+/// dot-handle id (AI-004 requirements 45 and 51). Groups emit in World, Characters, Locations order, empty
+/// groups are omitted, and empty input renders empty output.
 /// </summary>
 public sealed class MarkdownLoreCataloguePromptFormatter : ILoreCataloguePromptFormatter
 {

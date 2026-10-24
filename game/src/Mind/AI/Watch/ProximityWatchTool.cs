@@ -19,10 +19,10 @@ public sealed partial class ProximityWatchTool : WatchConditionTool
     {
         ToolName = "watch_proximity";
         ToolDescription = "Register persistent proximity monitoring for one exact character, identified by their "
-            + "full ID (char:…); maximum_distance is the inclusive distance limit in metres. Arming takes effect "
+            + "full ID (`char:…`); maximum_distance is the inclusive distance limit in metres. Arming takes effect "
             + "immediately: it returns an opaque watch ID and the distance evidence currently available — this is "
             + "not an activation event and does not itself mean the character is inside or outside the limit. The "
-            + "watch keeps monitoring until you remove it with unwatch; never re-arm to keep it active. Its "
+            + "watch keeps monitoring until you remove it with `unwatch`; never re-arm to keep it active. Its "
             + "evidence is limited by what you currently perceive, and transitions — entering or leaving the "
             + "distance — reach you as ordinary events in your event history.";
     }
@@ -131,7 +131,8 @@ public sealed partial class ProximityWatchTool : WatchConditionTool
             string relation = status.Evidence is null
                 ? "Current retained proximity evidence is unavailable."
                 : $"Current retained distance is {status.Evidence.Distance:0.###}.";
-            return $"Armed watch {snapshot.WatchId} for {snapshot.SubjectId}. State: {status.State}. {relation}";
+            // The watch ID and the subject's canonical full ID read as handles, not prose (AI-004 requirement 51).
+            return $"Armed watch `{snapshot.WatchId}` for `{snapshot.SubjectId}`. State: {status.State}. {relation}";
         }
 
         private ProximityState GetState(ProximityWatchEvidence? evidence)

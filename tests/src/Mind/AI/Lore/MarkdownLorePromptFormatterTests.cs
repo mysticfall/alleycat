@@ -18,7 +18,7 @@ public sealed class MarkdownLorePromptFormatterTests
 
         string content = formatter.Format([new LoreEntry("id.charter", "The Charter", "The operating logic of a city.")]);
 
-        Assert.Equal("# The Charter\n\nThe operating logic of a city.", content);
+        Assert.Equal("# The Charter\n\n`id.charter`\n\nThe operating logic of a city.", content);
     }
 
     /// <summary>
@@ -43,6 +43,8 @@ public sealed class MarkdownLorePromptFormatterTests
         Assert.Equal(
             """
             # The Peoples
+
+            `vadim.peoples`
 
             The Compact is home to three communities, each with a distinct standing under the charter. My work gives me cause to know all three.
 
@@ -70,7 +72,7 @@ public sealed class MarkdownLorePromptFormatterTests
         ]);
 
         Assert.Equal(
-            "# The Charter\n\n## The Charter\n\nThe operating logic of a city.",
+            "# The Charter\n\n`vadim.charter`\n\n## The Charter\n\nThe operating logic of a city.",
             content);
     }
 
@@ -91,7 +93,7 @@ public sealed class MarkdownLorePromptFormatterTests
         ]);
 
         Assert.Equal(
-            "# Page\n\n## First\n\nText.\n\n### Second\n\nMore text.\n\n#### Third\n\nEnd.",
+            "# Page\n\n`id.page`\n\n## First\n\nText.\n\n### Second\n\nMore text.\n\n#### Third\n\nEnd.",
             content);
     }
 
@@ -111,7 +113,7 @@ public sealed class MarkdownLorePromptFormatterTests
                 "## First\n\nText.\n\n### Second\n\nMore text."),
         ]);
 
-        Assert.Equal("# Page\n\n## First\n\nText.\n\n### Second\n\nMore text.", content);
+        Assert.Equal("# Page\n\n`id.page`\n\n## First\n\nText.\n\n### Second\n\nMore text.", content);
     }
 
     /// <summary>
@@ -133,7 +135,7 @@ public sealed class MarkdownLorePromptFormatterTests
         string content = formatter.Format([new LoreEntry("id.reclass", "Reclassification", body)]);
 
         Assert.Equal(
-            "# Reclassification\n\n" +
+            "# Reclassification\n\n`id.reclass`\n\n" +
             "Personhood in the Compact is not belonging in any traditional sense — there is no comfort in the word, only standing.\n\n" +
             "Assets are not persons. The word is precise.",
             content);
@@ -155,7 +157,7 @@ public sealed class MarkdownLorePromptFormatterTests
                 "First paragraph.\n\n\n\n   \nSecond paragraph."),
         ]);
 
-        Assert.Equal("# Page\n\nFirst paragraph.\n\nSecond paragraph.", content);
+        Assert.Equal("# Page\n\n`id.page`\n\nFirst paragraph.\n\nSecond paragraph.", content);
     }
 
     /// <summary>
@@ -174,21 +176,38 @@ public sealed class MarkdownLorePromptFormatterTests
         ]);
 
         Assert.Equal(
-            "# First\n\nFirst body.\n\n# Second\n\nSecond body.\n\n# Third\n\nThird body.",
+            "# First\n\n`id.first`\n\nFirst body.\n\n# Second\n\n`id.second`\n\nSecond body.\n\n# Third\n\n`id.third`\n\nThird body.",
             content);
     }
 
     /// <summary>
-    /// Entries without a body render the title heading only.
+    /// Entries without a body render the title heading and canonical ID line only.
     /// </summary>
     [Fact]
-    public void Format_RendersHeadingOnlyWhenBodyIsEmpty()
+    public void Format_RendersHeadingAndIDLineOnlyWhenBodyIsEmpty()
     {
         MarkdownLorePromptFormatter formatter = new();
 
         string content = formatter.Format([new LoreEntry("id.empty", "Empty", "  \n\n  ")]);
 
-        Assert.Equal("# Empty", content);
+        Assert.Equal("# Empty\n\n`id.empty`", content);
+    }
+
+    /// <summary>
+    /// The canonical ID line is uniform for world, character, and location entries: every kind renders the same
+    /// backticked canonical-ID line between the title heading and the body (AI-004 requirement 21).
+    /// </summary>
+    [Theory]
+    [InlineData(LoreSubjectKind.World, "world:charter")]
+    [InlineData(LoreSubjectKind.Character, "char:vadim")]
+    [InlineData(LoreSubjectKind.Location, "loc:interrogation-room")]
+    public void Format_RendersUniformCanonicalIDLineForEveryKind(LoreSubjectKind kind, string canonicalID)
+    {
+        MarkdownLorePromptFormatter formatter = new();
+
+        string content = formatter.Format([new LoreEntry(canonicalID, "Title", "Body.", Kind: kind)]);
+
+        Assert.Equal("# Title\n\n`" + canonicalID + "`\n\nBody.", content);
     }
 
     /// <summary>
@@ -201,7 +220,7 @@ public sealed class MarkdownLorePromptFormatterTests
 
         string content = formatter.Format([new LoreEntry("faction.rank.elite", "Faction/Rank <Elite>", "Canon includes / slashes.")]);
 
-        Assert.Equal("# Faction/Rank <Elite>\n\nCanon includes / slashes.", content);
+        Assert.Equal("# Faction/Rank <Elite>\n\n`faction.rank.elite`\n\nCanon includes / slashes.", content);
         Assert.DoesNotContain("<lore_entry>", content, StringComparison.Ordinal);
         Assert.DoesNotContain("<title>", content, StringComparison.Ordinal);
         Assert.DoesNotContain("<body>", content, StringComparison.Ordinal);
@@ -225,7 +244,7 @@ public sealed class MarkdownLorePromptFormatterTests
         ]);
 
         Assert.Equal(
-            "# Page\n\nIntro that wraps onto two lines.\n## Section\nSection body wraps onto two lines.",
+            "# Page\n\n`id.page`\n\nIntro that wraps onto two lines.\n## Section\nSection body wraps onto two lines.",
             content);
     }
 
@@ -254,6 +273,8 @@ public sealed class MarkdownLorePromptFormatterTests
         Assert.Equal(
             """
             # Code
+
+            `id.code`
 
             Intro paragraph that wraps onto two lines.
 

@@ -404,7 +404,7 @@ public sealed partial class DialogueExamplesPromptSectionIntegrationTests
             new LoreCatalogueQuery("char:test"));
         IReadOnlyList<LoreEntryLookup> lookups = await service.QueryEntriesAsync(
             _fixture,
-            new LoreEntryIDQuery("char:test", ["test.stable", "test.ally", "test.dialogue"]));
+            new LoreEntryIDQuery("char:test", ["world:with-id", "char:ally", "world:dialogue"]));
 
         Assert.DoesNotContain(FixtureDialogueMarker, EntriesText(essential), StringComparison.Ordinal);
         Assert.DoesNotContain(FixtureDialogueMarker, EntriesText(characters), StringComparison.Ordinal);
@@ -413,7 +413,7 @@ public sealed partial class DialogueExamplesPromptSectionIntegrationTests
 
         LoreEntryLookup dialogueLookup = Assert.Single(
             lookups,
-            lookup => lookup.RequestedID == "test.dialogue");
+            lookup => lookup.RequestedID == "world:dialogue");
         Assert.Null(dialogueLookup.Entry);
         foreach (LoreEntryLookup lookup in lookups)
         {

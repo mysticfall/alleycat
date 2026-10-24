@@ -29,7 +29,8 @@ public sealed record ObservedSpeech(
         {
             null => $"Heard an unknown speaker say: {Content}",
             var actorId when string.Equals(actorId, character.FullId, StringComparison.Ordinal) => $"I said: {Content}",
-            var actorId => $"Heard {actorId} say: {Content}",
+            // Canonical IDs read as handles, not prose, in every model-visible surface (AI-004 requirement 51).
+            var actorId => $"Heard `{actorId}` say: {Content}",
         };
     }
 

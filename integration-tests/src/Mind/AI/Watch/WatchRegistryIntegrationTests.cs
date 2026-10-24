@@ -19,6 +19,21 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Watch;
 [Headless]
 public sealed class WatchRegistryIntegrationTests
 {
+    /// <summary>
+    /// The delivered tool description backticks the canonical full-ID illustration and the referenced
+    /// <c>unwatch</c> tool name, per the universal model-visible presentation rule (AI-004 UR-25/TR-51).
+    /// </summary>
+    [Fact]
+    public void ProximityToolDescription_BackticksToolNameAndCanonicalIDForm()
+    {
+        var tool = new ProximityWatchTool();
+
+        Assert.Contains("full ID (`char:…`)", tool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("remove it with `unwatch`", tool.ToolDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("(char:", tool.ToolDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("with unwatch;", tool.ToolDescription, StringComparison.Ordinal);
+    }
+
     /// <summary>Registry binding exposes authorable watch functions and monotonically allocates opaque IDs.</summary>
     [Fact]
     public async Task ProximityTool_ArmsBoundedNonReusedWatchesAndUnwatchIsOrdinary()

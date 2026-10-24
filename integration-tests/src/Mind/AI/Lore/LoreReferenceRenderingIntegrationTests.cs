@@ -52,7 +52,7 @@ public sealed class LoreReferenceRenderingIntegrationTests
             "read_lore",
             new Dictionary<string, object?>
             {
-                ["entry_ids"] = new object[] { "test.reference_rendering" },
+                ["entry_ids"] = new object[] { "world:reference_rendering" },
             }));
         clientProvider.EnqueueHoldForever();
         ReferenceFlowMind mind = new(owner)
@@ -100,7 +100,7 @@ public sealed class LoreReferenceRenderingIntegrationTests
             FunctionResultContent loreResult = Assert.IsType<FunctionResultContent>(
                 Assert.Single(afterRetrieval.Messages[^1].Contents.OfType<FunctionResultContent>()));
             Assert.Equal("reference-lore-call", loreResult.CallId);
-            Assert.Contains("Entry 'test.reference_rendering':", loreResult.Result?.ToString(), StringComparison.Ordinal);
+            Assert.Contains("Entry `world:reference_rendering`:", loreResult.Result?.ToString(), StringComparison.Ordinal);
             AssertReferenceRendering(loreResult.Result?.ToString() ?? string.Empty);
         }
         finally

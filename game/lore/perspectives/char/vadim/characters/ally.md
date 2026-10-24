@@ -3,7 +3,6 @@ id: vadim.ally
 title: Ally
 description: What `char:ally`'s file contains, how I read a record, and how I approach her case and recommendation.
 type: char
-subject_id: char:ally
 ---
 
 I know `char:ally` from her file. I have reviewed her registration, her employment history, her civic record. The file gives me a name: Ally. She is Vesari — a young woman of the labour and service community, her personhood under the Compact's charter conditional on her continued utility. That is not a judgement. It is a legal category. Vesari stand or fall on whether they remain useful, whether they meet their obligations, whether they contribute to the order that holds the city together. Her standing, until now, has held.

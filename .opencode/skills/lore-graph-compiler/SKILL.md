@@ -24,11 +24,13 @@ The current AI-004 runtime slice loads observer perspective lore only:
 ```text
 <lore-root>/
 └── perspectives/  # Observer perspective Markdown lore; runtime source for essential world injection,
-                   # the session-start catalogue, and entry-ID retrieval.
+                   # the session-start catalogue, and canonical-ID retrieval.
 ```
 
-The canonical `wiki/` tree below is authoring-only at runtime: AI-004 never injects, catalogues, or retrieves
-canonical pages for an observer perspective, and `essential` marks perspective world lore only.
+The canonical `wiki/` tree below is outside the LLM-facing pipeline: AI-004 never injects, catalogues, or serves
+canonical pages to an observer perspective, and `essential` marks perspective world lore only. The lore service
+layer still reads the canonical wiki without an observer for non-LLM consumers such as tests, tooling, and future
+features (AI-004 TR-52).
 
 Graph compilation work may add the extended directories below when that workflow is invoked. Do not require these
 directories for the runtime `default` sample lore root used by the prompt injection slice.
@@ -47,16 +49,21 @@ may demonstrate the structure, but must not be treated as the schema authority.
 ## Wiki Page Convention
 
 Markdown pages under `<root>/wiki` are canonical authoring source; runtime essential lore, the catalogue, and
-entry-ID retrieval read the perspective trees per AI-004. Runtime-eligible pages require valid frontmatter, and every
-`essential` value must be a boolean when present.
+canonical-ID retrieval read the perspective trees per AI-004. Runtime-eligible pages require valid frontmatter
+carrying a bare path-matching `id` or a `title`, every `essential` value must be a boolean when present, and a
+`subject_id` field is rejected outright because identity is path-authoritative.
 
 Markdown pages are graph node candidates when graph compilation is in scope and they include YAML frontmatter with these
 fields:
 
 Required fields:
 
-- `id`: stable graph node ID, using a namespace-style value such as `character.alley`.
-- `type`: node type ID defined by ontology.
+- `id`: bare identity segment derived from the page's wiki-relative path (for example `vadim` for
+  `wiki/characters/vadim.md`, `charter` for `wiki/world/charter.md`), matching the path segments
+  hyphen/underscore-equivalent — never a namespace-style or composed value.
+- `type`: load-bearing page type, validated against the mapped top-level directory (`char`→`characters`,
+  `loc`→`locations`, `world`→`world`); together with `id` it composes the page's canonical full ID `type:id`
+  (for example `char:vadim`).
 - `title`: human-readable display title in Title Case, independent of `id` (the AI-004 display-title convention;
   known names or observer-known descriptive labels, never IDs).
 
@@ -67,14 +74,17 @@ Optional fields:
 - `description`: optional single-line scope preview of the topics the page covers; not a fact summary or a
   when/why lookup trigger (the AI-004 description convention).
 - `essential`: when `true`, marks world lore for baseline essential-lore prompt injection when read from a perspective
-  tree. AI-004 loads observer perspective lore only, so an `essential: true` flag on a canonical `wiki/` page is
-  preserved authoring metadata with no runtime injection effect.
+  tree. AI-004's LLM-facing pipeline loads observer perspective lore only, so an `essential: true` flag on a canonical
+  `wiki/` page is preserved authoring metadata with no runtime injection effect.
 - `links`: list of explicit typed graph relationships from this page's node.
 
 Each `links` item must include:
 
 - `type`: relation type ID defined by ontology.
-- `target`: target node ID.
+- `target`: target node's canonical full ID, composed as `type:id` (for example `char:vadim`).
+
+Composed full IDs appear in `links` targets, prose references, and labels — never as the page's own `id` frontmatter
+value, which stays bare and path-derived.
 
 Each `links` item may include additional scalar metadata such as `strength`, `confidence`, `note`, or `source`, provided
 the compiler preserves deterministic ordering and does not treat unknown metadata as a relation type.
@@ -93,7 +103,7 @@ Node type definitions are expected in YAML using this top-level key:
 
 ```yaml
 nodeTypes:
-  - id: character
+  - id: char
     description: A person, creature, or agent with identity and perspective.
 ```
 
@@ -109,8 +119,8 @@ relationTypes:
   - id: lives_in
     description: Connects a character to the location where they usually reside.
     directed: true
-    sourceTypes: [character]
-    targetTypes: [location]
+    sourceTypes: [char]
+    targetTypes: [loc]
 ```
 
 Required relation type fields:
@@ -131,9 +141,10 @@ Optional relation type fields:
 - Active content id: `default` or an optional pack id.
 - Active lore root: `game/lore` for `default`, or `game/content/<id>/lore` for an optional pack.
 
-Runtime perspective validation (essential-lore validation, catalogue, or entry-ID retrieval checks) requires the active
-observer perspective tree `<lore-root>/perspectives/<observer-type>/<observer-id>/` instead of canonical wiki; AI-004
-loads observer perspective lore only, so ordinary runtime validation must not require `<root>/wiki`.
+Runtime perspective validation (essential-lore validation, catalogue, or canonical-ID retrieval checks) requires the
+active observer perspective tree `<lore-root>/perspectives/<observer-type>/<observer-id>/` instead of canonical wiki;
+AI-004's LLM-facing pipeline loads observer perspective lore only, so ordinary runtime validation must not require
+`<root>/wiki`.
 
 Additional inputs are required only when canonical wiki, graph compilation, ontology validation, or suggestion work is
 requested:
@@ -161,7 +172,8 @@ validate Markdown source and essential frontmatter without requiring graph outpu
 - [ ] The active content id maps to `game/lore` (`res://lore`) for `default`, or to
       `game/content/<id>/lore` (`res://content/<id>/lore`) for an optional pack.
 - [ ] Runtime lore resolves under `<lore-root>/perspectives/<observer-type>/<observer-id>/` per AI-004; the canonical
-      `wiki/` tree is authoring-only at runtime.
+      `wiki/` tree stays outside the LLM-facing pipeline, with service-layer canonical reads for non-LLM consumers
+      excepted (AI-004 TR-52).
 - [ ] Every `essential` value, when present, is a boolean. Only perspective world `essential: true` entries mark lore
       for baseline prompt injection; canonical world `essential` flags are preserved authoring metadata with no
       runtime injection effect.
@@ -170,10 +182,14 @@ validate Markdown source and essential frontmatter without requiring graph outpu
 
 Additional checks apply only when graph compilation or ontology validation is in scope:
 
-- [ ] Every wiki page intended as a graph node has a stable `id`.
+- [ ] Every wiki page intended as a graph node carries a bare, path-matching `id` and a load-bearing `type` whose
+      mapped directory matches the page's location (`char`→`characters`, `loc`→`locations`, `world`→`world`);
+      namespace-style or composed `id` values are flagged.
+- [ ] No wiki or perspective page carries `subject_id` — identity is path-authoritative and a page carrying it fails
+      load validation.
 - [ ] Every graph node `type` is defined by ontology.
 - [ ] Every typed relationship uses a defined relation type.
-- [ ] Every typed relationship target resolves to a known node ID or accepted stub.
+- [ ] Every typed relationship target resolves to a known node's canonical full ID or accepted stub.
 - [ ] Wiki links either resolve to known pages or appear in suggestions as unresolved stubs.
 - [ ] Duplicate aliases or likely duplicate nodes are reported without being merged automatically.
 - [ ] Derived output has a generated-file notice and deterministic ordering.

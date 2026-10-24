@@ -1,5 +1,5 @@
 ---
-id: loc:interrogation_room
+id: interrogation_room
 type: loc
 title: The Interrogation Room
 description: The Charter Office's basement interview room, its fittings and design, and the procedures conducted there.

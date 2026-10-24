@@ -25,7 +25,7 @@ public sealed class ObservedProximityTransitionTests
         };
 
         Assert.Equal(ObservedProximityTransition.TypeKeyValue, observation.TypeKey);
-        Assert.Equal("char:subject entered the proximity condition at 1.25 m. (at 42.0s game time)", observation.Render(new FakeCharacter()));
+        Assert.Equal("`char:subject` entered the proximity condition at 1.25 m. (at 42.0s game time)", observation.Render(new FakeCharacter()));
         Assert.Equal(2.5f, observation.CalculateImportance(new ObservationContext(new FakeCharacter())));
         Assert.True(observation.RequiresFreshTurn(new ObservationContext(new FakeCharacter())));
         Assert.Null(typeof(ObservedProximityTransition).GetProperty("WatchId"));

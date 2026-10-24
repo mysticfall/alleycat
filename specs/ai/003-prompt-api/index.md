@@ -107,13 +107,17 @@ information it has already been supplied.
     removal handle (AI-010 TR-5).
 17. The shared NPC static stack preserves essential-world bodies followed by scene-character bodies, then renders
     AI-004's grouped catalogue of all remaining eligible observer/content-scoped entries. AI-004 normatively owns
-    metadata, shared selection/exclusion, ordering, empty output, formatting, and isolation. These are session-start
-    lore inputs, not a dynamic scene projection; no automatic location section or catalogue rebuild is required.
-18. Shared lore guidance distinguishes automatically supplied bodies from catalogue listings, identifies exact entry IDs
-    as `read_lore` handles rather than subject `FullId` values, and encourages retrieving relevant entries before
-    choosing an action. Returned bodies are the character's available beliefs, not omniscient facts; unavailable results
-    do not justify invention. Retrieval results reach subsequent reasoning through AI-002's retained exchanges, not
-    observations. Do not require retrieval before every action or promise same-response reasoning over tool results.
+    metadata, shared selection/exclusion, ordering, canonical-ID presentation, empty output, formatting, and
+    isolation. These are session-start lore inputs, not a dynamic scene projection; no automatic location section
+    or catalogue rebuild is required.
+18. Shared lore guidance distinguishes automatically supplied bodies from catalogue listings, identifies canonical
+    lore IDs — backticked `char:`/`loc:`/`world:` full IDs — as `read_lore` handles rather than subject `FullId`
+    values, and encourages retrieving relevant entries before choosing an action. It teaches canonical referencing
+    and presents IDs and tool names in backticks while teaching that `read_lore` argument values are exact bare
+    strings (AI-004 UR-25/TR-51). Returned bodies are the character's available beliefs, not omniscient facts;
+    unavailable results do not justify invention. Retrieval results reach subsequent reasoning through AI-002's
+    retained exchanges, not observations. Do not require retrieval before every action or promise same-response
+    reasoning over tool results.
 
 ## In Scope
 
@@ -191,9 +195,11 @@ information it has already been supplied.
      snapshot capture, or completed actions surfacing only through remembered events and fresh scene status.
 11. Tests verify the catalogue renders once at session start after unchanged automatic lore sections, obeys AI-004's
     shared-selection and presentation contracts, and is not rebuilt by fresh scene status or retrieval (TR-17).
-12. Tests verify shared guidance distinguishes listings from bodies and entry IDs from subject IDs, encourages relevant
-    retrieval for subsequent reasoning, treats results as observer beliefs, and promises neither mandatory retrieval,
-    invented missing lore, observations, nor same-response reasoning over results (TR-18).
+12. Tests verify shared guidance distinguishes listings from bodies and canonical lore IDs from subject IDs,
+    teaches canonical referencing with backticked IDs and tool names and bare `read_lore` argument values,
+    encourages relevant retrieval for subsequent reasoning, treats results as observer beliefs, and promises
+    neither mandatory retrieval, invented missing lore, observations, nor same-response reasoning over results
+    (TR-18).
 
 ## References
 

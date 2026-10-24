@@ -1,5 +1,5 @@
 ---
-id: scenario:interrogation
+id: interrogation
 type: scenario
 title: Interrogation
 description: The setup, participants, objectives, procedure, and stakes of the detention-interview scenario.

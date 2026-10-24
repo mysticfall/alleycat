@@ -1,5 +1,5 @@
 ---
-id: char:vadim
+id: vadim
 type: char
 title: Vadim
 description: Background, professional identity, self-image, and attitudes towards the Office and those he investigates.

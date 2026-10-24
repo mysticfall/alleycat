@@ -10,7 +10,7 @@ RootTypeName = "AlleyCat.Mind.AI.SceneStatus.AttendedCharactersSceneStatus"
 TemplateSource = "Current game time: {{ CurrentGameTime }}
 {% if AttendedCharacters.size > 0 %}
 Current attended characters:
-{% for attended in AttendedCharacters %}- {{ attended.FullId }}{% if attended.RelativePosition != nil %} is {{ attended.RelativePosition.Distance }} m away (observed at {{ attended.RelativePositionObservedAt }} s){% endif %}{% if attended.VisualDescription != nil %}: {{ attended.VisualDescription }} (described at {{ attended.VisualDescriptionObservedAt }} s){% endif %}
+{% for attended in AttendedCharacters %}- `{{ attended.FullId }}`{% if attended.RelativePosition != nil %} is {{ attended.RelativePosition.Distance }} m away (observed at {{ attended.RelativePositionObservedAt }} s){% endif %}{% if attended.VisualDescription != nil %}: {{ attended.VisualDescription }} (described at {{ attended.VisualDescriptionObservedAt }} s){% endif %}
 {% endfor %}{% else %}
 No characters are currently attended.
 {% endif %}"
@@ -20,7 +20,7 @@ Name = "Attended Characters"
 script = ExtResource("1_projection")
 ProjectorID = "active-watches"
 RootTypeName = "AlleyCat.Mind.AI.SceneStatus.ActiveWatchesSceneStatus"
-TemplateSource = "{% if Watches.size > 0 %}{% for watch in Watches %}- WatchId: {{ watch.WatchId }}, ConditionId: {{ watch.ConditionId }}, SubjectId: {{ watch.SubjectId }}
+TemplateSource = "{% if Watches.size > 0 %}{% for watch in Watches %}- WatchId: {{ watch.WatchId }}, ConditionId: {{ watch.ConditionId }}, SubjectId: `{{ watch.SubjectId }}`
 {% endfor %}{% endif %}"
 Name = "Active Watches"
 

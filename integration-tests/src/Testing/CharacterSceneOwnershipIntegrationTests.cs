@@ -77,7 +77,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             new ActiveWatchesSceneStatus([]),
             new Dictionary<string, object?>());
 
-        Assert.Equal("- WatchId: w17, ConditionId: proximity, SubjectId: char:ally\n", populated);
+        Assert.Equal("- WatchId: w17, ConditionId: proximity, SubjectId: `char:ally`\n", populated);
         Assert.Equal(string.Empty, empty);
         Assert.DoesNotContain("watch.Status", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
         Assert.DoesNotContain("State", activeWatchesSection.TemplateSource, StringComparison.Ordinal);

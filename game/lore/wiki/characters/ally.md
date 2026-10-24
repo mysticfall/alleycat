@@ -1,5 +1,5 @@
 ---
-id: char:ally
+id: ally
 type: char
 title: Ally
 description: Conditional standing, the paperwork discipline that maintains it, her temper, and what she values.

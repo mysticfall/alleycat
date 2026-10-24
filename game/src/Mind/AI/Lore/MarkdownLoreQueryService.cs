@@ -8,7 +8,11 @@ using Microsoft.Extensions.Logging;
 namespace AlleyCat.Mind.AI.Lore;
 
 /// <summary>
-/// Read-only Markdown-backed access to content-scoped perspective lore.
+/// Read-only Markdown-backed access to content-scoped lore with path-authoritative identity: each runtime
+/// entry's kind, canonical subject binding, and canonical full ID derive from its collection directory and path
+/// segments (AI-004 requirements 6 and 43), and the service reads both bases — the canonical wiki without an
+/// observer and observer-scoped perspectives (AI-004 requirement 52). LLM-facing composition always supplies the
+/// active observer, so it only ever resolves against that observer's perspective.
 /// </summary>
 /// <param name="logger">
 /// Optional logger that receives read-time triage warnings; triage stays silent when no logger is supplied.
@@ -19,9 +23,10 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
     private const string IgnoreCloseMarker = "<!-- /lore:ignore -->";
     private const string CommentOpenMarker = "<!--";
     private const string CommentCloseMarker = "-->";
+    private const string WikiRootSuffix = "lore/wiki/";
 
     /// <summary>
-    /// The scope-wide collection order used by catalogue and entry-ID queries, matching the catalogue's World,
+    /// The scope-wide collection order used by catalogue and canonical-ID queries, matching the catalogue's World,
     /// Characters, Locations group order.
     /// </summary>
     private static readonly LoreSubjectKind[] _scopeKindOrder =
@@ -30,6 +35,17 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
     private readonly Action<string>? _warn = logger is null
         ? null
         : message => logger.LogWarning("Lore: {Warning}", message);
+
+    /// <summary>
+    /// The base canonical-ID queries resolve against when their query defers base selection (AI-004 requirement
+    /// 52). Defaults to the canonical wiki because no-observer canonical reads are the first-class service
+    /// capability; LLM-facing composition always selects the observer's perspective explicitly.
+    /// </summary>
+    public LoreBase ConfiguredBase
+    {
+        get;
+        init;
+    } = LoreBase.Wiki;
 
     /// <summary>
     /// Test instrumentation observing every Markdown file read at the moment the file opens successfully and
@@ -51,6 +67,8 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Contextual selection is an LLM-facing prompt concern: it always reads the observer's perspective and
+        // never substitutes canonical wiki content (AI-004 requirements 25 to 27 and 52).
         string perspectiveRoot = GetPerspectiveRoot(content, query.ObserverID);
         Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = [];
         List<LoreEntry> entries = [];
@@ -60,7 +78,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             cancellationToken.ThrowIfCancellationRequested();
             if (!documentsByKind.TryGetValue(request.Kind, out IReadOnlyList<LoreMarkdownDocument>? documents))
             {
-                documents = ReadCollection(perspectiveRoot, request.Kind, cancellationToken, _warn);
+                documents = ReadCollection(perspectiveRoot, request.Kind, LoreBase.Perspective, cancellationToken, _warn);
                 documentsByKind.Add(request.Kind, documents);
             }
 
@@ -76,7 +94,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             requestDocuments.Sort(CompareDocuments);
             foreach (LoreMarkdownDocument document in requestDocuments)
             {
-                entries.Add(ToEntry(document, request.Kind));
+                entries.Add(ToEntry(document));
             }
         }
 
@@ -96,12 +114,16 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind =
-            ReadScope(content, query.ObserverID, cancellationToken, _warn);
+        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = ReadScope(
+            content,
+            query.ObserverID,
+            LoreBase.Perspective,
+            cancellationToken,
+            _warn);
         // Cancellation observed during the reads must cancel the whole query before it completes successfully,
         // including through result construction (AI-004 requirement 49).
         cancellationToken.ThrowIfCancellationRequested();
-        ValidateScopedEntryIDUniqueness(documentsByKind);
+        ValidateScopedAuthoringIdentityUniqueness(documentsByKind);
 
         List<LoreEntry> entries = [];
         foreach (LoreSubjectKind kind in _scopeKindOrder)
@@ -110,7 +132,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             documents.Sort(CompareDocuments);
             foreach (LoreMarkdownDocument document in documents)
             {
-                entries.Add(ToEntry(document, kind));
+                entries.Add(ToEntry(document));
             }
         }
 
@@ -128,22 +150,36 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind =
-            ReadScope(content, query.ObserverID, cancellationToken, _warn);
+        LoreBase loreBase = query.Base ?? ConfiguredBase;
+        string? observerID = query.ObserverID;
+        if (loreBase == LoreBase.Perspective && observerID is null)
+        {
+            throw new InvalidOperationException(
+                "A perspective-base lore entry query requires an observer FullId; pass one explicitly or select " +
+                "the canonical wiki base.");
+        }
+
+        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = ReadScope(
+            content,
+            observerID,
+            loreBase,
+            cancellationToken,
+            _warn);
         // Cancellation observed during the reads must cancel the whole query before it completes successfully,
         // including through result construction (AI-004 requirement 49).
         cancellationToken.ThrowIfCancellationRequested();
-        ValidateScopedEntryIDUniqueness(documentsByKind);
+        ValidateScopedAuthoringIdentityUniqueness(documentsByKind);
 
-        Dictionary<string, (LoreMarkdownDocument Document, LoreSubjectKind Kind)> documentsByID =
-            new(StringComparer.Ordinal);
+        // Authored dot-handle ids index the in-scope entries for the unavailable-result hint (AI-004 requirement
+        // 48); they never take part in canonical resolution themselves.
+        Dictionary<string, LoreMarkdownDocument> documentsByAuthoringID = new(StringComparer.Ordinal);
         foreach (LoreSubjectKind kind in _scopeKindOrder)
         {
             foreach (LoreMarkdownDocument document in documentsByKind[kind])
             {
                 if (document.ID is not null)
                 {
-                    documentsByID.Add(document.ID, (document, kind));
+                    _ = documentsByAuthoringID.TryAdd(document.ID, document);
                 }
             }
         }
@@ -151,13 +187,47 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         List<LoreEntryLookup> lookups = new(query.EntryIDs.Count);
         foreach (string entryID in query.EntryIDs)
         {
-            lookups.Add(documentsByID.TryGetValue(entryID, out (LoreMarkdownDocument Document, LoreSubjectKind Kind) match)
-                ? new LoreEntryLookup(entryID, ToEntry(match.Document, match.Kind))
-                : new LoreEntryLookup(entryID, null));
+            LoreMarkdownDocument? match = ResolveCanonicalID(entryID, documentsByKind);
+            lookups.Add(match is null
+                ? new LoreEntryLookup(
+                    entryID,
+                    Entry: null,
+                    HintCanonicalID: documentsByAuthoringID.TryGetValue(entryID, out LoreMarkdownDocument? hinted)
+                        ? hinted.CanonicalID
+                        : null)
+                : new LoreEntryLookup(entryID, ToEntry(match)));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<LoreEntryLookup>>(lookups);
+    }
+
+    /// <summary>
+    /// Resolves one requested canonical ID against the read scope through the type→directory map and segment
+    /// path with hyphen/underscore equivalence (AI-004 requirements 43 and 47). Unsupported types such as
+    /// <c>scenario:</c>, authoring dot handles, and malformed strings resolve to <c>null</c> — unavailable, never
+    /// an error. One canonical ID maps to at most one file per base by construction (per-directory collision
+    /// validation), so the first equivalent document is the only one.
+    /// </summary>
+    private static LoreMarkdownDocument? ResolveCanonicalID(
+        string requestedID,
+        IReadOnlyDictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind)
+    {
+        LoreSubjectKind? kind = LoreCanonicalIDs.TryResolveKind(requestedID);
+        if (kind is null)
+        {
+            return null;
+        }
+
+        foreach (LoreMarkdownDocument document in documentsByKind[kind.Value])
+        {
+            if (LoreCanonicalIDs.Equivalent(requestedID, document.CanonicalID))
+            {
+                return document;
+            }
+        }
+
+        return null;
     }
 
     private static string GetPerspectiveRoot(ContentContext content, string observerID)
@@ -169,21 +239,32 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
     }
 
     /// <summary>
-    /// Reads every runtime-eligible collection in one observer/content scope: world, characters, then
-    /// locations, including nested subdirectories at any depth.
+    /// Gets the lore base root for one base: the canonical wiki — which the three runtime collections read
+    /// directly, leaving the authoring-only <c>scenarios/</c> collection unread so <c>scenario:</c> IDs stay
+    /// unavailable everywhere — or one observer's perspective root (AI-004 requirements 4 and 52).
+    /// </summary>
+    private static string GetBaseRoot(ContentContext content, LoreBase loreBase, string? observerID)
+        => loreBase == LoreBase.Wiki
+            ? CombineResourcePath(content.RootPath, WikiRootSuffix)
+            : GetPerspectiveRoot(content, observerID!);
+
+    /// <summary>
+    /// Reads every runtime-eligible collection in one lore-base scope: world, characters, then locations,
+    /// including nested subdirectories at any depth.
     /// </summary>
     private Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> ReadScope(
         ContentContext content,
-        string observerID,
+        string? observerID,
+        LoreBase loreBase,
         CancellationToken cancellationToken,
         Action<string>? warn)
     {
-        string perspectiveRoot = GetPerspectiveRoot(content, observerID);
+        string baseRoot = GetBaseRoot(content, loreBase, observerID);
         Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = [];
         foreach (LoreSubjectKind kind in _scopeKindOrder)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            documentsByKind.Add(kind, ReadCollection(perspectiveRoot, kind, cancellationToken, warn));
+            documentsByKind.Add(kind, ReadCollection(baseRoot, kind, loreBase, cancellationToken, warn));
             // A cancellation landing inside a collection's final read must not let the scope read complete
             // successfully (AI-004 requirement 49).
             cancellationToken.ThrowIfCancellationRequested();
@@ -193,51 +274,47 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
     }
 
     /// <summary>
-    /// Enforces AI-004 requirement 43: entry IDs must be ordinally unique across all runtime-eligible world,
-    /// character, and location entries within one observer/content scope, including nested pages. The thrown
-    /// diagnostics name the conflicting source paths for internal triage only; model-facing failures must not
-    /// surface them. Reuse across observers or content roots stays valid because validation never crosses a
-    /// scope boundary.
+    /// Enforces AI-004 requirement 43: authoring identities — authored dot-handle ids and their path-derived
+    /// fallbacks — must be unique across all runtime-eligible world, character, and location entries within one
+    /// lore-base scope, including nested pages. The thrown diagnostics name the conflicting source paths for
+    /// internal triage only; model-facing failures must not surface them. Reuse across observers or content
+    /// roots stays valid because validation never crosses a scope boundary.
     /// </summary>
-    private static void ValidateScopedEntryIDUniqueness(
+    private static void ValidateScopedAuthoringIdentityUniqueness(
         IReadOnlyDictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind)
     {
-        Dictionary<string, string> sourcePathsByID = new(StringComparer.Ordinal);
+        Dictionary<string, string> sourcePathsByIdentity = new(StringComparer.Ordinal);
         foreach (LoreSubjectKind kind in _scopeKindOrder)
         {
             foreach (LoreMarkdownDocument document in documentsByKind[kind])
             {
-                if (document.ID is null)
-                {
-                    continue;
-                }
-
-                if (sourcePathsByID.TryGetValue(document.ID, out string? existingSourcePath))
+                if (sourcePathsByIdentity.TryGetValue(document.AuthoringID, out string? existingSourcePath))
                 {
                     throw new InvalidOperationException(
-                        $"Duplicate lore entry ID '{document.ID}' in the '{GetFolderName(kind)}' collection at " +
-                        $"'{document.SourcePath}' conflicts with the entry at '{existingSourcePath}'. Lore entry IDs " +
-                        "must be unique across all runtime-eligible world, character, and location entries within " +
-                        "one observer and content scope.");
+                        $"Duplicate lore authoring identity '{document.AuthoringID}' at '{document.SourcePath}' " +
+                        $"conflicts with the entry at '{existingSourcePath}'. Lore authoring identities must be " +
+                        "unique across all runtime-eligible world, character, and location entries within one " +
+                        "lore-base scope.");
                 }
 
-                sourcePathsByID.Add(document.ID, document.SourcePath);
+                sourcePathsByIdentity.Add(document.AuthoringID, document.SourcePath);
             }
         }
     }
 
     private IReadOnlyList<LoreMarkdownDocument> ReadCollection(
-        string perspectiveRoot,
+        string baseRoot,
         LoreSubjectKind kind,
+        LoreBase loreBase,
         CancellationToken cancellationToken,
         Action<string>? warn)
     {
-        string collectionPath = perspectiveRoot + GetFolderName(kind) + "/";
+        string collectionPath = baseRoot + GetFolderName(kind) + "/";
         List<LoreMarkdownDocument> documents = [];
-        foreach (string path in EnumerateMarkdownFiles(collectionPath))
+        foreach ((string path, string relativeStem) in EnumerateMarkdownFiles(collectionPath))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            LoreMarkdownDocument? document = ReadDocument(path, kind, warn);
+            LoreMarkdownDocument? document = ReadDocument(path, kind, relativeStem, loreBase, warn);
             // Cancellation can land inside the read itself — including the collection's final read, whose
             // cancellation would otherwise never be observed before completion (AI-004 requirement 49).
             cancellationToken.ThrowIfCancellationRequested();
@@ -247,28 +324,60 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             }
         }
 
+        ValidateSegmentCollisions(documents);
         return documents;
+    }
+
+    /// <summary>
+    /// Enforces AI-004 requirement 43: two runtime-eligible files in one directory whose stems collide under the
+    /// hyphen/underscore equivalence fail load validation, so one canonical ID maps to at most one file per base
+    /// and canonical lookups stay unambiguous by construction. Authoring-only files never take part because they
+    /// are not addressable.
+    /// </summary>
+    private static void ValidateSegmentCollisions(IReadOnlyList<LoreMarkdownDocument> documents)
+    {
+        Dictionary<(string Directory, string Stem), string> sourcePathsByKey = [];
+        foreach (LoreMarkdownDocument document in documents)
+        {
+            int separator = document.CanonicalID.IndexOf(':', StringComparison.Ordinal);
+            string relativeStem = document.CanonicalID[(separator + 1)..];
+            int lastSeparator = relativeStem.LastIndexOf('/');
+            (string directory, string stem) key = (
+                lastSeparator < 0 ? string.Empty : relativeStem[..lastSeparator],
+                LoreCanonicalIDs.NormaliseSegment(
+                    lastSeparator < 0 ? relativeStem : relativeStem[(lastSeparator + 1)..]));
+
+            if (sourcePathsByKey.TryGetValue(key, out string? existingSourcePath))
+            {
+                throw new InvalidOperationException(
+                    $"The lore files '{document.SourcePath}' and '{existingSourcePath}' collide under the " +
+                    "hyphen/underscore equivalence: two runtime-eligible files in one directory cannot share the " +
+                    "same canonical path segment.");
+            }
+
+            sourcePathsByKey.Add(key, document.SourcePath);
+        }
     }
 
     internal static bool Matches(LoreSubjectRequest request, LoreMarkdownDocument document)
         => request.Kind == LoreSubjectKind.World
             ? document.Essential
-            : string.Equals(document.SubjectID, request.SubjectID, StringComparison.Ordinal);
+            : request.Kind == document.Kind && LoreCanonicalIDs.Equivalent(request.SubjectID!, document.SubjectID!);
 
-    private static LoreEntry ToEntry(LoreMarkdownDocument document, LoreSubjectKind kind)
+    private static LoreEntry ToEntry(LoreMarkdownDocument document)
         => new(
-            document.ID,
+            document.CanonicalID,
             document.Title,
             document.Body,
             document.Priority,
-            kind,
+            document.Kind,
             document.SubjectID,
             document.Description);
 
     /// <summary>
-    /// Orders documents by priority, then ID, then title, then source path using ordinal comparisons. Runtime
-    /// documents always carry a non-null ID because pages without one are skipped at read time (AI-004
-    /// requirement 36); null IDs are only possible on directly constructed documents and sort first defensively.
+    /// Orders documents by priority, then authoring identity — the authored dot-handle <c>id</c> or its
+    /// path-derived fallback — then title, then source path using ordinal comparisons (AI-004 requirement 14).
+    /// Directly constructed documents without a canonical ID sort their null fallback first defensively.
     /// </summary>
     internal static int CompareDocuments(LoreMarkdownDocument left, LoreMarkdownDocument right)
     {
@@ -278,7 +387,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             return comparison;
         }
 
-        comparison = string.Compare(left.ID, right.ID, StringComparison.Ordinal);
+        comparison = string.Compare(left.AuthoringID, right.AuthoringID, StringComparison.Ordinal);
         if (comparison != 0)
         {
             return comparison;
@@ -298,7 +407,22 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported lore subject kind."),
     };
 
-    private static IEnumerable<string> EnumerateMarkdownFiles(string directoryPath)
+    /// <summary>
+    /// Enumerates every Markdown file under one collection directory at any depth, yielding the file's resource
+    /// path plus its collection-relative stem — the wiki-relative path without extension whose segments form the
+    /// canonical ID (AI-004 requirement 43).
+    /// </summary>
+    private static IEnumerable<(string Path, string RelativeStem)> EnumerateMarkdownFiles(string directoryPath)
+    {
+        foreach ((string path, string relativeStem) in EnumerateMarkdownFiles(directoryPath, string.Empty))
+        {
+            yield return (path, relativeStem);
+        }
+    }
+
+    private static IEnumerable<(string Path, string RelativeStem)> EnumerateMarkdownFiles(
+        string directoryPath,
+        string relativePrefix)
     {
         var directory = DirAccess.Open(directoryPath);
         if (directory is null)
@@ -312,7 +436,7 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         {
             if (fileName.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
             {
-                yield return directoryPath + fileName;
+                yield return (directoryPath + fileName, relativePrefix + fileName[..^".md".Length]);
             }
         }
 
@@ -320,14 +444,21 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         Array.Sort(directories, StringComparer.Ordinal);
         foreach (string childDirectory in directories)
         {
-            foreach (string filePath in EnumerateMarkdownFiles(directoryPath + childDirectory + "/"))
+            foreach ((string path, string relativeStem) in EnumerateMarkdownFiles(
+                         directoryPath + childDirectory + "/",
+                         relativePrefix + childDirectory + "/"))
             {
-                yield return filePath;
+                yield return (path, relativeStem);
             }
         }
     }
 
-    private LoreMarkdownDocument? ReadDocument(string path, LoreSubjectKind kind, Action<string>? warn)
+    private LoreMarkdownDocument? ReadDocument(
+        string path,
+        LoreSubjectKind kind,
+        string relativeStem,
+        LoreBase loreBase,
+        Action<string>? warn)
     {
         using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read);
         if (file is null)
@@ -337,22 +468,30 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         }
 
         FileReadObserver?.Invoke(path);
-        return ParseDocument(file.GetAsText(), path, kind, warn);
+        return ParseDocument(file.GetAsText(), path, kind, relativeStem, loreBase, warn);
     }
 
     /// <summary>
-    /// Parses a Markdown lore page, applying read-time triage and parse-time body cleaning (AI-004 requirements
-    /// 36 to 41). The optional <c>description</c> is a single-line frontmatter value where absent or blank means
-    /// no description (AI-004 requirement 42). Returns <see langword="null" /> for skipped pages: pages without
-    /// a frontmatter block or whose frontmatter carries no <c>id</c> are skipped silently, while unterminated
-    /// frontmatter, unclosed <c>lore:ignore</c> fences, and bodies emptied by cleaning are skipped with a warning
-    /// through <paramref name="warn" />. Frontmatter field validation stays fail-hard for <c>id</c>-bearing
-    /// pages.
+    /// Parses a Markdown lore page with path-authoritative identity (AI-004 requirements 6, 9, and 36 to 41):
+    /// the entry's kind, canonical subject binding, and canonical full ID derive from
+    /// <paramref name="kind" /> and <paramref name="relativeStem" />, never from frontmatter. Read-time triage
+    /// applies to both bases: a page runs when its frontmatter carries an <c>id</c> or a <c>title</c> — a
+    /// title-bearing id-less page loads with its path-derived authoring identity — while pages with no
+    /// frontmatter block or neither field are authoring-time only and skip silently. Unterminated frontmatter,
+    /// unclosed <c>lore:ignore</c> fences, and bodies emptied by cleaning skip with a warning through
+    /// <paramref name="warn" />. Field validation stays fail-hard on runtime-eligible pages: a <c>subject_id</c>
+    /// field is rejected outright because identity is path-authoritative, an optional <c>type</c> contradicting
+    /// the collection directory fails load validation, and wiki pages carrying an <c>id</c> additionally require
+    /// a load-bearing <c>type</c> and a bare <c>id</c> that matches the page's path under hyphen/underscore
+    /// equivalence. The optional <c>description</c> is a single-line frontmatter value where absent or blank
+    /// means no description (AI-004 requirement 42).
     /// </summary>
     internal static LoreMarkdownDocument? ParseDocument(
         string markdown,
         string sourcePath,
         LoreSubjectKind kind = LoreSubjectKind.World,
+        string relativeStem = "page",
+        LoreBase loreBase = LoreBase.Perspective,
         Action<string>? warn = null)
     {
         ArgumentNullException.ThrowIfNull(markdown);
@@ -367,16 +506,26 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         int end = normalised.Length < 5 ? -1 : normalised.IndexOf("\n---\n", 4, StringComparison.Ordinal);
         if (end < 0)
         {
-            // A stray '---' must not break runtime, but dropping a possibly 'id'-bearing entry deserves a signal.
+            // A stray '---' must not break runtime, but dropping a possibly runtime-eligible entry deserves a signal.
             warn?.Invoke($"Skipped lore page '{sourcePath}': its frontmatter block never closes after opening '---'.");
             return null;
         }
 
         Dictionary<string, string> frontmatter = ParseFrontmatter(normalised[4..end]);
-        string? id = GetOptionalField(frontmatter, "id");
-        if (id is null)
+        if (frontmatter.ContainsKey("subject_id"))
         {
-            // Frontmatter without an 'id': the page is authoring-time only and is skipped without a signal.
+            // Identity is path-authoritative (AI-004 requirement 9): no frontmatter field restates the path's
+            // identity decisions, so the legacy field is a load-validation failure on both bases.
+            throw new InvalidOperationException(
+                $"Lore page '{sourcePath}' carries a 'subject_id' frontmatter field. Entry identity is " +
+                "path-authoritative: remove 'subject_id' and place the entry at its canonical path instead.");
+        }
+
+        string? id = GetOptionalField(frontmatter, "id");
+        string? titleField = GetOptionalField(frontmatter, "title");
+        if (id is null && titleField is null)
+        {
+            // Frontmatter carrying neither an 'id' nor a 'title': authoring-time only, skipped without a signal.
             return null;
         }
 
@@ -384,7 +533,20 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         bool essential = ParseEssential(frontmatter, sourcePath);
         int priority = ParsePriority(frontmatter, sourcePath);
         string? description = GetOptionalField(frontmatter, "description");
-        string? subjectID = ParseSubjectID(frontmatter, sourcePath, kind);
+        string? type = GetOptionalField(frontmatter, "type");
+        if (loreBase == LoreBase.Wiki && id is not null)
+        {
+            // Wiki pages restate their path identity with a bare 'id' plus load-bearing 'type' (AI-004
+            // requirement 9), both validated against the page's actual position.
+            type ??= GetRequiredField(frontmatter, "type", sourcePath);
+            ValidateTypeMatchesDirectory(type, kind, sourcePath);
+            ValidateWikiIDMatchesPath(id, relativeStem, sourcePath);
+        }
+        else if (type is not null)
+        {
+            ValidateTypeMatchesDirectory(type, kind, sourcePath);
+        }
+
         string body = CleanBody(normalised[(end + "\n---\n".Length)..], sourcePath, warn);
         if (body.Length == 0)
         {
@@ -392,7 +554,54 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
             return null;
         }
 
-        return new LoreMarkdownDocument(id, title, subjectID, essential, priority, body, sourcePath, description);
+        string canonicalID = LoreCanonicalIDs.Compose(kind, relativeStem);
+        return new LoreMarkdownDocument(
+            id,
+            title,
+            kind == LoreSubjectKind.World ? null : canonicalID,
+            essential,
+            priority,
+            body,
+            sourcePath,
+            description,
+            canonicalID,
+            kind);
+    }
+
+    /// <summary>
+    /// Validates an optional frontmatter <c>type</c> against the collection directory the page actually sits in:
+    /// a mismatch fails load validation because the path owns the kind decision (AI-004 requirements 9 and 36).
+    /// </summary>
+    private static void ValidateTypeMatchesDirectory(string type, LoreSubjectKind kind, string sourcePath)
+    {
+        if (!string.Equals(type, LoreCanonicalIDs.GetTypePrefix(kind), StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Lore page '{sourcePath}' declares frontmatter type '{type}', but its collection directory " +
+                $"'{GetFolderName(kind)}' addresses kind '{LoreCanonicalIDs.GetTypePrefix(kind)}'. Remove or " +
+                "correct the 'type' field so it matches the entry's path.");
+        }
+    }
+
+    /// <summary>
+    /// Validates a wiki page's bare <c>id</c> against its path segments, hyphen/underscore-equivalent
+    /// (AI-004 requirement 9): composed full IDs are rejected because frontmatter values stay bare.
+    /// </summary>
+    private static void ValidateWikiIDMatchesPath(string id, string relativeStem, string sourcePath)
+    {
+        if (id.Contains(':', StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Lore page '{sourcePath}' declares composed full ID '{id}' as its frontmatter 'id'. Wiki ids " +
+                "are bare path restatements — for example 'id: vadim' plus 'type: char' — never 'type:id' values.");
+        }
+
+        if (!LoreCanonicalIDs.PathsEquivalent(id, relativeStem))
+        {
+            throw new InvalidOperationException(
+                $"Lore page '{sourcePath}' declares frontmatter id '{id}', which does not match its path " +
+                $"'{relativeStem}' under hyphen/underscore equivalence. The path owns the entry's identity.");
+        }
     }
 
     private static string GetRequiredField(
@@ -409,32 +618,6 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         => frontmatter.TryGetValue(field, out string? value) && !string.IsNullOrWhiteSpace(value)
             ? value.Trim()
             : null;
-
-    private static string? ParseSubjectID(
-        IReadOnlyDictionary<string, string> frontmatter,
-        string sourcePath,
-        LoreSubjectKind kind)
-    {
-        if (kind == LoreSubjectKind.World)
-        {
-            return null;
-        }
-
-        string subjectID = GetRequiredField(frontmatter, "subject_id", sourcePath);
-        try
-        {
-            LoreSubjectRequest request = kind == LoreSubjectKind.Character
-                ? LoreSubjectRequest.Character(subjectID)
-                : LoreSubjectRequest.Location(subjectID);
-            return request.SubjectID;
-        }
-        catch (ArgumentException exception)
-        {
-            throw new InvalidOperationException(
-                $"Lore page '{sourcePath}' has invalid 'subject_id' frontmatter value '{subjectID}'.",
-                exception);
-        }
-    }
 
     private static bool ParseEssential(IReadOnlyDictionary<string, string> frontmatter, string sourcePath)
     {
@@ -916,6 +1099,14 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
     private static string CombineResourcePath(string rootPath, string relativePath)
         => rootPath.EndsWith("/", StringComparison.Ordinal) ? rootPath + relativePath : rootPath + "/" + relativePath;
 
+    /// <summary>
+    /// One parsed runtime-eligible lore page. <see cref="CanonicalID" /> is the path-derived canonical full ID
+    /// and the only identity that reaches <see cref="LoreEntry" />; <see cref="ID" /> is the optional authored
+    /// dot-handle id, an authoring identity that never appears model-visible. <see cref="AuthoringID" /> — the
+    /// authored dot handle or its canonical-ID fallback — drives deterministic ordering and per-scope uniqueness
+    /// (AI-004 requirement 14). The source path stays backend-private for diagnostics and the final sorting
+    /// tie-breaker (AI-004 requirement 20).
+    /// </summary>
     internal sealed record LoreMarkdownDocument(
         string? ID,
         string Title,
@@ -924,5 +1115,11 @@ public sealed class MarkdownLoreQueryService(ILogger<MarkdownLoreQueryService>? 
         int Priority,
         string Body,
         string SourcePath,
-        string? Description = null);
+        string? Description = null,
+        string CanonicalID = "",
+        LoreSubjectKind Kind = LoreSubjectKind.World)
+    {
+        /// <summary>Gets the entry's authoring identity: its authored dot-handle id or canonical-ID fallback.</summary>
+        public string AuthoringID => ID ?? CanonicalID;
+    }
 }

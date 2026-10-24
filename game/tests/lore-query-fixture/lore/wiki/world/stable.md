@@ -1,5 +1,6 @@
 ---
-id: test.stable
+id: stable
+type: world
 title: Stable Entry
 description: Canonical authoring-only description that must never reach runtime lore queries.
 ---

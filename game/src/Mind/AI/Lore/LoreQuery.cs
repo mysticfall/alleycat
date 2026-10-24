@@ -120,6 +120,20 @@ public sealed record LoreQuery
 }
 
 /// <summary>
+/// Selects the lore base a canonical retrieval reads (AI-004 requirement 52): the canonical wiki base — read
+/// without an observer for non-LLM consumers — or one observer's perspective base, which is the only base any
+/// LLM-facing path resolves against.
+/// </summary>
+public enum LoreBase
+{
+    /// <summary>The canonical wiki base under <c>lore/wiki/</c>, read without an observer.</summary>
+    Wiki,
+
+    /// <summary>One observer's perspective base under <c>lore/perspectives/&lt;type&gt;/&lt;id&gt;/</c>.</summary>
+    Perspective,
+}
+
+/// <summary>
 /// Describes an observer-scoped catalogue query: every runtime-eligible entry in the bound content root and
 /// observer perspective across the world, character, and location collections (AI-004 requirement 44). Entries
 /// return in World, Characters, Locations group order with deterministic ordering inside each group. Selection
@@ -143,19 +157,88 @@ public sealed record LoreCatalogueQuery
 }
 
 /// <summary>
-/// Describes an exact entry-ID batch lookup for one observer perspective. Entry IDs are opaque exact strings
-/// distinct from subject FullIds: they match by ordinal equality without case folding, trimming, subject-ID
-/// interpretation, or alias lookup (AI-004 requirement 43). The complete batch is validated before any read: it
-/// must be non-empty with no null or blank IDs, and repeated IDs are deduplicated by ordinal equality while
-/// preserving first-request order (AI-004 requirement 47).
+/// Describes an exact canonical-ID batch lookup. Canonical IDs are strings of the form
+/// <c>[type]:[wiki-relative path]</c> — for example <c>char:vadim</c>, <c>loc:interrogation_room</c>, or
+/// <c>world:notes/nested</c> — matched by exact ordinal equality of the type and each path segment, with hyphens
+/// and underscores equivalent within segments and no case folding, trimming, subject-ID interpretation, or alias
+/// lookup (AI-004 requirement 43). The complete batch is validated before any read: it must be non-empty with no
+/// null or blank IDs, and repeated IDs are deduplicated by ordinal equality while preserving first-request order
+/// (AI-004 requirement 47).
 /// </summary>
+/// <remarks>
+/// The query selects its resolution base explicitly (observer-scoped perspective or canonical wiki) or defers to
+/// the service's configured scope (AI-004 requirement 52). The LLM-facing <c>read_lore</c> path always supplies
+/// the active observer, so it never reads the canonical wiki.
+/// </remarks>
 public sealed record LoreEntryIDQuery
 {
-    /// <summary>Creates an entry-ID batch lookup for one observer perspective.</summary>
+    /// <summary>
+    /// Creates an observer-scoped canonical-ID batch lookup against one observer's perspective base.
+    /// </summary>
     public LoreEntryIDQuery(string observerID, IEnumerable<string> entryIDs)
     {
         IdentityValidator.ValidateFullId(observerID, nameof(observerID));
+        Base = LoreBase.Perspective;
         ObserverID = observerID;
+        EntryIDs = ValidateEntryIDs(entryIDs);
+    }
+
+    /// <summary>Creates a canonical-ID batch lookup against one explicit lore base.</summary>
+    public LoreEntryIDQuery(LoreBase loreBase, IEnumerable<string> entryIDs)
+    {
+        Base = loreBase;
+        EntryIDs = ValidateEntryIDs(entryIDs);
+    }
+
+    /// <summary>
+    /// Creates a canonical-ID batch lookup that defers base selection to the service's configured scope
+    /// (AI-004 requirement 52).
+    /// </summary>
+    public LoreEntryIDQuery(IEnumerable<string> entryIDs)
+    {
+        Base = null;
+        EntryIDs = ValidateEntryIDs(entryIDs);
+    }
+
+    /// <summary>
+    /// Creates a canonical-ID lookup from a short id with an explicit kind — for example kind
+    /// <see cref="LoreSubjectKind.Character" /> with short id <c>vadim</c> addresses <c>char:vadim</c> — against
+    /// one observer's perspective base.
+    /// </summary>
+    public static LoreEntryIDQuery FromShortID(string observerID, LoreSubjectKind kind, string shortID)
+        => new(observerID, [ComposeCanonicalID(kind, shortID)]);
+
+    /// <summary>
+    /// Creates a canonical-ID lookup from a short id with an explicit kind against one explicit lore base.
+    /// </summary>
+    public static LoreEntryIDQuery FromShortID(LoreBase loreBase, LoreSubjectKind kind, string shortID)
+        => new(loreBase, [ComposeCanonicalID(kind, shortID)]);
+
+    /// <summary>
+    /// Gets the explicitly selected lore base, or <c>null</c> when the query defers to the service's configured
+    /// scope.
+    /// </summary>
+    public LoreBase? Base
+    {
+        get;
+    }
+
+    /// <summary>Gets the canonical observer FullId for perspective-base queries; <c>null</c> otherwise.</summary>
+    public string? ObserverID
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Gets the distinct requested canonical IDs in first-request order. Lookup results align with this order.
+    /// </summary>
+    public IReadOnlyList<string> EntryIDs
+    {
+        get;
+    }
+
+    private static IReadOnlyList<string> ValidateEntryIDs(IEnumerable<string> entryIDs)
+    {
         ArgumentNullException.ThrowIfNull(entryIDs);
 
         List<string> uniqueIDs = [];
@@ -175,25 +258,31 @@ public sealed record LoreEntryIDQuery
             }
         }
 
-        if (uniqueIDs.Count == 0)
+        return uniqueIDs.Count > 0
+            ? uniqueIDs.AsReadOnly()
+            : throw new ArgumentException("At least one lore entry ID is required.", nameof(entryIDs));
+    }
+
+    private static string ComposeCanonicalID(LoreSubjectKind kind, string shortID)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(shortID);
+        if (shortID.Contains(':', StringComparison.Ordinal))
         {
-            throw new ArgumentException("At least one lore entry ID is required.", nameof(entryIDs));
+            throw new ArgumentException(
+                $"A lore short id is the canonical ID without its type prefix; received '{shortID}'.",
+                nameof(shortID));
         }
 
-        EntryIDs = uniqueIDs.AsReadOnly();
-    }
+        foreach (string segment in shortID.Split('/'))
+        {
+            if (string.IsNullOrWhiteSpace(segment))
+            {
+                throw new ArgumentException(
+                    $"A lore short id cannot contain empty path segments; received '{shortID}'.",
+                    nameof(shortID));
+            }
+        }
 
-    /// <summary>Gets the canonical observer FullId.</summary>
-    public string ObserverID
-    {
-        get;
-    }
-
-    /// <summary>
-    /// Gets the distinct requested entry IDs in first-request order. Lookup results align with this order.
-    /// </summary>
-    public IReadOnlyList<string> EntryIDs
-    {
-        get;
+        return LoreCanonicalIDs.Compose(kind, shortID);
     }
 }

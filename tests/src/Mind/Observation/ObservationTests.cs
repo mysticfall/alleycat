@@ -44,7 +44,7 @@ public sealed class ObservationTests
 
         Assert.Equal("((Received test.default event.)) (at 10.2s game time)", fallback.Render(owner));
         Assert.Equal("I said: Hello", self.Render(owner));
-        Assert.Equal("Heard char:other say: Hi", recognised.Render(owner));
+        Assert.Equal("Heard `char:other` say: Hi", recognised.Render(owner));
         string unknownText = unknown.Render(owner);
         Assert.Equal("Heard an unknown speaker say: Who is there?", unknownText);
         Assert.DoesNotContain("VoiceId", unknownText, StringComparison.Ordinal);

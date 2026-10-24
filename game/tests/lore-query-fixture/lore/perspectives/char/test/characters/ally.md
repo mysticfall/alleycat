@@ -1,7 +1,6 @@
 ---
 id: test.ally
 title: char:ally
-subject_id: char:ally
 priority: 1
 description: What I think of the outsider.
 ---

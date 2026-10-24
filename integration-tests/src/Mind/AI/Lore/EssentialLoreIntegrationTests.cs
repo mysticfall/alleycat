@@ -111,7 +111,7 @@ public sealed class EssentialLoreIntegrationTests
             LoreQuery.Essential("char:vadim"));
 
         Assert.Equal(
-            ["vadim.charter", "vadim.charter_office", "vadim.peoples", "vadim.reclassification"],
+            ["world:charter", "world:charter-office", "world:peoples", "world:reclassification"],
             entries.Select(entry => entry.ID));
         Assert.All(entries, entry => Assert.Equal(LoreSubjectKind.World, entry.Kind));
         Assert.Contains("operating logic", entries[0].Body, StringComparison.Ordinal);
@@ -134,12 +134,14 @@ public sealed class EssentialLoreIntegrationTests
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(ContentContext.Default, query);
 
-        Assert.Equal(["vadim.ally", "vadim.interrogation_room", "vadim.self"], entries.Select(entry => entry.ID));
+        Assert.Equal(
+            ["char:ally", "loc:interrogation-room", "char:vadim"],
+            entries.Select(entry => entry.ID));
         Assert.Equal(
             [LoreSubjectKind.Character, LoreSubjectKind.Location, LoreSubjectKind.Character],
             entries.Select(entry => entry.Kind));
         Assert.Equal(
-            ["char:ally", "loc:interrogation_room", "char:vadim"],
+            ["char:ally", "loc:interrogation-room", "char:vadim"],
             entries.Select(entry => entry.SubjectID));
     }
 
@@ -159,11 +161,12 @@ public sealed class EssentialLoreIntegrationTests
     }
 
     /// <summary>
-    /// Read-time triage keeps authoring-time pages out of runtime queries while nested subdirectory pages join the
-    /// collection at any depth (AI-004 requirement 36).
+    /// Read-time triage keeps authoring-time pages out of runtime queries while title-bearing id-less pages load
+    /// with path-derived authoring identities, and nested subdirectory pages join the collection at any depth
+    /// (AI-004 requirements 36 and 43).
     /// </summary>
     [Fact]
-    public async Task QueryAsync_SkipsAuthoringTimePagesAndIncludesNestedSubdirectoryPages()
+    public async Task QueryAsync_SkipsAuthoringTimePagesAndLoadsTitleBearingNestedAndFallbackPages()
     {
         MarkdownLoreQueryService service = new();
         ContentContext content = new("lore-query-fixture", "res://tests/lore-query-fixture");
@@ -171,17 +174,20 @@ public sealed class EssentialLoreIntegrationTests
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
 
         Assert.Equal(
-            ["test.authoring_material", "test.nested_note", "test.stable"],
+            [
+                "world:with-id-authoring-material",
+                "world:notes/nested",
+                "world:with-id",
+                "world:without-id-a",
+                "world:without-id-b",
+            ],
             entries.Select(entry => entry.ID));
         Assert.All(entries, entry => Assert.NotNull(entry.ID));
         Assert.All(entries, entry => Assert.Equal(LoreSubjectKind.World, entry.Kind));
         Assert.Contains("Kept prose from a nested subdirectory page.", entries[1].Body, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            entries,
-            entry => entry.Body.Contains("First source-path fallback entry.", StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            entries,
-            entry => entry.Body.Contains("Second source-path fallback entry.", StringComparison.Ordinal));
+        // Title-bearing id-less pages load with their path-derived authoring identity (AI-004 requirement 36).
+        Assert.Contains("First source-path fallback entry.", entries[3].Body, StringComparison.Ordinal);
+        Assert.Contains("Second source-path fallback entry.", entries[4].Body, StringComparison.Ordinal);
         Assert.DoesNotContain(
             entries,
             entry => entry.Body.Contains("no frontmatter block at all", StringComparison.Ordinal));
@@ -205,13 +211,13 @@ public sealed class EssentialLoreIntegrationTests
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
 
-        LoreEntry material = Assert.Single(entries, entry => entry.ID == "test.authoring_material");
+        LoreEntry material = Assert.Single(entries, entry => entry.ID == "world:with-id-authoring-material");
         string body = material.Body;
 
         // No entry body carries inline link syntax, and only the verbatim fence carries comment syntax.
         Assert.All(entries, entry => Assert.DoesNotContain("](", entry.Body, StringComparison.Ordinal));
         Assert.All(
-            entries.Where(entry => entry.ID != "test.authoring_material"),
+            entries.Where(entry => entry.ID != "world:with-id-authoring-material"),
             entry => Assert.DoesNotContain("<!--", entry.Body, StringComparison.Ordinal));
 
         // Reduced links keep their label text, and autolinks keep their URL text.
@@ -261,7 +267,7 @@ public sealed class EssentialLoreIntegrationTests
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
 
-        Assert.Equal(3, entries.Count);
+        Assert.Equal(5, entries.Count);
         Assert.Contains(
             logger.Messages,
             message => message.Contains("unterminated-frontmatter.md", StringComparison.Ordinal)
@@ -273,6 +279,7 @@ public sealed class EssentialLoreIntegrationTests
         Assert.DoesNotContain(
             logger.Messages,
             message => message.Contains("no-frontmatter.md", StringComparison.Ordinal));
+        // The title-bearing id-less pages now load; their inclusion is silent, not a warning.
         Assert.DoesNotContain(
             logger.Messages,
             message => message.Contains("without-id-a.md", StringComparison.Ordinal));
@@ -302,6 +309,7 @@ public sealed class EssentialLoreIntegrationTests
         string content = await section.GetContentAsync(buildContext);
 
         Assert.StartsWith("# The Charter\n", content, StringComparison.Ordinal);
+        Assert.Contains("\n`world:charter`\n", content, StringComparison.Ordinal);
         Assert.Contains("operating logic", content, StringComparison.Ordinal);
         Assert.DoesNotContain("AlleyCat Sanctuary", content, StringComparison.Ordinal);
     }
@@ -344,6 +352,7 @@ public sealed class EssentialLoreIntegrationTests
 
         Assert.Equal(
             "# Faction/Rank <Elite>\n\n" +
+            "`faction.rank.elite`\n\n" +
             "Canon includes / slashes.",
             content);
         Assert.DoesNotContain("<lore_entry>", content, StringComparison.Ordinal);

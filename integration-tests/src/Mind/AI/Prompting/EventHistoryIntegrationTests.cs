@@ -72,8 +72,8 @@ public sealed class EventHistoryIntegrationTests
         Assert.Equal(
             "I said: Self line. (at 100.2s game time)\n"
                 + "((Received world.changed event.)) (at 300.6s game time)\n"
-                + "Heard char:rin say: Known line. (at 7200.0s game time)\n"
-                + "char:rin entered the proximity condition at 1.4 m. (at 900100.0s game time)",
+                + "Heard `char:rin` say: Known line. (at 7200.0s game time)\n"
+                + "`char:rin` entered the proximity condition at 1.4 m. (at 900100.0s game time)",
             output);
         Assert.DoesNotContain("w1", output, StringComparison.Ordinal);
         Assert.DoesNotContain("Watch", output, StringComparison.Ordinal);
@@ -95,8 +95,8 @@ public sealed class EventHistoryIntegrationTests
         string output = await renderer.RenderAsync(observations);
 
         Assert.Equal(
-            "Heard char:rin say: Hello\nHeard an unknown speaker say: Who is there?\n"
-                + "I said: Welcome.\nHeard CHAR:TEST_CHARACTER say: Not myself.",
+            "Heard `char:rin` say: Hello\nHeard an unknown speaker say: Who is there?\n"
+                + "I said: Welcome.\nHeard `CHAR:TEST_CHARACTER` say: Not myself.",
             output);
         Assert.DoesNotContain("raw-known-device", output, StringComparison.Ordinal);
         Assert.DoesNotContain("secret-unrecognised-device", output, StringComparison.Ordinal);
@@ -123,8 +123,8 @@ public sealed class EventHistoryIntegrationTests
         ContinuationProjection.Event grouped = Assert.Single(projected, item => item.Correlation is not null);
         Assert.Equal(3, grouped.Position);
         Assert.Equal(2, projected.Count);
-        Assert.Equal("Heard char:rin say: earlier … later", selected);
-        Assert.Equal("((Received world.changed event.))\nHeard char:rin say: earlier … later", rendered);
+        Assert.Equal("Heard `char:rin` say: earlier … later", selected);
+        Assert.Equal("((Received world.changed event.))\nHeard `char:rin` say: earlier … later", rendered);
         Assert.DoesNotContain("private-voice", rendered, StringComparison.Ordinal);
         Assert.DoesNotContain("private-group", rendered, StringComparison.Ordinal);
     }
@@ -151,13 +151,13 @@ public sealed class EventHistoryIntegrationTests
 
         Assert.Equal(
             "((Received world.settled event.))\n"
-                + "[new] Heard char:rin say: earlier … later\n"
+                + "[new] Heard `char:rin` say: earlier … later\n"
                 + "[new] ((Received world.changed event.))",
             output);
         // With every entry confirmed, the same projection renders wholly unmarked.
         Assert.Equal(
             "((Received world.settled event.))\n"
-                + "Heard char:rin say: earlier … later\n"
+                + "Heard `char:rin` say: earlier … later\n"
                 + "((Received world.changed event.))",
             await renderer.RenderAsync(timeline, confirmedSequenceWatermark: 4));
     }

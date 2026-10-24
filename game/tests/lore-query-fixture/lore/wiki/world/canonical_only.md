@@ -1,5 +1,6 @@
 ---
-id: test.canonical_only
+id: canonical_only
+type: world
 title: Canonical Only Entry
 description: Canonical authoring-only entry with no perspective counterpart.
 ---

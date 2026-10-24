@@ -3,8 +3,11 @@ using System.Text;
 namespace AlleyCat.Mind.AI.Lore;
 
 /// <summary>
-/// Formats lore entries as Markdown: each entry renders a level-one heading from its title followed by the
-/// normalised body, with body headings demoted so they always nest beneath the title heading.
+/// Formats lore entries as Markdown (AI-004 requirement 21): each entry renders a level-one heading from its
+/// verbatim title, one blank line, the entry's backticked canonical full ID on its own line, one blank line, and
+/// the normalised body with headings demoted so they always nest beneath the title heading. The ID line is
+/// uniform for world, character, and location entries and always shows the canonical ID — never an authoring
+/// dot-handle id.
 /// </summary>
 public sealed class MarkdownLorePromptFormatter : ILorePromptFormatter
 {
@@ -19,7 +22,8 @@ public sealed class MarkdownLorePromptFormatter : ILorePromptFormatter
         List<string> entryBlocks = new(entries.Count);
         foreach (LoreEntry entry in entries)
         {
-            entryBlocks.Add($"# {entry.Title}\n\n{FormatBody(entry.Body)}".TrimEnd());
+            entryBlocks.Add(
+                $"# {entry.Title}\n\n`{entry.ID ?? string.Empty}`\n\n{FormatBody(entry.Body)}".TrimEnd());
         }
 
         return string.Join("\n\n", entryBlocks);

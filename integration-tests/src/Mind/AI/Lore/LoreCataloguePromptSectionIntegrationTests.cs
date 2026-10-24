@@ -22,10 +22,11 @@ public sealed class LoreCataloguePromptSectionIntegrationTests
 
     /// <summary>
     /// The catalogue lists every remaining eligible entry exactly once, groups them in World, Characters, Locations
-    /// order, omits the empty Characters group, and carries optional descriptions without bodies. The automatically
-    /// injected essential-world entries (<c>test.stable</c>, <c>test.authoring_material</c>,
-    /// <c>test.nested_note</c>) and scene-character entries (<c>test.ally</c>, <c>test.vadim_self</c>) are excluded
-    /// by entry ID while their fixture-authored essential flags stay untouched.
+    /// order, omits the empty Characters group, and carries optional descriptions without bodies — every row shows
+    /// the entry's backticked canonical full ID. The automatically injected essential-world entries
+    /// (<c>world:with-id</c>, <c>world:with-id-authoring-material</c>, <c>world:notes/nested</c>,
+    /// <c>world:without-id-a</c>, <c>world:without-id-b</c>) and scene-character entries (<c>char:ally</c>,
+    /// <c>char:vadim</c>) are excluded by canonical ID while their fixture-authored essential flags stay untouched.
     /// </summary>
     [Fact]
     public async Task CatalogueSection_ListsRemainingEntriesGrouped_ExcludingAutomaticSelectionByID()
@@ -46,23 +47,26 @@ public sealed class LoreCataloguePromptSectionIntegrationTests
 
         Assert.Equal(
             "# World\n\n"
-            + "- `test.nonessential` — Non-Essential World Entry\n"
-            + "- `test.shared` — Shared World Entry — Riverside routes I keep to myself.\n"
+            + "- `world:nonessential` — Non-Essential World Entry\n"
+            + "- `world:shared` — Shared World Entry — Riverside routes I keep to myself.\n"
             + "\n"
             + "# Locations\n\n"
-            + "- `test.interrogation_room` — loc:interrogation_room — The room where they ask their questions.",
+            + "- `loc:interrogation_room` — loc:interrogation_room — The room where they ask their questions.",
             content);
         Assert.DoesNotContain("# Characters", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("test.stable", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("test.authoring_material", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("test.nested_note", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("test.ally", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("test.vadim_self", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`world:with-id`", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`world:with-id-authoring-material`", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`world:notes/nested`", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`world:without-id-a`", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`world:without-id-b`", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`char:ally`", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("`char:vadim`", content, StringComparison.Ordinal);
 
-        // Catalogue rows never carry bodies.
+        // Catalogue rows never carry bodies and never show authoring dot-handle ids.
         Assert.DoesNotContain("I walk them when I do not want to be found.", content, StringComparison.Ordinal);
         Assert.DoesNotContain("I have been inside once", content, StringComparison.Ordinal);
         Assert.DoesNotContain("World knowledge I have not internalised", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("test.", content, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -88,10 +92,19 @@ public sealed class LoreCataloguePromptSectionIntegrationTests
         string essential = await essentialSection.GetContentAsync(buildContext);
         string characters = await characterSection.GetContentAsync(buildContext);
 
-        Assert.Contains("# Stable Entry\n\nStable ID entry.", essential, StringComparison.Ordinal);
-        Assert.Contains("# Nested Note Entry\n\nKept prose from a nested subdirectory page.", essential, StringComparison.Ordinal);
+        Assert.Contains("# Stable Entry\n\n`world:with-id`\n\nStable ID entry.", essential, StringComparison.Ordinal);
+        Assert.Contains(
+            "# Nested Note Entry\n\n`world:notes/nested`\n\nKept prose from a nested subdirectory page.",
+            essential,
+            StringComparison.Ordinal);
         Assert.Equal(
-            ["# Authoring Material Entry", "# Nested Note Entry", "# Stable Entry"],
+            [
+                "# Authoring Material Entry",
+                "# Nested Note Entry",
+                "# Stable Entry",
+                "# Fallback Entry",
+                "# Fallback Entry",
+            ],
             ExtractEntryTitleLines(essential));
         Assert.StartsWith("# char:ally\n", characters, StringComparison.Ordinal);
         Assert.Contains("Who I am, in my own words.", characters, StringComparison.Ordinal);

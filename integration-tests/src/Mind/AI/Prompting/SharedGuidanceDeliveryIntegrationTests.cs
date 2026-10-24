@@ -92,11 +92,11 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             // The fresh player reply renders exactly once in the single section, marked newly presented on its
             // complete rendered line (AI-002 TR-3).
             Assert.Contains(
-                "[new] Heard char:fixture_player say: I am heading to the market now.",
+                "[new] Heard `char:fixture_player` say: I am heading to the market now.",
                 timeline,
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
-                "\nHeard char:fixture_player say:",
+                "\nHeard `char:fixture_player` say:",
                 timeline,
                 StringComparison.Ordinal);
 

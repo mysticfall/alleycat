@@ -1,5 +1,5 @@
 ---
-id: world.charter_office
+id: charter_office
 type: world
 title: The Charter Office
 description: The Compact's enforcement arm: its mandate, officers, premises, discretion, and final determinations.

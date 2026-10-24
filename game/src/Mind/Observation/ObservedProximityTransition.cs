@@ -80,7 +80,9 @@ public sealed record ObservedProximityTransition : Observation
     {
         ArgumentNullException.ThrowIfNull(character);
         string transition = Transition.ToString().ToLowerInvariant();
-        return $"{SubjectId} {transition} the proximity condition at "
+        // The subject's canonical ID reads as a handle, not prose, in every model-visible surface (AI-004
+        // requirement 51).
+        return $"`{SubjectId}` {transition} the proximity condition at "
             + $"{Distance.ToString("0.###", CultureInfo.InvariantCulture)} m.";
     }
 

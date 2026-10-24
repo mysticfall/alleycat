@@ -121,7 +121,7 @@ public sealed class CurrentSceneStatusIntegrationTests
 
             Assert.Contains("Current game time: 2.0s", populated, StringComparison.Ordinal);
             Assert.Contains("<Active Watches>", populated, StringComparison.Ordinal);
-            Assert.Contains("- WatchId: w1, ConditionId: proximity, SubjectId: char:subject", populated, StringComparison.Ordinal);
+            Assert.Contains("- WatchId: w1, ConditionId: proximity, SubjectId: `char:subject`", populated, StringComparison.Ordinal);
             Assert.DoesNotContain("Unknown", populated, StringComparison.Ordinal);
             Assert.DoesNotContain("Evidence", populated, StringComparison.Ordinal);
             Assert.DoesNotContain("Status", populated, StringComparison.Ordinal);
@@ -195,7 +195,7 @@ public sealed class CurrentSceneStatusIntegrationTests
             string rendered = await compiled.RenderAsync(statusContext);
 
             Assert.Contains("Current game time: 50.0s", rendered, StringComparison.Ordinal);
-            Assert.Contains("char:attended", rendered, StringComparison.Ordinal);
+            Assert.Contains("- `char:attended`", rendered, StringComparison.Ordinal);
             Assert.Contains("observed at 42", rendered, StringComparison.Ordinal);
             Assert.Contains("described at 43", rendered, StringComparison.Ordinal);
             Assert.Contains("A yellow coat.", rendered, StringComparison.Ordinal);

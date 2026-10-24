@@ -5,8 +5,8 @@ using Xunit;
 namespace AlleyCat.Tests.Mind.AI.Lore;
 
 /// <summary>
-/// Unit coverage for AI-004 Markdown lore read-time triage, parse-time body cleaning, and frontmatter
-/// validation.
+/// Unit coverage for AI-004 path-authoritative Markdown lore loading: read-time triage, parse-time body
+/// cleaning, frontmatter validation, canonical-ID derivation, and the canonical query surface.
 /// </summary>
 public sealed class MarkdownLoreQueryServiceTests
 {
@@ -103,52 +103,65 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Non-canonical subject values on an ID-bearing subject page remain fail-hard authoring errors.
+    /// Identity is path-authoritative: a <c>subject_id</c> frontmatter field fails load validation outright on
+    /// both bases (AI-004 requirements 9 and 36).
     /// </summary>
     [Theory]
-    [InlineData("ally")]
-    [InlineData("loc:ally")]
-    public void ParseDocument_RejectsInvalidSubjectIDValueOnIDBearingPage(string subjectID)
+    [InlineData(LoreBase.Perspective)]
+    [InlineData(LoreBase.Wiki)]
+    public void ParseDocument_RejectsSubjectIDFieldOutright(LoreBase loreBase)
     {
-        string markdown = $"""
+        const string markdown = """
             ---
             id: test.page
             title: Test Page
-            subject_id: {subjectID}
+            subject_id: char:ally
             ---
             Body.
             """;
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => MarkdownLoreQueryService.ParseDocument(markdown, SourcePath, LoreSubjectKind.Character));
+            () => MarkdownLoreQueryService.ParseDocument(
+                markdown,
+                SourcePath,
+                LoreSubjectKind.Character,
+                "ally",
+                loreBase));
 
         Assert.Contains(SourcePath, exception.Message, StringComparison.Ordinal);
         Assert.Contains("subject_id", exception.Message, StringComparison.Ordinal);
-        Assert.Contains(subjectID, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("path-authoritative", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Frontmatter without an <c>id</c> is authoring-time only: the page is skipped silently at read time.
+    /// A page whose frontmatter carries a <c>title</c> but no <c>id</c> loads with its path-derived authoring
+    /// identity: the authored dot-handle id stays <c>null</c> while the canonical ID addresses the entry like
+    /// any other (AI-004 requirements 9 and 36).
     /// </summary>
     [Fact]
-    public void ParseDocument_SkipsPageWithoutIDSilently()
+    public void ParseDocument_LoadsTitleBearingIDLessPageWithPathDerivedIdentity()
     {
-        string markdown = """
+        const string markdown = """
             ---
-            title: Test Page
+            title: Fallback Entry
+            essential: true
+            priority: 1
             ---
             Body.
             """;
 
-        List<string> warnings = [];
-
         MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(
             markdown,
-            SourcePath,
-            warn: warnings.Add);
+            "res://lore/perspectives/char/test/world/without-id-a.md",
+            LoreSubjectKind.World,
+            "without-id-a");
 
-        Assert.Null(document);
-        Assert.Empty(warnings);
+        Assert.NotNull(document);
+        Assert.Null(document.ID);
+        Assert.Equal("world:without-id-a", document.CanonicalID);
+        Assert.Equal("world:without-id-a", document.AuthoringID);
+        Assert.Equal("Fallback Entry", document.Title);
+        Assert.Equal("Body.", document.Body);
     }
 
     /// <summary>
@@ -175,16 +188,38 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Field validation applies only to ID-bearing pages: a page without an <c>id</c> skips silently even when
-    /// its frontmatter carries values that would fail hard on a runtime page.
+    /// Field validation applies to every runtime-eligible page — any page carrying an <c>id</c> or a
+    /// <c>title</c> — so a title-bearing id-less page with an invalid <c>essential</c> value fails hard instead
+    /// of skipping (AI-004 requirement 36).
     /// </summary>
     [Fact]
-    public void ParseDocument_SkipsPageWithoutIDBeforeFieldValidation()
+    public void ParseDocument_RejectsInvalidFieldValueOnTitleBearingIDLessPage()
     {
         const string markdown = """
             ---
             title: Test Page
             essential: maybe
+            ---
+            Body.
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => MarkdownLoreQueryService.ParseDocument(markdown, SourcePath));
+
+        Assert.Contains("essential", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Frontmatter carrying neither an <c>id</c> nor a <c>title</c> is authoring-time only: the page is skipped
+    /// silently (AI-004 requirement 36).
+    /// </summary>
+    [Fact]
+    public void ParseDocument_SkipsPageWithoutIDAndTitleSilently()
+    {
+        const string markdown = """
+            ---
+            essential: true
+            priority: 3
             ---
             Body.
             """;
@@ -201,7 +236,7 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// An unterminated frontmatter block must not break runtime, but dropping a possibly ID-bearing entry
+    /// An unterminated frontmatter block must not break runtime, but dropping a possibly runtime-eligible entry
     /// deserves a signal: the page is skipped with a logged warning.
     /// </summary>
     [Fact]
@@ -229,7 +264,7 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Every runtime page requires a stable display title, and ID-bearing pages fail hard without one.
+    /// Every runtime page requires a stable display title, and id-bearing pages fail hard without one.
     /// </summary>
     [Fact]
     public void ParseDocument_RejectsPageWithoutTitle()
@@ -272,40 +307,53 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Every location and character page needs a canonical subject key, irrespective of essential status.
+    /// Kind, canonical subject binding, and canonical full ID derive from the collection directory and path
+    /// segments for every kind, including nested world pages (AI-004 requirements 6 and 43).
     /// </summary>
     [Theory]
-    [InlineData(LoreSubjectKind.Location)]
-    [InlineData(LoreSubjectKind.Character)]
-    public void ParseDocument_RejectsSubjectScopedPageWithoutSubjectID(LoreSubjectKind kind)
+    [InlineData(LoreSubjectKind.World, "charter", "world:charter", null)]
+    [InlineData(LoreSubjectKind.World, "notes/nested", "world:notes/nested", null)]
+    [InlineData(LoreSubjectKind.Character, "vadim", "char:vadim", "char:vadim")]
+    [InlineData(LoreSubjectKind.Location, "interrogation-room", "loc:interrogation-room", "loc:interrogation-room")]
+    public void ParseDocument_DerivesIdentityFromThePath(
+        LoreSubjectKind kind,
+        string relativeStem,
+        string expectedCanonicalID,
+        string? expectedSubjectID)
     {
-        string markdown = """
+        const string markdown = """
             ---
-            id: test.page
+            id: authoring.handle
             title: Test Page
             ---
             Body.
             """;
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => MarkdownLoreQueryService.ParseDocument(markdown, SourcePath, kind));
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(
+            markdown,
+            SourcePath,
+            kind,
+            relativeStem);
 
-        Assert.Contains(SourcePath, exception.Message, StringComparison.Ordinal);
-        Assert.Contains("subject_id", exception.Message, StringComparison.Ordinal);
+        Assert.NotNull(document);
+        Assert.Equal(expectedCanonicalID, document.CanonicalID);
+        Assert.Equal(expectedSubjectID, document.SubjectID);
+        Assert.Equal(kind, document.Kind);
+        // The authored dot-handle id is an authoring identity only; it never overrides the path.
+        Assert.Equal("authoring.handle", document.AuthoringID);
     }
 
     /// <summary>
-    /// Valid optional ordering and subject metadata is represented in its canonical form, with the cleaned
-    /// body carried through unchanged when no authoring-time material is present.
+    /// A character or location page's path-derived subject binding is what contextual subject requests match —
+    /// with hyphen/underscore equivalence (AI-004 requirement 31).
     /// </summary>
     [Fact]
-    public void ParseDocument_ParsesPriorityAndNormalisesSubjectID()
+    public void ParseDocument_ParsesPriorityAndDerivesSubjectBindingFromPath()
     {
         string markdown = """
             ---
             id: test.page
             title: Test Page
-            subject_id: char:ally
             priority: -10
             ---
             Body.
@@ -314,12 +362,151 @@ public sealed class MarkdownLoreQueryServiceTests
         MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(
             markdown,
             SourcePath,
-            LoreSubjectKind.Character);
+            LoreSubjectKind.Character,
+            "ally");
 
         Assert.NotNull(document);
         Assert.Equal(-10, document.Priority);
         Assert.Equal("char:ally", document.SubjectID);
         Assert.Equal("Body.", document.Body);
+    }
+
+    /// <summary>
+    /// Wiki pages carry a bare <c>id</c> plus load-bearing <c>type</c> validated against the path: a hyphen in
+    /// the file name matches an underscore in the authored id (AI-004 requirement 9).
+    /// </summary>
+    [Fact]
+    public void ParseDocument_AcceptsWikiBareIDAndTypeMatchingThePath()
+    {
+        const string markdown = """
+            ---
+            id: interrogation_room
+            type: loc
+            title: The Interrogation Room
+            ---
+            Body.
+            """;
+
+        MarkdownLoreQueryService.LoreMarkdownDocument? document = MarkdownLoreQueryService.ParseDocument(
+            markdown,
+            "res://lore/wiki/locations/interrogation-room.md",
+            LoreSubjectKind.Location,
+            "interrogation-room",
+            LoreBase.Wiki);
+
+        Assert.NotNull(document);
+        Assert.Equal("loc:interrogation-room", document.CanonicalID);
+    }
+
+    /// <summary>
+    /// A wiki <c>id</c> that disagrees with the page's path — beyond hyphen/underscore equivalence — fails load
+    /// validation because the path owns the identity (AI-004 requirement 9).
+    /// </summary>
+    [Fact]
+    public void ParseDocument_RejectsWikiIDThatDoesNotMatchThePath()
+    {
+        const string markdown = """
+            ---
+            id: somewhere_else
+            type: world
+            title: Test Page
+            ---
+            Body.
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => MarkdownLoreQueryService.ParseDocument(
+                markdown,
+                "res://lore/wiki/world/charter.md",
+                LoreSubjectKind.World,
+                "charter",
+                LoreBase.Wiki));
+
+        Assert.Contains("somewhere_else", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("charter", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Composed <c>type:id</c> values never appear as frontmatter values: a wiki <c>id</c> carrying its type
+    /// prefix fails load validation (AI-004 requirement 9).
+    /// </summary>
+    [Fact]
+    public void ParseDocument_RejectsComposedWikiIDValue()
+    {
+        const string markdown = """
+            ---
+            id: char:vadim
+            type: char
+            title: Vadim
+            ---
+            Body.
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => MarkdownLoreQueryService.ParseDocument(
+                markdown,
+                "res://lore/wiki/characters/vadim.md",
+                LoreSubjectKind.Character,
+                "vadim",
+                LoreBase.Wiki));
+
+        Assert.Contains("char:vadim", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("bare", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The wiki <c>type</c> is load-bearing: an id-bearing wiki page without one fails load validation.
+    /// </summary>
+    [Fact]
+    public void ParseDocument_RejectsWikiPageWithoutLoadBearingType()
+    {
+        const string markdown = """
+            ---
+            id: charter
+            title: Test Page
+            ---
+            Body.
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => MarkdownLoreQueryService.ParseDocument(
+                markdown,
+                "res://lore/wiki/world/charter.md",
+                LoreSubjectKind.World,
+                "charter",
+                LoreBase.Wiki));
+
+        Assert.Contains("type", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An optional frontmatter <c>type</c> that contradicts its collection directory fails load validation on
+    /// either base (AI-004 requirements 9 and 36).
+    /// </summary>
+    [Theory]
+    [InlineData(LoreBase.Perspective)]
+    [InlineData(LoreBase.Wiki)]
+    public void ParseDocument_RejectsTypeContradictingTheCollectionDirectory(LoreBase loreBase)
+    {
+        string markdown = """
+            ---
+            id: authoring.handle
+            title: Test Page
+            type: loc
+            ---
+            Body.
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => MarkdownLoreQueryService.ParseDocument(
+                markdown,
+                SourcePath,
+                LoreSubjectKind.World,
+                "page",
+                loreBase));
+
+        Assert.Contains("loc", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("world", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -751,7 +938,7 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// An ID-bearing page whose body is empty after parse-time cleaning is excluded from query results with a
+    /// A runtime-eligible page whose body is empty after parse-time cleaning is excluded from query results with a
     /// logged warning rather than an error.
     /// </summary>
     [Fact]
@@ -779,39 +966,39 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Entry ordering applies priority, ID, title, and source path in that order using ordinal comparisons.
-    /// Null IDs cannot occur at runtime because pages without an ID are skipped at read time; they sort first
-    /// only as a defensive comparator guarantee for directly constructed documents.
+    /// Entry ordering applies priority, authoring identity — the authored dot-handle <c>id</c> or its
+    /// path-derived canonical fallback — title, and source path in that order using ordinal comparisons
+    /// (AI-004 requirement 14).
     /// </summary>
     [Fact]
     public void CompareDocuments_AppliesDeterministicOrderingContractBeforePublicProjection()
     {
         List<MarkdownLoreQueryService.LoreMarkdownDocument> documents =
         [
-            Document("same", "Same", "z.md", priority: 1),
-            Document("same", "Zed", "a.md", priority: 1),
-            Document("z", "First", "a.md", priority: -1),
-            Document("a", "First", "a.md", priority: 1),
-            Document("same", "Same", "a.md", priority: 1),
-            Document(null, "Alpha", "z.md", priority: 1),
-            Document(null, "Alpha", "a.md", priority: 1),
-            Document(null, "Beta", "a.md", priority: 1),
+            Document("same", "world:same", "Same", "z.md", priority: 1),
+            Document("same", "world:same", "Zed", "a.md", priority: 1),
+            Document(null, "world:z", "First", "a.md", priority: -1),
+            Document(null, "world:a", "First", "a.md", priority: 1),
+            Document("same", "world:same", "Same", "a.md", priority: 1),
+            Document(null, "world:fallback", "Alpha", "z.md", priority: 1),
+            Document(null, "world:fallback", "Alpha", "a.md", priority: 1),
+            Document(null, "world:fallback", "Beta", "a.md", priority: 1),
         ];
 
         documents.Sort(MarkdownLoreQueryService.CompareDocuments);
 
         Assert.Equal(
             [
-                (Priority: -1, ID: "z", Title: "First", SourcePath: "a.md"),
-                (Priority: 1, ID: null, Title: "Alpha", SourcePath: "a.md"),
-                (Priority: 1, ID: null, Title: "Alpha", SourcePath: "z.md"),
-                (Priority: 1, ID: null, Title: "Beta", SourcePath: "a.md"),
-                (Priority: 1, ID: "a", Title: "First", SourcePath: "a.md"),
-                (Priority: 1, ID: "same", Title: "Same", SourcePath: "a.md"),
-                (Priority: 1, ID: "same", Title: "Same", SourcePath: "z.md"),
-                (Priority: 1, ID: "same", Title: "Zed", SourcePath: "a.md"),
+                (Priority: -1, AuthoringID: "world:z", Title: "First", SourcePath: "a.md"),
+                (Priority: 1, AuthoringID: "same", Title: "Same", SourcePath: "a.md"),
+                (Priority: 1, AuthoringID: "same", Title: "Same", SourcePath: "z.md"),
+                (Priority: 1, AuthoringID: "same", Title: "Zed", SourcePath: "a.md"),
+                (Priority: 1, AuthoringID: "world:a", Title: "First", SourcePath: "a.md"),
+                (Priority: 1, AuthoringID: "world:fallback", Title: "Alpha", SourcePath: "a.md"),
+                (Priority: 1, AuthoringID: "world:fallback", Title: "Alpha", SourcePath: "z.md"),
+                (Priority: 1, AuthoringID: "world:fallback", Title: "Beta", SourcePath: "a.md"),
             ],
-            documents.Select(document => (document.Priority, document.ID, document.Title, document.SourcePath)));
+            documents.Select(document => (document.Priority, document.AuthoringID, document.Title, document.SourcePath)));
     }
 
     /// <summary>
@@ -822,6 +1009,7 @@ public sealed class MarkdownLoreQueryServiceTests
 
     private static MarkdownLoreQueryService.LoreMarkdownDocument Document(
         string? id,
+        string canonicalID,
         string title,
         string sourcePath,
         int priority)
@@ -832,7 +1020,10 @@ public sealed class MarkdownLoreQueryServiceTests
             Essential: true,
             Priority: priority,
             Body: string.Empty,
-            SourcePath: sourcePath);
+            SourcePath: sourcePath,
+            Description: null,
+            CanonicalID: canonicalID,
+            Kind: LoreSubjectKind.World);
 
     /// <summary>
     /// Observer and subject FullIds reject traversal, malformed, and mixed-case values.
@@ -850,15 +1041,20 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Essential metadata never makes a location or character entry match an unrequested subject.
+    /// Essential metadata never makes a location or character entry match an unrequested subject, and subject
+    /// matching is kind-scoped with hyphen/underscore equivalence — a hyphenated file stem matches the
+    /// canonical snake_case subject FullId.
     /// </summary>
     [Theory]
-    [InlineData(LoreSubjectKind.Location, "loc:requested", "loc:other")]
-    [InlineData(LoreSubjectKind.Character, "char:requested", "char:other")]
-    public void Matches_SubjectScopedEssentialEntry_DoesNotBypassSubjectSelection(
+    [InlineData(LoreSubjectKind.Location, "loc:requested", "loc:other", false)]
+    [InlineData(LoreSubjectKind.Character, "char:requested", "char:other", false)]
+    [InlineData(LoreSubjectKind.Location, "loc:requested_room", "loc:requested-room", true)]
+    [InlineData(LoreSubjectKind.Character, "char:requested", "loc:requested", false)]
+    public void Matches_SubjectScopedEntry_SelectsByKindAndEquivalentSubject(
         LoreSubjectKind kind,
         string requestedSubjectID,
-        string documentSubjectID)
+        string documentSubjectID,
+        bool expectedMatch)
     {
         LoreSubjectRequest request = kind == LoreSubjectKind.Location
             ? LoreSubjectRequest.Location(requestedSubjectID)
@@ -870,9 +1066,12 @@ public sealed class MarkdownLoreQueryServiceTests
             Essential: true,
             Priority: 0,
             Body: "Body.",
-            SourcePath: SourcePath);
+            SourcePath: SourcePath,
+            Description: null,
+            CanonicalID: documentSubjectID,
+            Kind: kind);
 
-        Assert.False(MarkdownLoreQueryService.Matches(request, document));
+        Assert.Equal(expectedMatch, MarkdownLoreQueryService.Matches(request, document));
     }
 
     /// <summary>
@@ -907,7 +1106,7 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// A pre-cancelled entry-ID query stops before attempting any storage access.
+    /// A pre-cancelled canonical-ID query stops before attempting any storage access.
     /// </summary>
     [Fact]
     public async Task QueryEntriesAsync_WhenAlreadyCancelled_ThrowsCancellation()
@@ -919,7 +1118,7 @@ public sealed class MarkdownLoreQueryServiceTests
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => service.QueryEntriesAsync(
                 ContentContext.Default,
-                new LoreEntryIDQuery("char:vadim", ["vadim.charter"]),
+                new LoreEntryIDQuery("char:vadim", ["world:charter"]),
                 cancellation.Token));
     }
 
@@ -949,13 +1148,13 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Entry-ID queries validate their observer FullId at construction, before any read.
+    /// Canonical-ID queries validate their observer FullId at construction, before any read.
     /// </summary>
     [Fact]
     public void EntryIDQuery_RejectsNonCanonicalObserverID()
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => new LoreEntryIDQuery("vadim", ["vadim.charter"]));
+            () => new LoreEntryIDQuery("vadim", ["world:charter"]));
 
         Assert.NotEmpty(exception.Message);
     }
@@ -979,7 +1178,7 @@ public sealed class MarkdownLoreQueryServiceTests
     public void EntryIDQuery_RejectsBlankIDItems(string blankID)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => new LoreEntryIDQuery("char:vadim", ["vadim.charter", blankID]));
+            () => new LoreEntryIDQuery("char:vadim", ["world:charter", blankID]));
 
         Assert.Contains("entry ID", exception.Message, StringComparison.Ordinal);
     }
@@ -991,7 +1190,7 @@ public sealed class MarkdownLoreQueryServiceTests
     public void EntryIDQuery_RejectsNullIDItem()
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => new LoreEntryIDQuery("char:vadim", ["vadim.charter", null!]));
+            () => new LoreEntryIDQuery("char:vadim", ["world:charter", null!]));
 
         Assert.Contains("entry ID", exception.Message, StringComparison.Ordinal);
     }
@@ -1010,7 +1209,7 @@ public sealed class MarkdownLoreQueryServiceTests
     }
 
     /// <summary>
-    /// Entry IDs are exact opaque strings: duplicates collapse by ordinal equality in first-request order with
+    /// Canonical IDs are exact opaque strings: duplicates collapse by ordinal equality in first-request order with
     /// no case folding and no trimming of requested values (AI-004 requirements 43 and 47).
     /// </summary>
     [Fact]
@@ -1018,25 +1217,73 @@ public sealed class MarkdownLoreQueryServiceTests
     {
         LoreEntryIDQuery query = new(
             "char:vadim",
-            ["b.entry", "a.entry", "b.entry", "a.entry ", "B.entry", "a.entry"]);
+            ["world:b", "world:a", "world:b", "world:a ", "WORLD:B", "world:a"]);
 
-        Assert.Equal(["b.entry", "a.entry", "a.entry ", "B.entry"], query.EntryIDs);
+        Assert.Equal(["world:b", "world:a", "world:a ", "WORLD:B"], query.EntryIDs);
     }
 
     /// <summary>
-    /// Lookup results associate the requested ID with either a found entry or an explicit unavailable status
+    /// The query surface selects its base explicitly — observer-scoped perspective or canonical wiki — or defers
+    /// to the service's configured scope (AI-004 requirement 52).
+    /// </summary>
+    [Fact]
+    public void EntryIDQuery_SelectsBaseExplicitlyOrDefersToTheConfiguredScope()
+    {
+        LoreEntryIDQuery observerScoped = new("char:vadim", ["world:charter"]);
+        LoreEntryIDQuery wikiExplicit = new(LoreBase.Wiki, ["world:charter"]);
+        LoreEntryIDQuery deferred = new(["world:charter"]);
+
+        Assert.Equal(LoreBase.Perspective, observerScoped.Base);
+        Assert.Equal("char:vadim", observerScoped.ObserverID);
+        Assert.Equal(LoreBase.Wiki, wikiExplicit.Base);
+        Assert.Null(wikiExplicit.ObserverID);
+        Assert.Null(deferred.Base);
+        Assert.Null(deferred.ObserverID);
+    }
+
+    /// <summary>
+    /// Retrieval accepts a short id with an explicit kind, composing the canonical ID — including multi-segment
+    /// world paths — and rejects malformed short ids (AI-004 requirement 52).
+    /// </summary>
+    [Fact]
+    public void FromShortID_ComposesCanonicalIDsFromKindAndShortID()
+    {
+        Assert.Equal(
+            ["char:vadim"],
+            LoreEntryIDQuery.FromShortID("char:vadim", LoreSubjectKind.Character, "vadim").EntryIDs);
+        Assert.Equal(
+            ["world:notes/nested"],
+            LoreEntryIDQuery.FromShortID(LoreBase.Wiki, LoreSubjectKind.World, "notes/nested").EntryIDs);
+        Assert.Equal(LoreBase.Wiki, LoreEntryIDQuery.FromShortID(LoreBase.Wiki, LoreSubjectKind.World, "charter").Base);
+
+        _ = Assert.Throws<ArgumentException>(
+            () => LoreEntryIDQuery.FromShortID(LoreBase.Wiki, LoreSubjectKind.World, "charter:extra"));
+        _ = Assert.Throws<ArgumentException>(
+            () => LoreEntryIDQuery.FromShortID(LoreBase.Wiki, LoreSubjectKind.World, "notes//nested"));
+        _ = Assert.Throws<ArgumentException>(
+            () => LoreEntryIDQuery.FromShortID(LoreBase.Wiki, LoreSubjectKind.World, " "));
+    }
+
+    /// <summary>
+    /// Lookup results associate the requested canonical ID with either a found entry or an explicit unavailable
+    /// status, and a miss carries a canonical hint exactly when the request matched an authored dot-handle id
     /// (AI-004 requirement 48).
     /// </summary>
     [Fact]
-    public void LoreEntryLookup_MarksExplicitUnavailableStatus()
+    public void LoreEntryLookup_MarksExplicitUnavailableStatusAndCanonicalHint()
     {
-        LoreEntry entry = new("id.entry", "Title", "Body.");
-        LoreEntryLookup found = new("id.entry", entry);
-        LoreEntryLookup missing = new("missing.entry", null);
+        LoreEntry entry = new("char:vadim", "Title", "Body.");
+        LoreEntryLookup found = new("char:vadim", entry);
+        LoreEntryLookup missing = new("world:missing", null);
+        LoreEntryLookup hinted = new("vadim.self", null, HintCanonicalID: "char:vadim");
 
         Assert.True(found.Found);
         Assert.Same(entry, found.Entry);
+        Assert.Null(found.HintCanonicalID);
         Assert.False(missing.Found);
         Assert.Null(missing.Entry);
+        Assert.Null(missing.HintCanonicalID);
+        Assert.False(hinted.Found);
+        Assert.Equal("char:vadim", hinted.HintCanonicalID);
     }
 }

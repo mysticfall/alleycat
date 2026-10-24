@@ -26,12 +26,13 @@ rules.
 
 1. Authors can provide per-character dialogue examples as a Markdown file inside that character's perspective folder,
    scoped by the same observer identity as perspective lore (AI-004). Speaker labels follow the event-history
-   identity convention (`Heard char:vadim say: …`): the character's own lines are labelled with the literal token
-   `{{ character.FullId }}`, which the section resolves to the character's full ID, and conversational partners carry
-   valid-looking fictional full IDs such as `char:ally`. Examples may also include action descriptions.
+   identity convention (``Heard `char:vadim` say: …``): every label is a full ID enclosed in backticks — the
+   character's own lines are labelled with the literal token `{{ character.FullId }}` inside its backticks, which
+   the section resolves to the character's full ID, and conversational partners carry valid-looking fictional full
+   IDs such as `char:visitor`. Examples may also include action descriptions.
 2. A character's examples appear in that character's session-start system instruction under a distinct
    `Dialogue Examples` section, separate from the lore sections, exactly as authored except that every authored
-   `{{ character.FullId }}` label reads as the character's resolved full ID.
+   `{{ character.FullId }}` label reads as the character's resolved full ID inside its authored backticks.
 3. Dialogue guidance travels with the section: when a stack includes it, the instruction explains how to treat
    examples — consult them for vocabulary, rhythm, mannerisms, personality, and typical words or actions in similar
    situations. These are hints, not rules or scripts: the current situation, mood, event history, and other actual
@@ -121,7 +122,7 @@ rules.
 
 1. A character with an authored `dialogue.md` receives that file's content in its session-start system instruction
    inside the distinct `Dialogue Examples` section, with every authored `{{ character.FullId }}` label rendered as
-   the character's full ID and everything else unchanged (UR-1, UR-2).
+   the character's full ID inside its authored backticks and everything else unchanged (UR-1, UR-2).
 2. A character without `dialogue.md` starts a session normally, with an empty section and no error (UR-4).
 3. With the section present, the rendered instruction carries every mandatory concept of user requirement 3,
    including personality and typical words or actions as adaptable hints, actual circumstances determining responses,

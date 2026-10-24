@@ -30,9 +30,9 @@ public sealed class ReadLoreToolIntegrationTests
     private static readonly ContentContext _fixture = new("lore-query-fixture", "res://tests/lore-query-fixture");
 
     /// <summary>
-    /// A batch lookup returns exactly one result per distinct ID in first-request order: found entries carry their
-    /// ID-associated formatted bodies — including automatically injected essential entries — and unknown IDs are
-    /// explicitly unavailable (AI-004 requirements 47 and 48).
+    /// A batch lookup returns exactly one result per distinct canonical ID in first-request order: found entries
+    /// carry their ID-associated formatted bodies — including automatically injected essential entries — and
+    /// unknown IDs are explicitly unavailable (AI-004 requirements 47 and 48).
     /// </summary>
     [Fact]
     public async Task Read_ReturnsFirstRequestOrderedIDAssociatedBodiesAndUnavailableResults()
@@ -41,23 +41,25 @@ public sealed class ReadLoreToolIntegrationTests
         await fixture.ReadyAsync();
 
         string message = await fixture.InvokeReadAsync(
-            ["test.interrogation_room", "test.missing", "test.interrogation_room", "test.stable"],
+            ["loc:interrogation_room", "world:missing", "loc:interrogation_room", "world:with-id"],
             CancellationToken.None);
 
-        int interrogation = message.IndexOf("Entry 'test.interrogation_room':", StringComparison.Ordinal);
-        int missing = message.IndexOf("Entry 'test.missing': unavailable.", StringComparison.Ordinal);
-        int stable = message.IndexOf("Entry 'test.stable':", StringComparison.Ordinal);
+        int interrogation = message.IndexOf("Entry `loc:interrogation_room`:", StringComparison.Ordinal);
+        int missing = message.IndexOf("Entry `world:missing`: unavailable.", StringComparison.Ordinal);
+        int stable = message.IndexOf("Entry `world:with-id`:", StringComparison.Ordinal);
         Assert.True(
             interrogation >= 0 && missing > interrogation && stable > missing,
             $"Results must keep first-request order with deduplication: {message}");
-        Assert.Equal(interrogation, message.LastIndexOf("Entry 'test.interrogation_room':", StringComparison.Ordinal));
+        Assert.Equal(interrogation, message.LastIndexOf("Entry `loc:interrogation_room`:", StringComparison.Ordinal));
 
         Assert.Contains("# loc:interrogation_room\n", message, StringComparison.Ordinal);
+        // The formatted body carries the entry's backticked canonical ID line (AI-004 requirement 21).
+        Assert.Contains("`loc:interrogation_room`\n", message, StringComparison.Ordinal);
         Assert.Contains("loc:interrogation_room sits below the charter office.", message, StringComparison.Ordinal);
         Assert.Contains("I have been inside once, and I do not intend to return.", message, StringComparison.Ordinal);
 
-        // 'test.stable' is essential world lore that automatic injection already supplies; it stays retrievable.
-        Assert.Contains("# Stable Entry\n\nStable ID entry.", message, StringComparison.Ordinal);
+        // 'world:with-id' is essential world lore that automatic injection already supplies; it stays retrievable.
+        Assert.Contains("# Stable Entry\n\n`world:with-id`\n\nStable ID entry.", message, StringComparison.Ordinal);
 
         // No canonical bodies and no scope-foreign knowledge join the result.
         Assert.DoesNotContain("Canonical authoring page", message, StringComparison.Ordinal);
@@ -67,8 +69,55 @@ public sealed class ReadLoreToolIntegrationTests
     }
 
     /// <summary>
-    /// The tool binds its trusted observer and content scope from the session context; the model supplies entry IDs
-    /// only (AI-002 TR-23).
+    /// Authoring dot handles and unsupported <c>scenario:</c> types return explicit unavailable results — never
+    /// errors — and a dot-handle request appends the hint pointing at the canonical form (AI-004 requirement
+    /// 48; acceptance 42).
+    /// </summary>
+    [Fact]
+    public async Task Read_WithDotHandleOrUnsupportedType_ReturnsUnavailableWithCanonicalHint()
+    {
+        ReadLoreFixture fixture = new(new MarkdownLoreQueryService(), new MarkdownLorePromptFormatter());
+        await fixture.ReadyAsync();
+
+        string message = await fixture.InvokeReadAsync(
+            ["test.ally", "scenario:interrogation"],
+            CancellationToken.None);
+
+        Assert.Contains(
+            "Entry `test.ally`: unavailable — request canonical IDs such as `char:ally`.",
+            message,
+            StringComparison.Ordinal);
+        Assert.Contains("Entry `scenario:interrogation`: unavailable.", message, StringComparison.Ordinal);
+
+        // The tool never reads the canonical wiki as content or fallback.
+        Assert.DoesNotContain("Canonical authoring page", message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Mind.GetTimelineForTest());
+    }
+
+    /// <summary>
+    /// Canonical addressing resolves against the active observer's perspective: the same canonical ID is
+    /// available to one observer and unavailable to another (AI-004 requirement 43; acceptance 42).
+    /// </summary>
+    [Fact]
+    public async Task Read_ResolvesCanonicalIDsPerObserver()
+    {
+        ReadLoreFixture fixture = new(new MarkdownLoreQueryService(), new MarkdownLorePromptFormatter());
+        await fixture.ReadyAsync();
+
+        string ownerMessage = await fixture.InvokeReadAsync(["world:shared"], CancellationToken.None);
+
+        Assert.Contains("Riverside routes I keep to myself.", ownerMessage, StringComparison.Ordinal);
+
+        fixture.UseObserver("other");
+        string otherMessage = await fixture.InvokeReadAsync(["world:shared"], CancellationToken.None);
+
+        Assert.Contains("Another observer knows these riverside routes too.", otherMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Riverside routes I keep to myself.", otherMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The tool binds its trusted observer and content scope from the session context; the model supplies canonical
+    /// IDs only (AI-002 TR-23).
     /// </summary>
     [Fact]
     public async Task Read_BindsTrustedObserverAndContentFromTheSessionContext()
@@ -77,12 +126,13 @@ public sealed class ReadLoreToolIntegrationTests
         ReadLoreFixture fixture = new(queryService, new MarkdownLorePromptFormatter());
         await fixture.ReadyAsync();
 
-        _ = await fixture.InvokeReadAsync(["scope.probe"], CancellationToken.None);
+        _ = await fixture.InvokeReadAsync(["world:scope-probe"], CancellationToken.None);
 
         _ = Assert.Single(queryService.EntryIDQueryCalls);
         (ContentContext content, LoreEntryIDQuery query) = queryService.EntryIDQueryCalls[0];
         Assert.Equal(fixture.Owner.FullId, query.ObserverID);
-        Assert.Equal(["scope.probe"], query.EntryIDs);
+        Assert.Equal(LoreBase.Perspective, query.Base);
+        Assert.Equal(["world:scope-probe"], query.EntryIDs);
         Assert.Same(fixture.SceneContext.Content, content);
     }
 
@@ -98,7 +148,7 @@ public sealed class ReadLoreToolIntegrationTests
         await fixture.ReadyAsync();
 
         _ = await Assert.ThrowsAsync<ArgumentException>(
-            () => fixture.InvokeReadAsync(["test.ally", "   "], CancellationToken.None));
+            () => fixture.InvokeReadAsync(["char:ally", "   "], CancellationToken.None));
         _ = await Assert.ThrowsAsync<ArgumentException>(
             () => fixture.InvokeReadAsync([], CancellationToken.None));
 
@@ -117,11 +167,11 @@ public sealed class ReadLoreToolIntegrationTests
         await fixture.ReadyAsync();
 
         _ = await Assert.ThrowsAnyAsync<Exception>(
-            () => fixture.InvokeReadRawAsync("test.ally", CancellationToken.None));
+            () => fixture.InvokeReadRawAsync("char:ally", CancellationToken.None));
         _ = await Assert.ThrowsAnyAsync<Exception>(
             () => fixture.InvokeReadRawAsync(42, CancellationToken.None));
         _ = await Assert.ThrowsAnyAsync<Exception>(
-            () => fixture.InvokeReadRawAsync(new object?[] { "test.ally", 7 }, CancellationToken.None));
+            () => fixture.InvokeReadRawAsync(new object?[] { "char:ally", 7 }, CancellationToken.None));
 
         Assert.Empty(queryService.EntryIDQueryCalls);
     }
@@ -138,7 +188,7 @@ public sealed class ReadLoreToolIntegrationTests
         ReadLoreTool tool = new(new MarkdownLoreQueryService(), new MarkdownLorePromptFormatter(), logger);
         ReadLoreFixture fixture = new(tool);
         await fixture.ReadyAsync();
-        fixture.UseConflictedObserver();
+        fixture.UseObserver("conflicted");
 
         string message = await fixture.InvokeReadAsync(["conflicted.entry"], CancellationToken.None);
 
@@ -172,7 +222,7 @@ public sealed class ReadLoreToolIntegrationTests
         cancellation.Cancel();
 
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => fixture.InvokeReadAsync(["test.ally"], cancellation.Token));
+            () => fixture.InvokeReadAsync(["char:ally"], cancellation.Token));
 
         Assert.Empty(fixture.Mind.GetTimelineForTest());
     }
@@ -204,7 +254,7 @@ public sealed class ReadLoreToolIntegrationTests
         await fixture.ReadyAsync();
 
         Exception? thrown = await Record.ExceptionAsync(
-            () => fixture.InvokeReadAsync(["test.ally"], cancellation.Token));
+            () => fixture.InvokeReadAsync(["char:ally"], cancellation.Token));
 
         // The cancellation genuinely landed inside the final location read of the tool's own query.
         Assert.True(cancellation.IsCancellationRequested);
@@ -233,7 +283,7 @@ public sealed class ReadLoreToolIntegrationTests
         await fixture.ReadyAsync();
 
         Exception? thrown = await Record.ExceptionAsync(
-            () => fixture.InvokeReadAsync(["test.ally"], cancellation.Token));
+            () => fixture.InvokeReadAsync(["char:ally"], cancellation.Token));
 
         // The cancellation genuinely landed inside the formatter, after the lookup batch completed.
         Assert.True(cancellation.IsCancellationRequested);
@@ -323,12 +373,12 @@ public sealed class ReadLoreToolIntegrationTests
         public TestMind Mind { get; } = new();
 
         /// <summary>
-        /// Rebinds the fixture to the conflicted observer whose perspective carries duplicate scoped entry IDs
-        /// (AI-004 requirement 43).
+        /// Rebinds the fixture to another observer perspective — for example the conflicted observer whose
+        /// perspective carries duplicate scoped authoring identities (AI-004 requirement 43).
         /// </summary>
-        public void UseConflictedObserver()
+        public void UseObserver(string observerID)
         {
-            Owner = new PromptOwnerCharacter("conflicted");
+            Owner = new PromptOwnerCharacter(observerID);
             SceneContext = new SceneContext([Owner], _fixture);
             Mind.SetOwner(Owner);
             CreateFunction();

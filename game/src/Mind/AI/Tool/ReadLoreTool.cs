@@ -34,14 +34,15 @@ public partial class ReadLoreTool : AgentTool
     public ReadLoreTool()
     {
         ToolName = ProductionToolName;
-        ToolDescription = "Read the full bodies of lore entries by their exact entry IDs. Entry IDs come from the "
-            + "Lore Catalogue in your instructions and are lore handles, not subject full IDs. Pass a non-empty "
-            + "list of IDs — for a single entry, pass a one-element list; every requested ID returns either its "
-            + "full body or an explicit unavailable result, and unavailable means no available lore of yours "
-            + "carries that exact ID — never a reason to invent. Returned bodies are your own beliefs, not "
-            + "omniscient facts. Results are retained, so they reach your next request: retrieve first, then "
-            + "reason and act in a later response — a tool call later in the same response cannot use a result "
-            + "it has not received. Retrieval is encouraged when relevant, never required before every action.";
+        ToolDescription = "Read the full bodies of lore entries by their canonical lore IDs. Canonical IDs appear "
+            + "throughout your context — in the Lore Catalogue, in formatted lore bodies, and in event history — "
+            + "in `char:`, `loc:`, and `world:` form, for example `world:charter`. Pass a non-empty list of IDs — "
+            + "for a single entry, pass a one-element list; every requested ID returns either its full body or an "
+            + "explicit unavailable result, and unavailable means no available lore of yours carries that exact "
+            + "canonical ID — never a reason to invent. Returned bodies are your own beliefs, not omniscient "
+            + "facts. Results are retained, so they reach your next request: retrieve first, then reason and act "
+            + "in a later response — a tool call later in the same response cannot use a result it has not "
+            + "received. Retrieval is encouraged when relevant, never required before every action.";
         // Default retention keeps the settled exchange model-visible (AI-002 TR-20/24): the next provider request
         // replays it so its results inform the subsequent action decision.
     }
@@ -69,8 +70,10 @@ public partial class ReadLoreTool : AgentTool
     private async ValueTask<AgentToolResult> Read(
         ScenarioContext context,
         [Description(
-            "Exact lore entry IDs from your Lore Catalogue. Pass a non-empty list; use a one-element list for a "
-            + "single entry; repeated IDs are read once.")]
+            "Canonical lore IDs in `char:`, `loc:`, or `world:` form, exactly as shown backticked in your Lore "
+            + "Catalogue, formatted lore, and event history. Pass a non-empty list as exact bare strings — for "
+            + "example world:charter, without its backticks; use a one-element list for a single entry; repeated "
+            + "IDs are read once.")]
         IReadOnlyList<string> entry_ids,
         CancellationToken cancellationToken = default)
     {
@@ -126,9 +129,11 @@ public partial class ReadLoreTool : AgentTool
     }
 
     /// <summary>
-    /// Associates every requested ID — in first-request order — with either its formatted lore body or an explicit
-    /// unavailable status (AI-004 requirement 48). Body formatting reuses the shared lore formatter unchanged; the
-    /// envelope adds only the ID association.
+    /// Associates every requested canonical ID — in first-request order — with either its formatted lore body or
+    /// an explicit unavailable status, enclosing the requested ID and any canonical hint in backticks
+    /// (AI-004 requirements 48 and 51). Body formatting reuses the shared lore formatter unchanged; the envelope
+    /// adds only the ID association. When a miss matched an in-scope authored dot-handle id, the unavailable
+    /// result appends a hint pointing at that entry's canonical form.
     /// </summary>
     private static string ComposeResultMessage(IReadOnlyList<LoreEntryLookup> lookups, ILorePromptFormatter formatter)
     {
@@ -136,8 +141,10 @@ public partial class ReadLoreTool : AgentTool
         foreach (LoreEntryLookup lookup in lookups)
         {
             blocks.Add(lookup.Found
-                ? $"Entry '{lookup.RequestedID}':\n{formatter.Format([lookup.Entry!])}"
-                : $"Entry '{lookup.RequestedID}': unavailable.");
+                ? $"Entry `{lookup.RequestedID}`:\n{formatter.Format([lookup.Entry!])}"
+                : lookup.HintCanonicalID is { Length: > 0 } hint
+                    ? $"Entry `{lookup.RequestedID}`: unavailable — request canonical IDs such as `{hint}`."
+                    : $"Entry `{lookup.RequestedID}`: unavailable.");
         }
 
         return string.Join("\n\n", blocks);

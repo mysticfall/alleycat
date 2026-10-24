@@ -1,7 +1,6 @@
 ---
 id: test.vadim_self
 title: char:vadim
-subject_id: char:vadim
 priority: 1
 ---
 

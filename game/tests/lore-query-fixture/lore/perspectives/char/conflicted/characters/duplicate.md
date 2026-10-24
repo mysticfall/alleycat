@@ -1,7 +1,6 @@
 ---
 id: conflicted.entry
 title: char:conflicted
-subject_id: char:conflicted
 priority: 1
 ---
 

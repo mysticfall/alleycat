@@ -3,7 +3,6 @@ id: vadim.self
 title: Vadim
 description: My background, professional identity, self-image, and attitudes towards the Office and those I investigate.
 type: char
-subject_id: char:vadim
 ---
 
 I am a Kaelic man and an officer of the Charter Office of Compliance. My name is Vadim. I have held the position for several years. I am good at it. I say that as a finding, not a boast. Assessment is what I do.

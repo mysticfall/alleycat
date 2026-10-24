@@ -150,16 +150,18 @@ accurately.
 ### Read-Only Lore Tool
 
 23. Compose `read_lore` at AgenticMind with the associated character's trusted observer identity, current content
-    context, and existing asynchronous lore query and formatting dependencies. Only entry IDs are model inputs: the
-    model cannot supply an observer, content root, or source path. AI-004's Discovery and Entry-ID Retrieval section
-    is normative for validation, ordering, deduplication, unavailable results, isolation, cleaning, and cancellation.
+    context, and existing asynchronous lore query and formatting dependencies. Only canonical lore IDs are model
+    inputs: the model cannot supply an observer, content root, or source path. AI-004's Discovery and Canonical-ID
+    Retrieval section is normative for validation, ordering, deduplication, unavailable results, isolation,
+    cleaning, and cancellation.
 24. `read_lore` is read-only and emits no Mind observations or lore mutations. Its successful exchange follows default
     retention (TR-20), so the next provider request includes the results before a subsequent action decision. Do not add
     a memory subsystem, special scheduling path, or disposal override; mixed batches retain the whole exchange as usual.
-25. Model-facing retrieval guidance explains exact entry-ID inputs, explicit unavailable results, and retained returned
-    knowledge. Encourage a retrieval request followed by reasoning over the result before choosing a relevant action;
-    a later call in the same provider response cannot reason over a result not yet received. Retrieval is not mandatory
-    before every action, and `speak`/`wait` guidance and disposal remain unchanged.
+25. Model-facing retrieval guidance explains exact canonical-ID inputs, the backticked presentation of IDs and
+    tool names with bare tool-call argument values (AI-004 UR-25/TR-51), explicit unavailable results, and retained
+    returned knowledge. Encourage a retrieval request followed by reasoning over the result before choosing a
+    relevant action; a later call in the same provider response cannot reason over a result not yet received.
+    Retrieval is not mandatory before every action, and `speak`/`wait` guidance and disposal remain unchanged.
 
 ### Reasoning Effort and Reasoning Summary Configuration
 
@@ -343,8 +345,9 @@ accurately.
     persisted self-speech timeline observation, and pre-hand-off cancelled or failed speech leaves no timeline or
     scene trace.
 13. Tests verify every logical request's current scene status carries its snapshot's current game time (AI-003 TR-6).
-14. Tests verify `read_lore` binds trusted observer/content dependencies at AgenticMind, exposes only entry IDs, and
-    follows AI-004's single/batch, missing-result, formatting, isolation, and cancellation contracts (TR-23).
+14. Tests verify `read_lore` binds trusted observer/content dependencies at AgenticMind, exposes only canonical
+    lore IDs, and follows AI-004's single/batch, missing-result, formatting, isolation, and cancellation contracts
+    (TR-23).
 15. Tests verify no retrieval observations, retained results on the next provider request, whole mixed-batch retention,
     unchanged `speak`/`wait` disposal, and guidance on retrieval before a subsequent action decision (TR-24–TR-25).
 16. Tests load shipped-style and user YAML through the real configuration binding: user values override matching
