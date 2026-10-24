@@ -213,6 +213,10 @@ and acceptance.
   same-side row, within the conserved lower-arm/helper/hand pool; verify axial construction conservation. All
   other pre-existing zero memberships persist in the saved `.blend` unless the row-specific finger-ghost
   exception below applies. Logical zero influence in a calculation must not create a new physical membership.
+  An eligible row's lower arm or hand anchor that lacks original positive membership receives no authored
+  positive mass; its ramp share concentrates onto the twist helper within the conserved pool, so a handless
+  distal row (for example a jacket sleeve) terminates the ramp on the helper rather than inventing hand
+  ownership.
   The authored pool and protected physical channels are preserved through output. Finger, unrelated,
   opposite-side and out-of-domain influences remain protected at the applicable stage.
   `helper_fraction = 0.5` is the initial ownership setting, independently tunable from runtime `TwistWeight`

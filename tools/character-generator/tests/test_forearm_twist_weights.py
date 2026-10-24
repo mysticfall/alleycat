@@ -98,6 +98,34 @@ class ForearmTwistWeightsTests(unittest.TestCase):
         self.assertAlmostEqual(1.0, reference[5]["hand_l"], places=9)
         self.assertAlmostEqual(0.0, reference[5].get("forearm_l", 0.0), places=9)
 
+    def test_axial_ramp_never_invents_a_missing_side_anchor(self) -> None:
+        side = weights_module.AxialSide("lowerarm_l", "forearm_l", "hand_l", frozenset())
+        # A clothing sleeve row carries lower-arm ownership only, yet sits in the
+        # distal hand phase: the absent hand cannot receive new positive mass, so
+        # its ramp share concentrates onto the helper instead of inventing a
+        # physical hand membership.
+        handless_absent = ForearmVertex(1.05, 0.02, {"lowerarm_l": 1.0})
+        handless_zero = ForearmVertex(1.05, 0.02, {"lowerarm_l": 0.7, "forearm_l": 0.0, "hand_l": 0.0, "body": 0.3})
+        # Symmetrically, a hand-owned row in the proximal phase cannot invent a
+        # lower-arm membership.
+        lowerless = ForearmVertex(0.30, 0.02, {"hand_l": 1.0})
+        authored = author_axial(
+            [handless_absent, handless_zero, lowerless], ((0, 1), (1, 2)), (side,)
+        )
+        absent_row = authored.reference[0]
+        self.assertNotIn("hand_l", absent_row)
+        self.assertAlmostEqual(1.0, absent_row["forearm_l"], places=9)
+        self.assertEqual(0.0, absent_row["lowerarm_l"])
+        zero_row = authored.reference[1]
+        self.assertEqual(0.0, zero_row["hand_l"])
+        self.assertAlmostEqual(0.7, zero_row["forearm_l"], places=9)
+        self.assertEqual(0.0, zero_row["lowerarm_l"])
+        self.assertAlmostEqual(0.3, zero_row["body"], places=12)
+        lowerless_row = authored.reference[2]
+        self.assertNotIn("lowerarm_l", lowerless_row)
+        self.assertAlmostEqual(1.0, lowerless_row["forearm_l"], places=9)
+        self.assertEqual(0.0, lowerless_row["hand_l"])
+
     def test_profile_boundaries_parameterise_the_transition(self) -> None:
         side = weights_module.AxialSide("lowerarm_l", "forearm_l", "hand_l", frozenset())
         rows = [ForearmVertex(t, 0.02, {"lowerarm_l": 0.6, "hand_l": 0.4}) for t in (0.05, 0.30, 0.60)]

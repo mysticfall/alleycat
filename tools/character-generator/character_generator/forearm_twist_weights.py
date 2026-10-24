@@ -122,7 +122,10 @@ def author_axial_weights(
 
     Side eligibility is established before either side is authored. No whole-row
     normalisation, coordinate relaxation, weld or triangulation is performed; the
-    lower-arm/helper/hand pool is conserved row by row.
+    lower-arm/helper/hand pool is conserved row by row. The lower arm and the
+    hand may only receive authored ramp mass where their original membership is
+    positive; a non-receiving anchor's share concentrates onto the helper, so
+    authoring never invents a new physical lower-arm or hand membership.
     """
     if not sides or len({name for side in sides for name in
                          (side.lower_arm, side.helper, side.hand)}) != 3 * len(sides):
@@ -205,6 +208,15 @@ def author_axial_weights(
                 else:
                     z_hand = _smooth((u - AXIAL_TWIST_CROSSOVER_PHASE) / (1.0 - AXIAL_TWIST_CROSSOVER_PHASE))
                     z_twist, z_lower = 1.0 - z_hand, 0.0
+                # A side anchor without original positive membership cannot
+                # receive new positive mass; its ramp share concentrates onto
+                # the helper, the always-receivable anchor.
+                if l <= 0.0:
+                    z_twist += z_lower
+                    z_lower = 0.0
+                if h <= 0.0:
+                    z_twist += z_hand
+                    z_hand = 0.0
                 row = result[index]
                 _assign(row, side.lower_arm, (1.0 - blend) * l + blend * pool * z_lower)
                 _assign(row, side.hand, (1.0 - blend) * h + blend * pool * z_hand)
