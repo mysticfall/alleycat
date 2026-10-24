@@ -14,15 +14,12 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private const string ProbeTypeName = "AlleyCat.IntegrationTests.Probe.DynamicLoadProbeNode";
     private const string ProbeSuccessMarker = "ALLEYCAT_INTEGRATION_PROBE_SUCCESS";
     private const int DefaultPreflightTimeoutMs = 30_000;
-    private const int DefaultImportTimeoutMs = 120_000;
     private const int DefaultRequestTimeoutMs = 120_000;
     private const int DefaultCleanupTimeoutMs = 5_000;
     private const string GodotBinaryEnvironmentVariable = "GODOT_PATH";
     private const string GodotPreflightTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_PREFLIGHT_TIMEOUT_MS";
-    private const string GodotImportTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS";
     private const string GodotRequestTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS";
     private const string GodotCleanupTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS";
-    private const string GodotImportPreflightEnvironmentVariable = "ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT";
 
     private readonly Assembly _testAssembly;
     private readonly GodotCliTestSelector _cliSelector;
@@ -30,7 +27,6 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private readonly string _godotBinaryPath;
     private readonly string _workspaceRootPath;
     private readonly int _preflightTimeoutMs;
-    private readonly int _importTimeoutMs;
     private readonly int _requestTimeoutMs;
     private readonly int _cleanupTimeoutMs;
     private readonly bool _headlessOverride;
@@ -75,9 +71,6 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         _preflightTimeoutMs = ResolveTimeout(
             GodotPreflightTimeoutEnvironmentVariable,
             DefaultPreflightTimeoutMs);
-        _importTimeoutMs = ResolveTimeout(
-            GodotImportTimeoutEnvironmentVariable,
-            DefaultImportTimeoutMs);
         _requestTimeoutMs = ResolveTimeout(
             GodotRequestTimeoutEnvironmentVariable,
             DefaultRequestTimeoutMs);
@@ -382,21 +375,6 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
     {
-        if (IsImportPreflightEnabled())
-        {
-            GodotProcessRunResult importResult = await RunGodotProcessAsync(CreateImportArguments(), _importTimeoutMs, cancellationToken);
-            if (importResult.FailureException is not null)
-            {
-                return importResult.FailureException;
-            }
-
-            if (importResult.ExitCode != 0)
-            {
-                return new InvalidOperationException(
-                    $"Godot integration import preflight failed. ExitCode={importResult.ExitCode}. {BuildOutputSummary(importResult)}");
-            }
-        }
-
         GodotProcessRunResult runResult = await RunGodotProcessAsync(CreateProbeArguments(), _preflightTimeoutMs, cancellationToken);
 
         return runResult.FailureException is not null
@@ -406,25 +384,6 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
             ? null
             : (Exception)new InvalidOperationException(
             $"Godot integration preflight failed. ExitCode={runResult.ExitCode}. {BuildOutputSummary(runResult)}");
-    }
-
-    private static IReadOnlyList<string> CreateImportArguments() =>
-    [
-        "--headless",
-        "--xr-mode",
-        "off",
-        "--path",
-        "game",
-        "--import",
-        "--recovery-mode",
-    ];
-
-    private static bool IsImportPreflightEnabled()
-    {
-        string? rawValue = Environment.GetEnvironmentVariable(GodotImportPreflightEnvironmentVariable);
-        return string.Equals(rawValue, "1", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(rawValue, "true", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(rawValue, "yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<GodotProcessRunResult> RunGodotProcessAsync(

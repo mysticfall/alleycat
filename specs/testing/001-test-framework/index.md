@@ -76,7 +76,10 @@ evidence to design production APIs, then lock behaviour down with deterministic 
    and `IAsyncLifetime` — executed by the existing per-test lifecycle executor inside the session.
 8. Individual Microsoft Testing Platform reporting must be unchanged: every test UID must get its own InProgress and
    terminal node on the host.
-9. The existing one-off dynamic-load probe preflight and the optional import preflight must be retained.
+9. The existing one-off dynamic-load probe preflight must be retained. The framework must never launch Godot with
+   `--import` or `--recovery-mode`: an already-imported `game/.godot` cache is a precondition supplied outside the
+   framework — by worktree setup or one manual normal-mode import, as documented in the `godot-integration-testing`
+   skill — not created by the framework.
 10. Between tests, the runtime must perform and validate the baseline restoration defined in
     [Session Execution Model](#session-execution-model), after every test including failures.
 11. The framework must document the test-owned cleanup limits it cannot reset, as listed in
@@ -286,7 +289,6 @@ non-positive value falls back to the listed default:
 - `ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS` (default 120,000) — per-request timeout bounding one dispatched test request.
 - `ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS` (default 5,000) — wait for matching `shutdown-complete` during graceful
   shutdown, then force termination if it is absent, invalid, mismatched, or late.
-- `ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS` (default 120,000) — the optional import preflight.
 
 The per-request timeout bounds the whole dispatched fact with no cooperative cancellation token reaching the test
 body; live LLM tests must therefore fit their entire declared batch — every scenario request, continuation,
@@ -516,7 +518,8 @@ all-empty list (for example `","`) is rejected during validation.
 10. Per-test lifecycle via constructor and disposal patterns is preserved inside sessions.
 11. Baseline restoration between tests is validated: scene tree unpaused, session-start time scale restored,
     test-created root children removed, fresh `Global` autoload present, no unexpected root children, runner alive.
-12. The dynamic-load probe preflight and the optional import preflight are retained.
+12. The dynamic-load probe preflight is retained, and no framework Godot launch passes `--import` or
+    `--recovery-mode`.
 13. Wire-protocol validation warning-skips a `shutdown` command whose `RequestId` is missing, `null`, empty, or
     whitespace-only. The host sends a non-empty identifier and accepts only a `shutdown-complete` carrying the same
     non-empty value; a missing, `null`, empty, whitespace-only, or mismatched acknowledgement is a protocol/cleanup

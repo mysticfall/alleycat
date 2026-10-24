@@ -17,7 +17,6 @@ namespace AlleyCat.TestFramework.Tests;
 public sealed class GodotTestFrameworkTests
 {
     private const string ProbeSuccessMarker = "ALLEYCAT_INTEGRATION_PROBE_SUCCESS";
-    private const string ImportPreflightEnvironmentVariable = "ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT";
     private static readonly Type _godotTestFrameworkType = typeof(TestingPlatformBuilderHook).Assembly
         .GetType("AlleyCat.TestFramework.GodotTestFramework", throwOnError: true)!;
     private static readonly Lock _environmentLock = new();
@@ -114,124 +113,34 @@ public sealed class GodotTestFrameworkTests
             .Where(method => method.DeclaringType == typeof(GodotTestFrameworkTests))];
 
         _ = Assert.Single(methods, method => method.Name == nameof(ResolveTimeout_UsesPositiveConfiguredValue_OtherwiseFallsBack));
-        _ = Assert.Single(methods, method => method.Name == nameof(RunPreflightAsync_RunsImportBeforeProbe_WhenImportPreflightIsTruthy));
+        _ = Assert.Single(methods, method => method.Name == nameof(RunPreflightAsync_RunsProbeOnly));
         _ = Assert.Single(methods, method => method.Name == nameof(ResolveGodotBinaryPath_ReturnsDefault_WhenEnvironmentVariableIsUnset));
         Assert.DoesNotContain(methods, method => method.Name == nameof(HelperMethodWithoutTestAttribute));
     }
 
     /// <summary>
-    /// Ensures default preflight execution uses only the runtime integration probe.
+    /// Ensures preflight execution launches only the runtime integration probe, with no import pass.
     /// </summary>
     [Fact]
-    public void RunPreflightAsync_RunsProbeOnly_WhenImportPreflightIsUnset()
+    public void RunPreflightAsync_RunsProbeOnly()
     {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
-            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess());
-            object framework = CreateFrameworkInstance(factory);
+        var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess());
+        object framework = CreateFrameworkInstance(factory);
 
 #pragma warning disable xUnit1031
-            Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
-                    framework,
-                    "RunPreflightAsync",
-                    CancellationToken.None)
-                .GetAwaiter()
-                .GetResult();
+        Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
+                framework,
+                "RunPreflightAsync",
+                CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
 #pragma warning restore xUnit1031
 
-            Assert.Null(preflightError);
-            IReadOnlyList<IReadOnlyList<string>> invocations = factory.Invocations;
-            IReadOnlyList<string> probeArgs = Assert.Single(invocations);
-            Assert.DoesNotContain("--import", probeArgs);
-            Assert.Contains("--integration-probe", probeArgs);
-        }
-    }
-
-    /// <summary>
-    /// Ensures opt-in import preflight runs before the runtime integration probe.
-    /// </summary>
-    [Theory]
-    [InlineData("1")]
-    [InlineData("true")]
-    [InlineData("yes")]
-    public void RunPreflightAsync_RunsImportBeforeProbe_WhenImportPreflightIsTruthy(string configuredValue)
-    {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, configuredValue);
-            var factory = new FakeGodotProcessFactory(
-                FakeGodotProcess.Create(outputEvents: [], naturalExitDelay: TimeSpan.Zero),
-                CreateSuccessfulProbeProcess());
-            object framework = CreateFrameworkInstance(factory);
-
-#pragma warning disable xUnit1031
-            Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
-                    framework,
-                    "RunPreflightAsync",
-                    CancellationToken.None)
-                .GetAwaiter()
-                .GetResult();
-#pragma warning restore xUnit1031
-
-            Assert.Null(preflightError);
-            Assert.Equal(2, factory.Invocations.Count);
-            Assert.Contains("--import", factory.Invocations[0]);
-            Assert.Contains("--integration-probe", factory.Invocations[1]);
-        }
-    }
-
-    /// <summary>
-    /// Ensures non-truthy values do not accidentally enable import preflight.
-    /// </summary>
-    [Theory]
-    [InlineData("0")]
-    [InlineData("false")]
-    [InlineData("no")]
-    [InlineData("enabled")]
-    public void RunPreflightAsync_RunsProbeOnly_WhenImportPreflightIsNotTruthy(string configuredValue)
-    {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, configuredValue);
-            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess());
-            object framework = CreateFrameworkInstance(factory);
-
-#pragma warning disable xUnit1031
-            Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
-                    framework,
-                    "RunPreflightAsync",
-                    CancellationToken.None)
-                .GetAwaiter()
-                .GetResult();
-#pragma warning restore xUnit1031
-
-            Assert.Null(preflightError);
-            IReadOnlyList<string> probeArgs = Assert.Single(factory.Invocations);
-            Assert.DoesNotContain("--import", probeArgs);
-            Assert.Contains("--integration-probe", probeArgs);
-        }
-    }
-
-    /// <summary>
-    /// Ensures opt-in import preflight uses safer editor startup arguments.
-    /// </summary>
-    [Fact]
-    public void CreateImportArguments_IncludesHeadlessXrPathImportAndRecoveryMode()
-    {
-        IReadOnlyList<string> args = InvokePrivateStatic<IReadOnlyList<string>>("CreateImportArguments");
-
-        Assert.Contains("--headless", args);
-        Assert.Contains("--import", args);
-        Assert.Contains("--recovery-mode", args);
-
-        int xrModeIndex = args.ToList().IndexOf("--xr-mode");
-        Assert.True(xrModeIndex >= 0, "Expected --xr-mode in arguments.");
-        Assert.Equal("off", args[xrModeIndex + 1]);
-
-        int pathIndex = args.ToList().IndexOf("--path");
-        Assert.True(pathIndex >= 0, "Expected --path in arguments.");
-        Assert.Equal("game", args[pathIndex + 1]);
+        Assert.Null(preflightError);
+        IReadOnlyList<string> probeArgs = Assert.Single(factory.Invocations);
+        Assert.DoesNotContain("--import", probeArgs);
+        Assert.DoesNotContain("--recovery-mode", probeArgs);
+        Assert.Contains("--integration-probe", probeArgs);
     }
 
     /// <summary>
@@ -428,22 +337,17 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ExecuteRequestAsync_Run_ExcludesLiveMarkedTests_WhenLiveLlmFlagIsAbsent()
     {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+        var factory = new FakeGodotProcessFactory();
+        GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest))]));
 
-            var factory = new FakeGodotProcessFactory();
-            GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
-            var messageBus = new RecordingMessageBus();
-            var request = new RunTestExecutionRequest(
-                CreateTestSessionContext(),
-                new TestNodeUidListFilter([GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest))]));
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
 
-            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
-
-            Assert.Empty(messageBus.Published);
-            Assert.Empty(factory.Invocations);
-        }
+        Assert.Empty(messageBus.Published);
+        Assert.Empty(factory.Invocations);
     }
 
     /// <summary>
@@ -453,34 +357,29 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ExecuteRequestAsync_Run_DoesNotExcludeOrdinaryTests_WhenLiveLlmFlagIsAbsent()
     {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+        TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
+        TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
 
-            TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
-            TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
+        var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(ordinaryUid)]);
+        var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
+        GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([ordinaryUid, liveUid]));
 
-            var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(ordinaryUid)]);
-            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
-            GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: false);
-            var messageBus = new RecordingMessageBus();
-            var request = new RunTestExecutionRequest(
-                CreateTestSessionContext(),
-                new TestNodeUidListFilter([ordinaryUid, liveUid]));
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
 
-            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+        Assert.Equal(2, factory.Invocations.Count);
+        Assert.Contains("--integration-probe", factory.Invocations[0]);
 
-            Assert.Equal(2, factory.Invocations.Count);
-            Assert.Contains("--integration-probe", factory.Invocations[0]);
+        List<string> runRequestIds = GetRunRequestIds(session);
+        Assert.Equal([ordinaryUid.Value], runRequestIds);
 
-            List<string> runRequestIds = GetRunRequestIds(session);
-            Assert.Equal([ordinaryUid.Value], runRequestIds);
-
-            List<TestNode> nodes = NodesOf(messageBus);
-            Assert.Equal(2, nodes.Count);
-            AssertNodeState(nodes[0], ordinaryUid, IsInProgressState);
-            AssertNodeState(nodes[1], ordinaryUid, IsPassedState);
-        }
+        List<TestNode> nodes = NodesOf(messageBus);
+        Assert.Equal(2, nodes.Count);
+        AssertNodeState(nodes[0], ordinaryUid, IsInProgressState);
+        AssertNodeState(nodes[1], ordinaryUid, IsPassedState);
     }
 
     /// <summary>
@@ -490,38 +389,33 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ExecuteRequestAsync_Run_IncludesLiveMarkedTests_WhenLiveLlmFlagIsPresent()
     {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+        TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
+        TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
 
-            TestNodeUid liveUid = GetLiveLlmFixtureUid(typeof(LiveLlmMethodMarkedFixture), nameof(LiveLlmMethodMarkedFixture.LiveTest));
-            TestNodeUid ordinaryUid = GetLiveLlmFixtureUid(typeof(LiveLlmUnmarkedFixture), nameof(LiveLlmUnmarkedFixture.OrdinaryTest));
+        var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(liveUid), ResultStage(ordinaryUid)]);
+        var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
+        GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: true);
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([liveUid, ordinaryUid]));
 
-            var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(liveUid), ResultStage(ordinaryUid)]);
-            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
-            GodotTestFramework framework = CreateFramework(factory, liveLlmEnabled: true);
-            var messageBus = new RecordingMessageBus();
-            var request = new RunTestExecutionRequest(
-                CreateTestSessionContext(),
-                new TestNodeUidListFilter([liveUid, ordinaryUid]));
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
 
-            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+        Assert.Equal(2, factory.Invocations.Count);
+        Assert.Contains("--integration-probe", factory.Invocations[0]);
+        Assert.Contains(GodotSessionProtocol.SessionCommandArg, factory.Invocations[1]);
+        Assert.DoesNotContain("--headless", factory.Invocations[1]);
 
-            Assert.Equal(2, factory.Invocations.Count);
-            Assert.Contains("--integration-probe", factory.Invocations[0]);
-            Assert.Contains(GodotSessionProtocol.SessionCommandArg, factory.Invocations[1]);
-            Assert.DoesNotContain("--headless", factory.Invocations[1]);
+        List<string> runRequestIds = GetRunRequestIds(session);
+        Assert.Equal([liveUid.Value, ordinaryUid.Value], runRequestIds);
 
-            List<string> runRequestIds = GetRunRequestIds(session);
-            Assert.Equal([liveUid.Value, ordinaryUid.Value], runRequestIds);
-
-            List<TestNode> nodes = NodesOf(messageBus);
-            Assert.Equal(4, nodes.Count);
-            AssertNodeState(nodes[0], liveUid, IsInProgressState);
-            AssertNodeState(nodes[1], liveUid, IsPassedState);
-            AssertNodeState(nodes[2], ordinaryUid, IsInProgressState);
-            AssertNodeState(nodes[3], ordinaryUid, IsPassedState);
-        }
+        List<TestNode> nodes = NodesOf(messageBus);
+        Assert.Equal(4, nodes.Count);
+        AssertNodeState(nodes[0], liveUid, IsInProgressState);
+        AssertNodeState(nodes[1], liveUid, IsPassedState);
+        AssertNodeState(nodes[2], ordinaryUid, IsInProgressState);
+        AssertNodeState(nodes[3], ordinaryUid, IsPassedState);
     }
 
     /// <summary>
@@ -530,25 +424,20 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ExecuteRequestAsync_Run_ExactMethodSelectorCannotBypassLiveGate()
     {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+        var factory = new FakeGodotProcessFactory();
+        GodotTestFramework framework = CreateFramework(
+            factory,
+            liveLlmEnabled: false,
+            selector: GodotCliTestSelector.ForMethod(
+                typeof(LiveLlmMethodMarkedFixture).FullName!,
+                nameof(LiveLlmMethodMarkedFixture.LiveTest)));
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(CreateTestSessionContext());
 
-            var factory = new FakeGodotProcessFactory();
-            GodotTestFramework framework = CreateFramework(
-                factory,
-                liveLlmEnabled: false,
-                selector: GodotCliTestSelector.ForMethod(
-                    typeof(LiveLlmMethodMarkedFixture).FullName!,
-                    nameof(LiveLlmMethodMarkedFixture.LiveTest)));
-            var messageBus = new RecordingMessageBus();
-            var request = new RunTestExecutionRequest(CreateTestSessionContext());
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
 
-            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
-
-            Assert.Empty(messageBus.Published);
-            Assert.Empty(factory.Invocations);
-        }
+        Assert.Empty(messageBus.Published);
+        Assert.Empty(factory.Invocations);
     }
 
     /// <summary>
@@ -557,23 +446,18 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ExecuteRequestAsync_Run_ExactClassSelectorCannotBypassLiveGate()
     {
-        lock (_environmentLock)
-        {
-            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+        var factory = new FakeGodotProcessFactory();
+        GodotTestFramework framework = CreateFramework(
+            factory,
+            liveLlmEnabled: false,
+            selector: GodotCliTestSelector.ForClass(typeof(LiveLlmClassMarkedFixture).FullName!));
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(CreateTestSessionContext());
 
-            var factory = new FakeGodotProcessFactory();
-            GodotTestFramework framework = CreateFramework(
-                factory,
-                liveLlmEnabled: false,
-                selector: GodotCliTestSelector.ForClass(typeof(LiveLlmClassMarkedFixture).FullName!));
-            var messageBus = new RecordingMessageBus();
-            var request = new RunTestExecutionRequest(CreateTestSessionContext());
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
 
-            ExecuteRequest(framework, CreateRequestContext(request, messageBus));
-
-            Assert.Empty(messageBus.Published);
-            Assert.Empty(factory.Invocations);
-        }
+        Assert.Empty(messageBus.Published);
+        Assert.Empty(factory.Invocations);
     }
 
     /// <summary>

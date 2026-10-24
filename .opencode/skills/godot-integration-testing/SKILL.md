@@ -23,6 +23,38 @@ Set `GODOT_PATH` when the required Godot executable is not available as `godot-m
 
 3. Prefer a narrow class or method run while developing; see [Targeted Runs](#targeted-runs).
 
+## Import Cache Precondition
+
+Integration tests require an already-imported `game/.godot` cache before they launch. The framework never imports:
+every Godot launch it makes carries only `--integration-probe` or `--integration-test-session`, never `--import`.
+Obtain the cache through exactly one of:
+
+- **Worktree setup** — OpenChamber worktree setup copies main's healthy `game/.godot` into the worktree
+  (`.openchamber/project.json`); this is the normal path for worktree sessions.
+- **One manual normal-mode import** — run once when no cache exists or an imported source has changed:
+
+  ```bash
+  godot-mono --headless --path game --xr-mode off --import
+  ```
+
+### Never Use Recovery Mode
+
+**Never run `--recovery-mode` on this project, and above all never on the main checkout.** Recovery mode disables the
+`EditorScenePostImport` helpers, so characters bake without the required `eyes` AnimationLibrary, which drives
+body-mesh blendshapes. The import cache's `source_md5` gate then treats the damaged output as current, which makes
+later normal imports no-ops for those files. Main's cache is the seed every worktree copies, so a single
+recovery-mode import there poisons every future worktree.
+
+If a cache was damaged this way, delete the affected
+`game/.godot/imported/reference_{female,male}.blend-*.{scn,md5}` pairs and re-import normally with the command
+above.
+
+### Stale Entries After Source Changes
+
+Worktree setup copies main's cache, so when a branch changes an imported source (for example a `.blend`), that
+file's copied cache entry is stale. Run the manual normal-mode import once before tests so the cache matches the
+branch's sources.
+
 ## Core Rule
 
 This skill owns integration-test execution, fixture authoring, and failure triage. The
@@ -301,8 +333,9 @@ above the observed suite duration before treating a run as hung.
 When a run fails, classify the failure before acting:
 
 - **Assertion failure** — test reached the expected runtime and the behaviour under test failed.
-- **Framework/runtime failure** — Godot process startup, import, scene loading, timeout, or result transport failed.
-- **Environment failure** — missing display server, missing import cache, unavailable renderer, or external timeout.
+- **Framework/runtime failure** — Godot process startup, scene loading, timeout, or result transport failed.
+- **Environment failure** — missing display server, missing or stale import cache, unavailable renderer, or external
+  timeout.
 
 Classify from observed evidence, not convenience. Never loosen timing, shorten the symptom observation window, or label
 an assertion failure as environmental merely to make a run pass. Timing bounds must follow the approved behaviour or an
@@ -321,13 +354,13 @@ Work the rungs in order; after each fix, rerun the exact narrow selector:
 3. **Godot crash or non-reusable session:** treat the affected result as `error`, inspect the output, correct the
    cause, and rerun the exact selector. A `SessionReusable:false` result also discards the session; a nominal
    `passed` result with that value becomes `error` because baseline restoration failed.
-4. **Import cache or preflight failure:** confirm `GODOT_PATH` and the repository root, run the optional import
-   preflight before the dynamic-load probe, then rerun the narrow selector. If it still fails, keep the probe/import
+4. **Import cache or preflight failure:** confirm `GODOT_PATH` and the repository root, verify the imported-cache
+   precondition (see [Import Cache Precondition](#import-cache-precondition)), then rerun the narrow selector. Never
+   rebuild the cache with `--recovery-mode`; use the manual normal-mode import. If it still fails, keep the probe
    stdout and stderr with the report:
 
    ```bash
-   ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT=1 \
-     dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
+   dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
      --test-class AlleyCat.IntegrationTests.Testing.ReusableSessionIntegrationTests
    ```
 
