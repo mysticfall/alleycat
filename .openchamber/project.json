@@ -3,13 +3,13 @@
   "setupWorktree": [
     "ln -s $ROOT_PROJECT_PATH/.opencode/opencode.json .opencode/opencode.json",
     "ln -s $ROOT_PROJECT_PATH/game/content game/content",
+    "cp -Rf $ROOT_PROJECT_PATH/game/.godot game/.godot",
     "cp -Rf $ROOT_PROJECT_PATH/graft .",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/onnx game/models/supertonic-3",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/voice_styles game/models/supertonic-3",
     "git lfs pull",
     "dotnet restore game/AlleyCat.csproj",
-    "dotnet build AlleyCat.sln -warnaserror",
-    "godot-mono --headless --path game --xr-mode off --import"
+    "dotnet build AlleyCat.sln -warnaserror"
   ],
   "projectActions": [
     {
