@@ -13,6 +13,8 @@ public sealed class ContentResolverTests
     private const string Fallback = "res://assets/scenes/empty.tscn";
     private const string RequestedPath = "res://content/req/start.tscn";
     private const string DefaultPath = "res://content/def/start.tscn";
+    private const string DeclaredPath = "res://content/req/scenes/intro.tscn";
+    private const string DefaultDeclaredPath = "res://content/def/scenes/intro.tscn";
 
     /// <summary>
     /// The switch literal is part of the CLI contract and must stay exactly <c>--no-content-pack</c>.
@@ -412,6 +414,230 @@ public sealed class ContentResolverTests
     }
 
     /// <summary>
+    /// A requested pack's declared start scene must be probed and returned instead of the conventional path.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_ReturnsDeclaredPath_WhenRequestedPackDeclaresStartScene()
+    {
+        List<string> probedPaths = [];
+        string result = ContentResolver.SelectStartScenePath(
+            requestedPackId: "req",
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: path =>
+            {
+                probedPaths.Add(path);
+                return path == DeclaredPath;
+            },
+            fallbackStartScenePath: Fallback,
+            resolvePackStartScene: _ => DeclaredPath,
+            contentRoot: ContentRoot);
+
+        Assert.Equal(DeclaredPath, result);
+        Assert.Equal([DeclaredPath], probedPaths);
+    }
+
+    /// <summary>
+    /// A default pack's declared start scene must be probed and returned instead of the conventional path.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_ReturnsDeclaredPath_WhenDefaultPackDeclaresStartScene()
+    {
+        string result = ContentResolver.SelectStartScenePath(
+            requestedPackId: null,
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: path => path == DefaultDeclaredPath,
+            fallbackStartScenePath: Fallback,
+            resolvePackStartScene: _ => DefaultDeclaredPath,
+            contentRoot: ContentRoot);
+
+        Assert.Equal(DefaultDeclaredPath, result);
+    }
+
+    /// <summary>
+    /// A declared start scene must take priority over a conventional <c>start.tscn</c> in the same pack, even
+    /// when both exist.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_ReturnsDeclaredPath_EvenWhenConventionalSceneExists()
+    {
+        string result = ContentResolver.SelectStartScenePath(
+            requestedPackId: "req",
+            defaultPackId: null,
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: _ => true,
+            fallbackStartScenePath: Fallback,
+            resolvePackStartScene: _ => DeclaredPath,
+            contentRoot: ContentRoot);
+
+        Assert.Equal(DeclaredPath, result);
+    }
+
+    /// <summary>
+    /// A requested pack whose declared scene is missing must fail exactly like a missing conventional
+    /// <c>start.tscn</c> — even though the conventional scene exists — with the failure naming the pack and the
+    /// resolved declared path.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_Throws_WhenDeclaredSceneMissing()
+    {
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => ContentResolver.SelectStartScenePath(
+                requestedPackId: "req",
+                defaultPackId: null,
+                isIntegrationTest: false,
+                skipContentPack: false,
+                sceneExists: path => path == RequestedPath,
+                fallbackStartScenePath: Fallback,
+                resolvePackStartScene: _ => DeclaredPath,
+                contentRoot: ContentRoot));
+
+        Assert.Contains("req", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(DeclaredPath, exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A default pack whose declared scene is missing must fall through to the fallback, mirroring a missing
+    /// conventional start scene.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_ReturnsFallback_WhenDefaultPackDeclaredSceneMissing()
+    {
+        string result = ContentResolver.SelectStartScenePath(
+            requestedPackId: null,
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: path => path == DefaultPath,
+            fallbackStartScenePath: Fallback,
+            resolvePackStartScene: _ => DefaultDeclaredPath,
+            contentRoot: ContentRoot);
+
+        Assert.Equal(Fallback, result);
+    }
+
+    /// <summary>
+    /// An unloadable per-pack manifest must fail resolution for a default pack candidate even when the scene
+    /// probe would succeed, because the manifest is read before the probe.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_Throws_WhenDefaultPackManifestUnloadable()
+    {
+        static string UnloadableManifest(string _)
+        {
+            throw new InvalidOperationException("unloadable manifest");
+        }
+
+        _ = Assert.Throws<InvalidOperationException>(
+            () => ContentResolver.SelectStartScenePath(
+                requestedPackId: null,
+                defaultPackId: "def",
+                isIntegrationTest: false,
+                skipContentPack: false,
+                sceneExists: _ => true,
+                fallbackStartScenePath: Fallback,
+                resolvePackStartScene: UnloadableManifest,
+                contentRoot: ContentRoot));
+
+        _ = Assert.Throws<InvalidOperationException>(
+            () => ContentResolver.SelectCurrentContentContext(
+                requestedPackId: null,
+                defaultPackId: "def",
+                isIntegrationTest: false,
+                skipContentPack: false,
+                sceneExists: _ => true,
+                resolvePackStartScene: UnloadableManifest,
+                contentRoot: ContentRoot));
+    }
+
+    /// <summary>
+    /// The integration-test bypass and the skip switch must never resolve a pack start scene, mirroring the
+    /// no-probe contract for scene existence and language.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_BypassPaths_NeverResolvePackStartScene()
+    {
+        foreach (bool bypass in new[] { true, false })
+        {
+            string result = ContentResolver.SelectStartScenePath(
+                requestedPackId: "req",
+                defaultPackId: "def",
+                isIntegrationTest: bypass,
+                skipContentPack: !bypass,
+                sceneExists: _ => throw new InvalidOperationException("Bypass paths should not probe pack scenes."),
+                fallbackStartScenePath: Fallback,
+                resolvePackStartScene: static _ => throw new InvalidOperationException(
+                    "Bypass paths should not resolve pack start scenes."),
+                contentRoot: ContentRoot);
+
+            Assert.Equal(Fallback, result);
+        }
+    }
+
+    /// <summary>
+    /// Start-scene and current-content resolution must probe the same declared path, and a declared start scene
+    /// must not change the context's identity, root, or language semantics.
+    /// </summary>
+    [Fact]
+    public void SelectCurrentContentContext_ProbesDeclaredPath_AndKeepsContextSemantics()
+    {
+        List<string> probedPaths = [];
+
+        bool SceneExists(string path)
+        {
+            probedPaths.Add(path);
+            return path == DeclaredPath;
+        }
+
+        string startScene = ContentResolver.SelectStartScenePath(
+            requestedPackId: "req",
+            defaultPackId: null,
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: SceneExists,
+            fallbackStartScenePath: Fallback,
+            resolvePackStartScene: _ => DeclaredPath,
+            contentRoot: ContentRoot);
+
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "req",
+            defaultPackId: null,
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: SceneExists,
+            resolvePackLanguage: _ => "ko",
+            resolvePackStartScene: _ => DeclaredPath,
+            contentRoot: ContentRoot);
+
+        Assert.Equal(DeclaredPath, startScene);
+        Assert.Equal([DeclaredPath, DeclaredPath], probedPaths);
+        Assert.Equal("req", context.ContentID);
+        Assert.Equal("res://content/req/", context.RootPath);
+        Assert.Equal("ko", context.Language);
+    }
+
+    /// <summary>
+    /// Instance start-scene resolution must pass the runtime start-scene resolver through to the selection
+    /// logic, so a declared start scene from the runtime seam wins.
+    /// </summary>
+    [Fact]
+    public void ResolveStartScenePath_UsesDeclaredStartScene_FromRuntimeInputs()
+    {
+        StubContentResolver resolver = new(
+            requestedPackId: "req",
+            sceneExists: path => path == DeclaredPath,
+            resolvePackStartScene: () => DeclaredPath);
+
+        string result = resolver.ResolveStartScenePath(Fallback);
+
+        Assert.Equal(DeclaredPath, result);
+    }
+
+    /// <summary>
     /// A language-resolution failure must not poison the context cache; the next call retries the resolution.
     /// </summary>
     [Fact]
@@ -640,6 +866,7 @@ public sealed class ContentResolverTests
         string? defaultPackId = null,
         Func<string, bool>? sceneExists = null,
         Func<string>? resolvePackLanguage = null,
+        Func<string>? resolvePackStartScene = null,
         ILogger<ContentResolver>? logger = null) : ContentResolver(logger, defaultPackId)
     {
         public int RuntimeInputReadCount
@@ -652,7 +879,8 @@ public sealed class ContentResolverTests
             string? RequestedPackId,
             bool SkipContentPack,
             Func<string, bool> SceneExists,
-            Func<string, string> ResolvePackLanguage) ReadRuntimeContentInputs()
+            Func<string, string> ResolvePackLanguage,
+            Func<string, string> ResolvePackStartScene) ReadRuntimeContentInputs()
         {
             RuntimeInputReadCount++;
             return (
@@ -660,7 +888,9 @@ public sealed class ContentResolverTests
                 requestedPackId,
                 skipContentPack,
                 sceneExists ?? (static _ => false),
-                _ => resolvePackLanguage?.Invoke() ?? ContentPackManifest.DefaultLanguage);
+                _ => resolvePackLanguage?.Invoke() ?? ContentPackManifest.DefaultLanguage,
+                packId => resolvePackStartScene?.Invoke()
+                    ?? (ContentPaths.GetPackRootPath(packId) + ContentPaths.StartSceneFileName));
         }
     }
 

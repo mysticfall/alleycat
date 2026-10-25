@@ -12,12 +12,44 @@ This document covers authoring and operation. The authoritative contracts live i
 ## Selecting a Pack at Startup
 
 - **Default pack**: `game/content/manifest.tres` (a `ContentManifest` resource) names the default pack through its
-  `DefaultPackId`. With no launch argument, the game starts that pack when its `start.tscn` exists.
+  `DefaultPackId`. With no launch argument, the game starts that pack when its start scene exists — the conventional
+  `start.tscn` unless the pack declares an override ([Overriding the Start Scene](#overriding-the-start-scene)).
 - **Explicit request**: `godot-mono --path game --content-pack <pack-id>` (or `--content-pack=<pack-id>`) overrides
-  the manifest default. A requested pack missing its `start.tscn` fails startup instead of falling back.
+  the manifest default. A requested pack missing its start scene fails startup instead of falling back.
 - **Bypass**: `godot-mono --path game -- --no-content-pack` skips configured and requested packs and starts the
   built-in default content, which speaks English.
 - Missing selection manifest, missing pack, and built-in fallback content are all normal English startup paths.
+
+## Overriding the Start Scene
+
+By default, a selected pack starts at its `start.tscn`. A pack can instead declare its start scene in the same
+per-pack manifest resource used for language, at `game/content/<pack-id>/manifest.tres`:
+
+```gdscript
+[gd_resource type="Resource" script_class="ContentPackManifest" format=3]
+
+[ext_resource type="Script" path="res://src/Core/Content/ContentPackManifest.cs" id="1_packmanifest"]
+
+[resource]
+script = ExtResource("1_packmanifest")
+StartScene = "scenes/intro.tscn"
+```
+
+Authoring notes:
+
+- Create the resource in the Godot editor as a `ContentPackManifest` resource; `StartScene` is a scene-file picker
+  filtered to `.tscn` files. The snippet shows the resulting text shape.
+- `StartScene` is optional and independent of `Language`; both may appear in the same manifest.
+- Accepted values, after trimming whitespace:
+  - blank or omitted — the pack's conventional `start.tscn`, so existing packs need no change;
+  - a pack-relative path — resolved against the pack root (`scenes/intro.tscn` →
+    `res://content/<pack-id>/scenes/intro.tscn`);
+  - a `res://` path — used exactly as written.
+- A declared scene takes priority over a `start.tscn` in the same pack, even when both exist.
+- A declared scene that is missing behaves like a missing `start.tscn`: a requested pack fails startup; a default
+  pack falls back to the built-in start scene. A per-pack manifest that cannot be loaded as a `ContentPackManifest`
+  resource fails startup for a default pack too — even when its start scene is missing — because the manifest must
+  be read to find the scene.
 
 ## Declaring the Spoken Language
 

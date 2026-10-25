@@ -40,7 +40,7 @@ public partial class ContentResolver : IContentResolver
     /// <inheritdoc />
     public string ResolveStartScenePath(string fallbackStartScenePath)
     {
-        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists, _) =
+        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists, _, Func<string, string> resolvePackStartScene) =
             ReadRuntimeContentInputs();
         string? defaultPackId = _defaultPackId;
 
@@ -50,7 +50,8 @@ public partial class ContentResolver : IContentResolver
             isIntegrationTest,
             skipContentPack,
             sceneExists,
-            fallbackStartScenePath);
+            fallbackStartScenePath,
+            resolvePackStartScene);
 
         if (skipContentPack)
         {
@@ -98,7 +99,7 @@ public partial class ContentResolver : IContentResolver
     /// </remarks>
     private ContentContext ResolveContentContext()
     {
-        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists, Func<string, string> resolvePackLanguage) =
+        (bool isIntegrationTest, string? requestedPackId, bool skipContentPack, Func<string, bool> sceneExists, Func<string, string> resolvePackLanguage, Func<string, string> resolvePackStartScene) =
             ReadRuntimeContentInputs();
         string? defaultPackId = _defaultPackId;
 
@@ -108,7 +109,8 @@ public partial class ContentResolver : IContentResolver
             isIntegrationTest,
             skipContentPack,
             sceneExists,
-            resolvePackLanguage);
+            resolvePackLanguage,
+            resolvePackStartScene);
 
         if (skipContentPack)
         {
@@ -138,19 +140,21 @@ public partial class ContentResolver : IContentResolver
     /// </summary>
     /// <returns>
     /// Integration-test flag, optional requested pack identifier, content-pack skip flag, start-scene existence
-    /// probe, and per-pack spoken-language resolver.
+    /// probe, per-pack spoken-language resolver, and per-pack start-scene path resolver.
     /// </returns>
     internal virtual (
         bool IsIntegrationTest,
         string? RequestedPackId,
         bool SkipContentPack,
         Func<string, bool> SceneExists,
-        Func<string, string> ResolvePackLanguage) ReadRuntimeContentInputs()
+        Func<string, string> ResolvePackLanguage,
+        Func<string, string> ResolvePackStartScene) ReadRuntimeContentInputs()
         => (RuntimeContext.IsIntegrationTest(),
             ReadRequestedPackId(),
             ContainsSkipContentPackSwitch(OS.GetCmdlineUserArgs()),
             static path => ResourceLoader.Exists(path),
-            static packId => LoadPackLanguage(packId, ContentPaths.GetPackManifestPath(packId)));
+            static packId => LoadPackLanguage(packId, ContentPaths.GetPackManifestPath(packId)),
+            static packId => LoadPackStartScenePath(packId, ContentPaths.GetPackManifestPath(packId)));
 
     /// <summary>
     /// Determines whether the supplied command-line user arguments contain the content-pack skip switch.
@@ -167,6 +171,11 @@ public partial class ContentResolver : IContentResolver
     /// <summary>
     /// Pure, Godot-free selection logic used to pick the start scene path.
     /// </summary>
+    /// <remarks>
+    /// The optional <paramref name="resolvePackStartScene" /> seam resolves each candidate pack's probe path —
+    /// typically from its per-pack manifest declaration — and is read before the scene probe. A null seam
+    /// constructs the conventional <c>start.tscn</c> path from the content root.
+    /// </remarks>
     public static string SelectStartScenePath(
         string? requestedPackId,
         string? defaultPackId,
@@ -174,6 +183,7 @@ public partial class ContentResolver : IContentResolver
         bool skipContentPack,
         Func<string, bool> sceneExists,
         string fallbackStartScenePath,
+        Func<string, string>? resolvePackStartScene = null,
         string contentRoot = ContentPaths.ContentRoot,
         string startSceneFileName = ContentPaths.StartSceneFileName)
     {
@@ -184,7 +194,8 @@ public partial class ContentResolver : IContentResolver
 
         if (!string.IsNullOrEmpty(requestedPackId))
         {
-            string path = contentRoot + requestedPackId + "/" + startSceneFileName;
+            string path = ResolvePackStartScenePath(
+                requestedPackId, resolvePackStartScene, contentRoot, startSceneFileName);
             return sceneExists(path)
                 ? path
                 : throw CreateMissingRequestedPackSceneException(requestedPackId, path);
@@ -192,7 +203,8 @@ public partial class ContentResolver : IContentResolver
 
         if (!string.IsNullOrEmpty(defaultPackId))
         {
-            string path = contentRoot + defaultPackId + "/" + startSceneFileName;
+            string path = ResolvePackStartScenePath(
+                defaultPackId, resolvePackStartScene, contentRoot, startSceneFileName);
             if (sceneExists(path))
             {
                 return path;
@@ -205,6 +217,11 @@ public partial class ContentResolver : IContentResolver
     /// <summary>
     /// Pure, Godot-free selection logic used to resolve the active content context.
     /// </summary>
+    /// <remarks>
+    /// Probe paths follow the optional <paramref name="resolvePackStartScene" /> seam exactly as start-scene
+    /// resolution does, so both selectors agree on the selected pack and its probe path. A null seam constructs
+    /// the conventional <c>start.tscn</c> path from the content root.
+    /// </remarks>
     public static ContentContext SelectCurrentContentContext(
         string? requestedPackId,
         string? defaultPackId,
@@ -212,6 +229,7 @@ public partial class ContentResolver : IContentResolver
         bool skipContentPack,
         Func<string, bool> sceneExists,
         Func<string, string>? resolvePackLanguage = null,
+        Func<string, string>? resolvePackStartScene = null,
         string contentRoot = ContentPaths.ContentRoot,
         string startSceneFileName = ContentPaths.StartSceneFileName)
     {
@@ -224,7 +242,8 @@ public partial class ContentResolver : IContentResolver
 
         if (!string.IsNullOrEmpty(requestedPackId))
         {
-            string path = contentRoot + requestedPackId + "/" + startSceneFileName;
+            string path = ResolvePackStartScenePath(
+                requestedPackId, resolvePackStartScene, contentRoot, startSceneFileName);
             return sceneExists(path)
                 ? new ContentContext(
                     requestedPackId,
@@ -235,7 +254,8 @@ public partial class ContentResolver : IContentResolver
 
         if (!string.IsNullOrEmpty(defaultPackId))
         {
-            string path = contentRoot + defaultPackId + "/" + startSceneFileName;
+            string path = ResolvePackStartScenePath(
+                defaultPackId, resolvePackStartScene, contentRoot, startSceneFileName);
             if (sceneExists(path))
             {
                 return new ContentContext(
@@ -258,9 +278,39 @@ public partial class ContentResolver : IContentResolver
     /// </remarks>
     internal static string LoadPackLanguage(string packId, string manifestPath)
     {
+        ContentPackManifest? manifest = TryLoadPackManifest(packId, manifestPath);
+        return manifest is null
+            ? ContentPackManifest.DefaultLanguage
+            : ContentPackManifest.ResolveDeclaredLanguage(manifest.Language, packId, manifestPath);
+    }
+
+    /// <summary>
+    /// Resolves a selected pack's declared start scene through the Godot resource boundary: a missing manifest or
+    /// blank declaration resolves the conventional start scene, while an unloadable manifest throws an actionable
+    /// error naming the pack and path.
+    /// </summary>
+    /// <remarks>
+    /// Internal static with an explicit manifest path so integration coverage can exercise real manifest
+    /// resources. Returns the probe path only; the caller checks whether that scene exists.
+    /// </remarks>
+    internal static string LoadPackStartScenePath(string packId, string manifestPath)
+    {
+        ContentPackManifest? manifest = TryLoadPackManifest(packId, manifestPath);
+        return ContentPackManifest.ResolveDeclaredStartScenePath(
+            manifest?.StartScene,
+            ContentPaths.GetPackRootPath(packId));
+    }
+
+    /// <summary>
+    /// Loads a per-pack manifest through the Godot resource boundary: a missing manifest is a normal startup path
+    /// returning null, while a manifest that exists but cannot be loaded as a <see cref="ContentPackManifest" />
+    /// throws an actionable error naming the pack and path.
+    /// </summary>
+    private static ContentPackManifest? TryLoadPackManifest(string packId, string manifestPath)
+    {
         if (!ResourceLoader.Exists(manifestPath))
         {
-            return ContentPackManifest.DefaultLanguage;
+            return null;
         }
 
         ContentPackManifest? manifest;
@@ -273,10 +323,15 @@ public partial class ContentResolver : IContentResolver
             throw CreateInvalidPackManifestException(packId, manifestPath, ex);
         }
 
-        return manifest is null
-            ? throw CreateInvalidPackManifestException(packId, manifestPath)
-            : ContentPackManifest.ResolveDeclaredLanguage(manifest.Language, packId, manifestPath);
+        return manifest ?? throw CreateInvalidPackManifestException(packId, manifestPath);
     }
+
+    private static string ResolvePackStartScenePath(
+        string packId,
+        Func<string, string>? resolvePackStartScene,
+        string contentRoot,
+        string startSceneFileName)
+        => resolvePackStartScene?.Invoke(packId) ?? (contentRoot + packId + "/" + startSceneFileName);
 
     private static string ResolvePackLanguageOrDefault(string packId, Func<string, string>? resolvePackLanguage)
         => resolvePackLanguage?.Invoke(packId) ?? ContentPackManifest.DefaultLanguage;
@@ -287,9 +342,9 @@ public partial class ContentResolver : IContentResolver
         Exception? innerException = null)
         => new(
             $"Content pack '{packId}' has a per-pack manifest at '{manifestPath}' that could not be loaded as a "
-            + $"{nameof(ContentPackManifest)} resource. Verify the resource text file references the "
-            + "ContentPackManifest script. The declared Language value is unavailable because the resource could "
-            + $"not be loaded. Supported languages: {string.Join(", ", ContentPackManifest.SupportedLanguages)}.",
+            + $"{nameof(ContentPackManifest)} resource, so the pack's declared metadata is unavailable. Verify "
+            + "the resource text file references the ContentPackManifest script. Supported languages: "
+            + $"{string.Join(", ", ContentPackManifest.SupportedLanguages)}.",
             innerException);
 
     private static InvalidOperationException CreateMissingRequestedPackSceneException(

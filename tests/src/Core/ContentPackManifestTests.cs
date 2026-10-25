@@ -4,12 +4,13 @@ using Xunit;
 namespace AlleyCat.Tests.Core;
 
 /// <summary>
-/// Tests the Godot-free spoken-language normalisation and validation owned by the per-pack manifest contract.
+/// Tests the Godot-free spoken-language and start-scene normalisation owned by the per-pack manifest contract.
 /// </summary>
 public sealed class ContentPackManifestTests
 {
     private const string PackId = "lang-pack";
     private const string ManifestPath = "res://content/lang-pack/manifest.tres";
+    private const string PackRoot = "res://content/lang-pack/";
 
     /// <summary>
     /// The backward-compatible default must stay English and the supported set must stay evidence-gated to
@@ -84,4 +85,38 @@ public sealed class ContentPackManifestTests
 
         Assert.Contains("fr-CA", exception.Message, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Null, omitted, and blank declared values must resolve to the pack's conventional start scene rather than
+    /// failing.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(" \t ")]
+    public void ResolveDeclaredStartScenePath_BlankValue_ResolvesConventionalStartScene(string? declared)
+        => Assert.Equal(
+            "res://content/lang-pack/start.tscn",
+            ContentPackManifest.ResolveDeclaredStartScenePath(declared, PackRoot));
+
+    /// <summary>
+    /// A <c>res://</c>-prefixed declared value is used exactly as written, without resolving against the pack root.
+    /// </summary>
+    [Fact]
+    public void ResolveDeclaredStartScenePath_ResPrefixedValue_IsUsedAsIs()
+        => Assert.Equal(
+            "res://shared/intro.tscn",
+            ContentPackManifest.ResolveDeclaredStartScenePath("res://shared/intro.tscn", PackRoot));
+
+    /// <summary>
+    /// A pack-relative declared value resolves against the pack root, after trimming outer whitespace.
+    /// </summary>
+    [Theory]
+    [InlineData("scenes/intro.tscn")]
+    [InlineData("  scenes/intro.tscn  ")]
+    public void ResolveDeclaredStartScenePath_RelativeValue_ResolvesAgainstPackRoot(string declared)
+        => Assert.Equal(
+            "res://content/lang-pack/scenes/intro.tscn",
+            ContentPackManifest.ResolveDeclaredStartScenePath(declared, PackRoot));
 }

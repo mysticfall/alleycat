@@ -13,10 +13,12 @@ the game from either built-in fallback content or an optional content pack with 
 ## Goal
 
 Enable a public build that launches without any additional content while exposing a generic current-content context for
-systems that need to load content-relative resources. Optional packs can declare a start scene through a manifest and
-override the default. Each pack may also declare exactly one spoken language through an optional per-pack manifest, so
-gameplay speech automatically follows the pack selected at startup while English remains the default. CORE remains
-decoupled from specific content domains while failing fast when an explicitly requested pack cannot start.
+systems that need to load content-relative resources. Pack selection — an explicit launch request or the selection
+manifest default — chooses which optional pack to start. Separately, a pack's per-pack manifest may declare that pack's
+start scene, overriding the conventional `start.tscn` file, and may declare exactly one spoken language, so the game
+starts the author's chosen entry scene and gameplay speech automatically follows the pack selected at startup while
+English remains the default. CORE remains decoupled from specific content domains while failing fast when an explicitly
+requested pack cannot start.
 
 ## User Requirements
 
@@ -45,6 +47,11 @@ decoupled from specific content domains while failing fast when an explicitly re
     startup failure instead of silently running in another spoken language.
 12. After a one-time multilingual backend setup, selecting an English or Korean content pack across game launches
     requires no Docker configuration changes, container restart, or container recreation.
+13. A pack author can declare the pack's start scene in the per-pack manifest instead of shipping a scene at the fixed
+    `start.tscn` path, and the game starts the declared scene whenever that pack is selected — whether requested
+    through a launch argument or loaded as the manifest default.
+14. A declared start scene takes priority over a conventional `start.tscn` in the same pack, and packs that declare no
+    start scene keep starting from their conventional `start.tscn`, so existing packs are unaffected.
 
 ## Technical Requirements
 
@@ -56,7 +63,9 @@ decoupled from specific content domains while failing fast when an explicitly re
 5. CORE must expose a generic current-content context API containing at least the current content id, root path, and
    effective spoken language. Consumers can combine the root path with domain-specific relative paths without adding
    domain-specific roots to CORE.
-6. A content pack's start scene is the fixed file `start.tscn` at `res://content/<pack-id>/start.tscn`.
+6. A content pack's conventional start scene is the fixed file `start.tscn` at
+   `res://content/<pack-id>/start.tscn`. A pack may override the convention through its per-pack manifest (Technical
+   Requirements 25 to 27).
 7. A manifest resource `res://content/manifest.tres` of Godot `Resource` type `ContentManifest` exposes
    `DefaultPackId` (string). A missing manifest means no default pack is declared.
 8. The resolver must check that `res://content/manifest.tres` exists before loading it, so a missing content directory
@@ -65,14 +74,15 @@ decoupled from specific content domains while failing fast when an explicitly re
    returns, in priority order:
     1. The start scene of the pack requested through the `--content-pack <id>` or `--content-pack=<id>` game
        executable argument, if present.
-    2. The start scene of the manifest default pack (`DefaultPackId`), if declared and its `start.tscn` exists.
+    2. The start scene of the manifest default pack (`DefaultPackId`), if declared and that scene exists.
     3. The supplied `fallbackStartScenePath`.
     - When `AlleyCat.Testing.RuntimeContext.IsIntegrationTest()` is true, steps 1 and 2 are skipped and the fallback
       is returned.
 10. The current-content context must resolve to the same selected identity and root as start-scene resolution, except
     integration-test runs resolve to `default` at `res://`.
-11. If an explicitly requested pack is missing `start.tscn`, resolution must throw an `InvalidOperationException`. If
-    the manifest default pack is missing `start.tscn`, resolution must return the supplied fallback.
+11. If the start scene of an explicitly requested pack — declared or conventional — is missing, resolution must throw
+    an `InvalidOperationException`. If the manifest default pack's start scene is missing, resolution must return the
+    supplied fallback.
 12. The `Game` node consumes `ContentResolver`, passing its own `FallbackStartScene` export as the fallback value. The
     resolver must not hardcode the fallback path.
 13. Argument parsing must accept both `--content-pack <id>` and `--content-pack=<id>` forms.
@@ -99,10 +109,11 @@ decoupled from specific content domains while failing fast when an explicitly re
 18. When the skip switch is active, resolution must emit one Information-level log notice that configured content
     packs are skipped, so an operator can determine from the logs why a configured pack did not load.
 19. The selection manifest (`ContentManifest` at `res://content/manifest.tres`) remains the only pack-selection
-    contract and carries no language metadata. Each content pack may additionally declare metadata through a distinct
-    optional per-pack manifest resource `ContentPackManifest` (Godot `Resource`) at
-    `res://content/<pack-id>/manifest.tres`, initially exposing one optional `Language` string export that defaults
-    to `en`.
+    contract and carries no language or start-scene metadata. Each content pack may additionally declare metadata
+    through a distinct optional per-pack manifest resource `ContentPackManifest` (Godot `Resource`) at
+    `res://content/<pack-id>/manifest.tres`, exposing an optional `Language` string export that defaults to `en`
+    (Technical Requirements 20 to 24) and an optional `StartScene` string export that defaults to empty (Technical
+    Requirements 25 to 29).
 20. Language declaration is optional and backward-compatible. The resolver must check that the per-pack manifest path
     exists before loading it: a missing per-pack manifest, a missing `res://content/` directory, or an omitted or
     blank `Language` value resolves to `en` as a normal startup path without Godot missing-resource errors or
@@ -121,18 +132,43 @@ decoupled from specific content domains while failing fast when an explicitly re
     primary sublanguage is unsupported, must fail content resolution with an actionable exception naming the pack id,
     the manifest path, the declared value, and the supported set. The failure reuses the Technical Requirement 15
     failure semantics: it throws without caching so the next call retries, and the game reports a startup failure
-    instead of silently speaking another language.
+    instead of silently speaking another language. The same unloadable-manifest failure also fails start-scene
+    resolution, including for a default pack candidate (Technical Requirement 28).
 24. Language metadata stays infrastructure-independent: packs never declare speech models, endpoints, or credentials,
     and CORE performs no mapping from language to infrastructure beyond the Technical Requirement 21 normalisation.
+25. The per-pack manifest exposes an optional start-scene declaration through an
+    `[Export(PropertyHint.File, "*.tscn")] string StartScene` property that defaults to empty. Start-scene
+    declaration lives only on the per-pack manifest; the selection manifest contract is unchanged (Technical
+    Requirement 7).
+26. A declared `StartScene` value is trimmed before use. A blank value resolves to the conventional `start.tscn`
+    (Technical Requirement 6), so packs that declare nothing are unaffected. A value beginning with `res://` is used
+    as-is. Any other value is pack-relative and resolves against the pack root: `scenes/intro.tscn` resolves to
+    `res://content/<pack-id>/scenes/intro.tscn`.
+27. An explicitly declared start scene takes priority over a conventional `start.tscn` in the same pack, even when
+    both exist. The resolver must read the per-pack manifest — existence check, then load — before probing a
+    candidate pack's start scene, for both the requested and the default pack candidate, because the manifest
+    determines the probe path. This read does not validate `Language`; language validation remains part of
+    current-content resolution for the selected pack (Technical Requirements 21 to 23).
+28. A declared start scene that resolves to a missing file behaves exactly like a missing conventional `start.tscn`
+    (Technical Requirement 11): a requested pack throws `InvalidOperationException`; a default pack candidate returns
+    the supplied fallback. Because the manifest read precedes the probe (Technical Requirement 27), a per-pack
+    manifest that exists but cannot be loaded as `ContentPackManifest` throws for a default pack candidate as well,
+    regardless of whether that pack's start scene exists. The integration-test bypass and the `--no-content-pack`
+    skip read no per-pack manifest and probe no start scene (Technical Requirements 9 and 17).
+29. A start-scene declaration changes only which scene path is probed and started. `ContentContext` identity, root,
+    and language semantics are unchanged, and start-scene resolution and current-content resolution continue to
+    agree on the selected pack (Technical Requirement 10).
 
 ## In Scope
 
 - Content identity and root path conventions for `default` and optional packs.
 - Generic current-content context API with no lore-specific paths.
-- Optional content root location and pack directory layout (`res://content/<pack-id>/start.tscn`).
+- Optional content root location and pack directory layout (`res://content/<pack-id>/start.tscn` convention).
 - `ContentManifest` resource contract with `DefaultPackId`.
 - Optional per-pack `ContentPackManifest` resource with spoken-language metadata: existence-checked loading,
   normalisation, supported-set validation, and selected-content language exposure.
+- Per-pack start-scene declaration through `ContentPackManifest.StartScene`: accepted path forms, priority over the
+  conventional `start.tscn`, manifest-read-before-probe ordering, and failure semantics.
 - `ContentResolver` resolution algorithm and its integration-test bypass via `RuntimeContext`.
 - Missing manifest handling before Godot resource loading.
 - Command-line argument handling for `--content-pack`.
@@ -157,17 +193,18 @@ decoupled from specific content domains while failing fast when an explicitly re
 2. A public build with no `res://content/manifest.tres` logs a normal startup message, does not emit a Godot
    missing-resource error, and launches the fallback start scene (User Requirement 2, Technical Requirement 8).
 3. With a manifest declaring `DefaultPackId` and no `--content-pack` argument, the resolver returns the manifest default
-   pack's `start.tscn` when it exists (User Requirement 3, Technical Requirement 9).
-4. A pack requested via the `--content-pack` argument overrides the default pack when its `start.tscn` exists
+   pack's start scene when it exists (User Requirement 3, Technical Requirement 9).
+4. A pack requested via the `--content-pack` argument overrides the default pack when its start scene exists
    (User Requirement 4, Technical Requirement 9).
 5. The current-content context reports `default` with root `res://` when fallback content is active, and `<pack-id>`
    with root `res://content/<pack-id>/` when an optional pack is active (User Requirement 7, Technical Requirements 2,
    3, 4, 5, and 10).
 6. Non-lore consumers can load content-relative resources by combining the current root with their own relative paths,
    without depending on lore-specific CORE API fields (User Requirement 7, Technical Requirements 5 and 14).
-7. A requested pack missing `start.tscn` reports a startup error instead of returning the fallback
-   (User Requirement 5, Technical Requirement 11).
-8. A manifest default pack missing `start.tscn` returns the supplied fallback (Technical Requirement 11).
+7. A requested pack missing its start scene, declared or conventional, reports a startup error instead of returning
+   the fallback (User Requirement 5, Technical Requirement 11).
+8. A manifest default pack missing its start scene, declared or conventional, returns the supplied fallback
+   (Technical Requirement 11).
 9. When `AlleyCat.Testing.RuntimeContext.IsIntegrationTest()` is true, resolution returns the fallback and current
    content is `default` regardless of installed content or arguments (User Requirement 6, Technical Requirements 9
    and 10).
@@ -204,6 +241,26 @@ decoupled from specific content domains while failing fast when an explicitly re
 22. Pack selection and its language require no configuration beyond the selection manifest, launch arguments, and
     per-pack manifests; packs carry no speech-model, endpoint, or credential metadata (User Requirement 12,
     Technical Requirements 19 and 24; end-to-end runtime evidence is defined in SPCH-003).
+23. A pack whose per-pack manifest declares `StartScene` starts the declared scene whenever it is selected — through
+    `--content-pack` or as the manifest default — with no conventional `start.tscn` present (User Requirement 13,
+    Technical Requirements 25, 26, and 27).
+24. A declared start scene takes priority over a conventional `start.tscn` in the same pack, and a blank or omitted
+    `StartScene` keeps resolving the conventional `start.tscn`, so existing packs are unaffected (User Requirement 14,
+    Technical Requirements 26 and 27).
+25. Each accepted path form resolves as specified: a pack-relative value resolves against the pack root
+    (`scenes/intro.tscn` → `res://content/<pack-id>/scenes/intro.tscn`) and a `res://`-prefixed value is used as-is
+    (User Requirement 13, Technical Requirement 26).
+26. A declared start scene that resolves to a missing file produces the same outcome as a missing conventional
+    `start.tscn`: a requested pack throws `InvalidOperationException` and a manifest default pack returns the
+    supplied fallback (User Requirement 5, Technical Requirements 11 and 28).
+27. A default pack candidate whose per-pack manifest exists but cannot be loaded as `ContentPackManifest` fails
+    resolution even when that pack's start scene is missing, because the manifest is read before the probe
+    (Technical Requirements 27 and 28).
+28. Integration-test runs and `--no-content-pack` read no per-pack manifest and probe no start scene, regardless of
+    any declared `StartScene` (User Requirements 6 and 9, Technical Requirement 28).
+29. With a start-scene override active, the current-content context reports the same id, root, and language as
+    without the override, and start-scene and current-content resolution agree on the selected pack (User
+    Requirement 7, Technical Requirements 10 and 29).
 
 ## References
 

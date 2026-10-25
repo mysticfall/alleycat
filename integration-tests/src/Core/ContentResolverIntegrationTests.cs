@@ -132,7 +132,137 @@ public sealed class ContentResolverIntegrationTests
         Assert.Contains(manifestPath, exception.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ContentPackManifest), exception.Message, StringComparison.Ordinal);
         Assert.Contains("en, ko", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("declared Language value is unavailable", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("declared metadata is unavailable", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A missing per-pack manifest must resolve the conventional start scene without Godot missing-resource
+    /// errors.
+    /// </summary>
+    [Fact]
+    public void LoadPackStartScenePath_MissingManifest_ResolvesConventionalStartScene()
+    {
+        string path = ContentResolver.LoadPackStartScenePath(
+            "missing-pack",
+            FixtureManifestRoot + "does-not-exist.tres");
+
+        Assert.Equal("res://content/missing-pack/start.tscn", path);
+    }
+
+    /// <summary>
+    /// A real manifest with a blank start-scene declaration must resolve the conventional start scene as a
+    /// normal startup path.
+    /// </summary>
+    [Fact]
+    public void LoadPackStartScenePath_BlankDeclaration_ResolvesConventionalStartScene()
+    {
+        string path = ContentResolver.LoadPackStartScenePath(
+            "start-scene-blank-pack",
+            FixtureManifestRoot + "start-scene-blank.tres");
+
+        Assert.Equal("res://content/start-scene-blank-pack/start.tscn", path);
+    }
+
+    /// <summary>
+    /// A real pack-relative declaration must resolve against the pack root through the Godot resource boundary.
+    /// </summary>
+    [Fact]
+    public void LoadPackStartScenePath_RelativeDeclaration_ResolvesAgainstPackRoot()
+    {
+        string path = ContentResolver.LoadPackStartScenePath(
+            "start-scene-relative-pack",
+            FixtureManifestRoot + "start-scene-relative.tres");
+
+        Assert.Equal("res://content/start-scene-relative-pack/scenes/intro.tscn", path);
+    }
+
+    /// <summary>
+    /// A real <c>res://</c>-prefixed declaration must be used exactly as written.
+    /// </summary>
+    [Fact]
+    public void LoadPackStartScenePath_AbsoluteDeclaration_IsUsedAsIs()
+    {
+        string path = ContentResolver.LoadPackStartScenePath(
+            "start-scene-absolute-pack",
+            FixtureManifestRoot + "start-scene-absolute.tres");
+
+        Assert.Equal("res://content/shared/intro.tscn", path);
+    }
+
+    /// <summary>
+    /// A real declaration with outer whitespace must be trimmed before resolving against the pack root.
+    /// </summary>
+    [Fact]
+    public void LoadPackStartScenePath_TrimmedDeclaration_TrimsBeforeResolving()
+    {
+        string path = ContentResolver.LoadPackStartScenePath(
+            "start-scene-trim-pack",
+            FixtureManifestRoot + "start-scene-trim.tres");
+
+        Assert.Equal("res://content/start-scene-trim-pack/scenes/trimmed.tscn", path);
+    }
+
+    /// <summary>
+    /// A start-scene read of a manifest resource that exists but carries a different script must fail with the
+    /// shared actionable message naming the pack and the manifest path.
+    /// </summary>
+    [Fact]
+    public void LoadPackStartScenePath_WrongScriptManifest_ThrowsActionableError()
+    {
+        string manifestPath = FixtureManifestRoot + "wrong-script.tres";
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => ContentResolver.LoadPackStartScenePath("wrong-script-pack", manifestPath));
+
+        Assert.Contains("wrong-script-pack", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(manifestPath, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(ContentPackManifest), exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Selection must resolve a requested pack's declared start scene through the real manifest resource and
+    /// probe exactly the declared path, mirroring the explicit-request shape used by speech selection.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_DeclaredStartScene_ResolvesThroughRealManifest()
+    {
+        const string declaredPath = "res://content/start-scene-relative-pack/scenes/intro.tscn";
+
+        string result = ContentResolver.SelectStartScenePath(
+            "start-scene-relative-pack",
+            null,
+            isIntegrationTest: false,
+            skipContentPack: false,
+            sceneExists: path => path == declaredPath,
+            fallbackStartScenePath: "res://assets/scenes/empty.tscn",
+            resolvePackStartScene: pack => ContentResolver.LoadPackStartScenePath(
+                pack,
+                FixtureManifestRoot + "start-scene-relative.tres"));
+
+        Assert.Equal(declaredPath, result);
+    }
+
+    /// <summary>
+    /// A default pack candidate whose manifest exists but cannot be loaded must fail selection even when the
+    /// scene probe would succeed, because the manifest is read before the probe.
+    /// </summary>
+    [Fact]
+    public void SelectStartScenePath_UnloadableDefaultManifest_ThrowsEvenWhenSceneExists()
+    {
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => ContentResolver.SelectStartScenePath(
+                null,
+                "wrong-script-pack",
+                isIntegrationTest: false,
+                skipContentPack: false,
+                sceneExists: _ => true,
+                fallbackStartScenePath: "res://assets/scenes/empty.tscn",
+                resolvePackStartScene: pack => ContentResolver.LoadPackStartScenePath(
+                    pack,
+                    FixtureManifestRoot + "wrong-script.tres")));
+
+        Assert.Contains("wrong-script-pack", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(FixtureManifestRoot + "wrong-script.tres", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
