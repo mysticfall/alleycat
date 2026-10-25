@@ -26,6 +26,9 @@ event-eligible observations.
    evidence window.
 4. Sensing and semantic interpretation do not select gaze or alter eye presentation.
 5. Invalid sensory or faculty configuration fails before sensory processing begins.
+6. In scenes with multiple characters, each hearing NPC determines for itself whether completed speech was addressed
+   to it, to other characters, or left undecided, using only whom the speaker faces; no emitter- or tool-declared
+   recipient participates.
 
 ## Technical Requirements
 
@@ -39,8 +42,12 @@ event-eligible observations.
 3. Visual presence remains an attention-only outcome initially. It refreshes attention but creates no retained-log
    entry,
    event-timeline record, scheduling pressure, or model-facing event text.
-4. Non-self completed speech produces `ObservedSpeech`; self filtering, speaker attribution, and speech lifecycle remain
-   as specified by the speech contracts. Its initial AI-001 policy is `NeverExpire` and event-eligible.
+4. Non-self completed speech produces `ObservedSpeech`; self filtering, speaker attribution, and speech lifecycle
+   remain as specified by the speech contracts. Speech interpretation also performs observer-side addressee inference
+   at perception time: the observing NPC infers which other current-scene characters the speaker addressed — never an
+   emitter- or tool-declared recipient — and records the result as the semantic, observer-relative addressee set on
+   `ObservedSpeech` (AI-001 TR-13). Unrecognised-speaker speech is always undecided because facing cannot be resolved
+   without a character node. Its initial AI-001 policy is `NeverExpire` and event-eligible.
 5. A valid focused visual description produces `ObservedVisualDescription`. Its AI-001 policy suppresses equal values
    and
    supersedes changed values; it is normally current-scene input and event-ineligible.
@@ -63,11 +70,20 @@ event-eligible observations.
    active-watch list emits no section or fallback.
 10. Sensing, faculties, and attention mutation must not call look-target assignment APIs. AI-007 remains the separately
     composed gaze consumer.
+11. Addressee inference uses the speaker's facing as its only v1 cue: every other current-scene character within the
+    speaker's facing cone — bounded by a tunable angle threshold — is an addressee, and an empty cone result is
+    undecided. The cone may contain multiple characters, yielding a multi-addressee set. Inference reads orientation
+    only: it must not assign look targets or alter eye presentation (TR-10), and it must not perform vocative
+    (name-mention) matching or make any model request on the perception path.
+12. The orientation source prefers the speaker's head or gaze direction — AI-007/AI-009 machinery where available, and
+    the player's head or camera for player speakers — falling back to body forward. The chosen source, fallback order,
+    and facing-cone angle threshold are documented and remain tunable.
 
 ## In Scope
 
 - Immutable percept publication, direct-child faculty discovery, ordered interpretation, and contained failure handling.
 - Attention-only visual presence, focused descriptions, and focus-limited relative-position evidence.
+- Observer-side speech-addressee inference from speaker facing at perception time.
 - Policy-directed suppression, supersession, finite evidence, and event eligibility through AI-001.
 - Attention snapshots used by [AI-003](../003-prompt-api/index.md) attended-character current-scene status and
   [AI-010](../010-agent-watches/index.md) condition-owned watch evaluation.
@@ -76,6 +92,10 @@ event-eligible observations.
 
 - Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
 - Gaze selection, direct look-target assignment, and final perception or hysteresis tuning values.
+- Addressee-inference extensions beyond speaker facing: vocative (name-mention) matching, dyadic-recency cues,
+  decision-model (LLM) inference, and distance gating of the facing cone.
+- Emitter- or tool-declared addressees (a speak-tool addressee parameter); hearing reach stays bounded by
+  [SPCH-006](../../speech/006-hearing/index.md).
 
 ## Acceptance Criteria
 
@@ -89,6 +109,8 @@ event-eligible observations.
 4. Acceptance shows sensing leaves gaze and eye presentation unchanged.
 5. Acceptance shows active-watch status is a generic list containing only `WatchId`, condition ID, and subject ID,
    with no state or condition-specific evidence; an empty active-watch list emits no section or fallback.
+6. Acceptance shows a hearing NPC's addressee conclusion is its own, derived from the speaker's facing at perception
+   time rather than any declared recipient, and that unrecognised speech is undecided.
 
 ### Technical Requirements
 
@@ -105,10 +127,15 @@ event-eligible observations.
    evidence, and that an empty list emits no section or fallback.
 4. Tests verify relative-position evidence is focus-limited and that configuration validation rejects non-finite values.
 5. Tests verify attention snapshots are immutable and no sensing or attention path assigns a look target.
+6. Tests verify facing-cone addressee resolution — single addressee, multiple addressees, empty-cone undecided,
+   unrecognised-speaker undecided, and speaker self-exclusion — the head/gaze-first orientation fallback to body
+   forward, and that the inference path assigns no look target and makes no model request.
 
 ## References
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
+- [AI-009: Attention-Driven Head Orientation](../009-attention-head-orientation/index.md)
 - [AI-010: Agent Watches](../010-agent-watches/index.md)
+- [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)

@@ -174,7 +174,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?"));
+            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?", ["char:owner"]));
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
@@ -185,7 +185,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 [ChatRole.User, ChatRole.User, ChatRole.User],
                 freshRequest.Select(message => message.Role));
             Assert.Contains("<Event History>", freshRequest[0].Text, StringComparison.Ordinal);
-            Assert.Contains("[new] Heard `char:someone-else` say: You there?", freshRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("[new] Heard `char:someone-else` say to me: You there?", freshRequest[0].Text, StringComparison.Ordinal);
             Assert.Equal(AgenticMind.SessionBootstrapInput, freshRequest[2].Text);
 
             // Node exit ends the held replacement request quietly.
@@ -262,7 +262,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             Assert.Equal([ChatRole.User, ChatRole.User, ChatRole.User], replacement.Select(static message => message.Role));
             ChatMessage timeline = replacement[0];
-            Assert.Contains("Heard `char:speaker` say: late prefix … continued text", timeline.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: late prefix … continued text", timeline.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(timeline.Text, "late prefix … continued text"));
             Assert.Equal(
                 ["late prefix", "continued text"],
@@ -335,8 +335,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             ChatMessage joined = GetEventTimelineMessage(replacement);
-            Assert.Contains("Heard `char:speaker` say: onset text", joined.Text, StringComparison.Ordinal);
-            Assert.Equal(1, CountOccurrences(joined.Text, "Heard `char:speaker` say: onset text"));
+            Assert.Contains("Heard `char:speaker` say to me: onset text", joined.Text, StringComparison.Ordinal);
+            Assert.Equal(1, CountOccurrences(joined.Text, "Heard `char:speaker` say to me: onset text"));
         }
         finally
         {
@@ -448,8 +448,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             ChatMessage delivered = GetEventTimelineMessage(replacement);
-            Assert.Contains("Heard `char:speaker` say: manual speech", delivered.Text, StringComparison.Ordinal);
-            Assert.Equal(1, CountOccurrences(delivered.Text, "Heard `char:speaker` say: manual speech"));
+            Assert.Contains("Heard `char:speaker` say to me: manual speech", delivered.Text, StringComparison.Ordinal);
+            Assert.Equal(1, CountOccurrences(delivered.Text, "Heard `char:speaker` say to me: manual speech"));
 
             ObservedSpeech ungrouped = Assert.IsType<ObservedSpeech>(Assert.Single(mind.GetTimelineForTest()));
         }
@@ -509,7 +509,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             IReadOnlyList<ChatMessage> delivered = clientProvider.Requests[1];
             ChatMessage heard = GetEventTimelineMessage(delivered);
-            Assert.Contains("Heard `char:speaker` say: late text", heard.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: late text", heard.Text, StringComparison.Ordinal);
             ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(mind.GetTimelineForTest()));
             Assert.Equal("late text", committed.Content);
 
@@ -526,7 +526,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 swept.Select(message => message.Role));
             Assert.Equal(AgenticMind.SessionBootstrapInput, swept[2].Text);
             ChatMessage replayed = GetEventTimelineMessage(swept);
-            Assert.Equal(1, CountOccurrences(replayed.Text, "Heard `char:speaker` say: late text"));
+            Assert.Equal(1, CountOccurrences(replayed.Text, "Heard `char:speaker` say to me: late text"));
             _ = Assert.Single(mind.GetTimelineForTest());
         }
         finally
@@ -541,7 +541,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A cue from a speaker the Mind does not attend registers nothing and cancels nothing: generation and the
     /// tool batch continue through the cue, no hold appears, and the speaker's completed
-    /// speech still arrives later as an ordinary all-hearer fresh turn (SPCH-005 TR-37, AI-002 UR-5).
+    /// speech — addressed to this co-located Mind — still arrives later as a fresh turn (SPCH-005 TR-37, AI-002
+    /// UR-5).
     /// </summary>
     [Fact]
     public async Task StartedContinuation_FromUnattendedSpeaker_RegistersNothingAndCancelsNothing()
@@ -599,14 +600,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
             Assert.False(clientProvider.EndedByCancellation());
 
-            // The unattended speaker's completed speech is ordinary all-hearer freshness: it invalidates the
-            // following held request and delivers one joined replacement turn.
+            // The unattended speaker's completed speech is addressed to this co-located Mind: it invalidates the
+            // following held request and delivers one joined replacement turn (AI-006 TR-11).
             source.PublishCompletedSpeech("unattended words", new SpeechSegmentMetadata("unattended-group", 1));
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 3);
 
             ChatMessage joined = GetEventTimelineMessage(clientProvider.Requests[2]);
-            Assert.Contains("Heard `char:speaker` say: unattended words", joined.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: unattended words", joined.Text, StringComparison.Ordinal);
         }
         finally
         {
@@ -622,7 +623,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// voice, only the two attending the speaker cancel their in-flight request and hold their replacement
     /// behind their own cue lease — each independently, on its own session — while the unattended Mind's
     /// generation and tool batch continue through the cue, and the speaker's later completed speech still
-    /// reaches all three Minds as ordinary fresh observations (SPCH-005 TR-37, AI-002 UR-5/TR-11).
+    /// reaches all three Minds as addressed-to-them fresh observations — every fixture character is co-located,
+    /// so each Mind infers itself an addressee (SPCH-005 TR-37, AI-002 UR-5/TR-11, AI-006 TR-11).
     /// </summary>
     [Fact]
     public async Task SharedSpeakerOnset_SuppressesAttendedMindsIndependentlyWhileUnattendedMindContinues()
@@ -738,8 +740,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(unattendedMindC.GetTimelineForTest());
             Assert.Empty(perceptsC);
 
-            // Completed speech is attention-independent all-hearer freshness: every Mind — attended or not —
-            // receives the same speech and turns it into one fresh replacement observation.
+            // Completed speech is addressed to every co-located Mind: each Mind — attended or not — infers itself an
+            // addressee and turns the speech into one fresh replacement observation (AI-006 TR-11).
             source.PublishCompletedSpeech("shared room words", new SpeechSegmentMetadata("shared-group", 0));
             await attendedMindA.DrainPerceptionsForTestAsync();
             await attendedMindB.DrainPerceptionsForTestAsync();
@@ -755,8 +757,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 ChatMessage joined = Assert.Single(
                     clientProvider.Requests[replacementIndex],
                     message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
-                Assert.Contains("Heard `char:speaker` say: shared room words", joined.Text, StringComparison.Ordinal);
-                Assert.Equal(1, CountOccurrences(joined.Text, "Heard `char:speaker` say: shared room words"));
+                Assert.Contains("Heard `char:speaker` say to me: shared room words", joined.Text, StringComparison.Ordinal);
+                Assert.Equal(1, CountOccurrences(joined.Text, "Heard `char:speaker` say to me: shared room words"));
             }
 
             (TestAgenticMind Mind, IReadOnlyList<SpeechPercept> Percepts)[] hearers =
@@ -873,7 +875,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
-            Assert.Contains("Heard `char:speaker` say: player words", joined.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: player words", joined.Text, StringComparison.Ordinal);
         }
         finally
         {
@@ -973,7 +975,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
-            Assert.Contains("Heard `char:speaker` say: player words", joined.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: player words", joined.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(joined.Text, "I said: Greetings"));
             _ = Assert.Single(percepts, percept => percept.Content == "player words");
         }
@@ -1046,7 +1048,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             source.EmitSpeechStarted(new SpeechSegmentMetadata("onset-group", 0));
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
-            // The unrelated speaker's completed speech is ordinary all-hearer freshness: with no speech key of the
+            // The unrelated speaker's completed speech is addressed to this co-located Mind: with no speech key of the
             // protected turn, it withdraws the unhand-offed submission silently.
             unrelated.PublishCompletedSpeech("unrelated chatter");
             await mind.DrainPerceptionsForTestAsync();
@@ -1075,8 +1077,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
-            Assert.Contains("Heard `char:speaker` say: player words", joined.Text, StringComparison.Ordinal);
-            Assert.Contains("Heard `char:unrelated` say: unrelated chatter", joined.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: player words", joined.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:unrelated` say to me: unrelated chatter", joined.Text, StringComparison.Ordinal);
         }
         finally
         {
@@ -1156,7 +1158,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
                 message => message.Role == ChatRole.User && message.Text.StartsWith("<Event History>", StringComparison.Ordinal));
-            Assert.Contains("Heard `char:speaker` say: player words", joined.Text, StringComparison.Ordinal);
+            Assert.Contains("Heard `char:speaker` say to me: player words", joined.Text, StringComparison.Ordinal);
         }
         finally
         {
@@ -1509,7 +1511,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // unmarked in its single section (AI-002 TR-3).
             ChatMessage heldTimeline = GetEventTimelineMessage(clientProvider.Requests[3]);
             Assert.Contains(
-                "\nHeard `char:speaker` say: accepted prefix",
+                "\nHeard `char:speaker` say to me: accepted prefix",
                 heldTimeline.Text,
                 StringComparison.Ordinal);
 
@@ -1529,7 +1531,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // accepted prefix segment was already confirmed, but its latest segment lies beyond the watermark
             // (AI-002 TR-3).
             Assert.Contains(
-                "[new] Heard `char:speaker` say: accepted prefix … later continuation",
+                "[new] Heard `char:speaker` say to me: accepted prefix … later continuation",
                 eventTimeline.Text,
                 StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(eventTimeline.Text, "accepted prefix … later continuation"));
@@ -1692,7 +1694,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: One."));
             Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: Two."));
             Assert.Equal(1, CountOccurrences(eventTimeline.Text, "I said: Three."));
-            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "Heard `char:speaker` say: outer words"));
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "Heard `char:speaker` say to me: outer words"));
         }
         finally
         {
@@ -1864,7 +1866,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // speech upgrades the complete window to fresh urgency and wakes the wait through its normal
             // completion mechanism.
             mind.ObserveForTest(new RouteObservation("world.before-speech"));
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?"));
+            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?", ["char:owner"]));
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
@@ -1890,7 +1892,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.DoesNotContain("You there?", waitText, StringComparison.Ordinal);
             ChatMessage eventTimeline = GetEventTimelineMessage(replacement);
             int preceding = eventTimeline.Text.IndexOf("((Received world.before-speech event.))", StringComparison.Ordinal);
-            int speech = eventTimeline.Text.IndexOf("Heard `char:someone-else` say: You there?", StringComparison.Ordinal);
+            int speech = eventTimeline.Text.IndexOf("Heard `char:someone-else` say to me: You there?", StringComparison.Ordinal);
             Assert.True(
                 preceding >= 0 && speech > preceding,
                 $"The canonical event timeline must order the accumulation before the speech: '{eventTimeline.Text}'");
@@ -2116,7 +2118,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?"));
+            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?", ["char:owner"]));
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             await TestUtils.WaitForFramesAsync(sceneTree, 6);

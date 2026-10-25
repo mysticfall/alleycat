@@ -22,7 +22,9 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 /// Godot-runtime coverage proving the authored shared guidance and the corrected tool metadata actually reach the
 /// model together with the context they describe: one captured provider request carries the rendered shared
 /// instruction, a new player reply marked newly presented in the event timeline, fresh current-scene status, and
-/// the corrected session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15).
+/// the corrected session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15) — and that the
+/// delivered instruction itself teaches speech-addressee interpretation: reply opportunity versus overheard
+/// context, and context inference for wording that makes no addressee claim (AI-003 UR-10, TR-13/TR-15).
 /// </summary>
 [Headless]
 public sealed partial class SharedGuidanceDeliveryIntegrationTests
@@ -79,7 +81,7 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.ObserveForTest(new ObservedSpeech(player.FullId, "I am heading to the market now."));
+            mind.ObserveForTest(new ObservedSpeech(player.FullId, "I am heading to the market now.", ["char:owner"]));
             await WaitUntilAsync(sceneTree, () => clientProvider.Captures.Count == 2);
             CapturedRequest freshRequest = clientProvider.Captures[1];
 
@@ -92,11 +94,11 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             // The fresh player reply renders exactly once in the single section, marked newly presented on its
             // complete rendered line (AI-002 TR-3).
             Assert.Contains(
-                "[new] Heard `char:fixture_player` say: I am heading to the market now.",
+                "[new] Heard `char:fixture_player` say to me: I am heading to the market now.",
                 timeline,
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
-                "\nHeard `char:fixture_player` say:",
+                "\nHeard `char:fixture_player` say to me:",
                 timeline,
                 StringComparison.Ordinal);
 
@@ -141,6 +143,81 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         }
     }
 
+    /// <summary>
+    /// The rendered shared instruction delivered on a real provider request teaches speech-addressee
+    /// interpretation: the Event History guidance covers addressee wording — including entries that make no
+    /// addressee claim and leave the addressee to be inferred from context — while the Choosing Actions guidance
+    /// distinguishes speech addressed to the NPC as a reply opportunity from speech addressed to other characters
+    /// as overheard context (AI-003 UR-10, TR-13/TR-15). Stable concept phrases are asserted rather than exact
+    /// prose, which stays tunable (AI-003 TR-12).
+    /// </summary>
+    [Fact]
+    public async Task ProviderRequest_InstructionTeachesSpeechAddresseeInterpretation()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        CapturingSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueHoldForever();
+        WatchRegistry watchRegistry = new()
+        {
+            Conditions = [new ProximityWatchTool()],
+        };
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack
+            {
+                Sections = [new FilePromptSection { FilePath = "res://prompts/mind.md", Name = "Instructions" }],
+            },
+            CurrentSceneStatus = Assert.IsType<PromptStack>(
+                ResourceLoader.Load(CurrentScenePromptPath),
+                exactMatch: false),
+            ClientProvider = clientProvider,
+        };
+        mind.AddChild(watchRegistry);
+        mind.AddChild(new AttendedCharacterSceneStatusProjector
+        {
+            ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
+        });
+        mind.AddChild(new WatchSceneStatusProjector
+        {
+            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
+            Registry = watchRegistry,
+        });
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Captures.Count == 1);
+
+            // The startup request's instruction is the authored shared guidance exactly as the model receives it.
+            string instructions = clientProvider.Captures[0].Instructions;
+
+            // Event-history guidance covers addressee wording: entries may state whom the speaker addressed, and
+            // wording that makes no addressee claim leaves the addressee to be inferred from context (TR-13).
+            string eventHistory = AuthoredSection(instructions, "Event History");
+            Assert.Contains("no addressee claim", eventHistory, StringComparison.Ordinal);
+            Assert.Contains("infer from context", eventHistory, StringComparison.Ordinal);
+
+            // Action-selection guidance distinguishes the two addressee outcomes: speech addressed to the NPC is
+            // its reply opportunity, while speech addressed to other characters is overheard context between
+            // others rather than itself a reason to respond (TR-15).
+            string choosingActions = AuthoredSection(instructions, "Choosing Actions");
+            Assert.Contains("addressed to you", choosingActions, StringComparison.Ordinal);
+            Assert.Contains("reply opportunity", choosingActions, StringComparison.Ordinal);
+            Assert.Contains("addressed to other characters", choosingActions, StringComparison.Ordinal);
+            Assert.Contains("overheard context", choosingActions, StringComparison.Ordinal);
+        }
+        finally
+        {
+            mind.QueueFree();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames = 300)
     {
         for (int frame = 0; frame < maxFrames && !predicate(); frame++)
@@ -149,6 +226,17 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         }
 
         Assert.True(predicate(), $"Condition was not met within {maxFrames} frames.");
+    }
+
+    /// <summary>Returns the authored markdown passage from the named top-level heading to the next one.</summary>
+    private static string AuthoredSection(string source, string heading)
+    {
+        string marker = $"# {heading}";
+        int start = source.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Expected a '{marker}' heading in the rendered shared instruction.");
+        int end = source.IndexOf("\n# ", start + marker.Length, StringComparison.Ordinal);
+
+        return end < 0 ? source[start..] : source[start..end];
     }
 
     private sealed class TestCharacter : ICharacter

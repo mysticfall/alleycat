@@ -59,6 +59,7 @@ public sealed class ObservationTests
         Assert.All(formerMembers, member => Assert.Null(typeof(ObservedSpeech).GetProperty(member)));
         Assert.NotNull(typeof(ObservedSpeech).GetProperty(nameof(ObservedSpeech.ActorId)));
         Assert.NotNull(typeof(ObservedSpeech).GetProperty(nameof(ObservedSpeech.Content)));
+        Assert.NotNull(typeof(ObservedSpeech).GetProperty(nameof(ObservedSpeech.Addressees)));
     }
 
     /// <summary>
@@ -133,12 +134,13 @@ public sealed class ObservationTests
     }
 
     /// <summary>
-    /// Freshness uses exact ordinal actor-to-owner identity, so only exact self speech avoids a fresh turn.
+    /// Freshness is owner-relative and ordinal-exact: only speech whose addressee set contains the observer
+    /// requires a fresh turn, while undecided speech — the two-argument default — and self speech never do.
     /// </summary>
     [Theory]
     [InlineData("char:owner", false)]
     [InlineData("char:other", true)]
-    [InlineData(null, true)]
+    [InlineData(null, false)]
     [InlineData("owner", true)]
     [InlineData("char:owner:extra", true)]
     public void ObservedSpeech_RequiresFreshTurn_IsOwnerRelativeAndOrdinalExact(
@@ -150,14 +152,20 @@ public sealed class ObservationTests
             Id = "owner"
         };
         ObservationContext context = new(owner);
-        var observation = new ObservedSpeech(actorId, "Hello");
+        var observation = new ObservedSpeech(actorId, "Hello", ["char:owner"]);
+        var undecided = new ObservedSpeech(actorId, "Hello");
 
         Assert.Equal(expected, observation.RequiresFreshTurn(context));
-        Assert.Equal(expected ? 1f : 0f, observation.CalculateImportance(context));
+        Assert.False(undecided.RequiresFreshTurn(context));
+        // The set-carrying observation is self speech (importance 0) for the observer actor and addressed-to-me
+        // speech (importance 2) otherwise; the unknown speaker stays undecided (importance 1).
+        float expectedImportance = actorId is null ? 1f : expected ? 2f : 0f;
+        Assert.Equal(expectedImportance, observation.CalculateImportance(context));
     }
 
     /// <summary>
-    /// Owner identity matching is case-sensitive, so the same ID differing only in case requires a fresh turn.
+    /// Owner identity matching is case-sensitive, so the same ID differing only in case still counts as
+    /// addressed-to-me speech through the addressee set rather than self speech.
     /// </summary>
     [Theory]
     [InlineData("CHAR:owner")]
@@ -168,7 +176,7 @@ public sealed class ObservationTests
         {
             Id = "owner"
         };
-        var observation = new ObservedSpeech(actorId, "Hello");
+        var observation = new ObservedSpeech(actorId, "Hello", ["char:owner"]);
 
         Assert.True(observation.RequiresFreshTurn(new ObservationContext(owner)));
     }
@@ -213,10 +221,10 @@ public sealed class ObservationTests
 
         ObservedSpeech clone = observation with
         {
-            Content = "Hi"
+            ActorId = "char:other"
         };
 
-        Assert.Equal("Hi", clone.Content);
+        Assert.Equal("char:other", clone.ActorId);
         Assert.Equal(stamp, clone.ObservedAt);
     }
 

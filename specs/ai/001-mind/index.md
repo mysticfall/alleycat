@@ -26,6 +26,11 @@ per-request scene context.
 5. An NPC's own successfully committed speech remains remembered exactly once for that Mind's lifetime.
 6. Every recalled event has canonical, consistent text. An unfamiliar event type gives the NPC a safe generic account
    without disclosing arbitrary private evidence.
+7. In scenes with several characters, speech scheduling follows its addressee: an NPC responds promptly to speech
+   addressed to it, notices speech addressed to other characters without being forced into a response, and notices
+   addressee-undetermined speech without it claiming the NPC's turn.
+8. Recalled speech states whom the speaker addressed — the recalling NPC or named other characters — and stays neutral
+   when the addressee is undetermined, leaving the addressee to be inferred from context.
 
 ## Technical Requirements
 
@@ -70,9 +75,27 @@ per-request scene context.
     body method. The base body uses only `TypeKey` for safe fallback wording and never renders arbitrary payload
     properties. The framing method appends one invariant `ObservedAt` suffix when timestamped; unstamped observations
     have no suffix. Observation rendering has no dependency on prompting or templating.
-13. `ObservedSpeech` owns actor-relative self, recognised-other, and unknown wording. Its public API contains only
-    semantic actor and content fields; raw voice provenance and continuation transport metadata must neither be
-    exposed nor rendered.
+13. `ObservedSpeech` owns actor-relative self, recognised-other, and unknown wording, plus observer-relative addressee
+    wording. Its public API contains only semantic actor, content, and addressee fields; the addressee value is an
+    observer-relative set of canonical character full IDs, empty when the addressee is undecided. Raw voice provenance
+    and continuation transport metadata must neither be exposed nor rendered.
+14. `ObservedSpeech` derives one observer-relative addressee state from that set — addressed to me (the observer is in
+    the set), addressed to another (a non-empty set without the observer), and undecided (an empty set) — and owns the
+    speech scheduling and attention policy per state:
+    - Self speech is unchanged: importance zero, never a fresh turn, no attention effect.
+    - Addressed to me: high importance requiring a fresh turn, with the speaker's attention weight raised above the
+      undecided baseline.
+    - Addressed to another: low importance below the observation-importance threshold that accumulates as ordinary
+      pressure — bystanders catch up through accumulation or their next request — never a fresh turn, with a base
+      attention effect on the speaker plus a smaller effect on each addressee.
+    - Undecided: notable importance that crosses the observation-importance threshold, waking a waiting NPC without
+      interrupting active reasoning, never a fresh turn, with the flat baseline attention effect on the speaker only.
+    Exact importance values, thresholds, and attention weights are tunable; the state mapping and its fresh-turn
+    boundaries are contractual.
+15. `ObservedSpeech` renders its addressee state canonically: addressed-to-me speech presents the speaker as speaking
+    to the observer; addressed-to-another speech names each addressee as a backticked canonical full ID (AI-004
+    requirement 51); undecided speech makes no addressee claim so the conversation model can infer it from context.
+    Self and unknown-speaker wording keep their current shape, and unknown-speaker speech is always undecided.
 
 ## In Scope
 
@@ -81,6 +104,7 @@ per-request scene context.
 - Exact-once scheduling metadata and payload-free delivery signals.
 - Projector notification on active-log removal without a synthetic semantic observation.
 - Speech commit-identity exact-once enforcement for the Mind lifetime.
+- Observer-relative speech-addressee states and their importance, fresh-turn, attention, and rendering policies.
 - Integration boundaries for AI-002 request scheduling, AI-003 current-scene projection, AI-006 perception, and AI-010
   watches.
 
@@ -88,6 +112,8 @@ per-request scene context.
 
 - Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
 - Final importance thresholds and finite-evidence-window tuning values.
+- Live-LLM behavioural validation of the addressee policy in multi-NPC scenes; deterministic acceptance covers this
+  delivery.
 
 ## Acceptance Criteria
 
@@ -102,6 +128,11 @@ per-request scene context.
    event.
 4. Acceptance shows that a committed own-speech identity is remembered once only.
 5. Acceptance shows an unfamiliar event is presented with safe, canonical wording rather than arbitrary payload data.
+6. Acceptance shows, in a scene with multiple characters, that speech addressed to the observing NPC produces a fresh
+   reply opportunity, speech addressed to another character is noticed without forcing one, and addressee-undetermined
+   speech is notable without claiming one.
+7. Acceptance shows recalled speech states whom the speaker addressed — the observer or named others — and makes no
+   addressee claim when undecided.
 
 ### Technical Requirements
 
@@ -121,10 +152,15 @@ per-request scene context.
 7. Tests verify type-owned canonical text, a fallback based only on `TypeKey`, invariant timestamp framing, and no
    timestamp suffix for unstamped observations.
 8. Tests verify actor-relative speech text never exposes provenance or continuation transport metadata.
+9. Tests verify the three observer-relative addressee states map exactly to their importance, fresh-turn, attention,
+   and rendering policies, with self speech unchanged (importance zero, never fresh, no attention effect).
+10. Tests verify `ObservedSpeech` exposes the addressee set as semantic canonical character full IDs — empty meaning
+    undecided — and neither exposes nor renders raw voice provenance or continuation transport metadata.
 
 ## References
 
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
+- [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [AI-010: Agent Watches](../010-agent-watches/index.md)

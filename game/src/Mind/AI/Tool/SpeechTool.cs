@@ -130,6 +130,6 @@ public partial class SpeechTool : AgentTool
 
         return new AgentToolResult(
             "Spoken through the configured voice.",
-            [new ObservedSpeech(ActorId: null, Content: acceptedSpeech)]);
+            [new ObservedSpeech(null, acceptedSpeech)]);
     }
 }

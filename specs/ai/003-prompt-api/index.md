@@ -35,6 +35,9 @@ information it has already been supplied.
     the same clock as its event-history timestamps.
 9. An NPC keeps its automatic lore context and receives a stable, grouped catalogue of remaining available lore, with
    guidance to retrieve relevant entries before acting without making retrieval mandatory.
+10. Speech events may state whom the speaker addressed. Shared guidance teaches an NPC to use that wording — treating
+    speech addressed to itself as its reply opportunity and speech between other characters as overheard context — and
+    to infer the addressee from context when the wording makes no claim.
 
 ## Technical Requirements
 
@@ -78,13 +81,17 @@ information it has already been supplied.
 ### Shared Context Interpretation Guidance
 
 12. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
-    instruction — must carry character-neutral guidance covering event-history interpretation,
-    current-scene interpretation, action selection, available watch tools, and lore discovery/retrieval. These are
-    mandatory content; exact prose stays tunable. Guidance must not contradict AI-002's automatic per-request delivery,
-    payload-free wait semantics, or tool-exchange disposal (AI-002 TR-17–TR-22).
+    instruction — must carry character-neutral guidance covering event-history interpretation — including
+    addressee-annotated speech and neutral undecided wording — current-scene interpretation, action selection,
+    available watch tools, and lore discovery/retrieval. These are mandatory content; exact prose stays tunable.
+    Guidance must not contradict AI-002's automatic per-request delivery, payload-free wait semantics, or
+    tool-exchange disposal (AI-002 TR-17–TR-22).
 13. Event-history guidance must match AI-002's timeline-message contract: a single `Event History` section holds the
     whole timeline, `[new] `-prefixed entries were newly presented since the NPC's previous valid response, unmarked
     entries were already shown, and neither status means a conversational contribution has been answered or resolved.
+    It must also cover addressee-annotated speech entries: wording may state that the speaker addressed the NPC or
+    name other characters, and neutral entries make no addressee claim, leaving the addressee to be inferred from
+    context.
 14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
     absence, and historical events do not establish current positions. It must not contradict the common game clock or
@@ -98,9 +105,11 @@ information it has already been supplied.
     through remembered events and fresh scene status; non-opted exchanges, including lore retrieval, remain retained.
     Guidance must distinguish provider requests from human conversational turns: ending output alone does not give
     another person time to reply. Normally yield after a conversational contribution unless a relevant unresolved reply
-    or a concrete in-character reason supports acting now. Use history and chronology, not `[new]` alone, to distinguish
-    such replies from already-addressed speech. Startup, empty history, repeated requests, wait expiry, or silence alone
-    must not require speech or repeated prompting. Preserve initiative without fixed delays, word caps, or forced turns.
+    or a concrete in-character reason supports acting now. Use history and chronology — including speech addressee
+    wording where present — not `[new]` alone, to distinguish such replies from already-addressed speech, and treat
+    speech addressed to other characters as overheard context rather than a reply opportunity. Startup, empty history,
+    repeated requests, wait expiry, or silence alone must not require speech or repeated prompting. Preserve initiative
+    without fixed delays, word caps, or forced turns.
 16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
     arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
@@ -126,8 +135,8 @@ information it has already been supplied.
 - Unconditional current game-time rendering in `CurrentSceneStatus`, on the game clock shared with event timestamps.
 - Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
 - Session-fixed scenario context and fresh request-scene snapshot separation.
-- Character-neutral shared context-interpretation guidance (history, current scene, action selection, watches, lore)
-  in the authored static instruction.
+- Character-neutral shared context-interpretation guidance (history, speech-addressee interpretation, current scene,
+  action selection, watches, lore) in the authored static instruction.
 - Session-start grouped lore catalogue after unchanged automatic lore bodies, under AI-004's normative contracts.
 
 ## Out Of Scope
@@ -162,6 +171,9 @@ information it has already been supplied.
     current scene status, or completed actions surfacing through event history and current scene status.
 8. Acceptance shows unchanged automatic lore context alongside a grouped catalogue of remaining available lore, and
    guidance to retrieve relevant entries before acting without requiring retrieval for every action (UR-9).
+9. Acceptance shows shared guidance uses speech addressee wording to distinguish speech addressed to the NPC from
+   speech overheard between others, and directs the NPC to infer the addressee from context when the wording makes no
+   claim (UR-10).
 
 ### Technical Requirements
 
@@ -182,7 +194,8 @@ information it has already been supplied.
    derives newly-presented marking from the caller-supplied confirmed watermark with the group-OR rule for joined
    speech groups (AI-002 TR-3), while projected speech uses canonical observation-owned text.
 7. Tests verify the authored shared instruction contains guidance covering each required concept — history
-    interpretation, current-scene evidence limits and timestamps, action selection, watches, and lore retrieval — and
+    interpretation, speech-addressee wording, current-scene evidence limits and timestamps, action selection, watches,
+    and lore retrieval — and
     stays consistent with AI-002's automatic per-request delivery, payload-free wait semantics, and disposal.
 8. Tests verify shared watch guidance is composition-neutral, referring to available watch tools and presenting listed
    watches as registrations rather than condition truth, and that it routes watch transitions through ordinary event

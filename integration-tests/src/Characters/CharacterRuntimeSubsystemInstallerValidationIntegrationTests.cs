@@ -262,6 +262,10 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
 
         ObservedSpeech speech = Assert.IsType<ObservedSpeech>(Assert.Single(emissions));
         Assert.Equal(((IIdentifiable)first).FullId, speech.ActorId);
+        // Both hubs stay outside the scene tree in this fixture, so their transforms are not live and no facing
+        // can be resolved: the observation stays undecided with the flat baseline speaker effect (AI-006 TR-12).
+        Assert.Equal(SpeechAddresseeState.Undecided, speech.GetAddresseeState(new ObservationContext(second)));
+        Assert.Empty(speech.Addressees);
         AttentionEffect attentionEffect = Assert.Single(speech.GetAttentionEffects(new ObservationContext(second)));
         Assert.Equal(((IIdentifiable)first).FullId, attentionEffect.SubjectFullId);
         Assert.Equal(0.5f, attentionEffect.Contribution);

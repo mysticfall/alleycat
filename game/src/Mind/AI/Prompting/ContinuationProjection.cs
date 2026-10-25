@@ -116,7 +116,7 @@ internal static class ContinuationProjection
                     .Select(static entry => ((ObservedSpeech)entry.Observation).Content)
                     .Where(static content => !string.IsNullOrWhiteSpace(content)));
             projected.Add(new Event(
-                new ObservedSpeech(first.ActorId, content) { ObservedAt = latest.Observation.ObservedAt },
+                new ObservedSpeech(first.ActorId, content, first.Addressees) { ObservedAt = latest.Observation.ObservedAt },
                 latest.Position + 1,
                 latest.Position + 1,
                 new SpeechGroupCorrelation(
@@ -133,7 +133,7 @@ internal static class ContinuationProjection
     private static Event CreateStandalone(Entry entry)
     {
         AgentObservation observation = entry.Observation is ObservedSpeech speech
-            ? new ObservedSpeech(speech.ActorId, speech.Content) { ObservedAt = speech.ObservedAt }
+            ? new ObservedSpeech(speech.ActorId, speech.Content, speech.Addressees) { ObservedAt = speech.ObservedAt }
             : entry.Observation;
         return new Event(observation, entry.Position + 1, entry.Position + 1, Correlation: null, entry.NewlyPresented);
     }
