@@ -13,9 +13,10 @@ using Xunit;
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
-/// Live-LLM execution stage of the Vadim interrogation baseline experiment (plan step 4's target): the
-/// deterministic scenario driven against the configured live model, with every provider roundtrip traced and the
-/// production session-transcript turn files captured as judging evidence.
+/// Live-LLM execution stage of the corrected Vadim interrogation experiment: the representative authored-scene
+/// scenario driven against the configured live model, with the fail-closed opening gate, the ~43s Hearing-path
+/// delivery, every provider roundtrip traced, and the production session-transcript turn files captured as judged
+/// evidence with explicit chronology anchors.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,16 +27,18 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// </para>
 /// <para>
 /// Operational prerequisites for the run: <c>AITest:Host</c>, <c>AITest:Model</c> (for the experiment,
-/// <c>qwen/qwen3.8-27b</c>), and <c>AITest:ApiKey</c> configured in the user override
+/// <c>qwen3.8-27b</c>), and <c>AITest:ApiKey</c> configured in the user override
 /// (<c>~/.local/share/godot/app_userdata/AlleyCat/AlleyCat.yaml</c>), and the whole-fact budget raised
 /// (<c>ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS=600000</c>) because the scenario's declared timeout alone is eight
-/// minutes for up to twelve provider roundtrips.
+/// minutes for up to twelve provider roundtrips, and the scenario waits out the ~43s question-to-delivery gap in
+/// real time.
 /// </para>
 /// <para>
-/// Deterministic assertions cover only the captured evidence's plumbing — the delivery request's shape and the
-/// completed window — never the model's phrasing; acceptance of the behaviour itself belongs to the judged
-/// stage over the retained artefacts (llm-experiment-driven-development: execution, evaluation, and assertion
-/// are separate stages).
+/// Deterministic assertions cover only the captured evidence's plumbing — the precondition decision, the delivery
+/// request's shape, and the completed window — never the model's phrasing; acceptance of the behaviour itself
+/// belongs to the judged stage over the retained artefacts (llm-experiment-driven-development: execution,
+/// evaluation, and assertion are separate stages). A precondition-missing or non-engaging live outcome is a valid
+/// recorded result that fails this fact; it is never retried until it passes.
 /// </para>
 /// </remarks>
 [LiveLlm]
@@ -43,12 +46,14 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 public sealed class VadimInterrogationBaselineLiveIntegrationTests
 {
     /// <summary>
-    /// The baseline scenario runs against the live target model: the scripted player line is delivered through a
-    /// runtime-authored synthetic scene-update exchange, the observation window completes two requests after
-    /// delivery, and the trace plus turn files are retained under the live-traces artefact root for judging.
+    /// The representative scenario runs against the live target model: the opening gate classifies only the
+    /// accepted, settled opening speech, and only an explicit full-name question permits the scripted player
+    /// line's Hearing-path delivery at the baseline's ~43s game time; the observation window completes two
+    /// requests after delivery, and the trace plus turn files are retained under the live-traces artefact root
+    /// for the corrected chronology-anchored judgement.
     /// </summary>
     [Fact]
-    public async Task BaselineScenario_CapturesWindowEvidenceAgainstTheLiveTarget()
+    public async Task RepresentativeScenario_CapturesWindowEvidenceAgainstTheLiveTarget()
     {
         IConfiguration configuration = Game.Instance.GetRequiredService<IConfiguration>();
         string? configuredModel = configuration["AITest:Model"]?.Trim();
@@ -71,7 +76,8 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
             timeoutSeconds = configuration["AITest:Timeout"],
             declaredTargetRequests = VadimInterrogationBaseline.LiveBounds.MaxTargetRequests,
             declaredTimeout = VadimInterrogationBaseline.LiveBounds.Timeout,
-            judgePromptVersion = "vadim-name-engagement-v1",
+            deliveryTargetGameTimeSeconds = VadimInterrogationBaseline.DeliveryTargetGameTimeSeconds,
+            judgePromptVersion = "vadim-name-engagement-v2",
             judgePromptSHA256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
                 VadimNameEngagementEvaluator.Prompt))),
         }, new JsonSerializerOptions { WriteIndented = true }));
@@ -91,9 +97,18 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
         Assert.NotNull(result);
         Assert.True(traceFile.Exists);
 
+        // The declared opening precondition: only an accepted, settled, explicit full-name question permits
+        // delivery. When it is missing, the slot is consumed without the name ever reaching a request, and the
+        // recorded outcome ends here — no judge call, no second opening sample.
+        Assert.True(
+            result.PreconditionSatisfied,
+            $"Recorded outcome: precondition missing ({result.OpeningKind}); the slot is consumed without "
+                + "delivering the name.");
+        Assert.Equal(VadimOpeningKind.FullNameQuestion, result.OpeningKind);
+
         // Deterministic plumbing assertions over the captured evidence only (AI-002 TR-2/3/18): the observation
-        // window completed, the player line became model-visible through the synthetic exchange, and no retired
-        // event-history shape exists anywhere in the delivery request.
+        // window completed, the player line became model-visible through the synthetic exchange before window
+        // response 1, and no retired event-history shape exists anywhere in the delivery request.
         Assert.True(result.WindowCompleted, "The observation window never completed.");
         VadimInterrogationRequest delivery = result.CompletedRequests[result.DeliveryRequestIndex];
         Assert.True(
@@ -113,20 +128,26 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
             SyntheticSceneUpdateExchange.SyntheticCallIDPrefix,
             sceneUpdate.CallId,
             StringComparison.Ordinal);
-        Assert.Contains(
-            VadimInterrogationBaseline.PlayerLineDeliveryPrefix,
-            string.Join(
-                string.Empty,
-                delivery.Messages.SelectMany(static message => message.Contents)
-                    .OfType<FunctionResultContent>()
-                    .Where(content => content.CallId == sceneUpdate.CallId)
-                    .Select(static content => content.Result?.ToString() ?? string.Empty)),
-            StringComparison.Ordinal);
+        string delivered = string.Join(
+            string.Empty,
+            delivery.Messages.SelectMany(static message => message.Contents)
+                .OfType<FunctionResultContent>()
+                .Where(content => content.CallId == sceneUpdate.CallId)
+                .Select(static content => content.Result?.ToString() ?? string.Empty));
+        Assert.Contains(VadimInterrogationBaseline.PlayerLineDeliveryPrefix, delivered, StringComparison.Ordinal);
+        double? deliveredAt = VadimInterrogationScenario.TryReadDeliveredLineGameTimeSeconds(delivery.Messages);
+        Assert.True(
+            deliveredAt is >= 43d and < 60d,
+            $"The delivered line must carry the baseline's ~43s game-time chronology (observed: {deliveredAt}).");
+        Assert.True(
+            result.OpeningSettledGameTimeSeconds < deliveredAt,
+            "The settled opening question must precede the delivered line's game time.");
         string joined = string.Join('\n', delivery.Messages.Select(static message => message.Text));
         Assert.DoesNotContain("<Event History>", joined, StringComparison.Ordinal);
         Assert.DoesNotContain("[new]", joined, StringComparison.Ordinal);
         Assert.NotEmpty(result.TurnFiles);
 
+        // One judge call follows only this eligible complete window, within the whole-fact bound.
         string evidence = VadimNameEngagementEvaluator.BuildEvidence(result);
         File.WriteAllText(Path.Combine(runRoot, "behaviour-evidence.json"), evidence);
         VadimNameEngagementEvaluator evaluator = new(evidence, runRoot);
