@@ -267,11 +267,11 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sectionText = ReadResourceText(sectionFilePath);
         // The shared instruction stays a character-parameterised template rather than fixed prose.
         Assert.Contains("{{ character.FullId }}", sectionText, StringComparison.Ordinal);
-        // Shared context-interpretation guidance (AI-003 TR-12–18): the five mandatory concepts — event-history
-        // interpretation, current-scene interpretation, action selection, watches, and lore discovery/retrieval —
+        // Shared context-interpretation guidance (AI-003 TR-12–18): the five mandatory concepts — scene
+        // delivery, current-scene interpretation, action selection, watches, and lore discovery/retrieval —
         // stay authored as sections, character-neutrally. Exact prose wording is game content and stays tunable, so
         // only section structure and character neutrality are asserted.
-        Assert.Contains("# Event History", sectionText, StringComparison.Ordinal);
+        Assert.Contains("# Scene Delivery", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Current Scene", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Choosing Actions", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Lore", sectionText, StringComparison.Ordinal);

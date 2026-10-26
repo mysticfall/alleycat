@@ -40,11 +40,14 @@ public sealed class EventHistoryIntegrationTests
         Assert.DoesNotContain("Returns only why the wait ended", waitTool.ToolDescription, StringComparison.Ordinal);
 
         // watch_proximity: immediate registration returning an opaque ID plus current evidence, persistent
-        // monitoring without re-arming, and ordinary event-history transitions.
+        // monitoring without re-arming, and transitions delivered through automatic scene updates (AI-010 TR-15).
         Assert.Contains("opaque watch ID", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
         Assert.Contains("not an activation event", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
         Assert.Contains("never re-arm to keep it active", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("ordinary events in your event history", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains(
+            "ordinary remembered events delivered through automatic scene updates",
+            proximityWatchTool.ToolDescription,
+            StringComparison.Ordinal);
 
         // unwatch: removal by the opaque ID returned at arming or listed in current-scene status.
         Assert.Contains("opaque watch ID", unwatchTool.ToolDescription, StringComparison.Ordinal);

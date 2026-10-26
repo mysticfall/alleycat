@@ -24,7 +24,7 @@ public sealed partial class ProximityWatchTool : WatchConditionTool
             + "not an activation event and does not itself mean the character is inside or outside the limit. The "
             + "watch keeps monitoring until you remove it with `unwatch`; never re-arm to keep it active. Its "
             + "evidence is limited by what you currently perceive, and transitions — entering or leaving the "
-            + "distance — reach you as ordinary events in your event history.";
+            + "distance — reach you as ordinary remembered events delivered through automatic scene updates.";
     }
 
     /// <inheritdoc />
