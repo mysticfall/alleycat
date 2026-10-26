@@ -98,7 +98,8 @@ public sealed class LoreReferenceRenderingIntegrationTests
             CapturedFlowRequest afterRetrieval = clientProvider.Requests[1];
             Assert.Equal(opening.Instructions, afterRetrieval.Instructions);
             FunctionResultContent loreResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(afterRetrieval.Messages[^1].Contents.OfType<FunctionResultContent>()));
+                Assert.Single(afterRetrieval.Messages
+                    .SelectMany(static message => message.Contents.OfType<FunctionResultContent>())));
             Assert.Equal("reference-lore-call", loreResult.CallId);
             Assert.Contains("Entry `world:reference_rendering`:", loreResult.Result?.ToString(), StringComparison.Ordinal);
             AssertReferenceRendering(loreResult.Result?.ToString() ?? string.Empty);

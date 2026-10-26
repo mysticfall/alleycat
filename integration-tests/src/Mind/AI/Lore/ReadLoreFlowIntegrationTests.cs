@@ -23,7 +23,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Lore;
 /// Deterministic provider-flow coverage for read-only lore retrieval: a scripted provider request asks
 /// <c>read_lore</c> for exact entry IDs, the next provider request replays the retained exchange with the real
 /// retrieved bodies, and the model's subsequent action consumes that context — with the session-start catalogue in
-/// the static instruction, unchanged speak/wait disposal, whole mixed-batch retention, and no lore observations
+/// the static instruction, retained exchanges end-to-end, whole mixed-batch retention, and no lore observations
 /// (AI-002 UR-11, TR-23/24; AI-003 UR-9, TR-17/18; AI-004 acceptance 34).
 /// </summary>
 [Headless]
@@ -35,8 +35,8 @@ public sealed class ReadLoreFlowIntegrationTests
     /// <summary>
     /// The NPC's <c>read_lore</c> request is retained and reaches the next provider request with its real retrieved
     /// content before the model's subsequent speak action; the catalogue renders in the session-start system
-    /// instruction and never in per-request scene status; retrieval creates no remembered events; and the settled
-    /// speak exchange is disposed while the lore exchange stays model-visible.
+    /// instruction and never in per-request scene status; retrieval creates no remembered events; and both settled
+    /// exchanges stay retained and model-visible.
     /// </summary>
     [Fact]
     public async Task ReadLore_ExchangeIsRetained_ReachesNextRequest_AndInformsTheSubsequentAction()
@@ -115,11 +115,11 @@ public sealed class ReadLoreFlowIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             CapturedFlowRequest afterRetrieval = clientProvider.Requests[1];
             Assert.Equal(
-                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 afterRetrieval.Messages.Select(static message => message.Role));
-            Assert.Equal(AgenticMind.SessionBootstrapInput, afterRetrieval.Messages[2].Text);
+            Assert.Equal(AgenticMind.SessionBootstrapInput, afterRetrieval.Messages[0].Text);
             FunctionResultContent loreResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(afterRetrieval.Messages[4].Contents.OfType<FunctionResultContent>()));
+                Assert.Single(afterRetrieval.Messages[2].Contents.OfType<FunctionResultContent>()));
             Assert.Equal("lore-call-1", loreResult.CallId);
             string loreText = loreResult.Result?.ToString() ?? string.Empty;
             Assert.Contains("Entry `loc:interrogation_room`:", loreText, StringComparison.Ordinal);
@@ -132,8 +132,8 @@ public sealed class ReadLoreFlowIntegrationTests
             // The static instruction — including the catalogue — is compiled once and never rebuilt by the fresh
             // per-request scene status or the retrieval (AI-003 TR-17; AI-004 requirement 46).
             Assert.Equal(opening.Instructions, afterRetrieval.Instructions);
-            Assert.Contains("Current game time", afterRetrieval.Messages[1].Text, StringComparison.Ordinal);
-            Assert.DoesNotContain("Lore Catalogue", afterRetrieval.Messages[1].Text, StringComparison.Ordinal);
+            Assert.Contains("Current game time", afterRetrieval.Messages[^1].Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Lore Catalogue", afterRetrieval.Messages[^1].Text, StringComparison.Ordinal);
 
             // The subsequent action commits exactly one speech observation; lore retrieval created none.
             await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest().Count == 1);
@@ -141,20 +141,20 @@ public sealed class ReadLoreFlowIntegrationTests
             Assert.Equal(owner.FullId, committed.ActorId);
             Assert.Equal(["You will find nothing down there but old questions."], ownerVoice.Submissions);
 
-            // The settled speak exchange is disposed while the retained lore exchange keeps reaching the model
-            // (AI-002 TR-20/22).
+            // Both settled exchanges stay retained: the lore result and the spoken result replay in chronological
+            // order between the bootstrap input and the fresh scene-status suffix (AI-002 TR-17/20).
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 3);
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
             CapturedFlowRequest afterAction = clientProvider.Requests[^1];
             Assert.Equal(
-                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 afterAction.Messages.Select(static message => message.Role));
-            Assert.DoesNotContain(
-                afterAction.Messages.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
-                result => result.CallId == "speak-call-1");
             Assert.Contains(
                 afterAction.Messages.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
                 result => result.CallId == "lore-call-1");
+            Assert.Contains(
+                afterAction.Messages.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
+                result => result.CallId == "speak-call-1");
             _ = Assert.Single(mind.GetTimelineForTest());
         }
         finally
@@ -167,8 +167,8 @@ public sealed class ReadLoreFlowIntegrationTests
     }
 
     /// <summary>
-    /// A batch mixing the disposal-opted wait with read_lore is retained whole: both assistant calls and both tool
-    /// results replay in the next request (AI-002 TR-20).
+    /// A batch mixing wait with read_lore is retained whole: both assistant calls and both tool
+    /// results replay in the next request (AI-002 TR-17/20).
     /// </summary>
     [Fact]
     public async Task MixedBatch_WithWaitAndReadLore_IsRetainedWhole()
@@ -224,10 +224,10 @@ public sealed class ReadLoreFlowIntegrationTests
 
             CapturedFlowRequest replacement = clientProvider.Requests[^1];
             Assert.Equal(
-                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Messages.Select(static message => message.Role));
             IReadOnlyList<FunctionResultContent> results =
-                [.. replacement.Messages[4].Contents.OfType<FunctionResultContent>()];
+                [.. replacement.Messages[2].Contents.OfType<FunctionResultContent>()];
             Assert.Equal(["wait-call-1", "lore-call-2"], results.Select(static result => result.CallId));
             Assert.Contains("Wait ended:", results[0].Result?.ToString(), StringComparison.Ordinal);
             Assert.Contains(
