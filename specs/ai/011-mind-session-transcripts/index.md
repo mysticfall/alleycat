@@ -34,10 +34,11 @@ transcripts or capturing provider-wire payloads.
    file — including anomalous cycles: transport retries, malformed-response recovery, and requests discarded by
    fresh-turn invalidation — with each anomaly visibly annotated and no cycle silently omitted.
 3. Self-Contained Readable Files: Each file can be read on its own: a metadata header; the full instructions rendered
-   with a proper Markdown heading hierarchy; the full role-labelled request transcript including the per-request
-   timeline and scene-status prefix messages, with pseudo-XML sections rendered as headings and line structure kept
-   visible; the response contents with reasoning content marked distinctly; and one block per tool invocation with
-   pretty-printed JSON arguments and the result.
+   with a proper Markdown heading hierarchy; the full role-labelled request transcript — bootstrap input, retained
+   accepted exchanges including runtime-authored synthetic scene-update exchanges visibly marked as runtime-authored,
+   and the final current-scene message — with pseudo-XML sections rendered as headings and line structure kept
+   visible; records of text content stripped from a retained exchange; the response contents with reasoning content
+   marked distinctly; and one block per tool invocation with pretty-printed JSON arguments and the result.
 4. Stable Discoverable Layout: Files live under
    `user://logs/mind/<game-run-start-timestamp>/<character-id>/turn-NNNN.md` with a sortable run timestamp and
    per-character turn numbers that continue monotonically when the same character's mind node is re-created within
@@ -92,19 +93,20 @@ transcripts or capturing provider-wire payloads.
    disabled, `AgenticMind` injects a null-object sink whose calls do nothing, perform no file input or output, and
    leave runner behaviour unchanged.
 6. A transport-level `IChatClient` decorator cannot capture a full cycle: it never sees validation verdicts, tool
-   invocations or their results, exchange disposal (AI-002 TR-17–TR-22), or invalidation arbitration, and it cannot
+   invocations or their results, exchange retention (AI-002 TR-17–TR-22), or invalidation arbitration, and it cannot
    group retries and recovery into one cycle record. The recorder must therefore observe the request-cycle loop
-   directly and capture, per cycle: the materialised request context and its frozen request transcript — prefix
-   timeline and scene-status messages, bootstrap input, and retained accepted exchanges — together with the request
-   options; the response contents (text, reasoning content, and function calls) plus model and token usage when the
-   provider supplies them; the validation outcome; transport retry attempts; invalid-response recovery events with
-   their budget state; stale or discarded outcomes from fresh-turn invalidation (AI-002 TR-4/TR-5); the exchange
-   disposal decision (AI-002 TR-17); per-tool invocations with the tool name, arguments, and delivered result
-   including canonical cancellation results; and wall-clock latency measured across the cycle so retries stay
-   attributable. Every cycle that reaches provider interaction produces its file once the cycle's outcome resolves.
+   directly and capture, per cycle: the materialised request context and its frozen request transcript — bootstrap
+   input, retained accepted exchanges including synthetic scene-update exchanges marked runtime-authored, and the
+   final current-scene message — together with the request options; the response contents (text, reasoning content,
+   and function calls) plus model and token usage when the provider supplies them; the validation outcome; transport
+   retry attempts; invalid-response recovery events with their budget state; stale or discarded outcomes from
+   fresh-turn invalidation (AI-002 TR-4/TR-5); records of text content stripped from a retained exchange
+   (AI-002 TR-12); per-tool invocations with the tool name, arguments, and delivered result including canonical
+   cancellation results; and wall-clock latency measured across the cycle so retries stay attributable. Every cycle
+   that reaches provider interaction produces its file once the cycle's outcome resolves.
 7. Recording is fully contained: a recorder failure is logged as a warning and never propagates into the session
-   loop, and recording never adds transcript entries nor changes validation, acceptance, disposal, watermark,
-   scheduling, or cancellation semantics (AI-002 TR-4/TR-5, TR-17–TR-22).
+   loop, and recording never adds transcript entries nor changes validation, acceptance, retention,
+   delivered-watermark, scheduling, or cancellation semantics (AI-002 TR-4/TR-5, TR-17–TR-22).
 
 ### Markdown Rendering
 
@@ -123,10 +125,11 @@ transcripts or capturing provider-wire payloads.
 10. The formatter demotes any Markdown headings inside section content so the document hierarchy survives nesting:
     no section's internal headings may collide with, or outrank, the section heading itself.
 11. Each file contains, in order: the metadata header (turn number, character Id, wall-clock time, model, latency,
-    token usage when available); the rendered instructions; the full role-labelled request transcript including the
-    per-request timeline and scene-status prefix messages; the response contents — text, distinctly marked reasoning
-    content when present, and function calls — with any anomaly annotations; and one block per tool invocation
-    showing the tool name, pretty-printed JSON arguments (encoded per TR-24), and the result.
+    token usage when available); the rendered instructions; the full role-labelled request transcript — bootstrap
+    input, retained accepted exchanges with runtime-authored synthetic scene-update exchanges marked as such, and
+    the final current-scene message — plus any stripped-text records; the response contents — text, distinctly marked
+    reasoning content when present, and function calls — with any anomaly annotations; and one block per tool
+    invocation showing the tool name, pretty-printed JSON arguments (encoded per TR-24), and the result.
 
 ### Test Seams And Validation
 
@@ -273,12 +276,12 @@ transcripts or capturing provider-wire payloads.
    fails closed through `LoadOrDefault` without game configuration, independently of `EnableRequestResponseLogging`.
 2. Tests verify the formatter accepts lax section names (spaces, tabs, mixed case, and sanitised characters), demotes
    internal Markdown headings below their section heading, renders pseudo-XML sections inside message bodies as
-   headings with no raw tags — including the timeline message's `Event History` section — keeps single-newline line
+   headings with no raw tags — including the current-scene message's sections — keeps single-newline line
    structure visible through hard line breaks while leaving fenced code blocks unmodified, renders role-labelled
-   messages including the prefix timeline and
-   scene-status messages, marks reasoning content distinctly — including parsed reasoning text that combines summary
-   and content portions, rendered in order with its textual separation preserved — and renders tool blocks with
-   pretty-printed JSON arguments and results (TR-8–TR-11, TR-24).
+   messages including the bootstrap input, retained exchanges with runtime-authored-marked synthetic scene updates,
+   and the final current-scene message, marks reasoning content distinctly — including parsed reasoning text that
+   combines summary and content portions, rendered in order with its textual separation preserved — and renders tool
+   blocks with pretty-printed JSON arguments and results (TR-8–TR-11, TR-24).
 3. Tests verify the disabled path injects a null-object sink, performs no file input or output, and leaves existing
    runner behaviour unchanged (TR-5).
 4. Tests verify path and counter naming: `turn-` numbers zero-padded to at least four digits, one lazily created run
@@ -286,8 +289,9 @@ transcripts or capturing provider-wire payloads.
    the reset seam restoring a known initial state between tests, and the character folder named by the exact
    validated local `Id`, including a non-ASCII ID (TR-2–TR-4, TR-12, TR-13).
 5. Integration tests with the scripted-client fixtures verify one file per request cycle; annotations for transport
-   retry, invalid-response recovery, fresh-turn invalidation discards, and exchange disposal; capture of the prefix
-   timeline and scene-status messages; and that an injected write failure is contained while the session continues
+   retry, invalid-response recovery, fresh-turn invalidation discards, and stripped-text records; capture of the
+   bootstrap input, retained exchanges including runtime-authored-marked synthetic scene updates, and the final
+   current-scene message; and that an injected write failure is contained while the session continues
    (TR-6, TR-7, TR-14).
 6. Tests verify both test seams are internal-only: no public API and no game-configuration switch redirects the
    recorder root or resets counters (TR-12).
@@ -311,8 +315,8 @@ transcripts or capturing provider-wire payloads.
 ## References
 
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md) — request-cycle loop, fresh-turn invalidation
-  (TR-4/TR-5), tool-exchange disposal (TR-17–TR-22), and provider-boundary returned-reasoning-content normalisation
-  (TR-32–TR-33)
+  (TR-4/TR-5), exchange retention and runtime-authored scene delivery (TR-17–TR-22), tolerated-text stripping
+  (TR-12), and provider-boundary returned-reasoning-content normalisation (TR-32–TR-33)
 - [AI-003: Prompt API](../003-prompt-api/index.md) — static instruction and per-request scene status whose rendered
   content the recorder captures
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md) — validated character local `Id`

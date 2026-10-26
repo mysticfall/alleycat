@@ -538,7 +538,6 @@ public sealed class ReasoningSummaryTranscriptTests : IDisposable
             Instructions,
             [new ChatMessage(ChatRole.User, AgenticMind.SessionBootstrapInput)],
             [AIFunctionFactory.Create((string speech) => "Spoken.", "speak")],
-            allowMultipleToolCalls: false,
             NullLogger.Instance,
             transcriptSink: recorder);
         await runner.RunAsync(sessionCancellation.Token);

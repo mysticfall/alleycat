@@ -28,14 +28,140 @@ public sealed class AgentSessionRunnerTests
     private static readonly IInvalidResponseRecoveryPolicy _immediateInvalidResponseRecoveryPolicy =
         new InvalidResponseRecoveryPolicy(InvalidResponseRecoveryPolicy.DefaultConsecutiveFailureBudget, [TimeSpan.Zero]);
 
-    /// <summary>Canonical request context precedes bootstrap input and accepted transcript replay.</summary>
-    /// <summary>Fresh batch cancellation preserves the canonical result protocol and accepted context.</summary>
+    /// <summary>
+    /// Every request orders the retained transcript — bootstrap first, accepted exchanges in chronological
+    /// order — and renders the materialisation's fresh scene-status suffix last (AI-002 TR-2).
+    /// </summary>
     [Fact]
-    public async Task RunAsync_OrdersCanonicalPrefixBeforeBootstrapAndAcceptedTranscript()
+    public async Task RunAsync_OrdersBootstrapAndAcceptedTranscriptBeforeTheSceneStatusSuffix()
     {
         using CancellationTokenSource lifetime = new();
         var context = new RecordingContextSource();
         ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            Respond(CreateCall("speak-replay", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Again" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        // First request: the retained bootstrap followed by the fresh scene-status suffix (AI-002 TR-2).
+        Assert.Equal(["Bootstrap", "scene:0"], client.Requests[0].Select(Text));
+        // Later request: both accepted exchanges replay in chronological order between the bootstrap and the
+        // fresh current-scene suffix, which still renders last (AI-002 TR-2, TR-17).
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            client.Requests[2].Select(static message => message.Role));
+        Assert.Equal("scene:2", Text(client.Requests[2][^1]));
+        Assert.Empty(context.RetainedDelivery);
+        Assert.Equal([0, 1], context.Confirmed);
+        Assert.Equal([2], context.Discarded);
+    }
+
+    /// <summary>
+    /// Delivery marking is irrevocable (AI-002 TR-19): a materialisation whose request was invalidated mid-generation
+    /// keeps its synthetic exchange retained and its delivery marked, and the replacement materialisation delivers
+    /// only its own fresh exchange instead of redelivering the first one.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_InvalidatedRequest_KeepsItsDeliveryMarkedAndTheReplacementDeliversOnlyNewObservations()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new RecordingContextSource { DeliverSyntheticExchange = true };
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        runner.InvalidateForFreshTurn();
+        await cancelled.Task;
+        await runTask;
+
+        Assert.Equal(2, context.MaterialisationCount);
+        // The invalidated request's synthetic delivery stayed delivered, and the replacement delivered its own.
+        Assert.True(context.RetainedDelivery.SequenceEqual([0, 1]));
+        Assert.Equal([0, 1], context.Discarded);
+        // The replacement request carries both retained synthetic exchanges and never repeats the first one's text.
+        IReadOnlyList<ChatMessage> replacement = client.Requests[1];
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            replacement.Select(static message => message.Role));
+        FunctionResultContent firstDelivery = Assert.IsType<FunctionResultContent>(
+            Assert.Single(replacement[2].Contents));
+        FunctionResultContent secondDelivery = Assert.IsType<FunctionResultContent>(
+            Assert.Single(replacement[4].Contents));
+        Assert.Equal("delivered:0", firstDelivery.Result?.ToString());
+        Assert.Equal("delivered:1", secondDelivery.Result?.ToString());
+    }
+
+    /// <summary>
+    /// Text content alongside valid tool calls is tolerated: the response stays valid, the text is stripped from
+    /// the retained exchange, and the stripped text is recorded in the transcript sink as a stripped-text record
+    /// (AI-002 TR-12, AI-011 TR-11).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithTextAlongsideCalls_StaysValidStripsTheTextAndRecordsIt()
+    {
+        using CancellationTokenSource lifetime = new();
+        RecordingTranscriptSink sink = new();
+        ChatMessage textAndCall = new(
+            ChatRole.Assistant,
+            [
+                new TextContent("Some preamble the model emitted"),
+                ValidSpeakCall("speak-call", "Hello"),
+                new TextReasoningContent("some reasoning"),
+            ]);
+        ScriptedSessionClient client = new(
+            Respond(textAndCall),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        // The cycle was accepted — text alongside calls keeps the response valid (AI-002 TR-12).
+        MindSessionCycleTranscript accepted = Assert.Single(sink.Records, static cycle =>
+            cycle.Outcome == MindTranscriptCycleOutcome.Accepted);
+        Assert.Equal(["Some preamble the model emitted"], accepted.StrippedTexts);
+
+        // The retained exchange carries the call and reasoning but no text; the original response still shows it.
+        List<ChatMessage> replay = [.. client.Requests[1].Take(client.Requests[1].Count - 1)];
+        ChatMessage retained = Assert.Single(replay, static message => message.Role == ChatRole.Assistant);
+        Assert.DoesNotContain(retained.Contents, static content => content is TextContent);
+        Assert.Contains(retained.Contents, static content => content is TextReasoningContent);
+        FunctionCallContent retainedCall = Assert.IsType<FunctionCallContent>(
+            Assert.Single(retained.Contents.OfType<FunctionCallContent>()));
+        Assert.Equal("speak-call", retainedCall.CallId);
+        Assert.NotNull(accepted.Response);
+        Assert.Contains(accepted.Response.Messages, static message => message.Text == "Some preamble the model emitted");
+    }
+
+    /// <summary>
+    /// A response whose only content is text carries no tool call and is invalid: tolerance applies only alongside
+    /// calls (AI-002 TR-12).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithTextOnlyResponse_RejectsItThroughBoundedRecovery()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            Respond(new ChatResponse(new ChatMessage(ChatRole.Assistant, "only text"))),
             Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
             EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(
@@ -46,13 +172,8 @@ public sealed class AgentSessionRunnerTests
 
         await runner.RunAsync(lifetime.Token);
 
-        Assert.Equal(["timeline:0", "scene:0", "Bootstrap"], client.Requests[0].Select(Text));
-        Assert.Equal(
-            [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
-            client.Requests[1].Select(static message => message.Role));
-        Assert.Equal(["timeline:1", "scene:1", "Bootstrap", null, null], client.Requests[1].Select(Text));
-        Assert.Equal([0], context.Confirmed);
-        Assert.Equal([1], context.Discarded);
+        Assert.Equal([1], context.Confirmed);
+        Assert.Equal([0, 2], context.Discarded);
     }
 
     /// <summary>Transport retries reuse one immutable logical-request context materialisation.</summary>
@@ -400,7 +521,7 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal(3, context.MaterialisationCount);
         Assert.Equal([0, 2], context.Discarded);
         Assert.Equal([1], context.Confirmed);
-        Assert.Equal("timeline:1", Text(client.Requests[1][0]));
+        Assert.Equal("scene:1", Text(client.Requests[1][^1]));
     }
 
     /// <summary>Fresh replacement discards stale context without fabricating observation text.</summary>
@@ -429,7 +550,7 @@ public sealed class AgentSessionRunnerTests
 
         Assert.Equal([0, 2], context.Discarded);
         Assert.Equal([1], context.Confirmed);
-        Assert.Equal(["timeline:1", "scene:1", "Bootstrap"], client.Requests[1].Take(3).Select(Text));
+        Assert.Equal(["Bootstrap", "scene:1"], client.Requests[1].Select(Text));
     }
 
     /// <summary>Stale provider output has no tool or request-context acceptance effect.</summary>
@@ -518,7 +639,6 @@ public sealed class AgentSessionRunnerTests
             client,
             [first, second],
             [],
-            allowMultipleToolCalls: true,
             requestContextSource: context);
 
         Task runTask = runner.RunAsync(lifetime.Token);
@@ -527,7 +647,7 @@ public sealed class AgentSessionRunnerTests
         await runTask;
 
         Assert.False(secondCalled);
-        ChatMessage replay = client.Requests[1][^1];
+        ChatMessage replay = client.Requests[1][^2];
         Assert.Equal(ChatRole.Tool, replay.Role);
         Assert.All(replay.Contents.OfType<FunctionResultContent>(), result =>
             Assert.Equal("The action was cancelled before it completed.", result.Result?.ToString()));
@@ -588,7 +708,8 @@ public sealed class AgentSessionRunnerTests
             Assert.Equal(Instructions, options.Instructions);
             RequiredChatToolMode toolMode = Assert.IsType<RequiredChatToolMode>(options.ToolMode);
             Assert.Null(toolMode.RequiredFunctionName);
-            Assert.False(options.AllowMultipleToolCalls);
+            // Responses may always carry multiple tool calls (AI-002 TR-12).
+            Assert.True(options.AllowMultipleToolCalls);
             Assert.Null(options.ResponseFormat);
             // No synthetic end-turn route exists in the session inventory (AI-002 TR-13).
             Assert.Equal(
@@ -607,11 +728,12 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Consecutive disposal-opted speak and wait batches never accumulate: every later request replays only the
-    /// request-context prefix and the bootstrap input, which disposal never removes (AI-002 TR-17/21).
+    /// A long session with many completed speak and wait batches keeps every accepted exchange visible in every
+    /// later request as the NPC's own action record — the whole exchange, with no partial removal (AI-002 TR-17,
+    /// TR-20).
     /// </summary>
     [Fact]
-    public async Task RunAsync_WithDisposalOptedBatches_NeverAccumulatesAndPreservesBootstrapInput()
+    public async Task RunAsync_EveryAcceptedExchangeIsRetainedInLaterRequests()
     {
         const string waitToolName = "wait";
         using CancellationTokenSource lifetime = new();
@@ -626,8 +748,8 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [
-                CreateSpeakFunction(speech.Add, disposeExchange: true),
-                CreateInstantFunction(waitToolName, disposeExchange: true),
+                CreateSpeakFunction(speech.Add),
+                CreateInstantFunction(waitToolName),
             ],
             [new ChatMessage(ChatRole.User, "Bootstrap")]);
 
@@ -635,20 +757,33 @@ public sealed class AgentSessionRunnerTests
 
         Assert.Equal(["One", "Two", "Three"], speech);
         Assert.Equal(6, client.Requests.Count);
-        for (int index = 1; index < client.Requests.Count; index++)
-        {
-            // Every settled exchange was disposed whole: no assistant call, no tool result, and the bootstrap input
-            // stays the only transcript tail (AI-002 TR-21/22).
-            ChatMessage bootstrap = Assert.Single(client.Requests[index]);
-            Assert.Equal(ChatRole.User, bootstrap.Role);
-            Assert.Equal("Bootstrap", Text(bootstrap));
-        }
+        // The final request replays the bootstrap plus all five settled exchanges — three speak and two wait — as
+        // assistant/tool pairs in acceptance order, followed only by the fresh suffix (AI-002 TR-17).
+        IReadOnlyList<ChatMessage> finalRequest = client.Requests[^1];
+        Assert.Equal(
+            [
+                ChatRole.User, ChatRole.Assistant, ChatRole.Tool,
+                ChatRole.Assistant, ChatRole.Tool,
+                ChatRole.Assistant, ChatRole.Tool,
+                ChatRole.Assistant, ChatRole.Tool,
+                ChatRole.Assistant, ChatRole.Tool,
+            ],
+            finalRequest.Select(static message => message.Role));
+        Assert.Equal("Bootstrap", Text(finalRequest[0]));
+        string[] retainedCallIds =
+        [
+            .. finalRequest
+                .Where(static message => message.Role == ChatRole.Assistant)
+                .SelectMany(static message => message.Contents)
+                .OfType<FunctionCallContent>()
+                .Select(static call => call.CallId),
+        ];
+        Assert.Equal(["speak-1", "wait-1", "speak-2", "wait-2", "speak-3"], retainedCallIds);
     }
 
     /// <summary>
-    /// A batch mixing a disposal-opted call with a non-opted call is retained whole: the assistant batch and every
-    /// tool result — including the opted sibling's — stay in the next request, with no partial removal and no
-    /// orphaned call or result (AI-002 TR-19/20).
+    /// A batch mixing a speak call with a watch call is retained whole: the assistant batch and every tool result
+    /// stay in the next request, with no partial removal and no orphaned call or result (AI-002 TR-17/20).
     /// </summary>
     [Fact]
     public async Task RunAsync_WithMixedOptedAndRetainedBatch_RetainsTheWholeExchange()
@@ -656,6 +791,7 @@ public sealed class AgentSessionRunnerTests
         const string watchToolName = "watch_like";
         using CancellationTokenSource lifetime = new();
         List<string> speech = [];
+        var context = new RecordingContextSource();
         ChatMessage mixedBatch = new(
             ChatRole.Assistant,
             [
@@ -668,11 +804,10 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [
-                CreateSpeakFunction(speech.Add, disposeExchange: true),
-                CreateInstantFunction(watchToolName, disposeExchange: false),
+                CreateSpeakFunction(speech.Add),
+                CreateInstantFunction(watchToolName),
             ],
-            [new ChatMessage(ChatRole.User, "Bootstrap")],
-            allowMultipleToolCalls: true);
+            [new ChatMessage(ChatRole.User, "Bootstrap")]);
 
         await runner.RunAsync(lifetime.Token);
 
@@ -689,11 +824,11 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Session-wide call-ID validation is independent of transcript retention: a call ID consumed by a disposed
-    /// exchange is still rejected as a duplicate, with the invalid replay leaving no tool effect (AI-002 TR-21).
+    /// Session-wide call-ID validation spans real and synthetic exchanges: a call ID consumed by a retained
+    /// exchange is rejected as a duplicate, with the invalid replay leaving no tool effect (AI-002 TR-18/21).
     /// </summary>
     [Fact]
-    public async Task RunAsync_WithCallIDReplayedFromDisposedBatch_RejectsItAsDuplicate()
+    public async Task RunAsync_WithCallIDReplayedFromRetainedExchange_RejectsItAsDuplicate()
     {
         using CancellationTokenSource lifetime = new();
         List<string> speech = [];
@@ -705,7 +840,7 @@ public sealed class AgentSessionRunnerTests
         var context = new RecordingContextSource();
         AgentSessionRunner runner = CreateRunner(
             client,
-            [CreateSpeakFunction(speech.Add, disposeExchange: true)],
+            [CreateSpeakFunction(speech.Add)],
             [new ChatMessage(ChatRole.User, "Bootstrap")],
             requestContextSource: context);
 
@@ -716,18 +851,24 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal(4, client.Requests.Count);
         Assert.Equal([0, 2], context.Confirmed);
         Assert.Equal([1, 3], context.Discarded);
-        // The disposed first exchange and the rejected replay leave the later requests protocol-clean.
+        // Every accepted exchange stays retained: the final request replays the bootstrap, both accepted speak
+        // exchanges, the first materialisation's synthetic delivery, and the fresh suffix (AI-002 TR-17).
         Assert.Equal(
-            [ChatRole.User, ChatRole.User, ChatRole.User],
+            [
+                ChatRole.User,
+                ChatRole.Assistant, ChatRole.Tool,
+                ChatRole.Assistant, ChatRole.Tool,
+                ChatRole.User,
+            ],
             client.Requests[3].Select(static message => message.Role));
     }
 
     /// <summary>
-    /// Exact transport retries keep reusing the frozen request byte-identically even when the eventual response's
-    /// batch is disposal-opted: disposal happens only after the exchange settles (AI-002 TR-18).
+    /// Exact transport retries keep reusing the frozen request byte-identically, and the settled exchange is
+    /// retained afterwards (AI-002 TR-4, TR-17).
     /// </summary>
     [Fact]
-    public async Task RunAsync_WithDisposalOptedTool_TransportRetryReusesFrozenRequestAndDisposesAfterSettlement()
+    public async Task RunAsync_WithSettledTool_TransportRetryReusesFrozenRequestAndRetainsTheExchange()
     {
         using CancellationTokenSource lifetime = new();
         var context = new RecordingContextSource();
@@ -737,7 +878,7 @@ public sealed class AgentSessionRunnerTests
             EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(
             client,
-            [CreateSpeakFunction(_ => { }, disposeExchange: true)],
+            [CreateSpeakFunction(_ => { })],
             [new ChatMessage(ChatRole.User, "Bootstrap")],
             retryDelays: [TimeSpan.Zero],
             requestContextSource: context);
@@ -748,24 +889,24 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal(client.Requests[0].Select(Text), client.Requests[1].Select(Text));
         Assert.Equal([0], context.Confirmed);
         Assert.Equal([1], context.Discarded);
-        // After the retried response's exchange settled, it was disposed from the next request.
+        // After the retried response's exchange settled, it stays retained in the next request.
         Assert.Equal(3, client.Requests.Count);
         Assert.Equal(
-            [ChatRole.User, ChatRole.User, ChatRole.User],
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
             client.Requests[2].Select(static message => message.Role));
     }
 
     /// <summary>
-    /// A fresh-turn invalidation during an opted tool call still skips the batch canonically, and the disposed stale
-    /// exchange leaves no protocol trace — no assistant call, no canonical cancellation result — in the replacement
-    /// request (AI-002 TR-17/22).
+    /// A fresh-turn invalidation during a tool call skips the batch canonically, and the stale exchange stays
+    /// retained in the replacement request with its assistant call and canonical cancellation results (AI-002
+    /// TR-17/TR-20).
     /// </summary>
     [Fact]
-    public async Task InvalidateForFreshTurn_DuringDisposalOptedToolCall_LeavesNoProtocolTraceInTheReplacement()
+    public async Task InvalidateForFreshTurn_DuringToolCall_RetainsTheSkippedExchangeInTheReplacement()
     {
         using CancellationTokenSource lifetime = new();
         TaskCompletionSource toolStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        AIFunction holding = BindExchangeDisposal(
+        AIFunction holding = AgentSessionPhasePolicy.AdmissionArbitration.Bind(
             AIFunctionFactory.Create(
                 async (string speech, CancellationToken cancellationToken) =>
                 {
@@ -774,8 +915,7 @@ public sealed class AgentSessionRunnerTests
                     return "unreachable";
                 },
                 SpeakToolName,
-                "Speak aloud."),
-            disposeExchange: true);
+                "Speak aloud."));
         ScriptedSessionClient client = new(
             Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Stale" })),
             EndQuietly(lifetime));
@@ -787,20 +927,19 @@ public sealed class AgentSessionRunnerTests
         await runTask;
 
         Assert.Equal(2, client.Requests.Count);
-        // The replacement request carries no protocol trace of the disposed stale exchange — not even the canonical
-        // cancellation results composed for its skipped call.
-        Assert.Empty(client.Requests[1]);
+        // The replacement request retains the stale exchange whole: the assistant call plus the canonical
+        // cancellation result composed for its skipped call (AI-002 TR-17).
+        Assert.Equal(
+            [ChatRole.Assistant, ChatRole.Tool],
+            client.Requests[1].Select(static message => message.Role));
     }
 
     /// <summary>
-    /// A valid multi-call batch executes serially in provider order regardless of the provider preference, which
-    /// must never make a valid batch fail local validation (AI-002 TR-13).
+    /// A valid multi-call batch executes serially in provider order (AI-002 TR-12), and the request always allows
+    /// multiple tool calls.
     /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RunAsync_WithMultiCallBatch_ExecutesAllConfiguredActionsInOrder(
-        bool allowMultipleToolCalls)
+    [Fact]
+    public async Task RunAsync_WithMultiCallBatch_ExecutesAllConfiguredActionsInOrder()
     {
         List<string> actions = [];
         AIFunction first = AIFunctionFactory.Create(() => actions.Add("first"), "first_action");
@@ -823,13 +962,12 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [first, second],
-            [],
-            allowMultipleToolCalls: allowMultipleToolCalls);
+            []);
 
         await runner.RunAsync(lifetime.Token);
 
         Assert.Equal(["first", "second:2"], actions);
-        Assert.All(client.Options, options => Assert.Equal(allowMultipleToolCalls, options.AllowMultipleToolCalls));
+        Assert.All(client.Options, options => Assert.True(options.AllowMultipleToolCalls));
         Assert.Equal(2, client.Requests.Count);
     }
 
@@ -963,8 +1101,8 @@ public sealed class AgentSessionRunnerTests
         Assert.Contains("exhausted its invalid response recovery budget", error.Message, StringComparison.Ordinal);
         Assert.Contains("3 consecutive invalid response shapes", error.Message, StringComparison.Ordinal);
         Assert.Contains(
-            "Final rejection: The agent session rejected the response at request 3 because message 1 carried text "
-            + "content instead of a function call.",
+            "Final rejection: The agent session rejected the response at request 3 because the response carried no "
+            + "function calls.",
             error.Message,
             StringComparison.Ordinal);
         MindSessionCycleTranscript exhausted = sink.Records[^1];
@@ -1489,8 +1627,7 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [controlled.Function, second],
-            [new ChatMessage(ChatRole.User, "Run input.")],
-            allowMultipleToolCalls: true);
+            [new ChatMessage(ChatRole.User, "Run input.")]);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await controlled.Started.Task;
@@ -1543,8 +1680,7 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [first, second],
-            [new ChatMessage(ChatRole.User, "Run input.")],
-            allowMultipleToolCalls: true);
+            [new ChatMessage(ChatRole.User, "Run input.")]);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await firstStarted.Task;
@@ -1588,8 +1724,7 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [committing.Function, second],
-            [new ChatMessage(ChatRole.User, "Run input.")],
-            allowMultipleToolCalls: true);
+            [new ChatMessage(ChatRole.User, "Run input.")]);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await committing.Started.Task;
@@ -1642,8 +1777,7 @@ public sealed class AgentSessionRunnerTests
         runner = CreateRunner(
             client,
             [racing, second],
-            [new ChatMessage(ChatRole.User, "Run input.")],
-            allowMultipleToolCalls: true);
+            [new ChatMessage(ChatRole.User, "Run input.")]);
 
         await runner.RunAsync(lifetime.Token);
 
@@ -1684,8 +1818,7 @@ public sealed class AgentSessionRunnerTests
         AgentSessionRunner runner = CreateRunner(
             client,
             [waitLike.Function, second],
-            [new ChatMessage(ChatRole.User, "Run input.")],
-            allowMultipleToolCalls: true);
+            [new ChatMessage(ChatRole.User, "Run input.")]);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await waitLike.Started.Task;
@@ -2605,19 +2738,13 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Gets representative malformed, text-bearing, mixed, duplicate-identifier, unknown-tool, and
-    /// schema-invalid responses.
+    /// Gets representative malformed, call-free, duplicate-identifier, unknown-tool, and schema-invalid responses.
+    /// Text content alongside a valid call is tolerated (AI-002 TR-12) and therefore not listed here.
     /// </summary>
     public static TheoryData<ChatResponse> InvalidResponses =>
     [
         new ChatResponse(),
         new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")),
-        new ChatResponse(new ChatMessage(
-            ChatRole.Assistant,
-            [
-                ValidSpeakCall("valid-call", "Must not run"),
-                new TextContent("mixed text"),
-            ])),
         new ChatResponse(new ChatMessage(
             ChatRole.Assistant,
             [
@@ -2662,7 +2789,7 @@ public sealed class AgentSessionRunnerTests
         },
         {
             new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")),
-            "message 1 carried text content instead of a function call"
+            "the response carried no function calls"
         },
         {
             new ChatResponse(new ChatMessage(ChatRole.User, [ValidSpeakCall("role-call", "Must not run")])),
@@ -2804,29 +2931,21 @@ public sealed class AgentSessionRunnerTests
     private static SpeechContinuationKey Continuation(string source, string turn, long revision)
         => new(source, turn, checked((int)revision));
 
-    private static AIFunction CreateSpeakFunction(Action<string> action, bool disposeExchange = false)
+    private static AIFunction CreateSpeakFunction(Action<string> action)
         // Composition registers the speak function's admission-arbitration policy, mirroring the AgenticMind wiring
-        // so the name alone never decides phase registration. Disposal opting is likewise a composition-registered
-        // policy rather than a name property.
-        => BindExchangeDisposal(
-            AgentSessionPhasePolicy.AdmissionArbitration.Bind(
-                AIFunctionFactory.Create(
-                    (string speech) =>
-                    {
-                        action(speech);
-                        return "Spoken.";
-                    },
-                    SpeakToolName,
-                    "Speak aloud.")),
-            disposeExchange);
+        // so the name alone never decides phase registration.
+        => AgentSessionPhasePolicy.AdmissionArbitration.Bind(
+            AIFunctionFactory.Create(
+                (string speech) =>
+                {
+                    action(speech);
+                    return "Spoken.";
+                },
+                SpeakToolName,
+                "Speak aloud."));
 
-    private static AIFunction CreateInstantFunction(string name, bool disposeExchange = false)
-        => BindExchangeDisposal(
-            AIFunctionFactory.Create(() => $"{name} result.", name, $"{name} description."),
-            disposeExchange);
-
-    private static AIFunction BindExchangeDisposal(AIFunction function, bool disposeExchange)
-        => disposeExchange ? ToolExchangeDisposalPolicy.Dispose.Bind(function) : function;
+    private static AIFunction CreateInstantFunction(string name)
+        => AIFunctionFactory.Create(() => $"{name} result.", name, $"{name} description.");
 
     private static string ThrowingSpeak(string speech)
         => throw new InvalidOperationException($"Sensitive tool detail: {speech}");
@@ -2909,7 +3028,6 @@ public sealed class AgentSessionRunnerTests
         ScriptedSessionClient client,
         IList<AITool> tools,
         IReadOnlyList<ChatMessage> runInputMessages,
-        bool allowMultipleToolCalls = false,
         ILogger? logger = null,
         bool enableReasoningLogging = true,
         IReadOnlyList<TimeSpan>? retryDelays = null,
@@ -2921,7 +3039,6 @@ public sealed class AgentSessionRunnerTests
             Instructions,
             runInputMessages,
             tools,
-            allowMultipleToolCalls,
             logger ?? NullLogger.Instance,
             enableReasoningLogging,
             retryDelays,
@@ -3367,7 +3484,11 @@ public sealed class AgentSessionRunnerTests
         public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
         {
             lifetime.Cancel();
-            return ValueTask.FromResult(new AgentRequestContext([], confirmation: null));
+            return ValueTask.FromResult(new AgentRequestContext([], [], confirmation: null));
+        }
+
+        public void Retain(object? confirmation)
+        {
         }
 
         public void Confirm(object? confirmation)
@@ -3394,7 +3515,7 @@ public sealed class AgentSessionRunnerTests
             StartedAt = DateTimeOffset.Now,
             Instructions = string.Empty,
             RequestMessages = [],
-            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", false, []),
+            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", []),
         };
 
         gate.Record(cycle);
@@ -3430,21 +3551,82 @@ public sealed class AgentSessionRunnerTests
             get;
         } = [];
 
+        public List<int> RetainedDelivery
+        {
+            get;
+        } = [];
+
+        /// <summary>Whether every materialisation also delivers a synthetic exchange (AI-002 TR-18).</summary>
+        public bool DeliverSyntheticExchange
+        {
+            get;
+            set;
+        }
+
         public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             int index = MaterialisationCount++;
+            // By default only the fresh scene-status suffix renders last (AI-002 TR-2); the opt-in flag adds one
+            // synthetic delivery exchange per materialisation in the distinct call-ID namespace (AI-002 TR-18).
+            if (!DeliverSyntheticExchange)
+            {
+                return ValueTask.FromResult(new AgentRequestContext(
+                    [],
+                    [new ChatMessage(ChatRole.User, $"scene:{index}")],
+                    index));
+            }
+
+            string callId = SyntheticSceneUpdateExchange.FormatCallId(index + 1);
             return ValueTask.FromResult(new AgentRequestContext(
                 [
-                    new ChatMessage(ChatRole.User, $"timeline:{index}"),
-                    new ChatMessage(ChatRole.User, $"scene:{index}"),
+                    new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, SyntheticSceneUpdateExchange.DeliveryToolName)]),
+                    new ChatMessage(ChatRole.Tool, [new FunctionResultContent(callId, $"delivered:{index}")]),
                 ],
+                [new ChatMessage(ChatRole.User, $"scene:{index}")],
                 index));
         }
+
+        public void Retain(object? confirmation) => RetainedDelivery.Add(Assert.IsType<int>(confirmation));
 
         public void Confirm(object? confirmation) => Confirmed.Add(Assert.IsType<int>(confirmation));
 
         public void Discard(object? confirmation) => Discarded.Add(Assert.IsType<int>(confirmation));
+    }
+
+    /// <summary>Context source retaining a fixed set of synthetic exchange messages exactly once.</summary>
+    private sealed class RetainingContextSource(IReadOnlyList<ChatMessage> transcriptMessages)
+        : IAgentRequestContextSource
+    {
+        private int _materialisationCount;
+
+        public int RetainedCount
+        {
+            get;
+            private set;
+        }
+
+        public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<ChatMessage> delivery = _materialisationCount++ == 0
+                ? transcriptMessages
+                : [];
+            return ValueTask.FromResult(new AgentRequestContext(
+                delivery,
+                [new ChatMessage(ChatRole.User, "scene")],
+                confirmation: null));
+        }
+
+        public void Retain(object? confirmation) => RetainedCount++;
+
+        public void Confirm(object? confirmation)
+        {
+        }
+
+        public void Discard(object? confirmation)
+        {
+        }
     }
 
     private sealed class ContinuationContextSource : IAgentRequestContextSource
@@ -3475,7 +3657,11 @@ public sealed class AgentSessionRunnerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             _awaitingConfirmation = true;
-            return ValueTask.FromResult(new AgentRequestContext([], new object()));
+            return ValueTask.FromResult(new AgentRequestContext([], [], new object()));
+        }
+
+        public void Retain(object? confirmation)
+        {
         }
 
         public void Confirm(object? confirmation)

@@ -41,19 +41,6 @@ public abstract partial class AgentTool : Resource
     public string ToolDescription { get; set; } = string.Empty;
 
     /// <summary>
-    /// Whether the session runner disposes this tool's completed exchanges (AI-002 TR-17/20): once a batch whose
-    /// every call targets a disposal-opted tool settles, the accepted assistant messages and the tool-result message
-    /// are removed from the replayed transcript, so the settled exchange is never model-visible in a later request.
-    /// The conservative default retains completed exchanges — `speak` and `wait` opt in, while watch tools and
-    /// authored extras stay retained. Tool name and description metadata are unaffected by this flag.
-    /// </summary>
-    [Export]
-    public bool DisposesExchangeOnCompletion
-    {
-        get; set;
-    }
-
-    /// <summary>
     /// Session binding available to derived tools between
     /// <see cref="CreateFunction(ScenarioContext, MindBase, IMainThreadDispatcher)" /> and invocation.
     /// </summary>
@@ -106,10 +93,7 @@ public abstract partial class AgentTool : Resource
 
         string? name = string.IsNullOrWhiteSpace(ToolName) ? null : ToolName.Trim();
         string? description = string.IsNullOrWhiteSpace(ToolDescription) ? null : ToolDescription.Trim();
-        AIFunction function = CreateFunction(method, context, mind, dispatcher, name, description);
-        // The authored disposal flag binds the composition-registered exchange-disposal policy here, so every
-        // caller of this tool's function inherits the authored retention semantics.
-        return DisposesExchangeOnCompletion ? ToolExchangeDisposalPolicy.Dispose.Bind(function) : function;
+        return CreateFunction(method, context, mind, dispatcher, name, description);
     }
 
     /// <summary>

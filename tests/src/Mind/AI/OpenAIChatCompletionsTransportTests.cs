@@ -22,11 +22,8 @@ public sealed class OpenAIChatCompletionsTransportTests
     /// The rollback transport carries the session bootstrap input and replays the complete ordered transcript with
     /// strict tool-only requests.
     /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task SessionChatCompletions_WithTwoSpeakCalls_ReplaysTranscriptWithStrictToolOnlyRequests(
-        bool allowMultipleToolCalls)
+    [Fact]
+    public async Task SessionChatCompletions_WithTwoSpeakCalls_ReplaysTranscriptWithStrictToolOnlyRequests()
     {
         CancellationTokenSource sessionCancellation = new();
         var handler = new CancellingHandler(
@@ -45,7 +42,7 @@ public sealed class OpenAIChatCompletionsTransportTests
             "speak",
             "Speak aloud.");
 
-        await RunSessionAsync(client, speak, allowMultipleToolCalls, sessionCancellation);
+        await RunSessionAsync(client, speak, sessionCancellation);
 
         Assert.Equal(["Hello", "Again"], admittedSpeech);
         // Two scripted responses served, plus the third request whose cancellation ends the session.
@@ -66,14 +63,14 @@ public sealed class OpenAIChatCompletionsTransportTests
         Assert.Equal(Instructions, firstMessages[0].GetProperty("content").GetString());
         // Both chat-client kinds carry the session-owner bootstrap input message (AI-002 TR-2).
         Assert.Equal(AgenticMind.SessionBootstrapInput, firstMessages[1].GetProperty("content").GetString());
-        AssertStrictToolOnlyRequest(firstRequest.RootElement, allowMultipleToolCalls);
+        AssertStrictToolOnlyRequest(firstRequest.RootElement);
         using var secondRequest = JsonDocument.Parse(handler.RequestBodies[1]);
         JsonElement[] messages = [.. secondRequest.RootElement.GetProperty("messages").EnumerateArray()];
         Assert.Equal(
             ["system", "user", "assistant", "tool"],
             messages.Select(message => message.GetProperty("role").GetString()));
         Assert.Equal("call-1", messages[3].GetProperty("tool_call_id").GetString());
-        AssertStrictToolOnlyRequest(secondRequest.RootElement, allowMultipleToolCalls);
+        AssertStrictToolOnlyRequest(secondRequest.RootElement);
     }
 
     /// <summary>
@@ -100,7 +97,6 @@ public sealed class OpenAIChatCompletionsTransportTests
         await RunSessionAsync(
             client,
             speak,
-            allowMultipleToolCalls: false,
             sessionCancellation,
             new InvalidResponseRecoveryPolicy(2, [TimeSpan.Zero]));
 
@@ -128,7 +124,7 @@ public sealed class OpenAIChatCompletionsTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation);
 
         // Two scripted responses served, plus the third request whose cancellation ends the session: every request
@@ -141,7 +137,7 @@ public sealed class OpenAIChatCompletionsTransportTests
             JsonElement root = request.RootElement;
             Assert.Equal("medium", root.GetProperty("reasoning_effort").GetString());
             AssertNoChatCompletionsSummaryOrVerbosityField(root);
-            AssertStrictToolOnlyRequest(root, allowMultipleToolCalls: false);
+            AssertStrictToolOnlyRequest(root);
             Assert.Equal(Instructions, root.GetProperty("messages")[0].GetProperty("content").GetString());
         }
 
@@ -176,7 +172,7 @@ public sealed class OpenAIChatCompletionsTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation);
 
         Assert.Equal(2, handler.RequestBodies.Count);
@@ -264,7 +260,7 @@ public sealed class OpenAIChatCompletionsTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation,
             retryDelays: [TimeSpan.Zero]);
 
@@ -289,7 +285,6 @@ public sealed class OpenAIChatCompletionsTransportTests
     private static async Task RunSessionAsync(
         IChatClient client,
         AIFunction speak,
-        bool allowMultipleToolCalls,
         CancellationTokenSource sessionCancellation,
         IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null,
         IReadOnlyList<TimeSpan>? retryDelays = null)
@@ -299,7 +294,6 @@ public sealed class OpenAIChatCompletionsTransportTests
             Instructions,
             [new ChatMessage(ChatRole.User, AgenticMind.SessionBootstrapInput)],
             [speak],
-            allowMultipleToolCalls,
             NullLogger.Instance,
             retryDelays: retryDelays,
             invalidResponseRecoveryPolicy: invalidResponseRecoveryPolicy);
@@ -334,10 +328,10 @@ public sealed class OpenAIChatCompletionsTransportTests
         string? reasoningSummary = null)
         => new("https://unit.test/v1", "not-a-live-key", "test-model", null, reasoningEffort, reasoningSummary);
 
-    private static void AssertStrictToolOnlyRequest(JsonElement root, bool allowMultipleToolCalls)
+    private static void AssertStrictToolOnlyRequest(JsonElement root)
     {
         Assert.Equal("required", root.GetProperty("tool_choice").GetString());
-        Assert.Equal(allowMultipleToolCalls, root.GetProperty("parallel_tool_calls").GetBoolean());
+        Assert.True(root.GetProperty("parallel_tool_calls").GetBoolean());
         Assert.False(root.TryGetProperty("response_format", out _));
         Assert.Equal(
             ["speak"],

@@ -1850,7 +1850,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             Tools = [tool],
-            AllowMultipleToolCalls = true,
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));

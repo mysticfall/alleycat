@@ -26,14 +26,15 @@ public sealed class EventHistoryIntegrationTests
         using ProximityWatchTool proximityWatchTool = new();
         UnwatchTool unwatchTool = new(registry: null);
 
-        // wait: fresh context arrives automatically; waiting is deliberate yielding whose settled exchange is
-        // internal bookkeeping the model never sees, and an answer already visible is distinguished from a reply
-        // not yet given.
-        Assert.Contains("arrives with every request", waitTool.ToolDescription, StringComparison.Ordinal);
+        // wait: fresh context arrives automatically; waiting is deliberate yielding whose exchange persists in
+        // context like any other exchange, and an answer already visible is distinguished from a reply not yet
+        // given (AI-002 TR-15/16).
+        Assert.Contains("arrive automatically", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.Contains("awaiting a reply that has not been given yet", waitTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("leaves no record in your context", waitTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("internal bookkeeping", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("remain in your context like any other exchange", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("the record that you yielded", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.Contains("never what was observed", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("leaves no record", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("nothing new reaches you", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("wait a reasonable duration", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("Returns only why the wait ended", waitTool.ToolDescription, StringComparison.Ordinal);
@@ -49,6 +50,8 @@ public sealed class EventHistoryIntegrationTests
         Assert.Contains("opaque watch ID", unwatchTool.ToolDescription, StringComparison.Ordinal);
 
         Assert.Contains("optional and repeatable", speechTool.ToolDescription, StringComparison.Ordinal);
+        // speak: the call remains in context as the record of the speech (AI-002 TR-15/16).
+        Assert.Contains("remains in your context as the record of what you said", speechTool.ToolDescription, StringComparison.Ordinal);
     }
 
     /// <summary>History keeps chronology and joins type-owned entries with exactly one newline.</summary>
@@ -130,11 +133,11 @@ public sealed class EventHistoryIntegrationTests
     }
 
     /// <summary>
-    /// Watermark-aware rendering marks every entry beyond the confirmed watermark on its complete rendered line,
-    /// and a joined speech group is marked when any contributing segment lies beyond it (AI-002 TR-3).
+    /// Model-facing newly-presented marking is retired (AI-002 TR-3, AI-003 TR-10): the canonical renderer always
+    /// emits observation-owned text with no watermark-derived prefix, and joined speech groups stay joined.
     /// </summary>
     [Fact]
-    public async Task RenderAsync_ConfirmedWatermark_MarksNewlyPresentedEntriesAndJoinedGroups()
+    public async Task RenderAsync_CarriesNoNewlyPresentedMarking()
     {
         AcceptedObservationEntry[] timeline =
         [
@@ -145,21 +148,14 @@ public sealed class EventHistoryIntegrationTests
         ];
         ObservationHistoryRenderer renderer = CreateRenderer();
 
-        // Entries 1–2 are confirmed; the joined group's latest segment and the trailing event are newly presented,
-        // so the joined line carries the marker through the OR of its segments.
-        string output = await renderer.RenderAsync(timeline, confirmedSequenceWatermark: 2);
+        string output = await renderer.RenderAsync(timeline);
 
-        Assert.Equal(
-            "((Received world.settled event.))\n"
-                + "[new] Heard `char:rin` say: earlier … later\n"
-                + "[new] ((Received world.changed event.))",
-            output);
-        // With every entry confirmed, the same projection renders wholly unmarked.
         Assert.Equal(
             "((Received world.settled event.))\n"
                 + "Heard `char:rin` say: earlier … later\n"
                 + "((Received world.changed event.))",
-            await renderer.RenderAsync(timeline, confirmedSequenceWatermark: 4));
+            output);
+        Assert.DoesNotContain("[new]", output, StringComparison.Ordinal);
     }
 
     /// <summary>Timestamp framing is invariant even when the active process culture is not.</summary>

@@ -31,19 +31,6 @@ internal enum MindTranscriptCycleOutcome
     Interrupted,
 }
 
-/// <summary>Exchange-disposal decision of a settled tool batch (AI-002 TR-17; AI-011 TR-6).</summary>
-internal enum MindTranscriptExchangeDisposal
-{
-    /// <summary>The batch contained a non-opted call, so the disposal decision did not apply.</summary>
-    NotApplicable,
-
-    /// <summary>Every call targeted a disposal-opted tool and the completed exchange was removed.</summary>
-    Disposed,
-
-    /// <summary>The batch was disposal-eligible but the exchange was retained conservatively.</summary>
-    Retained,
-}
-
 /// <summary>Kind of an anomalous event annotated on a cycle transcript (AI-011 TR-6).</summary>
 internal enum MindTranscriptAnnotationKind
 {
@@ -64,7 +51,6 @@ internal sealed record MindTranscriptAnnotation(MindTranscriptAnnotationKind Kin
 internal sealed record MindTranscriptRequestOptions(
     string? ModelId,
     string ToolMode,
-    bool AllowMultipleToolCalls,
     IReadOnlyList<string> ToolNames);
 
 /// <summary>Terminal state of one recorded tool invocation (AI-011 TR-6).</summary>
@@ -204,11 +190,24 @@ internal sealed class MindSessionCycleTranscript
         set;
     }
 
-    public MindTranscriptExchangeDisposal ExchangeDisposal
+    /// <summary>
+    /// Positions, within <see cref="RequestMessages" />, of the runtime-authored synthetic scene-update exchange
+    /// messages (AI-002 TR-18): the transcript renders them visibly marked as runtime-authored (AI-011 TR-11).
+    /// Because every synthetic exchange is retained for the whole session, a cycle marks every exchange appended
+    /// so far, not only those of its own materialisation.
+    /// </summary>
+    public IReadOnlyList<int> RuntimeAuthoredMessageIndexes
     {
         get;
         set;
-    }
+    } = [];
+
+    /// <summary>
+    /// Text contents stripped from this cycle's retained exchange (AI-002 TR-12): the response stayed valid, the
+    /// retained assistant messages no longer carry the text, and each record preserves what was removed for the
+    /// transcript sink (AI-011 TR-11).
+    /// </summary>
+    public List<string> StrippedTexts { get; } = [];
 
     public List<MindTranscriptAnnotation> Annotations { get; } = [];
 

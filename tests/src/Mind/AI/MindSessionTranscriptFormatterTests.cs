@@ -792,7 +792,7 @@ public sealed class MindSessionTranscriptFormatterTests
             StartedAt = new DateTimeOffset(2026, 9, 28, 14, 3, 22, TimeSpan.FromHours(9)),
             Instructions = "<Identity>" + LineFeed + "You are Luna." + LineFeed + "</Identity>" + LineFeed,
             RequestMessages = requestMessages ?? [new ChatMessage(ChatRole.User, "Begin.")],
-            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", false, ["speak", "wait"]),
+            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", ["speak", "wait"]),
             Response = response,
         };
 }

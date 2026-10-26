@@ -19,15 +19,14 @@ public partial class WaitTool : AgentTool
     public WaitTool()
     {
         ToolName = "wait";
-        ToolDescription = "Deliberately yield until future developments make responding worthwhile. Fresh context — "
-            + "event history and the current scene — arrives with every request, so waiting is never needed to "
-            + "receive information. A wait delivers no observation text — never what was observed — and a completed "
-            + "wait leaves no record in your context: its outcome is internal bookkeeping, and what happened "
-            + "meanwhile reaches you through fresh events and scene status, which also state the current game time. "
-            + "Wait when giving something time to develop, for example awaiting a reply that has not been given "
-            + "yet; an answer already visible in your context needs no wait.";
-        // The wait result is protocol bookkeeping only; the settled exchange is never replayed to the model.
-        DisposesExchangeOnCompletion = true;
+        ToolDescription = "Deliberately yield until future developments make responding worthwhile, or remain "
+            + "silent. Scene updates you did not initiate arrive automatically as tool results, and fresh scene "
+            + "status — including the current game time — arrives with every request, so waiting is never needed "
+            + "to receive information. A wait returns only why it ended, the elapsed game time, and the current "
+            + "game time — never what was observed meanwhile; scene events reach you through automatic scene "
+            + "updates afterwards. This call and its result remain in your context like any other exchange, as "
+            + "the record that you yielded. Wait when giving something time to develop, for example awaiting a "
+            + "reply that has not been given yet; an answer already visible in your context needs no wait.";
     }
 
     /// <inheritdoc />

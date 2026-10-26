@@ -5,17 +5,14 @@ using AgentObservation = AlleyCat.Mind.Observation.Observation;
 namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
-/// Renders ordered observation records through their type-owned canonical text for the per-request event-history
-/// message.
+/// Renders ordered observation records through their type-owned canonical text: the observation lines of the
+/// runtime-authored synthetic scene-update exchange's tool result (AI-002 TR-18, AI-003 TR-8).
 /// </summary>
 internal sealed class ObservationHistoryRenderer(ICharacter character)
 {
-    /// <summary>Prefix marking a timeline line as newly presented since the last confirmed response (AI-002 TR-3).</summary>
-    private const string NewlyPresentedPrefix = "[new] ";
-
     /// <summary>Renders ordered observation records through their type-owned canonical text.</summary>
     /// <param name="observations">Observation records in timeline order.</param>
-    /// <returns>The rendered event-history text for the supplied records.</returns>
+    /// <returns>The rendered observation text for the supplied records.</returns>
     public ValueTask<string> RenderAsync(IReadOnlyList<AgentObservation> observations)
         => RenderAsync(observations, observations);
 
@@ -38,14 +35,6 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
         IReadOnlyList<AcceptedObservationEntry> timeline)
         => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations));
 
-    /// <summary>
-    /// Renders the complete accepted timeline for the per-request event-history section: every event beyond the
-    /// confirmed watermark carries the newly-presented prefix on its complete rendered line, including any
-    /// timestamp suffix (AI-002 TR-3).
-    /// </summary>
-    public ValueTask<string> RenderAsync(IReadOnlyList<AcceptedObservationEntry> timeline, long confirmedSequenceWatermark)
-        => RenderProjectedAsync(ContinuationProjection.Project(timeline, confirmedSequenceWatermark: confirmedSequenceWatermark));
-
     /// <summary>Renders pre-projected model events through their type-owned canonical text.</summary>
     internal ValueTask<string> RenderProjectedAsync(IReadOnlyList<ContinuationProjection.Event> events)
     {
@@ -53,17 +42,13 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
         ArgumentNullException.ThrowIfNull(character);
         return ValueTask.FromResult(events.Count == 0
             ? string.Empty
-            : string.Join(
-                '\n',
-                events.Select(RenderLine)));
+            : string.Join('\n', events.Select(RenderLine)));
 
         string RenderLine(ContinuationProjection.Event @event)
         {
             AgentObservation observation = @event.Observation ?? throw new ArgumentException(
                 "Events contain a null observation.", nameof(events));
-            return @event.IsNewlyPresented
-                ? NewlyPresentedPrefix + observation.Render(character)
-                : observation.Render(character);
+            return observation.Render(character);
         }
     }
 }

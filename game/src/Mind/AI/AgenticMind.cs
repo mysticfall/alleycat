@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Text;
 using AlleyCat.Character;
 using AlleyCat.Common;
 using AlleyCat.Core;
@@ -100,15 +99,6 @@ public partial class AgenticMind : MindBase
     [ExportGroup("Scenario")]
     [Export]
     public ScenarioManager? ScenarioManager
-    {
-        get; set;
-    }
-
-    /// <summary>
-    /// Allows the provider to return several action calls in one response.
-    /// </summary>
-    [Export]
-    public bool AllowMultipleToolCalls
     {
         get; set;
     }
@@ -295,7 +285,6 @@ public partial class AgenticMind : MindBase
             session.Instructions,
             session.RunMessages,
             session.Tools,
-            AllowMultipleToolCalls,
             GameLoggerResolver.ResolveRequired<AgenticMind>(),
             session.EnableReasoningLogging,
             invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy,
@@ -647,9 +636,9 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Composes Mind-specific event history and scene status into the generic runner request-context boundary.
-    /// The source owns the confirmed event watermark; it never exposes Mind, projectors, observations, or tools to
-    /// <see cref="AgentSessionRunner" />.
+    /// Composes Mind's synthetic scene-update delivery and fresh scene status into the generic runner
+    /// request-context boundary (AI-002 TR-2, TR-18, TR-19). The source owns the delivered event watermark; it never
+    /// exposes Mind, projectors, observations, or tools to <see cref="AgentSessionRunner" />.
     /// </summary>
     private sealed class MindRequestContextSource(
         AgenticMind mind,
@@ -657,7 +646,8 @@ public partial class AgenticMind : MindBase
         SpeechTurnContinuationCoordinator continuations) : IAgentRequestContextSource
     {
         private readonly Lock _watermarkLock = new();
-        private long _confirmedEventSequenceID;
+        private long _deliveredEventSequenceID;
+        private long _syntheticCallSequence;
 
         public async ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
         {
@@ -673,25 +663,46 @@ public partial class AgenticMind : MindBase
                     continue;
                 }
 
-                IReadOnlyList<AcceptedObservationEntry> accepted = mind.GetAcceptedObservationLogSnapshot();
-                long confirmed;
+                long delivered;
                 lock (_watermarkLock)
                 {
-                    confirmed = _confirmedEventSequenceID;
+                    delivered = _deliveredEventSequenceID;
                 }
 
-                // The confirmed watermark only decides per-entry newly-presented marking; every entry is presented
-                // in one section (AI-002 TR-3).
-                string timelineText = await RenderTimelineAsync(timeline, confirmed);
+                // Every pending observation consolidates into exactly one runtime-authored synthetic exchange
+                // (AI-002 TR-18); nothing pending creates no exchange.
+                IReadOnlyList<ChatMessage> delivery = await SyntheticSceneUpdateExchange.BuildAsync(
+                    timeline,
+                    delivered,
+                    session.Context.Character,
+                    NextSyntheticCallId());
+
+                // The fresh current-scene message renders last, after every retained exchange (AI-002 TR-2/TR-6).
                 string sceneStatus = await mind.RenderCurrentSceneStatusAsync(session, cancellationToken);
+
+                IReadOnlyList<AcceptedObservationEntry> accepted = mind.GetAcceptedObservationLogSnapshot();
                 long schedulingWatermark = accepted.Count == 0 ? 0 : accepted[^1].SequenceID;
                 var confirmation = new Confirmation(eventWatermark, schedulingWatermark);
                 return new AgentRequestContext(
-                    [
-                        new ChatMessage(ChatRole.User, BuildTimelineMessage(timelineText)),
-                        new ChatMessage(ChatRole.User, sceneStatus),
-                    ],
+                    delivery,
+                    [new ChatMessage(ChatRole.User, sceneStatus)],
                     confirmation);
+            }
+        }
+
+        public void Retain(object? confirmation)
+        {
+            // Delivery marking is irrevocable and happens exactly when the runner appends the synthetic exchange to
+            // the retained transcript (AI-002 TR-19): retries, invalid-response recovery, and fresh replacement
+            // requests never redeliver what this advanced past.
+            if (confirmation is not Confirmation snapshot)
+            {
+                return;
+            }
+
+            lock (_watermarkLock)
+            {
+                _deliveredEventSequenceID = Math.Max(_deliveredEventSequenceID, snapshot.EventSequenceID);
             }
         }
 
@@ -700,11 +711,6 @@ public partial class AgenticMind : MindBase
             if (confirmation is not Confirmation snapshot)
             {
                 return;
-            }
-
-            lock (_watermarkLock)
-            {
-                _confirmedEventSequenceID = Math.Max(_confirmedEventSequenceID, snapshot.EventSequenceID);
             }
 
             mind.ConfirmProviderRequestContext(snapshot.SchedulingSequenceID);
@@ -719,24 +725,20 @@ public partial class AgenticMind : MindBase
             }
         }
 
-        private async Task<string> RenderTimelineAsync(
-            IReadOnlyList<AcceptedObservationEntry> timeline,
-            long confirmedSequenceWatermark)
-            => timeline.Count == 0
-                ? "(none)"
-                : await new ObservationHistoryRenderer(session.Context.Character)
-                    .RenderAsync(timeline, confirmedSequenceWatermark);
-
         /// <summary>
-        /// Builds the per-request timeline message as one user message of a single pseudo-XML block section holding
-        /// every selected entry in timeline order, with newly presented entries marked on their rendered lines
-        /// (AI-002 TR-3).
+        /// Draws the next synthetic call ID from the session's distinct namespace (AI-002 TR-18). IDs only need
+        /// uniqueness within the session, so a materialisation that is superseded before its request is built may
+        /// consume its ID without delivery.
         /// </summary>
-        private static string BuildTimelineMessage(string timeline)
+        private string NextSyntheticCallId()
         {
-            StringBuilder builder = new();
-            PseudoXmlFormatter.AppendBlock(builder, "Event History", timeline, "Timeline sections");
-            return builder.ToString().Trim();
+            long sequence;
+            lock (_watermarkLock)
+            {
+                sequence = ++_syntheticCallSequence;
+            }
+
+            return SyntheticSceneUpdateExchange.FormatCallId(sequence);
         }
 
         private readonly record struct Confirmation(long EventSequenceID, long SchedulingSequenceID);

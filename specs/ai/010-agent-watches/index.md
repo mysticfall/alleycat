@@ -88,9 +88,10 @@ accurately so the NPC neither re-arms needlessly nor mistakes a registration for
     registrations, not condition truth (TR-13); and removal takes the opaque ID returned at arming or listed in
     current-scene status (TR-5). Descriptions must not promise an activation event or suggest that re-arming is
     needed to keep monitoring.
-15. Watch-tool descriptions must state that transitions arrive as ordinary remembered events through the per-request
-    event timeline (TR-10, TR-11), never as wait-result text (AI-002 TR-8/TR-10), and that available evidence is
-    limited by current perception (TR-8 for proximity). Shared-instruction watch concepts follow AI-003 TR-16.
+15. Watch-tool descriptions must state that transitions arrive as ordinary remembered events delivered through
+    automatic scene updates (TR-10, TR-11), never as wait-result text (AI-002 TR-8/TR-10), and that available
+    evidence is limited by current perception (TR-8 for proximity). Shared-instruction watch concepts follow
+    AI-003 TR-16.
 
 ## In Scope
 
@@ -155,7 +156,7 @@ accurately so the NPC neither re-arms needlessly nor mistakes a registration for
    and an empty list contributes no active-watch section or fallback.
 10. Tests verify watch-tool descriptions match the lifecycle contracts: non-blocking arming with current evidence and
     no activation-event promise, persistent monitoring without re-arming, perception-limited evidence, transition
-    delivery through ordinary event history, and removal by opaque watch ID.
+    delivery through automatic scene updates, and removal by opaque watch ID.
 
 ## References
 

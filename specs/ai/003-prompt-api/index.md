@@ -12,27 +12,27 @@ that static instruction must carry, and canonical, type-owned event rendering fo
 
 ## Goal
 
-Keep static guidance stable while presenting fresh typed scene state and causally watermarked event history on every
-logical provider request. The shared guidance must be sufficient for the model to interpret that context and to act on
-information it has already been supplied.
+Keep static guidance stable while presenting fresh typed scene state and canonically delivered scene updates on
+every logical provider request. The shared guidance must be sufficient for the model to interpret that context and to
+act on information it has already been supplied.
 
 ## User Requirements
 
 1. Authors can provide one stable system instruction and a separately authored, fresh current-scene status.
 2. NPCs see current attended characters and active watches in current scene status without changing their fixed
    scenario.
-3. Event history uses the canonical text owned by each observation type. Unknown types receive safe fallback text that
-   discloses only their `TypeKey`.
+3. Delivered scene events use the canonical text owned by each observation type. Unknown types receive safe fallback
+   text that discloses only their `TypeKey`.
 4. An NPC's prompt does not expose raw voice provenance or scheduling-only data as observation text.
 5. The shared instruction gives each NPC character-neutral guidance sufficient to interpret its supplied context —
-   established versus newly presented event history and the fresh current-scene status — without any tool call.
+   its own retained exchanges, automatic scene updates, and the fresh current-scene status — without any tool call.
 6. Shared guidance distinguishes acting on an available reply from waiting for a future one: an NPC is never told that
    waiting is necessary to receive context. NPCs normally make room for replies after conversational contributions,
    while initiative, silence, and waiting remain legitimate in-character choices rather than forced alternating turns.
 7. Shared watch guidance refers to available watch tools rather than a fixed tool set and presents listed watches as
    monitoring registrations, not assertions that a condition is currently true.
 8. An NPC always sees the current game time in its current scene status — including when no character is attended — on
-    the same clock as its event-history timestamps.
+    the same clock as its delivered event timestamps.
 9. An NPC keeps its automatic lore context and receives a stable, grouped catalogue of remaining available lore, with
    guidance to retrieve relevant entries before acting without making retrieval mandatory.
 10. Speech events may state whom the speaker addressed. Shared guidance teaches an NPC to use that wording — treating
@@ -65,33 +65,35 @@ information it has already been supplied.
 
 8. Event-history rendering is separate from both prompt stacks. It projects the selected persistent event timeline,
    invokes each observation's canonical renderer with owner context, and joins entries with exactly one newline for
-   the single section of AI-002's per-request timeline message.
+   the tool result of AI-002's runtime-authored scene-update exchange (AI-002 TR-18).
 9. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
    `TypeKey`-only base fallback, and shared timestamp suffix. No `event_history.md` asset, event-history parser,
    fragment catalogue, `EventHistoryPath`, or authored `TypeKey` dispatch exists.
 10. Speech rendering remains actor-relative and must not render raw `VoiceId` or continuation transport metadata.
-    `ContinuationProjection` remains responsible for speech-segment grouping, ordering, correlation, latest-event
-    placement, and per-entry newly-presented marking derived from the caller-supplied confirmed watermark: a
-    projected entry is newly presented when it lies beyond that watermark, and a joined speech group is newly
-    presented iff any contributing segment lies beyond it (AI-002 TR-3); projected speech uses the same
-    observation-owned rendering contract.
-11. Event rendering receives only the event records selected by its caller: AI-002's watermark rules for the canonical
-    per-request timeline message. Prompt stacks must not accept observations as general render-context values.
+    `ContinuationProjection` remains responsible for speech-segment grouping, ordering, correlation, and latest-event
+    placement for delivered observations: a projected speech group's segments join into one line at its latest
+    position, and projected speech uses the same observation-owned rendering contract. Model-facing newly-presented
+    marking is retired: no `[new]` prefix or watermark-derived marker exists (AI-002 TR-3).
+11. Event rendering receives only the event records selected by its caller: AI-002's delivered-watermark rules for
+    scene-update delivery (AI-002 TR-18, TR-19). Prompt stacks must not accept observations as general render-context
+    values.
 
 ### Shared Context Interpretation Guidance
 
 12. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
-    instruction — must carry character-neutral guidance covering event-history interpretation — including
-    addressee-annotated speech and neutral undecided wording — current-scene interpretation, action selection,
-    available watch tools, and lore discovery/retrieval. These are mandatory content; exact prose stays tunable.
-    Guidance must not contradict AI-002's automatic per-request delivery, payload-free wait semantics, or
-    tool-exchange disposal (AI-002 TR-17–TR-22).
-13. Event-history guidance must match AI-002's timeline-message contract: a single `Event History` section holds the
-    whole timeline, `[new] `-prefixed entries were newly presented since the NPC's previous valid response, unmarked
-    entries were already shown, and neither status means a conversational contribution has been answered or resolved.
-    It must also cover addressee-annotated speech entries: wording may state that the speaker addressed the NPC or
-    name other characters, and neutral entries make no addressee claim, leaving the addressee to be inferred from
-    context.
+    instruction — must carry character-neutral guidance covering how the scene reaches the NPC (its own retained
+    exchanges and automatic scene updates), speech-addressee interpretation, current-scene interpretation,
+    action selection, available watch tools,
+    and lore discovery/retrieval. These are mandatory content; exact prose stays tunable. Guidance must not
+    contradict AI-002's automatic scene-update delivery, payload-free wait semantics, or exchange retention
+    (AI-002 TR-17–TR-22).
+13. Scene-delivery guidance must match AI-002's delivery contract: the NPC's own prior tool calls and their results
+    remain in its context as its record of what it said and did; scene updates it did not initiate arrive
+    automatically as runtime-authored tool results; and the fresh current-scene message ends every request. Guidance
+    must state honestly that scene updates arrive without any action by the NPC, and that neither a delivered event
+    nor an own prior action means a conversational contribution has been answered or resolved. It must also cover
+    addressee-annotated speech entries: wording may state that the speaker addressed the NPC or name other characters,
+    and neutral entries make no addressee claim, leaving the addressee to be inferred from context.
 14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
     exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
     absence, and historical events do not establish current positions. It must not contradict the common game clock or
@@ -100,20 +102,21 @@ information it has already been supplied.
 15. Action-selection guidance must direct the NPC to consider relevant available history — including an available
     reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
     remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
-    freedom to act, speak, or stay silent according to character and scenario. It must not contradict tool-exchange
-    disposal (AI-002 TR-17–TR-22): disposed `speak`/`wait` exchanges are never model-visible. Completed actions surface
-    through remembered events and fresh scene status; non-opted exchanges, including lore retrieval, remain retained.
-    Guidance must distinguish provider requests from human conversational turns: ending output alone does not give
-    another person time to reply. Normally yield after a conversational contribution unless a relevant unresolved reply
-    or a concrete in-character reason supports acting now. Use history and chronology — including speech addressee
-    wording where present — not `[new]` alone, to distinguish such replies from already-addressed speech, and treat
-    speech addressed to other characters as overheard context rather than a reply opportunity. Startup, empty history,
-    repeated requests, wait expiry, or silence alone must not require speech or repeated prompting. Preserve initiative
-    without fixed delays, word caps, or forced turns.
+    freedom to act, speak, or stay silent according to character and scenario. It must not contradict exchange
+    retention (AI-002 TR-17–TR-22): the NPC's own `speak`/`wait` exchanges remain in context as its action record,
+    scene events arrive through automatic scene updates, and completed actions also surface through fresh scene
+    status. Guidance must distinguish provider requests from human conversational turns: ending output alone does not
+    give another person time to reply. Normally yield after a conversational contribution unless a relevant unresolved
+    reply or a concrete in-character reason supports acting now. Use chronology and the NPC's own conversation record
+    — including speech addressee wording where present — to distinguish such replies from already-addressed speech,
+    and treat speech addressed to other characters as overheard context rather than a reply opportunity.
+    Startup, empty history, repeated requests, wait
+    expiry, or silence alone must not require speech or repeated prompting. Preserve initiative without fixed delays,
+    word caps, or forced turns.
 16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
     describe them as persistent monitoring registration rather than condition truth, state that watch transitions
-    arrive through ordinary event history (AI-010 TR-10/TR-11), and identify the listed or returned watch ID as the
-    removal handle (AI-010 TR-5).
+    arrive as ordinary remembered events delivered through automatic scene updates (AI-010 TR-10/TR-11), and
+    identify the listed or returned watch ID as the removal handle (AI-010 TR-5).
 17. The shared NPC static stack preserves essential-world bodies followed by scene-character bodies, then renders
     AI-004's grouped catalogue of all remaining eligible observer/content-scoped entries. AI-004 normatively owns
     metadata, shared selection/exclusion, ordering, canonical-ID presentation, empty output, formatting, and
@@ -135,8 +138,9 @@ information it has already been supplied.
 - Unconditional current game-time rendering in `CurrentSceneStatus`, on the game clock shared with event timestamps.
 - Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
 - Session-fixed scenario context and fresh request-scene snapshot separation.
-- Character-neutral shared context-interpretation guidance (history, speech-addressee interpretation, current scene,
-  action selection, watches, lore) in the authored static instruction.
+- Character-neutral shared context-interpretation guidance (scene delivery, speech-addressee interpretation,
+  current scene, action selection,
+  watches, lore) in the authored static instruction.
 - Session-start grouped lore catalogue after unchanged automatic lore bodies, under AI-004's normative contracts.
 
 ## Out Of Scope
@@ -156,19 +160,20 @@ information it has already been supplied.
 2. Acceptance shows event wording is supplied by each observation type, and an unknown future observation type has
    safe fallback wording that exposes no payload fields.
 3. Acceptance shows speech text remains actor-relative without exposing raw voice provenance or continuation metadata.
-4. Acceptance shows the shared instruction explains established versus newly presented history, the fresh
-   evidence-limited current-scene status, and watch registration, and never states that waiting is necessary to receive
-   supplied context.
+4. Acceptance shows the shared instruction explains how the scene reaches the NPC — its own retained exchanges,
+   automatic scene updates, and the fresh evidence-limited current-scene status — and watch registration, and never
+   states that waiting is necessary to receive supplied context.
 5. Acceptance shows action-selection guidance distinguishes engaging with an available reply from waiting for a future
-   one using history and chronology rather than newly-presented status or already-addressed speech. It distinguishes
-   provider requests and output completion from making room for a human reply, normally directs yielding after a
-   contribution, and does not demand speech or repeated prompting merely because of startup, empty history, repeated
-   requests, wait expiry, or silence. Character-driven initiative and exceptions remain valid without fixed delays,
-   word caps, or forced alternating turns (UR-6, TR-13–TR-15).
+   one using chronology and the NPC's own conversation record rather than assumptions about already-addressed speech.
+   It distinguishes provider requests and output completion from making room for a human reply, normally directs
+   yielding after a contribution, and does not demand speech or repeated prompting merely because of startup, empty
+   history, repeated requests, wait expiry, or silence. Character-driven initiative and exceptions remain valid
+   without fixed delays, word caps, or forced alternating turns (UR-6, TR-13–TR-15).
 6. Acceptance shows the current scene status always presents the current game time — including with an empty attended
    list — on the same clock as event timestamps, while event entries keep their original observation times.
 7. Acceptance shows the shared instruction never contradicts the common game clock, the snapshot capture of the
-    current scene status, or completed actions surfacing through event history and current scene status.
+    current scene status, or completed actions surfacing through the NPC's own retained exchanges, automatic scene
+    updates, and current scene status.
 8. Acceptance shows unchanged automatic lore context alongside a grouped catalogue of remaining available lore, and
    guidance to retrieve relevant entries before acting without requiring retrieval for every action (UR-9).
 9. Acceptance shows shared guidance uses speech addressee wording to distinguish speech addressed to the NPC from
@@ -191,21 +196,23 @@ information it has already been supplied.
    and has no standalone event-history asset or parser, `EventHistoryPath`, fragment catalogue, authored `TypeKey`
    dispatch, or `ObservedWatchOutcome` requirement.
 6. Tests verify continuation projection preserves segment grouping, ordering, correlation, and latest-event placement,
-   derives newly-presented marking from the caller-supplied confirmed watermark with the group-OR rule for joined
-   speech groups (AI-002 TR-3), while projected speech uses canonical observation-owned text.
-7. Tests verify the authored shared instruction contains guidance covering each required concept — history
-    interpretation, speech-addressee wording, current-scene evidence limits and timestamps, action selection, watches,
-    and lore retrieval — and
-    stays consistent with AI-002's automatic per-request delivery, payload-free wait semantics, and disposal.
+   and carries no model-facing newly-presented marking or confirmed-watermark derivation (AI-002 TR-3), while
+   projected speech uses canonical observation-owned text.
+7. Tests verify the authored shared instruction contains guidance covering each required concept — how the scene
+    reaches the NPC, speech-addressee wording, current-scene evidence limits and timestamps, action selection,
+    watches, and lore retrieval — and
+    stays consistent with AI-002's automatic scene-update delivery, payload-free wait semantics, and exchange
+    retention.
 8. Tests verify shared watch guidance is composition-neutral, referring to available watch tools and presenting listed
-   watches as registrations rather than condition truth, and that it routes watch transitions through ordinary event
-   history.
+   watches as registrations rather than condition truth, and that it routes watch transitions through automatic
+   scene updates as ordinary remembered events.
 9. Tests verify the scene status renders its snapshot's current game time unconditionally — including with an empty
    attended list — in the invariant one-decimal form on the same clock as event-timestamp suffixes, and that rendered
    events keep their original observation times.
 10. Tests verify the current-time capture is frozen with its request — exact transport retries keep it while recovery
     and replacement recapture — and that the authored shared guidance does not contradict the common game clock, the
-     snapshot capture, or completed actions surfacing only through remembered events and fresh scene status.
+     snapshot capture, or completed actions surfacing through the NPC's own retained exchanges, automatic scene
+     updates, and fresh scene status.
 11. Tests verify the catalogue renders once at session start after unchanged automatic lore sections, obeys AI-004's
     shared-selection and presentation contracts, and is not rebuilt by fresh scene status or retrieval (TR-17).
 12. Tests verify shared guidance distinguishes listings from bodies and canonical lore IDs from subject IDs,

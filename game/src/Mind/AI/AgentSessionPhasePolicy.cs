@@ -32,7 +32,7 @@ internal sealed record AgentSessionPhasePolicy(bool AdmissionArbitrated)
 
 /// <summary>
 /// Base of the game's composition-bound function wrappers: exposes the wrapped composed function so the session
-/// runner can inspect composition-registered policies — phase policy, exchange disposal — through arbitrary wrapper
+/// runner can inspect composition-registered policies — for example the phase policy — through arbitrary wrapper
 /// layers without coupling to any concrete production tool.
 /// </summary>
 internal abstract class ComposedAIFunction(AIFunction function) : DelegatingAIFunction(function)

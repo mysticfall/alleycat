@@ -261,7 +261,6 @@ public sealed partial class SessionToolsIntegrationTests
             "Unused tool-fixture instructions.",
             [],
             [],
-            allowMultipleToolCalls: false,
             NullLogger.Instance));
         return admission;
     }

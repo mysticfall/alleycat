@@ -443,7 +443,7 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
             StartedAt = DateTimeOffset.Now,
             Instructions = "<Identity>\nYou are Luna.\n</Identity>\n",
             RequestMessages = [new ChatMessage(ChatRole.User, "Begin.")],
-            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", false, ["speak"]),
+            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", ["speak"]),
         };
 
     private sealed class RecordingLogger : ILogger

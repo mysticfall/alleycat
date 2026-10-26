@@ -18,9 +18,9 @@ namespace AlleyCat.Mind.AI;
 /// normally with its cut-short result; it does not provide the strict whole-batch tool-only validation before any
 /// execution (AI-002 TR-12); and its history and function-invocation machinery would append protocol entries beyond
 /// assistant tool calls and tool results, which the transient transcript contract keeps out (AI-002 TR-1/2) — a
-/// contract that now also disposes completed exchanges of disposal-opted tools rather than retaining every settled
-/// batch. Where the framework fits without deviation — the stateless transport underneath — it is used unchanged
-/// through <see cref="IChatClient"/>.
+/// contract that now retains every accepted exchange for the whole session instead of disposing settled batches
+/// (AI-002 TR-17). Where the framework fits without deviation — the stateless transport underneath — it is used
+/// unchanged through <see cref="IChatClient"/>.
 /// </para>
 /// <para>
 /// Thread safety: <see cref="InvalidateForFreshTurn()"/> and its overloads may be called from any thread; the
@@ -29,16 +29,15 @@ namespace AlleyCat.Mind.AI;
 /// <para>
 /// Transcript recording (AI-011 TR-5–TR-7) is an optional injected sink observing the request-cycle loop from
 /// outside: the runner stays character-agnostic and filesystem-free, the sink receives one capture per resolved
-/// cycle, and recording never changes validation, acceptance, disposal, watermark, scheduling, or cancellation
-/// semantics.
+/// cycle, and recording never changes validation, acceptance, retention, delivered-watermark, scheduling, or
+/// cancellation semantics.
 /// </para>
 /// </remarks>
 internal sealed class AgentSessionRunner
 {
     /// <summary>
-    /// Canonical cancellation result for every tool call that produced no natural result, keeping a retained or
-    /// in-flight exchange protocol-valid (AI-002 TR-19). A disposed batch's canonical results are composed the same
-    /// way and then dropped with the whole exchange. Internal so transcript tests assert the runner-generated value
+    /// Canonical cancellation result for every tool call that produced no natural result, keeping a retained
+    /// in-flight exchange protocol-valid (AI-002 TR-19). Internal so transcript tests assert the runner-generated value
     /// rather than a hand-supplied string (AI-011 TR-6).
     /// </summary>
     internal const string CancelledActionResult = "The action was cancelled before it completed.";
@@ -56,7 +55,6 @@ internal sealed class AgentSessionRunner
     private readonly IChatClient _chatClient;
     private readonly IReadOnlyList<ChatMessage> _runInputMessages;
     private readonly IReadOnlyDictionary<string, AIFunction> _functions;
-    private readonly HashSet<string> _exchangeDisposalToolNames;
     private readonly ChatOptions _chatOptions;
     private readonly ILogger _logger;
     private readonly bool _enableReasoningLogging;
@@ -70,6 +68,7 @@ internal sealed class AgentSessionRunner
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
     private readonly Lock _stateLock = new();
     private readonly List<ChatMessage> _acceptedTranscript = [];
+    private readonly List<int> _runtimeAuthoredMessageIndexes = [];
     private long _invalidationEpoch;
     private ActivePhaseState? _activePhase;
     private int _freshInvalidation;
@@ -80,7 +79,6 @@ internal sealed class AgentSessionRunner
         string instructions,
         IReadOnlyList<ChatMessage> runInputMessages,
         IList<AITool> productionTools,
-        bool allowMultipleToolCalls,
         ILogger logger,
         bool enableReasoningLogging = true,
         IReadOnlyList<TimeSpan>? retryDelays = null,
@@ -102,22 +100,19 @@ internal sealed class AgentSessionRunner
         // continuation can never reach the recorder after the session loop has exited (AI-011 TR-6/TR-7).
         _transcriptSink = new SessionScopedTranscriptSink(transcriptSink ?? NullAgentSessionTranscriptSink.Instance);
         _functions = ResolveFunctions(productionTools);
-        _exchangeDisposalToolNames = [.. _functions
-            .Where(static function => DisposesExchange(function.Value))
-            .Select(static function => function.Key)];
         _instructions = instructions ?? throw new ArgumentNullException(nameof(instructions));
         _chatOptions = new ChatOptions
         {
             Instructions = _instructions,
             Tools = [.. _functions.Values],
             ToolMode = ChatToolMode.RequireAny,
-            AllowMultipleToolCalls = allowMultipleToolCalls,
+            // Responses may carry multiple tool calls, validated and executed serially as one batch (AI-002 TR-12).
+            AllowMultipleToolCalls = true,
             ResponseFormat = null,
         };
         _transcriptRequestOptions = new MindTranscriptRequestOptions(
             _chatOptions.ModelId,
             _chatOptions.ToolMode?.GetType().Name ?? "Auto",
-            allowMultipleToolCalls,
             [.. _functions.Values.Select(static function => function.Name)]);
     }
 
@@ -408,7 +403,7 @@ internal sealed class AgentSessionRunner
                 }
 
                 IReadOnlyList<ChatMessage> requestTranscript = PrepareRequestTranscript(
-                    requestContext.PrefixMessages,
+                    requestContext,
                     out long requestEpoch);
 
                 // Transcript capture (AI-011 TR-6) accompanies the cycle from its first provider interaction: a
@@ -422,6 +417,13 @@ internal sealed class AgentSessionRunner
                     RequestMessages = requestTranscript,
                     RequestOptions = _transcriptRequestOptions,
                 };
+                lock (_stateLock)
+                {
+                    // Positions are stable within this frozen request: synthetic exchanges are retained forever
+                    // (AI-002 TR-17), so every appended runtime-authored message is marked on every later cycle too.
+                    cycleTranscript.RuntimeAuthoredMessageIndexes = [.. _runtimeAuthoredMessageIndexes];
+                }
+
                 var cycleStopwatch = Stopwatch.StartNew();
 
                 ChatResponse? response;
@@ -539,6 +541,7 @@ internal sealed class AgentSessionRunner
 
                 // A response only resets the recovery streak after every shape, call-ID, and argument check passed.
                 consecutiveInvalidResponseCount = 0;
+                List<string> toleratedTexts = [.. CollectToleratedTexts(response)];
                 if (!TryAcceptResponse(response, requestEpoch, requestContext.Confirmation, lifetimeToken))
                 {
                     // Registration won while validation was running. The mutable turn remains available for its
@@ -554,6 +557,10 @@ internal sealed class AgentSessionRunner
                         MindTranscriptCycleOutcome.DiscardedStaleResponse);
                     continue;
                 }
+
+                // Text alongside tool calls was tolerated to keep the response valid (AI-002 TR-12): it is stripped
+                // from the retained exchange and recorded in the transcript sink (AI-011 TR-6).
+                cycleTranscript.StrippedTexts.AddRange(toleratedTexts);
 
                 List<AIContent> results = new(calls.Length);
                 bool batchSkippedByInvalidation = false;
@@ -628,41 +635,14 @@ internal sealed class AgentSessionRunner
                         + "the canonical cancellation result.");
                 }
 
-                // Exchange-disposal boundary (AI-002 TR-17): the batch has fully settled — every call executed or
-                // canonically skipped, with tool observations already ingested — and the next request context has
-                // not been materialised yet. A batch is disposed only when every call targets a disposal-opted
-                // tool (TR-20); a single non-opted call retains the whole exchange so no request ever carries a
-                // dangling call or result (TR-19). Disposal removes only the accepted assistant messages of this
-                // batch — never bootstrap input (TR-21) — and leaves session-wide call-ID validation intact.
-                bool disposeExchange = Array.TrueForAll(calls, call => _exchangeDisposalToolNames.Contains(call.Name));
-                bool disposed = false;
+                // Retention boundary (AI-002 TR-17/TR-20): the batch has fully settled — every call executed or
+                // canonically skipped — and the whole exchange joins the retained transcript: the stripped assistant
+                // messages appended atomically at acceptance plus this tool-result message. Nothing is ever removed.
                 lock (_stateLock)
                 {
-                    if (disposeExchange)
-                    {
-                        disposed = TryRemoveAcceptedExchangeLocked(response);
-                    }
-
-                    if (!disposed)
-                    {
-                        _acceptedTranscript.Add(new ChatMessage(ChatRole.Tool, results));
-                    }
+                    _acceptedTranscript.Add(new ChatMessage(ChatRole.Tool, results));
                 }
 
-                if (disposed)
-                {
-                    _logger.LogDebug(
-                        "Agent session disposed the completed tool exchange of request {RequestCount}; its settled "
-                        + "outcome is delivered by fresh per-request context instead.",
-                        requestCount);
-                }
-
-                cycleTranscript.ExchangeDisposal = disposeExchange switch
-                {
-                    true when disposed => MindTranscriptExchangeDisposal.Disposed,
-                    true => MindTranscriptExchangeDisposal.Retained,
-                    _ => MindTranscriptExchangeDisposal.NotApplicable,
-                };
                 CompleteCycleTranscript(cycleTranscript, cycleStopwatch, MindTranscriptCycleOutcome.Accepted);
             }
 
@@ -951,17 +931,49 @@ internal sealed class AgentSessionRunner
     }
 
     /// <summary>
-    /// Freezes the canonical request context and accepted transcript for one provider request.
+    /// Freezes one logical provider request over the retained transcript (AI-002 TR-2/TR-4): the materialisation's
+    /// pending synthetic delivery exchange is appended to the retained transcript first — in chronological tail
+    /// position, with its synthetic call IDs registered session-wide and delivery marked irrevocably (TR-18/TR-19) —
+    /// then the request becomes the whole retained transcript followed by the materialisation's suffix, whose fresh
+    /// current-scene message renders last.
     /// </summary>
     private IReadOnlyList<ChatMessage> PrepareRequestTranscript(
-        IReadOnlyList<ChatMessage> prefixMessages,
+        AgentRequestContext requestContext,
         out long requestEpoch)
     {
+        ArgumentNullException.ThrowIfNull(requestContext);
         lock (_stateLock)
         {
-            List<ChatMessage> request = [.. prefixMessages, .. _acceptedTranscript];
+            if (requestContext.TranscriptMessages.Count > 0)
+            {
+                int firstIndex = _acceptedTranscript.Count;
+                _acceptedTranscript.AddRange(requestContext.TranscriptMessages);
+                foreach (ChatMessage message in requestContext.TranscriptMessages)
+                {
+                    foreach (AIContent content in message.Contents)
+                    {
+                        if (content is FunctionCallContent call)
+                        {
+                            if (!_callIds.Add(call.CallId))
+                            {
+                                throw new AgentSessionException(
+                                    $"The agent session synthetic delivery reused the already-consumed call ID "
+                                    + $"'{call.CallId}'.");
+                            }
+                        }
+                    }
+
+                    _runtimeAuthoredMessageIndexes.Add(firstIndex++);
+                }
+
+                // Delivery marking shares the acceptance critical section: the moment the synthetic exchange joins
+                // the retained transcript its observations are delivered forever, whatever happens to this request
+                // (AI-002 TR-19).
+                _requestContextSource.Retain(requestContext.Confirmation);
+            }
+
             requestEpoch = _invalidationEpoch;
-            return request;
+            return [.. _acceptedTranscript, .. requestContext.SuffixMessages];
         }
     }
 
@@ -975,8 +987,8 @@ internal sealed class AgentSessionRunner
 
     /// <summary>
     /// Atomically decides whether validated assistant output belongs to the request's epoch. If it does, the mutable
-    /// assistant batch becomes accepted history, and the same critical section confirms the request snapshot's
-    /// watermark (AI-002 TR-5).
+    /// assistant batch becomes accepted history — with tolerated text content stripped from the retained exchange
+    /// (AI-002 TR-12/TR-20) — and the same critical section confirms the request snapshot's watermark (AI-002 TR-5).
     /// </summary>
     private bool TryAcceptResponse(
         ChatResponse response,
@@ -991,12 +1003,16 @@ internal sealed class AgentSessionRunner
                 return false;
             }
 
-            _acceptedTranscript.AddRange(response.Messages);
-            foreach (FunctionCallContent call in response.Messages
-                         .SelectMany(static message => message.Contents)
-                         .OfType<FunctionCallContent>())
+            foreach (ChatMessage message in response.Messages)
             {
-                _ = _callIds.Add(call.CallId);
+                _acceptedTranscript.Add(StripRetainedMessage(message));
+                foreach (AIContent content in message.Contents)
+                {
+                    if (content is FunctionCallContent call)
+                    {
+                        _ = _callIds.Add(call.CallId);
+                    }
+                }
             }
 
             // Context confirmation is part of the same acceptance critical section as transcript mutation and epoch
@@ -1007,35 +1023,27 @@ internal sealed class AgentSessionRunner
     }
 
     /// <summary>
-    /// Removes one disposed batch's accepted assistant messages — the complete exchange unit of AI-002 TR-19, the
-    /// tail range <see cref="TryAcceptResponse" /> appended for this response — so no later request replays them.
-    /// Must be called while holding <see cref="_stateLock" />. The transcript is mutated only by the run loop
-    /// between acceptance and settlement, so the response's messages are always the tail; the identity check
-    /// retains conservatively rather than ever removing another batch's content. The tool-result message of a
-    /// disposed batch is never appended, and the batch's call IDs stay registered for duplicate validation
-    /// (AI-002 TR-21).
+    /// Returns the retained-exchange view of one accepted assistant message (AI-002 TR-20): the message instance
+    /// itself when it carries no text content, otherwise a copy carrying only its tool calls and reasoning content —
+    /// accompanying text is stripped and recorded separately (TR-12). The original parsed message stays untouched for
+    /// transcript capture.
     /// </summary>
-    /// <returns>Whether the accepted assistant messages were removed; false retains the exchange conservatively.</returns>
-    private bool TryRemoveAcceptedExchangeLocked(ChatResponse response)
-    {
-        int count = response.Messages.Count;
-        if (_acceptedTranscript.Count < count)
-        {
-            return false;
-        }
+    private static ChatMessage StripRetainedMessage(ChatMessage message)
+        => message.Contents.Any(static content => content is TextContent)
+            ? new ChatMessage(message.Role, [.. message.Contents.Where(static content => content is not TextContent)])
+            : message;
 
-        int start = _acceptedTranscript.Count - count;
-        for (int index = 0; index < count; index++)
-        {
-            if (!ReferenceEquals(_acceptedTranscript[start + index], response.Messages[index]))
-            {
-                return false;
-            }
-        }
-
-        _acceptedTranscript.RemoveRange(start, count);
-        return true;
-    }
+    /// <summary>
+    /// Collects the non-empty text contents tolerated alongside a validated response's tool calls (AI-002 TR-12):
+    /// the response stays valid, and each text becomes a stripped-text record in the transcript sink (AI-011 TR-11)
+    /// when the response is accepted.
+    /// </summary>
+    private static IEnumerable<string> CollectToleratedTexts(ChatResponse response)
+        => response.Messages
+            .SelectMany(static message => message.Contents)
+            .OfType<TextContent>()
+            .Select(static text => text.Text)
+            .Where(static text => !string.IsNullOrEmpty(text))!;
 
     /// <summary>Classifies one registered active phase of the session loop.</summary>
     private enum AgentSessionPhaseKind
@@ -1109,29 +1117,12 @@ internal sealed class AgentSessionRunner
     }
 
     /// <summary>
-    /// Determines whether one production function carries a composition-registered exchange-disposal policy,
-    /// unwrapping composition layers — for example a phase-policy binding — so the authored flag survives
-    /// composition wrapping.
-    /// </summary>
-    private static bool DisposesExchange(AIFunction function)
-    {
-        for (AIFunction? current = function; current is not null; current = current is ComposedAIFunction layer ? layer.ComposedFunction : null)
-        {
-            if (current is ExchangeDisposalBoundFunction { Policy.DisposesExchange: true })
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Validates one response's shape and arguments — every call, identifier, argument, and content item —
     /// before any tool in the batch executes (AI-002 TR-12), rejecting each failing branch with a
     /// branch-specific diagnostic reason naming the parsed content that failed (AI-011 TR-20). The predicates
     /// and their evaluation order are unchanged: only the rejection reason differs, so no verdict, acceptance
-    /// rule, or recovery-budget behaviour changes.
+    /// rule, or recovery-budget behaviour changes. Text content alongside tool calls is tolerated and stripped at
+    /// acceptance (AI-002 TR-12).
     /// </summary>
     private FunctionCallContent[] ValidateResponse(ChatResponse response, int requestCount)
     {
@@ -1163,6 +1154,21 @@ internal sealed class AgentSessionRunner
                         _logger.LogTrace("Reasoning: {}", reasoning.Text);
                     }
 
+                    continue;
+                }
+
+                if (content is TextContent)
+                {
+                    // Text alongside tool calls is tolerated: the response stays valid and the text is stripped from
+                    // the retained exchange at acceptance (AI-002 TR-12).
+                    continue;
+                }
+
+                if (content is TextContent)
+                {
+                    // Text alongside tool calls is tolerated: the response stays valid and the text is stripped from
+                    // the retained exchange at acceptance (AI-002 TR-12). A response whose every content item is text
+                    // still fails the at-least-one-call check below.
                     continue;
                 }
 

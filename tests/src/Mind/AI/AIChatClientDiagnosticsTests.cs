@@ -104,7 +104,6 @@ public sealed class AIChatClientDiagnosticsTests
             "Complete the scripted diagnostic session.",
             [],
             [tool],
-            false,
             loggerFactory.CreateLogger("test"));
         await runner.RunAsync(sessionCancellation.Token);
 

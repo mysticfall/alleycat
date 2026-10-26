@@ -198,7 +198,6 @@ public sealed class ReadLoreFlowIntegrationTests
                 ResourceLoader.Load(CurrentScenePromptPath),
                 exactMatch: false),
             ClientProvider = clientProvider,
-            AllowMultipleToolCalls = true,
             ObservationImportanceThreshold = 1f,
         };
         WatchRegistry watchRegistry = new()

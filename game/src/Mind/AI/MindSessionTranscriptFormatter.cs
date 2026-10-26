@@ -68,7 +68,13 @@ internal static partial class MindSessionTranscriptFormatter
         AppendHeader(document, cycle, turnNumber, characterId);
         AppendInstructions(document, cycle.Instructions);
         AppendRequestOptions(document, cycle.RequestOptions);
-        AppendMessages(document, "## Request Transcript", "Message", cycle.RequestMessages);
+        AppendMessages(
+            document,
+            "## Request Transcript",
+            "Message",
+            cycle.RequestMessages,
+            cycle.RuntimeAuthoredMessageIndexes);
+        AppendStrippedTexts(document, cycle.StrippedTexts);
         AppendResponse(document, cycle);
         AppendToolInvocations(document, cycle.ToolInvocations);
         return document.ToString();
@@ -455,11 +461,6 @@ internal static partial class MindSessionTranscriptFormatter
             _ = document.Append(" — ").Append(cycle.OutcomeDetail);
         }
 
-        if (cycle.ExchangeDisposal is not MindTranscriptExchangeDisposal.NotApplicable)
-        {
-            _ = document.Append(LineFeed).Append("- **Exchange Disposal:** ").Append(cycle.ExchangeDisposal);
-        }
-
         _ = document.Append(LineFeed).Append(LineFeed);
     }
 
@@ -475,8 +476,6 @@ internal static partial class MindSessionTranscriptFormatter
         _ = document
             .Append("## Request Options").Append(LineFeed).Append(LineFeed)
             .Append("- **Tool Mode:** ").Append(options.ToolMode).Append(LineFeed)
-            .Append("- **Allow Multiple Tool Calls:** ").Append(options.AllowMultipleToolCalls ? "yes" : "no")
-            .Append(LineFeed)
             .Append("- **Tools:** ").Append(string.Join(", ", options.ToolNames)).Append(LineFeed)
             .Append(LineFeed);
     }
@@ -485,7 +484,8 @@ internal static partial class MindSessionTranscriptFormatter
         StringBuilder document,
         string sectionHeading,
         string messageLabelPrefix,
-        IReadOnlyList<ChatMessage> messages)
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<int> runtimeAuthoredMessageIndexes)
     {
         _ = document.Append(sectionHeading).Append(LineFeed).Append(LineFeed);
         if (messages.Count == 0)
@@ -496,10 +496,35 @@ internal static partial class MindSessionTranscriptFormatter
 
         for (int index = 0; index < messages.Count; index++)
         {
+            // Runtime-authored synthetic scene-update exchanges are visibly marked as such in the transcript
+            // (AI-011 TR-11, AI-002 TR-18).
+            string runtimeAuthoredMark = runtimeAuthoredMessageIndexes.Contains(index)
+                ? " *(runtime-authored scene update)*"
+                : string.Empty;
             AppendMessage(
                 document,
                 messages[index],
-                $"{messageLabelPrefix} {index + 1} of {messages.Count}");
+                $"{messageLabelPrefix} {index + 1} of {messages.Count}{runtimeAuthoredMark}");
+        }
+    }
+
+    /// <summary>
+    /// Renders the records of text content stripped from this cycle's retained exchange (AI-002 TR-12, AI-011
+    /// TR-11): each record shows what was removed, while the response section still carries the original parsed
+    /// text.
+    /// </summary>
+    private static void AppendStrippedTexts(StringBuilder document, IReadOnlyList<string> strippedTexts)
+    {
+        if (strippedTexts.Count == 0)
+        {
+            return;
+        }
+
+        _ = document.Append("### Stripped Text From Retained Exchange").Append(LineFeed).Append(LineFeed);
+        foreach (string text in strippedTexts)
+        {
+            _ = document.Append("- ");
+            AppendTextBlock(document, text);
         }
     }
 

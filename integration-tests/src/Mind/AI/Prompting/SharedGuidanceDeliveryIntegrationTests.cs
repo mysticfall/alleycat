@@ -22,9 +22,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 /// Godot-runtime coverage proving the authored shared guidance and the corrected tool metadata actually reach the
 /// model together with the context they describe: one captured provider request carries the rendered shared
 /// instruction, a new player reply marked newly presented in the event timeline, fresh current-scene status, and
-/// the corrected session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15) — and that the
-/// delivered instruction itself teaches speech-addressee interpretation: reply opportunity versus overheard
-/// context, and context inference for wording that makes no addressee claim (AI-003 UR-10, TR-13/TR-15).
+/// the corrected session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15).
 /// </summary>
 [Headless]
 public sealed partial class SharedGuidanceDeliveryIntegrationTests
@@ -85,30 +83,37 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Captures.Count == 2);
             CapturedRequest freshRequest = clientProvider.Captures[1];
 
-            // The replacement request leads with the canonical timeline and scene messages (AI-002 TR-2/3).
+            // The replacement request replays the bootstrap, the consolidated synthetic scene-update exchange
+            // for the fresh player reply, and the fresh scene-status suffix rendered last (AI-002 TR-2/18).
             Assert.Equal(
-                [ChatRole.User, ChatRole.User, ChatRole.User],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 freshRequest.Messages.Select(static message => message.Role));
-            string timeline = freshRequest.Messages[0].Text;
-            Assert.StartsWith("<Event History>", timeline, StringComparison.Ordinal);
-            // The fresh player reply renders exactly once in the single section, marked newly presented on its
-            // complete rendered line (AI-002 TR-3).
-            Assert.Contains(
-                "[new] Heard `char:fixture_player` say to me: I am heading to the market now.",
-                timeline,
+            // No event-history user message or newly-presented marking exists anywhere model-facing
+            // (AI-002 TR-3, AI-003 TR-10).
+            Assert.DoesNotContain(
+                "<Event History>",
+                string.Join('\n', freshRequest.Messages.Select(static message => message.Text)),
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
-                "\nHeard `char:fixture_player` say to me:",
-                timeline,
+                "[new]",
+                string.Join('\n', freshRequest.Messages.Select(static message => message.Text)),
                 StringComparison.Ordinal);
+            // The fresh player reply reaches the model exactly once through the synthetic exchange's tool
+            // result (AI-002 TR-18).
+            FunctionResultContent delivery = Assert.IsType<FunctionResultContent>(
+                Assert.Single(freshRequest.Messages[2].Contents));
+            Assert.Equal(
+                "Heard `char:fixture_player` say to me: I am heading to the market now.",
+                ExtractObservedLine(delivery.Result?.ToString()));
 
-            // Fresh current-scene status accompanies the timeline on the same request, stating its snapshot's
+            // Fresh current-scene status renders last on the same request, stating its snapshot's
             // current game time unconditionally — including with an attended character present.
-            Assert.Contains("Current attended characters:", freshRequest.Messages[1].Text, StringComparison.Ordinal);
-            Assert.Contains("char:fixture_player", freshRequest.Messages[1].Text, StringComparison.Ordinal);
+            ChatMessage sceneStatus = freshRequest.Messages[^1];
+            Assert.Contains("Current attended characters:", sceneStatus.Text, StringComparison.Ordinal);
+            Assert.Contains("char:fixture_player", sceneStatus.Text, StringComparison.Ordinal);
             Assert.Matches(
                 new System.Text.RegularExpressions.Regex(@"Current game time: \d+\.\ds"),
-                freshRequest.Messages[1].Text);
+                sceneStatus.Text);
 
             // The authored shared guidance reaches the request fully rendered: non-empty, built from this mind's
             // character context, and free of unresolved template placeholders. Exact prose wording is game content
@@ -123,13 +128,13 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
                 [.. freshRequest.Tools.Keys.OrderBy(static name => name, StringComparer.Ordinal)]);
             Assert.Contains("Lore Catalogue", freshRequest.Tools["read_lore"], StringComparison.Ordinal);
             Assert.Contains("not omniscient facts", freshRequest.Tools["read_lore"], StringComparison.Ordinal);
-            Assert.Contains("arrives with every request", freshRequest.Tools["wait"], StringComparison.Ordinal);
+            Assert.Contains("arrive automatically", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.DoesNotContain("nothing new reaches you", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.Contains("never what was observed", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.Contains("opaque watch ID", freshRequest.Tools["watch_proximity"], StringComparison.Ordinal);
             Assert.Contains("never re-arm to keep it active", freshRequest.Tools["watch_proximity"], StringComparison.Ordinal);
             Assert.Contains(
-                "ordinary events in your event history",
+                "ordinary remembered events delivered through automatic scene updates",
                 freshRequest.Tools["watch_proximity"],
                 StringComparison.Ordinal);
             Assert.Contains("opaque watch ID", freshRequest.Tools["unwatch"], StringComparison.Ordinal);
@@ -144,12 +149,8 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
     }
 
     /// <summary>
-    /// The rendered shared instruction delivered on a real provider request teaches speech-addressee
-    /// interpretation: the Event History guidance covers addressee wording — including entries that make no
-    /// addressee claim and leave the addressee to be inferred from context — while the Choosing Actions guidance
-    /// distinguishes speech addressed to the NPC as a reply opportunity from speech addressed to other characters
-    /// as overheard context (AI-003 UR-10, TR-13/TR-15). Stable concept phrases are asserted rather than exact
-    /// prose, which stays tunable (AI-003 TR-12).
+    /// The delivered instruction teaches addressee wording, including neutral entries, and distinguishes an
+    /// addressed reply opportunity from overheard context (AI-003 UR-10, TR-13/TR-15).
     /// </summary>
     [Fact]
     public async Task ProviderRequest_InstructionTeachesSpeechAddresseeInterpretation()
@@ -190,19 +191,12 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         try
         {
             await WaitUntilAsync(sceneTree, () => clientProvider.Captures.Count == 1);
-
-            // The startup request's instruction is the authored shared guidance exactly as the model receives it.
             string instructions = clientProvider.Captures[0].Instructions;
 
-            // Event-history guidance covers addressee wording: entries may state whom the speaker addressed, and
-            // wording that makes no addressee claim leaves the addressee to be inferred from context (TR-13).
-            string eventHistory = AuthoredSection(instructions, "Event History");
-            Assert.Contains("no addressee claim", eventHistory, StringComparison.Ordinal);
-            Assert.Contains("infer from context", eventHistory, StringComparison.Ordinal);
+            string sceneDelivery = AuthoredSection(instructions, "Scene Delivery");
+            Assert.Contains("no addressee claim", sceneDelivery, StringComparison.Ordinal);
+            Assert.Contains("infer from context", sceneDelivery, StringComparison.Ordinal);
 
-            // Action-selection guidance distinguishes the two addressee outcomes: speech addressed to the NPC is
-            // its reply opportunity, while speech addressed to other characters is overheard context between
-            // others rather than itself a reason to respond (TR-15).
             string choosingActions = AuthoredSection(instructions, "Choosing Actions");
             Assert.Contains("addressed to you", choosingActions, StringComparison.Ordinal);
             Assert.Contains("reply opportunity", choosingActions, StringComparison.Ordinal);
@@ -218,16 +212,6 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         }
     }
 
-    private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames = 300)
-    {
-        for (int frame = 0; frame < maxFrames && !predicate(); frame++)
-        {
-            await TestUtils.WaitForNextFrameAsync(sceneTree);
-        }
-
-        Assert.True(predicate(), $"Condition was not met within {maxFrames} frames.");
-    }
-
     /// <summary>Returns the authored markdown passage from the named top-level heading to the next one.</summary>
     private static string AuthoredSection(string source, string heading)
     {
@@ -237,6 +221,16 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         int end = source.IndexOf("\n# ", start + marker.Length, StringComparison.Ordinal);
 
         return end < 0 ? source[start..] : source[start..end];
+    }
+
+    private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames = 300)
+    {
+        for (int frame = 0; frame < maxFrames && !predicate(); frame++)
+        {
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+
+        Assert.True(predicate(), $"Condition was not met within {maxFrames} frames.");
     }
 
     private sealed class TestCharacter : ICharacter
@@ -329,5 +323,19 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             {
             }
         }
+    }
+
+    /// <summary>
+    /// Extracts the player-reply line from the synthetic delivery's tool-result text (AI-002 TR-18): canonical
+    /// observation lines carry a trailing game-time suffix.
+    /// </summary>
+    private static string ExtractObservedLine(string? delivered)
+    {
+        Assert.NotNull(delivered);
+        string line = delivered!.Split('\n').Single(
+            static line => line.Contains("char:fixture_player", StringComparison.Ordinal));
+        // Canonical lines keep their observation time suffix (AI-001); strip it for the wording comparison.
+        int suffix = line.IndexOf(" (at ", StringComparison.Ordinal);
+        return suffix > 0 ? line[..suffix] : line;
     }
 }

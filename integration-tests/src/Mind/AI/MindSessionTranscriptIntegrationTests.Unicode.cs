@@ -52,7 +52,7 @@ public sealed partial class MindSessionTranscriptIntegrationTests
             var recorder = new MindSessionTranscriptRecorder("owner", () => root, NullLogger.Instance);
             var runner = new AgentSessionRunner(
                 client, "Scripted Korean JSON regression.", [new ChatMessage(ChatRole.User, "Begin.")],
-                [function], allowMultipleToolCalls: false, NullLogger.Instance, transcriptSink: recorder);
+                [function], NullLogger.Instance, transcriptSink: recorder);
             run = runner.RunAsync(lifetime.Token);
             // The next request starts only after cycle one has settled and both files have been written.
             await nextRequest.Task.WaitAsync(TimeSpan.FromSeconds(5));

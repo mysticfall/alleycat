@@ -7,8 +7,9 @@ namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
 /// Produces the model-facing view of immutable Mind observations. Grouped speech is coalesced here only; Mind's
-/// timeline remains the factual, append-only segment record. Timeline-presentation marking — which projected
-/// events lie beyond a caller-supplied confirmed watermark — is decided here, with the grouping it must match.
+/// timeline remains the factual, append-only segment record. No model-facing newly-presented marking exists
+/// (AI-002 TR-3, AI-003 TR-10): delivery selection belongs entirely to the caller's delivered watermark
+/// (AI-002 TR-18/TR-19).
 /// </summary>
 internal static class ContinuationProjection
 {
@@ -16,8 +17,7 @@ internal static class ContinuationProjection
         AgentObservation Observation,
         long Position,
         long Revision,
-        SpeechGroupCorrelation? Correlation,
-        bool IsNewlyPresented);
+        SpeechGroupCorrelation? Correlation);
 
     /// <summary>
     /// Prompting-owned correlation identity for one projected grouped-speech event: the contributing group's
@@ -36,14 +36,13 @@ internal static class ContinuationProjection
     {
         ArgumentNullException.ThrowIfNull(timeline);
         return Project(
-            [.. timeline.Select((observation, index) => new Entry(observation, index, selected is null || selected.Contains(observation), null, NewlyPresented: false))]);
+            [.. timeline.Select((observation, index) => new Entry(observation, index, selected is null || selected.Contains(observation), null))]);
     }
 
     /// <summary>Projects accepted timeline entries while retaining their ingestion-only speech transport privately.</summary>
     public static IReadOnlyList<Event> Project(
         IReadOnlyList<AcceptedObservationEntry> timeline,
-        IReadOnlyList<AcceptedObservationEntry>? selected = null,
-        long? confirmedSequenceWatermark = null)
+        IReadOnlyList<AcceptedObservationEntry>? selected = null)
     {
         ArgumentNullException.ThrowIfNull(timeline);
         return Project(
@@ -51,8 +50,7 @@ internal static class ContinuationProjection
                 entry.Payload,
                 index,
                 selected is null || selected.Contains(entry),
-                entry.SpeechTransport,
-                entry.SequenceID > confirmedSequenceWatermark))]);
+                entry.SpeechTransport))]);
     }
 
     private static IReadOnlyList<Event> Project(IReadOnlyList<Entry> timeline)
@@ -122,9 +120,7 @@ internal static class ContinuationProjection
                 new SpeechGroupCorrelation(
                     identity.SourceVoiceID,
                     identity.SpeechGroupID,
-                    entries.Select(static entry => entry.SpeechTransport!.SegmentIndex).ToHashSet()),
-                // The joined line is newly presented when any contributing segment is (AI-002 TR-3).
-                entries.Any(static entry => entry.NewlyPresented)));
+                    entries.Select(static entry => entry.SpeechTransport!.SegmentIndex).ToHashSet())));
         }
 
         return [.. projected.OrderBy(static entry => entry.Position)];
@@ -135,7 +131,7 @@ internal static class ContinuationProjection
         AgentObservation observation = entry.Observation is ObservedSpeech speech
             ? new ObservedSpeech(speech.ActorId, speech.Content, speech.Addressees) { ObservedAt = speech.ObservedAt }
             : entry.Observation;
-        return new Event(observation, entry.Position + 1, entry.Position + 1, Correlation: null, entry.NewlyPresented);
+        return new Event(observation, entry.Position + 1, entry.Position + 1, Correlation: null);
     }
 
     private static bool TryGetGroupIdentity(Entry entry, out GroupIdentity identity)
@@ -164,8 +160,7 @@ internal static class ContinuationProjection
         AgentObservation Observation,
         long Position,
         bool Selected,
-        SpeechObservationTransport? SpeechTransport,
-        bool NewlyPresented);
+        SpeechObservationTransport? SpeechTransport);
 
     private sealed class ContinuationProjectionLog
     {

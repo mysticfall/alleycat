@@ -55,7 +55,9 @@ per-request scene context.
     - dedicated typed proximity-transition observations: `NeverExpire`, event-eligible.
    - visual presence: attention-only; it creates no retained observation initially.
 6. Mind independently appends every event-eligible accepted entry to a persistent event timeline. Active-log expiry or
-   supersession never removes timeline entries. AI-002's per-request event-timeline message renders this timeline.
+   supersession never removes timeline entries. AI-002 delivers this timeline's entries to the model through
+   runtime-authored scene-update exchanges; the timeline remains Mind's canonical memory, and the provider transcript
+   is derived presentation.
 7. Every accepted entry evaluates importance, freshness, and any other scheduler metadata exactly once. Scheduling
    carries
    only that metadata; it must not carry or render observation payload text.

@@ -214,7 +214,7 @@ public sealed class AgenticMindTests
             StartedAt = DateTimeOffset.Now,
             Instructions = "<Identity>\nUnused.\n</Identity>\n",
             RequestMessages = [new ChatMessage(ChatRole.User, "Begin.")],
-            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", false, []),
+            RequestOptions = new MindTranscriptRequestOptions(null, "RequiredChatToolMode", []),
         };
 
     /// <summary>

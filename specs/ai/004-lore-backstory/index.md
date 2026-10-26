@@ -291,7 +291,7 @@ authored once and every model-visible surface presents it in the same backticked
     cancellation into unavailable lore. Source validation failures remain errors, not missing knowledge. No
     arbitrary batch limit is set.
 50. AI-002 normatively owns `read_lore` composition, trusted observer/content binding, no-observation execution, and
-    default exchange retention. AI-003 normatively owns static catalogue composition and guidance to retrieve
+    uniform exchange retention. AI-003 normatively owns static catalogue composition and guidance to retrieve
     relevant lore before acting, including the canonical-reference and backtick presentation teaching. Neither
     integration may bypass the isolation and cleaning contracts here.
 
@@ -502,7 +502,7 @@ authored once and every model-visible surface presents it in the same backticked
     handles — including the dot-handle hint — plus scoped duplicate failures with internal diagnostics only, and
     cancellation without partial success (TR-43, TR-47–TR-49).
 39. AI-002 and AI-003 acceptance verifies trusted tool binding, retained retrieval reaching the next provider
-    request, no observations, unchanged action disposal, and shared retrieval guidance with canonical-reference
+    request, no observations, uniform exchange retention, and shared retrieval guidance with canonical-reference
     and backtick teaching (TR-50).
 40. An end-to-end regression proves an authored annotated pipe wiki reference renders as ``Title(`target_id`)``
     with a canonical full ID for subject-bound targets, no source path, and no residual wiki brackets in both the

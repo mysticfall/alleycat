@@ -94,16 +94,12 @@ public sealed partial class MindSessionTranscriptIntegrationTests
             Assert.Contains("## Instructions", firstCycle);
             Assert.Contains("### Static", firstCycle);
             Assert.DoesNotContain("<Static>", firstCycle);
-            // The role-labelled request transcript carries the prefix timeline and scene-status messages ahead of
-            // the bootstrap input (AI-002 TR-2).
+            // The role-labelled request transcript leads with the bootstrap input and ends with the fresh
+            // scene-status message (AI-002 TR-2): no event-history message exists.
             Assert.Contains("## Request Transcript", firstCycle);
-            Assert.Contains("### Message 1 of 3 — user", firstCycle);
-            Assert.Contains("### Message 2 of 3 — user", firstCycle);
-            Assert.Contains("### Message 3 of 3 — user", firstCycle);
-            // The timeline message body renders its pseudo-XML section as a heading with no raw tags visible
-            // (AI-011 TR-9).
-            Assert.Contains("#### Event History", firstCycle);
-            Assert.DoesNotContain("<Event History>", firstCycle);
+            Assert.Contains("### Message 1 of 2 — user", firstCycle);
+            Assert.Contains("### Message 2 of 2 — user", firstCycle);
+            Assert.DoesNotContain("Event History", firstCycle);
             Assert.Contains(AgenticMind.SessionBootstrapInput, firstCycle);
             Assert.Contains(SceneStatusText, firstCycle);
             Assert.Contains("## Request Options", firstCycle);
@@ -304,7 +300,7 @@ public sealed partial class MindSessionTranscriptIntegrationTests
                     "received an invalid response shape at request",
                     exhaustedCycle),
                 () => Assert.Matches(
-                    @"(?i)\b(text|content|role)\b",
+                    @"(?i)\b(no function calls|response)\b",
                     proseCycle),
                 () => Assert.Matches(
                     @"(?i)pars",
@@ -413,11 +409,11 @@ public sealed partial class MindSessionTranscriptIntegrationTests
     }
 
     /// <summary>
-    /// A cycle whose whole tool batch targets a disposal-opted tool records the exchange-disposal decision
-    /// (AI-002 TR-17; AI-011 TR-6, TR-14).
+    /// Every accepted exchange is retained for the whole session (AI-002 TR-17): a settled batch stays visible in
+    /// the turn page and the following request, with no disposal decision recorded (AI-011 TR-6, TR-14).
     /// </summary>
     [Fact]
-    public async Task DisposalOptedToolBatch_RecordsTheExchangeDisposalDecision()
+    public async Task AcceptedToolBatch_IsRetainedWithNoDisposalDecision()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         string root = CreateTranscriptRoot();
@@ -439,10 +435,10 @@ public sealed partial class MindSessionTranscriptIntegrationTests
             await WaitUntilAsync(sceneTree, () => tool.CapturedContexts.Count == 1);
 
             string characterDirectory = GetCharacterDirectory(root);
-            string disposedCycle = File.ReadAllText(Path.Combine(characterDirectory, "turn-0001.md"));
-            Assert.Contains("- **Outcome:** Accepted", disposedCycle);
-            Assert.Contains("- **Exchange Disposal:** Disposed", disposedCycle);
-            Assert.Contains($"### {DisposingCapturingTool.DisposingToolNameValue} — call `call-1`", disposedCycle);
+            string acceptedCycle = File.ReadAllText(Path.Combine(characterDirectory, "turn-0001.md"));
+            Assert.Contains("- **Outcome:** Accepted", acceptedCycle);
+            Assert.DoesNotContain("Exchange Disposal:", acceptedCycle);
+            Assert.Contains($"### {DisposingCapturingTool.DisposingToolNameValue} — call `call-1`", acceptedCycle);
 
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
@@ -1249,7 +1245,7 @@ public sealed partial class MindSessionTranscriptIntegrationTests
     }
 
     /// <summary>
-    /// Disposal-opted capture: a whole batch of its calls has its completed exchange disposed (AI-002 TR-17).
+    /// Ordinary capture tool whose settled exchanges stay retained (AI-002 TR-17).
     /// </summary>
     private sealed partial class DisposingCapturingTool : CapturingTool
     {
@@ -1258,7 +1254,6 @@ public sealed partial class MindSessionTranscriptIntegrationTests
         public DisposingCapturingTool()
         {
             ToolName = DisposingToolNameValue;
-            DisposesExchangeOnCompletion = true;
         }
     }
 

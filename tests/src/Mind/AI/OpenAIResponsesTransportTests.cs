@@ -26,11 +26,8 @@ public sealed class OpenAIResponsesTransportTests
     /// Unset request controls are omitted from the wire entirely: no reasoning or answer-text verbosity fields are
     /// sent.
     /// </remarks>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task SessionResponses_WithTwoSpeakCalls_EmitsRequiredStatelessRequests(
-        bool allowMultipleToolCalls)
+    [Fact]
+    public async Task SessionResponses_WithTwoSpeakCalls_EmitsRequiredStatelessRequests()
     {
         CancellationTokenSource sessionCancellation = new();
         var handler = new CancellingHandler(
@@ -49,7 +46,7 @@ public sealed class OpenAIResponsesTransportTests
             "speak",
             "Speak through the character-owned voice.");
 
-        await RunSessionAsync(client, speak, allowMultipleToolCalls, sessionCancellation);
+        await RunSessionAsync(client, speak, sessionCancellation);
 
         Assert.Equal(["Hello", "Again"], admittedSpeech);
         // Two scripted responses served, plus the third request whose cancellation ends the session.
@@ -65,7 +62,7 @@ public sealed class OpenAIResponsesTransportTests
             Assert.False(root.TryGetProperty("previous_response_id", out _));
             Assert.Equal(Instructions, root.GetProperty("instructions").GetString());
             Assert.Equal("required", root.GetProperty("tool_choice").GetString());
-            Assert.Equal(allowMultipleToolCalls, root.GetProperty("parallel_tool_calls").GetBoolean());
+            Assert.True(root.GetProperty("parallel_tool_calls").GetBoolean());
             Assert.False(root.TryGetProperty("reasoning", out _));
             Assert.False(root.TryGetProperty("text", out _));
             Assert.False(root.TryGetProperty("text", out JsonElement text)
@@ -120,7 +117,7 @@ public sealed class OpenAIResponsesTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation);
 
         // Two scripted responses served, plus the third request whose cancellation ends the session: every request
@@ -169,7 +166,7 @@ public sealed class OpenAIResponsesTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation);
 
         Assert.Equal(2, handler.Requests.Count);
@@ -204,7 +201,7 @@ public sealed class OpenAIResponsesTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation);
 
         Assert.Equal(2, handler.Requests.Count);
@@ -239,7 +236,7 @@ public sealed class OpenAIResponsesTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation);
 
         Assert.Equal(2, handler.Requests.Count);
@@ -286,7 +283,7 @@ public sealed class OpenAIResponsesTransportTests
         await RunSessionAsync(
             client,
             AIFunctionFactory.Create((string speech) => "Spoken.", "speak"),
-            allowMultipleToolCalls: false,
+
             sessionCancellation,
             retryDelays: [TimeSpan.Zero]);
 
@@ -332,7 +329,6 @@ public sealed class OpenAIResponsesTransportTests
     private static async Task RunSessionAsync(
         IChatClient client,
         AIFunction speak,
-        bool allowMultipleToolCalls,
         CancellationTokenSource sessionCancellation,
         IReadOnlyList<TimeSpan>? retryDelays = null)
     {
@@ -341,7 +337,6 @@ public sealed class OpenAIResponsesTransportTests
             Instructions,
             [new ChatMessage(ChatRole.User, AgenticMind.SessionBootstrapInput)],
             [speak],
-            allowMultipleToolCalls,
             NullLogger.Instance,
             retryDelays: retryDelays);
         await runner.RunAsync(sessionCancellation.Token);
