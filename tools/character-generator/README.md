@@ -48,6 +48,25 @@ python3 tools/character-generator/commands/update_character_import_retarget_meta
 
 Use the metadata command only with its required generated `.blend` path and configured character name.
 
+### Import Retarget Validation
+
+Validate character import sidecars for the required MakeHuman retarget metadata on demand. A character whose sidecars
+lack those keys imports with MakeHuman bone names, which the runtime rig then skips. The command accepts one or more
+targets: a character directory, a character `.blend` or `.blend.import` path, or a pack/content root scanned
+recursively for paired `.colliders.blend` sources. Paired collider sources distinguish generated characters from
+animation and prop `.blend` assets sharing their directories:
+
+```sh
+python3 tools/character-generator/commands/check_character_import_retarget.py game/assets/characters/reference/female
+```
+
+The check verifies every `/Skeleton3D` entry in the main sidecar and the `PATH:Ragdoll/Skeleton3D` entry in the
+collider sidecar for the three required retarget keys, prints per-file PASS/FAIL results with a summary, and reports
+missing sidecars with the run-import-then-helper remedy. Key presence is validated, not key values. Exit status is
+`0` when every sidecar passes, `1` for any validation failure, and `2` for unsupported targets. Its unit tests run
+through the standard unittest discovery command below; headless Godot integration coverage lives in
+`integration-tests/src/Characters/CharacterColliderRetargetGuardIntegrationTests.cs`.
+
 ### Forearm and Binding Helpers
 
 The [forearm diagnostics guide](character_generator/rigging/README.md) documents the read-only source-audit,

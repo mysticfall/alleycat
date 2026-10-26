@@ -3,6 +3,12 @@ extends RefCounted
 
 const BODY_COLLIDER_PROFILE_SCRIPT_PATH := "res://src/Rigging/Physics/BodyColliderProfile.cs"
 const BODY_COLLIDER_PROFILE_PATH := "body_collider_profile.tres"
+const COLLIDER_RETARGET_SKELETON_PATH := "PATH:Ragdoll/Skeleton3D"
+const REQUIRED_RETARGET_KEYS := [
+	"retarget/bone_map",
+	"retarget/rest_fixer/fix_silhouette/enable",
+	"retarget/rest_fixer/fix_silhouette/filter",
+]
 
 
 func apply(source_file_path: String) -> void:
@@ -24,6 +30,19 @@ func apply(source_file_path: String) -> void:
 
 	if not FileAccess.file_exists(collider_scene_path + ".import"):
 		push_warning("Character collider import skipped because Godot has not imported collider source '%s' yet." % collider_scene_path)
+		return
+
+	var collider_sidecar_path := collider_scene_path + ".import"
+	if not _has_required_retarget_metadata(collider_sidecar_path):
+		# Collider sources without the MakeHuman retarget metadata import with MakeHuman
+		# bone names, which the runtime rig skips wholesale with warnings, so refuse to
+		# generate the wrapper and profile until the sidecar is repaired.
+		push_error(
+			(
+				"Character collider import stopped because collider sidecar '%s' lacks the MakeHuman retarget metadata for '%s'. Run python3 tools/character-generator/commands/update_character_import_retarget_metadata.py <character .blend> <name>, then reimport the character in Godot."
+				% [collider_sidecar_path, COLLIDER_RETARGET_SKELETON_PATH]
+			)
+		)
 		return
 
 	if not ResourceLoader.exists(collider_scene_path, "PackedScene"):
@@ -52,6 +71,88 @@ func _derive_wrapper_scene_path(source_file_path: String) -> String:
 
 func _derive_profile_path(source_file_path: String) -> String:
 	return "%s/%s" % [source_file_path.get_base_dir(), BODY_COLLIDER_PROFILE_PATH]
+
+
+func _has_required_retarget_metadata(sidecar_path: String) -> bool:
+	var sidecar_text := FileAccess.get_file_as_string(sidecar_path)
+	var subresources_block := _find_subresources_block(sidecar_text)
+	if subresources_block.is_empty():
+		return false
+
+	var subresources_text := _block_text(sidecar_text, subresources_block)
+	var nodes_block := _find_keyed_dictionary_block(subresources_text, "nodes")
+	if nodes_block.is_empty():
+		return false
+
+	var nodes_text := _block_text(subresources_text, nodes_block)
+	var skeleton_block := _find_keyed_dictionary_block(nodes_text, COLLIDER_RETARGET_SKELETON_PATH)
+	if skeleton_block.is_empty():
+		return false
+
+	var skeleton_text := _block_text(nodes_text, skeleton_block)
+	for retarget_key in REQUIRED_RETARGET_KEYS:
+		if not skeleton_text.contains("\"%s\":" % retarget_key):
+			return false
+	return true
+
+
+func _find_subresources_block(text: String) -> Dictionary:
+	var key_index := text.find("_subresources=")
+	if key_index < 0:
+		return {}
+	var cursor := key_index + "_subresources=".length()
+	while cursor < text.length() and (text[cursor] == " " or text[cursor] == "\t"):
+		cursor += 1
+	if cursor >= text.length() or text[cursor] != "{":
+		return {}
+	var block_end := _find_balanced_block_end(text, cursor)
+	if block_end < 0:
+		return {}
+	return {"start": cursor, "end": block_end}
+
+
+func _find_keyed_dictionary_block(text: String, key: String) -> Dictionary:
+	var needle := "\"%s\":" % key
+	var key_index := text.find(needle)
+	if key_index < 0:
+		return {}
+	var open_brace_index := text.find("{", key_index + needle.length())
+	if open_brace_index < 0:
+		return {}
+	var block_end := _find_balanced_block_end(text, open_brace_index)
+	if block_end < 0:
+		return {}
+	return {"start": key_index, "end": block_end}
+
+
+func _find_balanced_block_end(text: String, open_brace_index: int) -> int:
+	var depth := 0
+	var in_string := false
+	var escaped := false
+	for index in range(open_brace_index, text.length()):
+		var character := text[index]
+		if in_string:
+			if escaped:
+				escaped = false
+			elif character == "\\":
+				escaped = true
+			elif character == "\"":
+				in_string = false
+			continue
+
+		if character == "\"":
+			in_string = true
+		elif character == "{":
+			depth += 1
+		elif character == "}":
+			depth -= 1
+			if depth == 0:
+				return index + 1
+	return -1
+
+
+func _block_text(text: String, block: Dictionary) -> String:
+	return text.substr(block["start"], block["end"] - block["start"])
 
 
 func _save_collider_wrapper(collider_scene_path: String, wrapper_path: String) -> bool:

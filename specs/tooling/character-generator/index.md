@@ -13,11 +13,12 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 ## Tool Ownership and Usage Boundary
 
 The character generator owns the manually invoked character-generation workflow and its asset-import helpers under
-`tools/character-generator/`. Core generation entry points are:
+`tools/character-generator/`. Core generation and validation entry points are:
 
 - `commands/generate_character.sh` for generated character output;
-- `commands/generate_body_colliders.py` for the tool-owned collider operation; and
-- `commands/update_character_import_retarget_metadata.py` for existing import-sidecar metadata.
+- `commands/generate_body_colliders.py` for the tool-owned collider operation;
+- `commands/update_character_import_retarget_metadata.py` for existing import-sidecar metadata; and
+- `commands/check_character_import_retarget.py` for on-demand validation of import-sidecar retarget metadata.
 
 Forearm validation, diagnostic, and bone-binding commands are documented in [the operational README][readme].
 
@@ -134,6 +135,19 @@ and acceptance.
   `retarget/rest_fixer/fix_silhouette/filter`, matching the reference female import sidecars.
 - Missing sidecars must be reported with instructions to run Godot import and rerun the helper or generator.
   Tooling must not fabricate Godot UID or imported scene metadata.
+- The collider profile post-import module (`game/assets/characters/import/character_collider_profile_import.gd`)
+  must raise a loud error when the collider source's `.import` sidecar exists but lacks the required MakeHuman
+  retarget metadata under `PATH:Ragdoll/Skeleton3D`. The error must name the sidecar and the remedy (run
+  `tools/character-generator/commands/update_character_import_retarget_metadata.py`, then reimport), and the module
+  must skip collider wrapper and profile generation for that source.
+- The retarget-metadata check command (`tools/character-generator/commands/check_character_import_retarget.py`)
+  validates character import sidecars on demand. It must verify that every `_subresources.nodes` entry ending in
+  `/Skeleton3D` in the main `<stem>.blend.import` sidecar carries the required retarget keys, and that, whenever a
+  `<stem>.colliders.blend` exists, the `<stem>.colliders.blend.import` sidecar exists and carries the required
+  retarget keys under `PATH:Ragdoll/Skeleton3D`. Missing sidecars are reported with the existing remedy instruction
+  (run Godot import and rerun the helper or generator), and any validation failure exits non-zero with per-file
+  results. Validation checks key presence, not key values; a main sidecar without `/Skeleton3D` entries passes the
+  per-entry check.
 - Root role installer scene/profile assignment remains a separate Scene Installer System (CORE-005) workflow unless a
   dedicated role-scene workflow handles it.
 - Godot role scene assembly is performed by downstream Scene Installer System (CORE-005) workflows that:
@@ -358,6 +372,14 @@ and acceptance.
         script execution.
   - [ ] Existing main `Skeleton3D` node entries, or the generated-name fallback when absent, and the collider
         `Skeleton3D` entry contain the reference MakeHuman bone map and silhouette settings.
+  - [ ] With the collider sidecar present but missing a required retarget key under `PATH:Ragdoll/Skeleton3D`, the
+        collider profile post-import module errors naming the sidecar and the updater-and-reimport remedy and skips
+        wrapper/profile generation, while regeneration from a healthy collider sidecar leaves wrapper/profile assets
+        byte-for-byte unchanged.
+  - [ ] The retarget-metadata check command passes healthy main and collider sidecars, fails the empty-`_subresources`
+        collider sidecar and missing required retarget keys non-zero with the remedy instruction, and is proved by
+        `tools/character-generator/tests/test_character_import_retarget.py` and the headless integration tests in
+        `integration-tests/src/Characters/CharacterColliderRetargetGuardIntegrationTests.cs`.
   - [ ] Missing sidecars are reported without writing synthetic Godot remap, UID, dependency, or `.scn` data.
   - [ ] Blender/Python tooling does not serialise Godot scenes/resources or fabricate Godot UID, remap, dependency,
         import, or imported-scene metadata.
@@ -434,6 +456,10 @@ and acceptance.
 - Eye animation post-import module: `game/assets/characters/import/character_eye_animation_import.gd`
 - Collider profile post-import module: `game/assets/characters/import/character_collider_profile_import.gd`
 - Import-sidecar command: `tools/character-generator/commands/update_character_import_retarget_metadata.py`
+- Retarget-metadata guard:
+  - Implementation: `tools/character-generator/character_generator/character_import_retarget.py`
+  - Check command: `tools/character-generator/commands/check_character_import_retarget.py`
+  - Tests: `tools/character-generator/tests/test_character_import_retarget.py`
 - Forearm-twist weight pipeline: `tools/character-generator/character_generator/forearm_twist_weights.py`
 - Forearm-twist run ownership and zero ledger:
   `tools/character-generator/character_generator/forearm_twist_generator_run_ownership.py`
