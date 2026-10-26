@@ -174,6 +174,12 @@ public sealed class VadimInterrogationBaselineScenarioTests
         Assert.Contains(EngagedLine, engaged);
         Assert.Contains("Stripped Text From Retained Exchange", engaged);
         Assert.Contains(ToleratedText, engaged);
+        string judgeEvidence = VadimNameEngagementEvaluator.BuildEvidence(result);
+        Assert.Contains(EngagedLine, judgeEvidence, StringComparison.Ordinal);
+        Assert.Contains("Invalid Response", judgeEvidence, StringComparison.Ordinal);
+        Assert.DoesNotContain(OpeningLine, judgeEvidence, StringComparison.Ordinal);
+        Assert.DoesNotContain(ToleratedText, judgeEvidence, StringComparison.Ordinal);
+        Assert.DoesNotContain("## Instructions", judgeEvidence, StringComparison.Ordinal);
         string closing = await File.ReadAllTextAsync(result.TurnFiles[4]);
         Assert.Contains("- **Outcome:** Accepted", closing);
         Assert.Contains("Wait ended:", closing);

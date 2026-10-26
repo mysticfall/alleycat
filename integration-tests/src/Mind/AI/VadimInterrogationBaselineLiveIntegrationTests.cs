@@ -1,7 +1,11 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using AlleyCat.IntegrationTests.Support.AI;
 using AlleyCat.Mind.AI;
 using AlleyCat.TestFramework;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.AI.Evaluation.Quality;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -18,7 +22,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// Excluded from discovery and execution unless <c>--live-llm</c> is supplied. The target client comes from
 /// <see cref="LiveLLMClientFactory.CreateLiveClients()" /> — the only authorised <c>AITest</c> credential
 /// boundary. The pair's separate judge client is built from the same <c>AITest</c> settings — no divergent
-/// target/judge configuration exists today — and stays unused here, reserved for the judged phase.
+/// target/judge configuration exists today — and performs one evidence-only evaluation after execution.
 /// </para>
 /// <para>
 /// Operational prerequisites for the run: <c>AITest:Host</c>, <c>AITest:Model</c> (for the experiment,
@@ -46,7 +50,8 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
     [Fact]
     public async Task BaselineScenario_CapturesWindowEvidenceAgainstTheLiveTarget()
     {
-        string? configuredModel = Game.Instance.GetRequiredService<IConfiguration>()["AITest:Model"]?.Trim();
+        IConfiguration configuration = Game.Instance.GetRequiredService<IConfiguration>();
+        string? configuredModel = configuration["AITest:Model"]?.Trim();
         Assert.True(
             configuredModel is "qwen3.8-27b" or "qwen/qwen3.8-27b",
             "This experiment requires AITest:Model to select qwen3.8-27b; do not substitute another model.");
@@ -56,6 +61,20 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
             $"{VadimInterrogationBaseline.ScenarioName}-{DateTimeOffset.UtcNow:yyyyMMddTHHmmssZ}");
         VadimInterrogationScenario scenario = new(Path.Combine(runRoot, "transcripts"));
         VadimInterrogationResult? result = null;
+        _ = Directory.CreateDirectory(runRoot);
+        // Allow-listed metadata only. Never serialise the configuration or credentials.
+        File.WriteAllText(Path.Combine(runRoot, "runtime-metadata.json"), JsonSerializer.Serialize(new
+        {
+            model = configuredModel,
+            hostSHA256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+                configuration["AITest:Host"] ?? string.Empty))),
+            timeoutSeconds = configuration["AITest:Timeout"],
+            declaredTargetRequests = VadimInterrogationBaseline.LiveBounds.MaxTargetRequests,
+            declaredTimeout = VadimInterrogationBaseline.LiveBounds.Timeout,
+            judgePromptVersion = "vadim-name-engagement-v1",
+            judgePromptSHA256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+                VadimNameEngagementEvaluator.Prompt))),
+        }, new JsonSerializerOptions { WriteIndented = true }));
 
         using LiveLLMClientPair clients = LiveLLMClientFactory.CreateLiveClients();
         LiveLLMScenarioExecutor executor = new(clients.Target);
@@ -107,5 +126,19 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
         Assert.DoesNotContain("<Event History>", joined, StringComparison.Ordinal);
         Assert.DoesNotContain("[new]", joined, StringComparison.Ordinal);
         Assert.NotEmpty(result.TurnFiles);
+
+        string evidence = VadimNameEngagementEvaluator.BuildEvidence(result);
+        File.WriteAllText(Path.Combine(runRoot, "behaviour-evidence.json"), evidence);
+        VadimNameEngagementEvaluator evaluator = new(evidence, runRoot);
+        LiveLLMJudgeVerdict verdict = await LiveLLMEvidenceEvaluation.EvaluateAsync(
+            execution,
+            clients,
+            evaluator,
+            new GroundednessEvaluatorContext("The subject supplied the name Ellie Onyx."),
+            threshold: 5,
+            readCategory: _ => evaluator.Category);
+        File.WriteAllText(Path.Combine(runRoot, "judge-verdict.json"), JsonSerializer.Serialize(
+            verdict, new JsonSerializerOptions { WriteIndented = true }));
+        Assert.True(verdict.Passed, verdict.FailureMessage);
     }
 }
