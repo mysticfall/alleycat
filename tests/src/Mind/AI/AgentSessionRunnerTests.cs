@@ -864,6 +864,58 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
+    /// A runtime-delivered synthetic ID is consumed session-wide: replaying it for an otherwise valid production
+    /// call rejects before effects and never becomes a retained model exchange (AI-002 Technical Acceptance 2).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithReplayedSyntheticCallID_RejectsBeforeEffectsAndRetainsOnlyValidExchanges()
+    {
+        using CancellationTokenSource lifetime = new();
+        List<string> speech = [];
+        RecordingTranscriptSink sink = new();
+        // Use the runtime-context fixture's actual delivery, not a formatter-derived rejection oracle.
+        RecordingContextSource deliverySource = new()
+        {
+            DeliverSyntheticExchange = true,
+        };
+        AgentRequestContext delivery = await deliverySource.MaterialiseAsync(lifetime.Token);
+        RetainingContextSource context = new(delivery.TranscriptMessages);
+        const string consumedID = "runtime-scene-update-1";
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("first", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "First" })),
+            Respond(CreateCall(consumedID, SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Replay" })),
+            Respond(CreateCall("fresh", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Fresh" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client, [CreateSpeakFunction(speech.Add)], [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context, transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(1, context.RetainedCount);
+        Assert.Equal(4, client.Requests.Count);
+        // Independently establish that the exact replayed ID was delivered and retained before the replay request.
+        foreach (IReadOnlyList<ChatMessage> request in client.Requests)
+        {
+            FunctionCallContent synthetic = Assert.Single(request.SelectMany(message => message.Contents)
+                .OfType<FunctionCallContent>(), call => call.Name == "scene_update");
+            Assert.Equal(consumedID, synthetic.CallId);
+            FunctionResultContent result = Assert.Single(request.SelectMany(message => message.Contents)
+                .OfType<FunctionResultContent>(), content => content.CallId == consumedID);
+            Assert.Equal("delivered:0", result.Result);
+        }
+
+        Assert.Equal(["First", "Fresh"], speech);
+        Assert.Contains(sink.Records[1].Annotations, annotation =>
+            annotation.Kind == MindTranscriptAnnotationKind.InvalidResponseRecovery
+            && annotation.Message.Contains($"call ID '{consumedID}' was reused", StringComparison.Ordinal));
+        Assert.Equal(["first", "fresh"], client.Requests[3].SelectMany(message => message.Contents)
+            .OfType<FunctionCallContent>().Where(call => call.Name == SpeakToolName).Select(call => call.CallId));
+        Assert.Equal([consumedID, "first", "fresh"], client.Requests[3].SelectMany(message => message.Contents)
+            .OfType<FunctionResultContent>().Select(result => result.CallId));
+    }
+
+    /// <summary>
     /// Exact transport retries keep reusing the frozen request byte-identically, and the settled exchange is
     /// retained afterwards (AI-002 TR-4, TR-17).
     /// </summary>
