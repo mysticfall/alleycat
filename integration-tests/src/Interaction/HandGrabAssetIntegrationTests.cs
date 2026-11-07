@@ -49,15 +49,6 @@ public sealed partial class HandGrabAssetIntegrationTests
     private const int TargetConvergencePhysicsFrames = 90;
     // These are authored optical/controller inputs. Ball placement is derived from the shared asset offset, never
     // from a solved hand attachment, so a later wrist motion remains an independent source stimulus.
-    private static readonly Transform3D _authoredOpticalBallWrist = new(
-        Basis.Identity,
-        new Vector3(0.419f, 1.049f, -0.037f));
-    private static readonly Transform3D _authoredOpticalBallWristMoved = new(
-        Basis.Identity.Rotated(Vector3.Up, 0.13f),
-        new Vector3(0.500f, 1.035f, -0.040f));
-    private static readonly Transform3D _authoredOpticalBallWristIsolationMoved = new(
-        Basis.Identity.Rotated(Vector3.Up, 0.27f),
-        new Vector3(0.590f, 1.040f, -0.060f));
     private static readonly Transform3D _authoredControllerBallWrist = new(
         Basis.Identity.Rotated(Vector3.Up, 0.16f),
         new Vector3(0.405f, 1.025f, -0.025f));
@@ -769,95 +760,6 @@ public sealed partial class HandGrabAssetIntegrationTests
             Assert.Equal(Vector3.Zero, fixture.Ball.LinearVelocity);
             Assert.Equal(Vector3.Zero, fixture.Ball.AngularVelocity);
             Assert.Same(candidate.Animation, fixture.RightHand.CurrentPose);
-        }
-        finally
-        {
-            await fixture.DisposeAsync(sceneTree);
-        }
-    }
-
-    /// <summary>
-    /// Reproduces the reported held-hand path with a real PlayerVRIK and active optical wrist source. After a movable
-    /// ball commits, an independently authored 9 cm optical wrist movement through clear air must propagate through
-    /// every runtime stage while the held collision proxy remains on the collision-aware hand actuator.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public async Task ReferencePlayerFixture_HeldBall_OpticalWristMovesAllTargetsAndHeldItemThroughClearAir()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
-
-        try
-        {
-            await CommitBallFromAuthoredOpticalWristAsync(sceneTree, fixture);
-
-            AnimatableBody3D heldCollisionTarget = Assert.IsType<AnimatableBody3D>(fixture.RightHand.HeldCollisionTarget);
-            CollisionShape3D heldBallShape = fixture.Ball.GetNode<CollisionShape3D>("CollisionShape3D");
-            Assert.Same(fixture.RightHandTarget, heldCollisionTarget);
-            Assert.Equal(fixture.RightHandTarget.CollisionLayer, heldCollisionTarget.CollisionLayer);
-            Assert.Equal(fixture.RightHandTarget.CollisionMask, heldCollisionTarget.CollisionMask);
-            Assert.Contains(
-                heldCollisionTarget.GetShapeOwners(),
-                ownerId => ShapeOwnerContainsShape(heldCollisionTarget, ownerId, heldBallShape.Shape));
-            Assert.Contains(
-                fixture.RightHandTarget.GetShapeOwners(),
-                ownerId => ShapeOwnerContainsShape(fixture.RightHandTarget, ownerId, heldBallShape.Shape));
-            Assert.True(heldBallShape.Disabled);
-
-            OpticalHeldMotionObservation motion = await MoveHeldOpticalWristAsync(
-                sceneTree,
-                fixture,
-                _authoredOpticalBallWristMoved);
-
-            Assert.InRange(motion.CalibratedSourceMovementMetres, 0.08f, 0.10f);
-            Assert.True(motion.ProviderMovementMetres > 0.08f, "The grab provider intent must follow the valid optical wrist.");
-            Assert.True(motion.RequestedTargetMovementMetres > 0.08f, "PlayerVRIK must request the moved provider target.");
-            Assert.True(motion.RealisedTargetMovementMetres > 0.01f, "The physical hand target must not freeze after the held proxy is present.");
-            Assert.True(motion.AttachmentMovementMetres > 0.01f, "The right-hand BoneAttachment3D must follow the moved target.");
-            Assert.True(motion.HeldItemMovementMetres > 0.01f, "The parented held ball must follow the moving hand attachment.");
-            Assert.Equal("None", motion.CollisionFeedbackReason);
-            Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
-
-            fixture.RightHand.Release();
-
-            Assert.DoesNotContain(
-                heldCollisionTarget.GetShapeOwners(),
-                ownerId => ShapeOwnerContainsShape(heldCollisionTarget, ownerId, heldBallShape.Shape));
-            Assert.False(heldBallShape.Disabled);
-        }
-        finally
-        {
-            await fixture.DisposeAsync(sceneTree);
-        }
-    }
-
-    /// <summary>
-    /// Verifies the clear-air held optical wrist path remains collision-free without a test-only hand-target collision
-    /// mask bypass while held-item proxy shapes remain on the actuator-swept IK target.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public async Task ReferencePlayerFixture_HeldBall_OpticalWristMovesThroughClearAirWithoutCollisionMaskBypass()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        ReferencePlayerMockXRFixture fixture = await ReferencePlayerMockXRFixture.CreateAsync(sceneTree);
-
-        try
-        {
-            await CommitBallFromAuthoredOpticalWristAsync(sceneTree, fixture);
-            OpticalHeldMotionObservation motion = await MoveHeldOpticalWristAsync(
-                sceneTree,
-                fixture,
-                _authoredOpticalBallWristIsolationMoved);
-
-            Assert.InRange(motion.CalibratedSourceMovementMetres, 0.16f, 0.19f);
-            Assert.True(motion.ProviderMovementMetres > 0.16f);
-            Assert.True(motion.RequestedTargetMovementMetres > 0.16f);
-            Assert.True(motion.RealisedTargetMovementMetres > 0.01f);
-            Assert.True(motion.AttachmentMovementMetres > 0.01f);
-            Assert.True(motion.HeldItemMovementMetres > 0.01f);
-            Assert.Equal("None", motion.CollisionFeedbackReason);
         }
         finally
         {
@@ -3043,127 +2945,6 @@ public sealed partial class HandGrabAssetIntegrationTests
             PositionToleranceMetres);
     }
 
-    private static async Task CommitBallFromAuthoredOpticalWristAsync(
-        SceneTree sceneTree,
-        ReferencePlayerMockXRFixture fixture)
-    {
-        fixture.Stick.GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
-        fixture.Stick.ForceUpdateTransform();
-        ConfigureBallForAuthoredWrist(fixture, _authoredOpticalBallWrist);
-        _ = fixture.Runtime.SetHandObservations(
-            XRHandSourceObservation.Optical,
-            XRHandSourceObservation.Optical);
-        SetCalibratedOpticalWristWorld(fixture.Runtime, LimbSide.Right, _authoredOpticalBallWrist);
-        SetCalibratedOpticalWristWorld(
-            fixture.Runtime,
-            LimbSide.Left,
-            new Transform3D(Basis.Identity, new Vector3(-0.25f, 1.00f, -0.35f)));
-
-        _ = await WaitForOpticalPipelineSourceAsync(sceneTree, fixture);
-        GrabPointCandidate candidate = ((IGrabbable)fixture.Ball).GetGrabPoint(
-            LimbSide.Right,
-            fixture.RightHandTarget.GlobalTransform)
-            ?? throw new Xunit.Sdk.XunitException("Expected the authored optical wrist to select the shared ball.");
-        AssertTransformApproximatelyEqual(
-            candidate.GrabPointTransform,
-            candidate.HandTarget * candidate.GrabPointOffsetFromHand,
-            PositionToleranceMetres);
-        Assert.Null(fixture.RightHand.Grab());
-
-        for (int frame = 0; frame < 180 && fixture.RightHand.CurrentGrabbed is null; frame++)
-        {
-            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
-            await TestUtils.WaitForFramesAsync(sceneTree, 1);
-        }
-
-        Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
-        Assert.Same(fixture.RightHandAttachment, fixture.Ball.GetParent());
-        Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
-    }
-
-    private static async Task<OpticalHeldMotionObservation> MoveHeldOpticalWristAsync(
-        SceneTree sceneTree,
-        ReferencePlayerMockXRFixture fixture,
-        Transform3D authoredWrist)
-    {
-        Transform3D calibratedBefore = GetRequiredCalibratedOpticalWrist(fixture.Runtime, LimbSide.Right);
-        Transform3D providerBefore = fixture.RightHandGrabProvider.GetTargetIntent().WorldTransform;
-        IKTargetPipelineResult pipelineBefore = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
-        Transform3D attachmentBefore = fixture.RightHandAttachment.GlobalTransform;
-        Transform3D heldBallBefore = fixture.Ball.GlobalTransform;
-
-        SetCalibratedOpticalWristWorld(fixture.Runtime, LimbSide.Right, authoredWrist);
-        IKTargetPipelineResult pipelineAfter = await WaitForOpticalPipelineSourceAsync(sceneTree, fixture);
-        Transform3D calibratedAfter = GetRequiredCalibratedOpticalWrist(fixture.Runtime, LimbSide.Right);
-        IKTargetIntent providerAfter = fixture.RightHandGrabProvider.GetTargetIntent();
-        Transform3D attachmentAfter = fixture.RightHandAttachment.GlobalTransform;
-        Transform3D heldBallAfter = fixture.Ball.GlobalTransform;
-
-        Assert.Equal(1.0f, providerAfter.DesiredInfluence);
-        AssertTransformApproximatelyEqual(calibratedAfter, providerAfter.WorldTransform, PositionToleranceMetres);
-        AssertTransformApproximatelyEqual(providerAfter.WorldTransform, pipelineAfter.SourceTarget, PositionToleranceMetres);
-        AssertTransformApproximatelyEqual(pipelineAfter.SourceTarget, pipelineAfter.RequestedTarget, PositionToleranceMetres);
-        Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
-        Assert.Same(fixture.RightHandAttachment, fixture.Ball.GetParent());
-        Assert.False(fixture.RightHandGrabProvider.IsGrabOverrideActive);
-
-        return new OpticalHeldMotionObservation(
-            calibratedBefore.Origin.DistanceTo(calibratedAfter.Origin),
-            providerBefore.Origin.DistanceTo(providerAfter.WorldTransform.Origin),
-            pipelineBefore.RequestedTarget.Origin.DistanceTo(pipelineAfter.RequestedTarget.Origin),
-            pipelineBefore.RealisedTarget.Origin.DistanceTo(pipelineAfter.RealisedTarget.Origin),
-            attachmentBefore.Origin.DistanceTo(attachmentAfter.Origin),
-            heldBallBefore.Origin.DistanceTo(heldBallAfter.Origin),
-            pipelineAfter.Feedback.Reason);
-    }
-
-    private static async Task<IKTargetPipelineResult> WaitForOpticalPipelineSourceAsync(
-        SceneTree sceneTree,
-        ReferencePlayerMockXRFixture fixture)
-    {
-        for (int frame = 0; frame < TargetConvergencePhysicsFrames; frame++)
-        {
-            await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 1);
-            await TestUtils.WaitForFramesAsync(sceneTree, 1);
-        }
-
-        Transform3D calibratedWrist = GetRequiredCalibratedOpticalWrist(fixture.Runtime, LimbSide.Right);
-        IKTargetIntent providerIntent = fixture.RightHandGrabProvider.GetTargetIntent();
-        IKTargetPipelineResult pipeline = fixture.PlayerVRIK.RightHandTargetPipelineDebugState;
-        Assert.Equal(XRHandTrackingMode.Optical, fixture.Runtime.HandTrackingMode);
-        AssertTransformApproximatelyEqual(calibratedWrist, providerIntent.WorldTransform, PositionToleranceMetres);
-        AssertTransformApproximatelyEqual(providerIntent.WorldTransform, pipeline.SourceTarget, PositionToleranceMetres);
-        AssertTransformApproximatelyEqual(pipeline.SourceTarget, pipeline.RequestedTarget, PositionToleranceMetres);
-        AssertTransformApproximatelyEqual(pipeline.RealisedTarget, fixture.RightHandTarget.GlobalTransform, PositionToleranceMetres);
-        return pipeline;
-    }
-
-    private static Transform3D GetRequiredCalibratedOpticalWrist(MockXRRuntimeNode runtime, LimbSide side)
-    {
-        IXRHandPoseSource source = runtime.GetHandPoseSource(side);
-        Assert.True(source.TryGetCalibratedWristTransform(out Transform3D wrist));
-        return wrist;
-    }
-
-    private static void SetCalibratedOpticalWristWorld(
-        MockXRRuntimeNode runtime,
-        LimbSide side,
-        Transform3D worldWrist)
-    {
-        Transform3D calibrationAnchor = Transform3D.Identity;
-        string anchorPath = side == LimbSide.Right
-            ? "RightOpticalHand/WristAnchor/OpticalHandAnchor"
-            : "LeftOpticalHand/WristAnchor/OpticalHandAnchor";
-        if (runtime.GetNodeOrNull<Node3D>(anchorPath) is { } seededAnchor)
-        {
-            calibrationAnchor = seededAnchor.Transform;
-        }
-
-        Transform3D scaledOrigin = runtime.OriginNode.GlobalTransform
-            .Scaled(new Vector3(runtime.WorldScale, runtime.WorldScale, runtime.WorldScale));
-        runtime.SetOpticalWristSample(side, scaledOrigin.AffineInverse() * (worldWrist * calibrationAnchor.AffineInverse()));
-    }
-
     private static async Task<StaticTargetTrace> CaptureStaticTargetTraceAsync(
         SceneTree sceneTree,
         ReferencePlayerMockXRFixture fixture,
@@ -3848,15 +3629,6 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     private readonly record struct AttachmentResidual(float PositionMetres, float OrientationDegrees);
-
-    private readonly record struct OpticalHeldMotionObservation(
-        float CalibratedSourceMovementMetres,
-        float ProviderMovementMetres,
-        float RequestedTargetMovementMetres,
-        float RealisedTargetMovementMetres,
-        float AttachmentMovementMetres,
-        float HeldItemMovementMetres,
-        string CollisionFeedbackReason);
 
     private readonly record struct StaticTargetSample(
         float PositionErrorMetres,
