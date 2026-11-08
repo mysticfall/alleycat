@@ -44,6 +44,7 @@
 ## Scene
 
 - [SCN-001: Scene Context API](scene/001-scene-context-api/index.md)
+- [SCN-002: Spatial Minimap](scene/002-spatial-minimap/index.md)
 
 ## Templating
 

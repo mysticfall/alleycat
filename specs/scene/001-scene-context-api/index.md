@@ -179,3 +179,5 @@ character and Godot node objects remain live.
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
+- [SCN-002: Spatial Minimap](../002-spatial-minimap/index.md) — discovers markers through its own scene group; it does
+  not consume scene-context membership.

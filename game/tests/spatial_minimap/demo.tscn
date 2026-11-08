@@ -1,0 +1,160 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/Character/Character.cs" id="1_character"]
+[ext_resource type="Script" path="res://src/Scene/MiniMap/MiniMapMarker.cs" id="2_marker"]
+[ext_resource type="Script" path="res://src/Scene/MiniMap/MiniMapRectangle.cs" id="3_rectangle"]
+[ext_resource type="Script" path="res://src/Scene/MiniMap/MiniMapCircle.cs" id="4_circle"]
+[ext_resource type="Script" path="res://src/Scene/MiniMap/MiniMapTriangle.cs" id="5_triangle"]
+[ext_resource type="Script" path="res://src/Scene/MiniMap/MiniMapLabel.cs" id="6_label"]
+[ext_resource type="Script" path="res://tests/spatial_minimap/MiniMapDemoDriver.cs" id="7_driver"]
+
+[node name="MinimapRedesignDemo" type="Node3D"]
+
+[node name="DemoDriver" type="Node3D" parent="." node_paths=PackedStringArray("DemoCharacter")]
+script = ExtResource("7_driver")
+DemoCharacter = NodePath("../Alice")
+
+[node name="Walls" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+script = ExtResource("2_marker")
+DrawOrder = 0
+Primitives = [NodePath("West"), NodePath("North"), NodePath("SouthPartial")]
+
+[node name="West" type="Node3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -1)
+script = ExtResource("3_rectangle")
+Width = 0.6
+Depth = 10.0
+FillColour = Color(0.16, 0.22, 0.26, 1)
+
+[node name="North" type="Node3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -6)
+script = ExtResource("3_rectangle")
+Width = 6.6
+Depth = 0.6
+FillColour = Color(0.16, 0.22, 0.26, 1)
+
+[node name="SouthPartial" type="Node3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, 4)
+script = ExtResource("3_rectangle")
+Width = 4.0
+Depth = 0.6
+FillColour = Color(0.16, 0.22, 0.26, 1)
+
+[node name="Beacon" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -3)
+script = ExtResource("2_marker")
+DrawOrder = 2
+Primitives = [NodePath("Heading")]
+
+[node name="Heading" type="Node3D" parent="Beacon"]
+script = ExtResource("5_triangle")
+Width = 1.0
+Length = 1.4
+FillColour = Color(0.39, 0.68, 0.81, 1)
+
+[node name="Crate" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 2)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Box"), NodePath("Caption")]
+
+[node name="Box" type="Node3D" parent="Crate"]
+script = ExtResource("3_rectangle")
+Width = 1.5
+Depth = 1.5
+FillColour = Color(0.75, 0.52, 0.22, 1)
+
+[node name="Caption" type="Node3D" parent="Crate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.3)
+script = ExtResource("6_label")
+Flavour = 0
+Text = "Crate"
+TextSize = 18
+FillColour = Color(0.24, 0.13, 0.02, 1)
+
+[node name="Basin" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0, 3)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Pool")]
+
+[node name="Pool" type="Node3D" parent="Basin"]
+script = ExtResource("4_circle")
+Radius = 0.8
+FillColour = Color(0.16, 0.5, 0.63, 1)
+
+[node name="Alice" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 0)
+script = ExtResource("1_character")
+Id = "alice"
+
+[node name="AliceMarker" type="Node3D" parent="Alice" node_paths=PackedStringArray("Primitives")]
+script = ExtResource("2_marker")
+DrawOrder = 10
+Primitives = [NodePath("Heading"), NodePath("Identity")]
+
+[node name="Heading" type="Node3D" parent="Alice/AliceMarker"]
+script = ExtResource("5_triangle")
+Width = 1.0
+Length = 1.4
+FillColour = Color(0.85, 0.25, 0.34, 1)
+
+[node name="Identity" type="Node3D" parent="Alice/AliceMarker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.3)
+script = ExtResource("6_label")
+Flavour = 1
+TextSize = 18
+FillColour = Color(0.4, 0.07, 0.12, 1)
+
+[node name="Minsu" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -2)
+script = ExtResource("1_character")
+Id = "민수"
+
+[node name="MinsuMarker" type="Node3D" parent="Minsu" node_paths=PackedStringArray("Primitives")]
+script = ExtResource("2_marker")
+DrawOrder = 10
+Primitives = [NodePath("Spot"), NodePath("Identity")]
+
+[node name="Spot" type="Node3D" parent="Minsu/MinsuMarker"]
+script = ExtResource("4_circle")
+Radius = 0.7
+FillColour = Color(0.55, 0.35, 0.75, 1)
+
+[node name="Identity" type="Node3D" parent="Minsu/MinsuMarker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.3)
+script = ExtResource("6_label")
+Flavour = 1
+TextSize = 18
+FillColour = Color(0.28, 0.14, 0.4, 1)
+
+[node name="FarBeacon" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 0, 40)
+script = ExtResource("2_marker")
+DrawOrder = 2
+Primitives = [NodePath("Box"), NodePath("Caption")]
+
+[node name="Box" type="Node3D" parent="FarBeacon"]
+script = ExtResource("3_rectangle")
+Width = 3.0
+Depth = 2.0
+FillColour = Color(0.5, 0.55, 0.5, 1)
+
+[node name="Caption" type="Node3D" parent="FarBeacon"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2)
+script = ExtResource("6_label")
+Flavour = 0
+Text = "Far beacon (excluded close-up)"
+TextSize = 16
+
+[node name="DemoOverlay" type="CanvasLayer" parent="."]
+
+[node name="DemoPreview" type="TextureRect" parent="DemoOverlay"]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5

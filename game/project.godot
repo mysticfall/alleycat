@@ -36,7 +36,7 @@ project/assembly_name="AlleyCat"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/alleycat_editor/plugin.cfg")
+enabled=PackedStringArray("res://addons/alleycat_editor/plugin.cfg", "res://addons/spatial_minimap/plugin.cfg")
 
 [global_group]
 

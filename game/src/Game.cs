@@ -177,7 +177,8 @@ public partial class Game : Node, IServiceProvider
             .AddSingleton<IGameClock>(new GameClock())
             .AddSingleton<ILoreQueryService, MarkdownLoreQueryService>()
             .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>()
-            .AddSingleton<ILoreCataloguePromptFormatter, MarkdownLoreCataloguePromptFormatter>();
+            .AddSingleton<ILoreCataloguePromptFormatter, MarkdownLoreCataloguePromptFormatter>()
+            .AddSingleton(new Scene.MiniMap.MiniMapRenderer(this));
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {
