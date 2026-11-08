@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://dmt0tevnp51it"]
+
+[ext_resource type="Script" uid="uid://j5nt48a08vbv" path="res://src/Scene/MiniMap/MiniMapMarker.cs" id="1_bjt24"]
+[ext_resource type="Script" uid="uid://bdq4e5dko6vhv" path="res://src/Scene/MiniMap/MiniMapCircle.cs" id="2_i2obb"]
+[ext_resource type="Script" uid="uid://ddcbvkm0k6w2b" path="res://src/Scene/MiniMap/MiniMapTriangle.cs" id="3_vt4rx"]
+[ext_resource type="Script" uid="uid://bi286ig2oimvg" path="res://src/Scene/MiniMap/MiniMapLabel.cs" id="4_x8ts7"]
+
+[node name="MiniMapMarker" type="Node3D" unique_id=1485608118 node_paths=PackedStringArray("Primitives")]
+script = ExtResource("1_bjt24")
+Primitives = [NodePath("MiniMapCircle"), NodePath("MiniMapTriangle"), NodePath("MiniMapLabel")]
+metadata/_custom_type_script = "uid://j5nt48a08vbv"
+
+[node name="MiniMapCircle" type="Node3D" parent="." unique_id=1635719248]
+script = ExtResource("2_i2obb")
+Radius = 0.3
+FillColour = Color(0.050980393, 0.17254902, 0.77254903, 1)
+metadata/_custom_type_script = "uid://bdq4e5dko6vhv"
+
+[node name="MiniMapTriangle" type="Node3D" parent="." unique_id=1959024747]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.3802556)
+script = ExtResource("3_vt4rx")
+Width = 0.2
+Length = 0.2
+FillColour = Color(0.050980393, 0.17254902, 0.77254903, 1)
+metadata/_custom_type_script = "uid://ddcbvkm0k6w2b"
+
+[node name="MiniMapLabel" type="Node3D" parent="." unique_id=1465768925]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.5389039)
+script = ExtResource("4_x8ts7")
+Text = "Actor"
+TextSize = 42
+FillColour = Color(0, 0, 0, 1)
+metadata/_custom_type_script = "uid://bi286ig2oimvg"
