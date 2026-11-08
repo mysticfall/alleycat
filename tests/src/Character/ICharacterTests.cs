@@ -111,6 +111,10 @@ public sealed class ICharacterTests
             get; set;
         }
 
+        public Camera3D? Camera => null;
+
+        public ValueTask<Image> CaptureImage() => throw new NotImplementedException();
+
         public IReadOnlyList<Type> PerceptTypes => throw new NotImplementedException();
 
         public event Action<IPercept>? Perceived

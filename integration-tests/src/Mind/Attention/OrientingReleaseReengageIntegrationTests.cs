@@ -405,6 +405,11 @@ public sealed class OrientingReleaseReengageIntegrationTests
             set;
         }
 
+        public Camera3D? Camera => null;
+
+        public ValueTask<Image> CaptureImage()
+            => throw new InvalidOperationException("The test vision component does not support image capture.");
+
         public IReadOnlyList<Type> PerceptTypes { get; } = [];
 
         public event Action<IPercept>? Perceived

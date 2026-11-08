@@ -389,6 +389,11 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             get; set;
         }
 
+        public Camera3D? Camera => null;
+
+        public ValueTask<Image> CaptureImage()
+            => throw new InvalidOperationException("The test vision component does not support image capture.");
+
         public event Action<IPercept>? Perceived
         {
             add

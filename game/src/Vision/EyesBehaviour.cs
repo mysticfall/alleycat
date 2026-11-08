@@ -36,6 +36,8 @@ public partial class EyesBehaviour : Node, IVision
     private bool _hasSaccadeAnchor;
     private readonly Array<Rid> _selfCollisionExclusions = [];
     private double _secondsUntilVisualSurvey;
+    private readonly VisionImageCapture _imageCapture = new();
+    private Func<Camera3D?>? _runtimeVisionCameraResolver;
 
     /// <inheritdoc />
     public event Action<IPercept>? Perceived;
@@ -77,10 +79,31 @@ public partial class EyesBehaviour : Node, IVision
             if (!AreSameNode(field, value))
             {
                 InvalidatePendingGazeWork();
+                InvalidatePendingCaptures();
             }
 
             field = value;
             ScheduleDeferredRefresh();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the template-authored vision camera the NPC vision rig exposes for image
+    /// capture. The player role instead resolves its camera to the active XR runtime camera at the
+    /// player-role composition boundary outside this namespace.
+    /// </summary>
+    [Export]
+    public Camera3D? VisionCamera
+    {
+        get;
+        set
+        {
+            if (!AreSameNode(field, value))
+            {
+                InvalidatePendingCaptures();
+            }
+
+            field = value;
         }
     }
 
@@ -325,6 +348,59 @@ public partial class EyesBehaviour : Node, IVision
     } = 1d;
 
     /// <inheritdoc />
+    public Camera3D? Camera
+    {
+        get
+        {
+            if (_runtimeVisionCameraResolver is { } resolver)
+            {
+                // The runtime resolver (the player-role composition boundary) is authoritative once
+                // installed: while the XR camera is unavailable the vision camera reads null so
+                // capture fails clearly instead of silently falling back to the inherited rig.
+                Camera3D? resolved = resolver();
+                return IsLiveVisionCamera(resolved) ? resolved : null;
+            }
+
+            return IsLiveVisionCamera(VisionCamera) ? VisionCamera : null;
+        }
+    }
+
+    /// <summary>
+    /// Installs, replaces, or clears the runtime vision-camera resolver. Resolvers must return the
+    /// currently configured camera or <c>null</c> when unavailable and must not throw; a
+    /// <c>null</c> return makes <see cref="Camera"/> read <c>null</c> until a camera becomes
+    /// available. Installing or replacing a resolver invalidates in-flight captures.
+    /// </summary>
+    /// <param name="resolver">The resolver delegate, or <c>null</c> to clear it.</param>
+    public void SetRuntimeVisionCameraResolver(Func<Camera3D?>? resolver)
+    {
+        _runtimeVisionCameraResolver = resolver;
+        InvalidatePendingCaptures();
+    }
+
+    private static bool IsLiveVisionCamera(Camera3D? camera)
+        => camera is not null && IsInstanceValid(camera) && !camera.IsQueuedForDeletion();
+
+    /// <inheritdoc />
+    public async ValueTask<Image> CaptureImage()
+    {
+        Camera3D camera = Camera
+            ?? throw new InvalidOperationException(
+                $"{nameof(EyesBehaviour)} '{DescribeNodePath()}' cannot capture an image without a configured vision "
+                + $"camera: {nameof(Camera)} is null. The player resolves the XR runtime camera once initialised; "
+                + $"NPCs require the template-authored vision rig camera.");
+
+        // Only the template-authored rig camera is re-synced from the eye origin; the runtime-resolved
+        // player camera is owned by the XR runtime and must never be moved by the capture path.
+        return await _imageCapture.CaptureAsync(
+            camera,
+            EyeOrigin,
+            resyncCameraFromEyeOrigin: AreSameNode(camera, VisionCamera));
+    }
+
+    private void InvalidatePendingCaptures() => _imageCapture.Invalidate();
+
+    /// <inheritdoc />
     public override void _EnterTree()
     {
         ValidateVisualSurveyInterval(VisualSurveyIntervalSeconds);
@@ -334,7 +410,11 @@ public partial class EyesBehaviour : Node, IVision
     }
 
     /// <inheritdoc />
-    public override void _ExitTree() => InvalidatePendingGazeWork();
+    public override void _ExitTree()
+    {
+        InvalidatePendingGazeWork();
+        InvalidatePendingCaptures();
+    }
 
     /// <inheritdoc />
     public override void _Ready()

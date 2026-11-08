@@ -974,6 +974,11 @@ public sealed class OrientingControllerIntegrationTests
             private set;
         }
 
+        public Camera3D? Camera => null;
+
+        public ValueTask<Image> CaptureImage()
+            => throw new InvalidOperationException("The test vision component does not support image capture.");
+
         public int SetLookTargetCalls
         {
             get;

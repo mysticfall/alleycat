@@ -356,6 +356,11 @@ public sealed class SpeechAddresseeInferenceIntegrationTests
             set;
         }
 
+        public Camera3D? Camera => null;
+
+        public ValueTask<Image> CaptureImage()
+            => throw new InvalidOperationException("The test vision component does not support image capture.");
+
         public IReadOnlyList<Type> PerceptTypes { get; } = [];
 
 #pragma warning disable CS0067

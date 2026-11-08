@@ -13,7 +13,9 @@ facial animations. The default gaze backend drives authored eye blend shapes thr
 AnimationTree parameters, matching the reference character, which uses eye blend shapes instead
 of independent eye transform bones. Characters whose eye meshes lack gaze blend shapes may
 instead author the optional transform-driven gaze backend, which rotates the eye nodes directly
-while blinking continues through the blendshape path.
+while blinking continues through the blendshape path. The vision component additionally exposes
+what the character currently sees as a capturable image — the player through the active XR
+runtime camera, an NPC through a template-authored vision camera rendered from its eye anchor.
 
 ## Goal
 
@@ -29,6 +31,9 @@ Provide a reusable eye component system that:
 - Periodically publishes a synchronous immutable survey of authored visual subjects visible to the character.
 - Publishes immutable visual-family percepts when the assigned cue changes so Mind may inspect focused subjects.
 - Keeps eye motion in step with head turns during transit, without changing gaze selection or the eye clamps.
+- Captures an on-demand still image of what the character currently sees — through the player's
+  active XR runtime camera or an NPC's template-authored vision rig — without disrupting the
+  player's live view or adding idle rendering cost.
 
 ## User Requirements
 
@@ -66,6 +71,12 @@ Provide a reusable eye component system that:
 19. Both eyes must acquire a genuinely new target within 0.4 s of actual assignment, then maintain fixation.
     This brief acquisition transition is separate from continuous fixation. Intentional saccades may briefly interrupt
     fixation; their random trajectory need not be exact.
+20. A character can capture, on demand, a still image of what it currently sees from its own viewpoint:
+    the player through their live XR view, an NPC from its eye/head anchor.
+21. Player capture never disturbs the live view — presentation continues unchanged during and after a
+    capture.
+22. With the documented default rig, an NPC snapshot frames a faced person naturally, like an ordinary
+    glance, without the NPC's own face or hair occluding the image.
 
 ## Technical Requirements
 
@@ -298,6 +309,68 @@ Provide a reusable eye component system that:
     Replay the assignment/presentation boundaries below; no eligible presentation may be skipped or pre-assignment
     presentation counted towards onset.
 
+53. `IVision` exposes the character's vision camera as `Camera3D? Camera { get; }`, nullable while unconfigured:
+      - For the player character it is exactly the active XR runtime camera — the identical `Camera3D`
+        node behind `IXRRuntime.Camera.CameraNode`
+        ([XR-001: XRManager](../../xr/001-xr-manager/index.md)) — never a clone or substitute camera.
+      - For NPCs it is the template-authored vision camera (Technical Requirement 59).
+      - Capture without a configured camera fails clearly; it never silently yields an empty or stale image.
+54. `IVision` defines the asynchronous capture operation `ValueTask<Image> CaptureImage()`, following the
+     `ValueTask<T>` async pattern of `VisualCue.Describe` in the same namespace. Each call renders exactly one
+     fresh frame from `Camera`'s viewport at call time and returns the readback `Image`; the result is a snapshot
+     of its own render frame, not a live view. Capture publishes no percepts and changes no gaze, eye
+     presentation, or live-view state; the no-public-`Scan()` rule (Technical Requirement 28) is unaffected.
+55. Capture from a viewport that is not continuously updating (the NPC rig at rest) follows the
+     prototype-validated one-shot sequence: await `RenderingServer.FramePreDraw`, set
+     `SubViewport.RenderTargetUpdateMode = UpdateMode.Once`, await `RenderingServer.FramePostDraw`, read
+     `viewport.GetTexture().GetImage()`, then restore the prior update mode (`UpdateMode.Disabled` at rest). It
+     completes within a small bounded frame count (validated at ≤ 2 engine frames) with no polling loops.
+56. Capture from a continuously updating viewport (the player's live XR viewport) preserves that viewport's
+     update mode and rendering: it never disables, reconfigures, or steals the player's view, and no capture path
+     may mutate the live viewport's render-target settings. It awaits the next completed frame and reads back the
+     viewport texture.
+57. Freshness and idle cost are guaranteed separately:
+      - Freshness: a returned image reflects the scene state of its own render frame; scene changes made while
+        no capture is in flight appear in the next capture. A stale-texture readback is a defect.
+      - Idle: while no capture is in flight, the NPC rig performs no per-frame rendering; the rest update mode is
+        `UpdateMode.Disabled` and a consumed `Once` provably does not re-render. This temporal claim is proven by
+        texture-hash stability across advanced idle frames, not by screenshots.
+58. Overlap, failure, and lifetime behaviour:
+      - Concurrent `CaptureImage()` calls on one component are serialised; each call yields its own fresh
+        frame, never a shared or merged result.
+      - An invalid or freed camera or viewport fails clearly by throwing, never by hanging or returning a null
+        or empty image.
+      - Component or scene teardown invalidates in-flight captures: no hangs, no writes to freed objects, and
+        no late callbacks touching released bindings.
+59. Character templates author the NPC vision rig:
+      - A `SubViewport` parented under the head anchor (`…/Head/Viewpoint`, the `EyeOrigin` anchor) with the
+        `Camera3D` as its child; the shared reference female and male templates ship this rig in their base and
+        NPC variants.
+      - Documented default authoring values, user-chosen through live framing tweaks in a temporary editor
+        scene (superseding the pre-API prototype recommendation): size 768×768 (square); `Camera3D.fov = 70`
+        vertical with `keep_aspect = Keep Height` (square aspect, so the horizontal field is also ≈ 70°);
+        camera local rotation Euler x -7.5°, a slight downward tilt relative to the anchor basis, with
+        yaw/roll 0; no positional offset; `near = 0.05`; `own_world_3d = false`; `transparent_bg = false`;
+        `RenderTargetUpdateMode = Disabled` at rest; `Camera3D.current = true` (coexists with other viewports'
+        cameras).
+      - These defaults are framing choices, not physics: every value remains overridable per character.
+60. The capture path re-syncs the camera world transform from the vision component's `EyeOrigin` on every
+     capture: `camera.GlobalTransform = EyeOrigin.GlobalTransform * authoredLocalOffset`, where
+     `authoredLocalOffset` is the camera's authored local transform — its authored local rotation is the
+     pitch-offset mechanism. A `Camera3D` under a head-mounted `SubViewport` does not inherit the head's 3D
+     transform chain; without this re-sync it silently renders from the world origin. The camera stays inactive
+     between captures — `current` inside its own `SubViewport` is permitted, with no continuous rendering.
+61. Wiring stays free of policy coupling:
+      - `EyesBehaviour` (the vision component) exposes the template-authored NPC camera through `IVision.Camera`.
+      - The player character resolves `IVision.Camera` to `IXRRuntime.Camera.CameraNode` at the existing
+        player-role/runtime composition boundary, outside `AlleyCat.Vision`. Identity resolution holds once the
+        XR runtime is initialised; capture attempted before the camera is available fails clearly.
+      - `AlleyCat.Vision` remains free of Mind dependencies and free of hard XR service lookups where clean
+        injection or authoring suffices.
+62. `IHasVision` adds no capture convenience. Holder traits own component resolution only, so capture resolves
+     through `RequireVision().CaptureImage()` or `TryGetVision`, keeping the holder surface consistent with
+     `VisualCue.Describe`, whose observer parameter is already an `IHasVision`.
+
 ### Shared-Direction Geometry
 
 This is the normative independent calculation for TR48/51–52 in both backends. All rotations below are proper,
@@ -407,6 +480,11 @@ requirement does not establish measured feasibility: report conflicts rather tha
 - Awaitable cue description for transition-driven focused inspection under AI-006.
 - Continuous live-target fixation and separate bounded saccades in both backends: frame-consistent solved-head
   composition, lifetime-safe scheduling and independent bilateral, complete-window measurement.
+- `IVision` vision-camera exposure (`Camera3D? Camera`) and the on-demand one-shot image capture operation with
+  freshness, idle-cost, overlap, failure, and teardown-lifetime contracts.
+- Player capture through the live XR viewport with update-mode and rendering preservation.
+- Template-authored NPC vision rigs under the head anchor with overridable documented defaults, and per-capture
+  camera transform re-sync from `EyeOrigin`.
 
 ## Out Of Scope
 
@@ -427,6 +505,11 @@ requirement does not establish measured feasibility: report conflicts rather tha
 - Physical eye collision or physics-response behaviour; scan-only `VisionOccluder` ray tests remain required.
 - Head-turn transit dynamics themselves — rate limits, reaction delay, and transit stalls — which remain owned by
   [AI-009: Attention-Driven Head Orientation](../../ai/009-attention-head-orientation/index.md).
+- Continuous video, live-preview streams, or animation from the vision camera; only single-image capture is
+  required.
+- Interpretation, captioning, or memory of captured images; consumers of the returned `Image` own its meaning,
+  keeping Vision policy-neutral.
+- Capturing from cameras other than the character's own vision camera.
 
 ## Acceptance Criteria
 
@@ -617,6 +700,30 @@ requirement does not establish measured feasibility: report conflicts rather tha
 |    |                   | authored references, assignment-time deadlines and complete post-draw windows. |
 |    |                   | Independently reproduce Shared-Direction Geometry examples and Assignment and Presentation |
 |    |                   | Ordering boundary replays; skip no eligible presentation and count no pre-assignment one. |
+| 71 | Technical         | Camera-resolution tests verify the player's `IVision.Camera` is the identical `Camera3D` |
+|    |                   | behind `IXRRuntime.Camera.CameraNode` (evidence from a fake or simulated XR runtime is |
+|    |                   | labelled as such; hardware validation is separate) and the NPC's is the template-authored |
+|    |                   | rig camera; an unconfigured `Camera` reads `null` and capture then fails clearly. |
+| 72 | Technical         | Reference female and male base and NPC templates load with the documented vision rig under |
+|    |                   | `Head/Viewpoint`, and `IVision.Camera` resolves to the authored `Camera3D` carrying the |
+|    |                   | documented overridable defaults. |
+| 73 | Technical         | One-shot freshness: after a scene change made while idle, the next capture differs from the |
+|    |                   | previous image (image or texture-hash comparison) and is non-empty; the readback is never |
+|    |                   | a stale pre-change texture. |
+| 74 | Technical         | Idle no-render: with no capture in flight, advancing frames leaves the rig's texture hash |
+|    |                   | unchanged, proving zero per-frame rendering while idle. |
+| 75 | Technical         | Player-path capture preserves the live XR viewport's update mode and continued rendering; |
+|    |                   | no capture disables, reconfigures, or steals the player's view. |
+| 76 | Technical         | Per-capture re-sync holds at capture time: the camera's global transform equals |
+|    |                   | `EyeOrigin.GlobalTransform * authoredLocalOffset`, including under head/body rotation |
+|    |                   | (±30° yaw tracked exactly); an unsynced world-origin render is a failing regression. |
+| 77 | Technical         | Overlap, failure, and lifetime: concurrent captures serialise, each yielding its own fresh |
+|    |                   | frame; an invalid or freed camera or viewport throws clearly; teardown invalidates |
+|    |                   | in-flight captures without hangs or late writes. |
+| 78 | User              | Rendered visual verification: an NPC capture with the documented defaults frames a facing |
+|    |                   | person naturally at a conversational glance — full body with margins, a readable face, no |
+|    |                   | self-face occlusion — judged by inspecting the captured images, not mechanism asserts |
+|    |                   | alone. |
 
 Criteria 66–70 retain the original 40° reassignment and 135-frame 90 fps series with measured actual cadence, including
 all baseline, acquisition, transit, centring and settled observations. Neither suite may shorten its window
@@ -640,6 +747,7 @@ universal animated-idle proof.
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../../ai/007-attention-gaze-target-selection/index.md)
 - [AI-009: Attention-Driven Head Orientation](../../ai/009-attention-head-orientation/index.md)
+- [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/assets/characters/import/eye_animation_library_import.gd`
 - `game/src/Vision/IVision.cs`
