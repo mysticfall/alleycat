@@ -107,6 +107,10 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
             string contents = MindSessionTranscriptFormatter.Render(cycle, turnNumber, _characterId);
             File.WriteAllText(Path.Combine(directory, CreateTurnFileName(turnNumber)), contents);
 
+            // The cycle's generated images follow the successful turn write as sibling files (AI-011 TR-26): each
+            // failure is contained separately, so the turn page stays available and later images still write.
+            WriteCycleImages(directory, turnNumber, cycle);
+
             // The index update follows the successful turn write (AI-011 TR-19): its failure is contained
             // separately, so the turn page stays available and the previously written index survives.
             try
@@ -205,6 +209,90 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
         ArgumentOutOfRangeException.ThrowIfLessThan(turnNumber, 1);
         return $"{TurnFileNamePrefix}{turnNumber.ToString(CultureInfo.InvariantCulture).PadLeft(TurnNumberMinimumDigits, '0')}"
             + TurnFileNameExtension;
+    }
+
+    /// <summary>
+    /// Enumerates one cycle's generated images with their derived sibling file names (AI-011 TR-26): every
+    /// invocation that generated an AI-013 image in invocation order, then every message-carried image of the
+    /// cycle's fresh request suffix in request order — the auto-mode visual-context message — numbered per kind
+    /// within the cycle so the names stay unique within the character folder. The recorder and the formatter share
+    /// this single enumeration, so written files and rendered links cannot diverge.
+    /// </summary>
+    internal static IReadOnlyList<MindTranscriptImageFile> EnumerateCycleImageFiles(
+        int turnNumber,
+        MindSessionCycleTranscript cycle)
+    {
+        ArgumentNullException.ThrowIfNull(cycle);
+        ArgumentOutOfRangeException.ThrowIfLessThan(turnNumber, 1);
+
+        List<MindTranscriptImageFile> files = [];
+        Dictionary<VisualContextImageKind, int> nextOrdinalPerKind = [];
+        foreach (MindTranscriptToolInvocation invocation in cycle.ToolInvocations)
+        {
+            if (invocation.GeneratedImage is not { } image)
+            {
+                continue;
+            }
+
+            int ordinal = nextOrdinalPerKind.TryGetValue(image.Kind, out int seen) ? seen + 1 : 1;
+            nextOrdinalPerKind[image.Kind] = ordinal;
+            files.Add(new MindTranscriptImageFile(invocation, RequestMessageIndex: null, image, CreateImageFileName(turnNumber, image, ordinal)));
+        }
+
+        foreach (MindTranscriptMessageImage messageImage in cycle.MessageImages)
+        {
+            int ordinal = nextOrdinalPerKind.TryGetValue(messageImage.Image.Kind, out int seen) ? seen + 1 : 1;
+            nextOrdinalPerKind[messageImage.Image.Kind] = ordinal;
+            files.Add(
+                new MindTranscriptImageFile(
+                    Invocation: null,
+                    messageImage.RequestMessageIndex,
+                    messageImage.Image,
+                    CreateImageFileName(turnNumber, messageImage.Image, ordinal)));
+        }
+
+        return files;
+    }
+
+    /// <summary>
+    /// Builds the sibling image file name (AI-011 TR-26): derived from the cycle's turn number and the image kind,
+    /// with the per-kind ordinal keeping the name unique within the character folder, and the extension fixed by
+    /// the kind's media type — minimap PNG, view JPEG.
+    /// </summary>
+    internal static string CreateImageFileName(int turnNumber, VisualContextImage image, int ordinal)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(turnNumber, 1);
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentOutOfRangeException.ThrowIfLessThan(ordinal, 1);
+
+        string extension = image.MediaType switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            _ => throw new ArgumentOutOfRangeException(nameof(image), image.MediaType, null),
+        };
+        return $"{TurnFileNamePrefix}{turnNumber.ToString(CultureInfo.InvariantCulture).PadLeft(TurnNumberMinimumDigits, '0')}"
+            + $"-{VisualContextImage.DescribeKind(image.Kind)}-{ordinal.ToString(CultureInfo.InvariantCulture)}{extension}";
+    }
+
+    /// <summary>
+    /// Writes each of the cycle's generated images exactly once as a sibling file beside the just-written turn page
+    /// (AI-011 TR-26): the bytes are the generated image itself as first captured, and each failing write is
+    /// contained alone — it warns without disturbing the session and never removes the turn page (TR-28).
+    /// </summary>
+    private void WriteCycleImages(string characterDirectory, int turnNumber, MindSessionCycleTranscript cycle)
+    {
+        foreach (MindTranscriptImageFile file in EnumerateCycleImageFiles(turnNumber, cycle))
+        {
+            try
+            {
+                File.WriteAllBytes(Path.Combine(characterDirectory, file.FileName), file.Image.Data.ToArray());
+            }
+            catch (Exception exception)
+            {
+                TryLogContainedFailure(exception, "Failed to write a mind session transcript image");
+            }
+        }
     }
 
     /// <summary>

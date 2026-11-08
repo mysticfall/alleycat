@@ -59,6 +59,10 @@ transcripts or capturing provider-wire payloads.
 8. Readable Non-ASCII Sections: With the toggle enabled, Korean and other non-ASCII text in response function-call
    arguments, tool-invocation arguments, and structured tool results appears literally in the turn page and index
    JSON sections rather than as `\uXXXX` escapes, while actual requests, responses, and tool payloads are unchanged.
+9. Transcript Images: With the toggle enabled, every image AgenticMind generated for model context — the AI-013
+   minimap and view-capture images — is written as an image file beside the turn page of the cycle that generated it
+   (minimap PNG, view-capture JPEG), relatively linked from that turn page at the position of the exchange or
+   message that carried it and listed per cycle. With the toggle disabled, no image files are written anywhere.
 
 ## Technical Requirements
 
@@ -205,6 +209,25 @@ transcripts or capturing provider-wire payloads.
     holds them, and validity comes from the local encoder rather than from unescaping or reinterpreting arbitrary
     strings as JSON.
 
+### Transcript Images
+
+26. When the toggle is enabled, every AI-013-generated image — a tools-mode tool-result image or an auto-mode
+    visual-context message image alike — is written exactly once as a sibling file of the turn page belonging to the
+    cycle in which the image was generated, in the same character folder: a minimap image as PNG and a view capture
+    as JPEG. File names derive from the cycle's turn number and the image kind and remain unique within the
+    character folder; the exact naming is implementation-owned. The written file is the generated image itself as
+    first captured or rendered — recording performs no re-render.
+27. The turn page renders the AI-013 auto-mode visual-context message like any other transcript message, and embeds
+    a relative Markdown link to each sibling image at the position of the exchange or message that carried the
+    image, listing the cycle's images per cycle with kind and link. A later cycle's rendering of a disposed AI-013
+    presentation shows the textual placeholder; no image file is written for a placeholder, and a cycle that
+    generated no image writes none. The character invocation index (TR-15–TR-19) is unchanged by this amendment and
+    carries no image links.
+28. With the toggle disabled, the null-object path (TR-5) writes no image files anywhere: AI-013 images exist only
+    within provider requests, and no `user://` path is created for them. Image-file write failures are contained
+    exactly like any recording failure (TR-7) — they warn without disturbing the session, and a failed image write
+    never removes or alters a turn page already written. The TR-12 root-path seam applies to sibling image output.
+
 ## In Scope
 
 - The `Diagnostics:AI:EnableSessionTranscriptLogging` toggle with binding and fail-closed semantics.
@@ -220,6 +243,9 @@ transcripts or capturing provider-wire payloads.
   detail, recovery and terminal-exhaustion reasons, and the parsed-only privacy boundary.
 - Transcript-local JSON encoding: literal non-ASCII output with structural escaping, round-trip validity for valid
   JSON sources, and the unchanged malformed-input fallback.
+- Transcript images for AI-013 visual context: exactly-once sibling PNG/JPEG files beside the generating turn page,
+  relative links at the carrying position with per-cycle listing, no image files when the toggle is disabled, and
+  contained image writes (TR-26–TR-28).
 - Internal test seams and the unit and integration validation contracts.
 
 ## Out Of Scope
@@ -269,6 +295,10 @@ transcripts or capturing provider-wire payloads.
 8. With the toggle enabled, Korean and other non-ASCII text in response function-call arguments, tool-invocation
    arguments, and structured tool results appears literally in every applicable JSON section of the turn page and
    the index rather than as Unicode escapes, without changing any actual request, response, or tool payload.
+9. With the toggle enabled, cycles that generate AI-013 images produce sibling minimap PNGs and view JPEGs beside
+   their turn pages — relatively linked at the carrying exchange's or message's position and listed per cycle —
+   while cycles presenting only placeholders or generating no images produce no image files; with the toggle
+   disabled, no image files are written anywhere (UR-9).
 
 ### Technical Requirements
 
@@ -311,12 +341,20 @@ transcripts or capturing provider-wire payloads.
    arguments, delivered tool arguments, and provider-replayed results are unchanged; malformed argument JSON keeps
    its existing fallback rendering; ordinary non-JSON text passes through untouched; and no production provider or
    tool serialisation changes.
+10. Tests verify transcript images (TR-26–TR-28): sibling placement and per-kind encoding, turn-derived unique
+    naming within the character folder, exactly-once writes per generated image, relative links at the carrying
+    position with per-cycle listing, the visual-context message rendered like any other transcript message,
+    placeholder-only cycles writing no file, index output unchanged, the disabled path writing no image files, and
+    contained image-write failures leaving an already-written turn page intact, with the root-path seam redirecting
+    image output.
 
 ## References
 
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md) — request-cycle loop, fresh-turn invalidation
   (TR-4/TR-5), exchange retention and runtime-authored scene delivery (TR-17–TR-22), tolerated-text stripping
   (TR-12), and provider-boundary returned-reasoning-content normalisation (TR-32–TR-33)
+- [AI-013: Visual AI Context](../013-visual-context/index.md) — the visual-context feature whose generated images
+  the transcript-image contracts (TR-26–TR-28) record
 - [AI-003: Prompt API](../003-prompt-api/index.md) — static instruction and per-request scene status whose rendered
   content the recorder captures
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md) — validated character local `Id`

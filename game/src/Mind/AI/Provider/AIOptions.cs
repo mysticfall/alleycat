@@ -67,4 +67,19 @@ public sealed class AIOptions
         get;
         init;
     }
+
+    /// <summary>
+    /// Optional AI-013 visual-context delivery mode: <c>tools</c>, <c>auto</c>, or <c>off</c>.
+    /// </summary>
+    /// <remarks>
+    /// Parsed case-insensitively after trimming; unset or blank applies the default <c>tools</c> mode, and an
+    /// unrecognised nonblank value is rejected locally before any provider request (AI-013 TR-1). Unlike the
+    /// reasoning settings, the mode is read once at AgenticMind session start and stays fixed for that session; it
+    /// is never forwarded to the provider transport.
+    /// </remarks>
+    public string? VisualContextMode
+    {
+        get;
+        init;
+    }
 }

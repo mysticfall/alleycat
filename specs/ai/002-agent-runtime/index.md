@@ -69,9 +69,11 @@ persistent event timeline remains canonical memory; the provider transcript is d
    watches and time-based tasks read Mind's observation store, never the provider transcript.
 2. The static system instruction is rendered once at session start under AI-003. Every logical provider request then
    uses, in order: the static system instruction; the bootstrap user input; every retained accepted exchange in
-   chronological order, real and synthetic interleaved; and one fresh user current-scene message rendered last. Each
-   request carries exactly one current-scene message, and delivered content is never duplicated elsewhere in the
-   request.
+   chronological order, real and synthetic interleaved; and one fresh user current-scene message rendered last. In
+   `auto` visual-context mode (AI-013) exactly one runtime-authored user visual-context message is presented
+   immediately before that current-scene message; no such message exists in `tools` or `off` modes. Each request
+   carries exactly one current-scene message, at most one visual-context message, and delivered content is never
+   duplicated elsewhere in the request.
 3. The request context contains no event-history message and no model-facing newly-presented marking. Model-visible
    event text reaches the model only through retained exchanges: the NPC's own tool calls and results, and the
    synthetic scene-update exchanges of TR-17–TR-22.
@@ -108,9 +110,13 @@ persistent event timeline remains canonical memory; the provider transcript is d
      recorded in the transcript sink (AI-011). Every response is completely validated before any tool effect; invalid
      responses have no transcript, observation, action, or watermark effect and use bounded recovery; transport retry
      and recovery remain contained.
-13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, and authorable watch tools from
-     AI-010. The synthetic delivery tool (TR-18) is runtime-authored only: it is not offered to the model, and a model
-     attempt to call it is rejected as an unknown tool under existing validation. Tool delegates send any
+13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, authorable watch tools from
+     AI-010, and, in the default `tools` visual-context mode, the two zero-argument visual-context tools (minimap
+     and view capture) composed at AgenticMind under AI-013. In `auto` and `off` visual-context modes those two
+     tools are absent from the inventory, and a model attempt to call either is rejected as an unknown tool under
+     existing validation, mirroring the synthetic-delivery precedent (TR-18). The synthetic delivery tool (TR-18)
+     is runtime-authored only: it is not offered to the model, and a model attempt to call it is rejected as an
+     unknown tool under existing validation. Tool delegates send any
      resulting observations through Mind's atomic queue. Tool validation and typed tool binding occur only at
      AgenticMind composition; the common runtime has no feature service bag.
 14. Speech admitted to its voice pipeline remains committed at playback hand-off and uses Mind's node-lifetime
@@ -124,16 +130,24 @@ persistent event timeline remains canonical memory; the provider transcript is d
       results contain event or observation text (TR-8, TR-10). Because every accepted exchange is retained, no
       description may claim that a `speak` or `wait` exchange leaves no record in the NPC's context: `speak` guidance
       states that the call remains in context as the record of the speech, and `wait` guidance states that its
-      exchange persists in context like any other exchange.
+      exchange persists in context like any other exchange. The AI-013 visual-context tool descriptions obey the
+      same accuracy rule under AI-013 TR-6: zero-argument shape, subject binding, returned image, contained
+      failure, and ephemeral image lifetime are described exactly as the runtime behaves.
 16. `wait` must be described as intentionally yielding until future developments or remaining silent, and `speak` as
       taking effect in the world with its call remaining in context as the record of the speech; timing is carried by
       current scene status. Watch-tool descriptions follow AI-010's model-facing watch guidance; shared-instruction
-      guidance follows AI-003's Shared Context Interpretation Guidance (TR-12–TR-16).
+      guidance follows AI-003's Shared Context Interpretation Guidance (TR-12–TR-16). Visual-context tool
+      descriptions follow AI-013's model-facing guidance (AI-013 TR-6).
 
 ### Exchange Retention And Scene Delivery
 
 17. Every accepted tool exchange is retained in the provider transcript for the whole session: there is no disposal
-    policy and no removal path. Retention changes only transcript presence — whole-batch validation before effects,
+    policy and no removal path. One deliberate, scoped exception exists: generated image content carried by a
+    retained exchange under AI-013 is disposed of at the materialisation of the next fresh scheduling turn — the
+    pixels are replaced by a textual placeholder recording the image kind, its area or centre, and the capture game
+    time — while the exchange, its tool call, and its arguments remain retained forever; AI-013 TR-9 owns the
+    disposal boundary and mechanism, and the exception replaces image content in place without removing any part of
+    the exchange. Retention changes only transcript presence — whole-batch validation before effects,
     atomic acceptance with watermark confirmation, invalidation arbitration, serial execution, speech admission, and
     terminal cancellation guarantees are unchanged. The transcript therefore grows unboundedly within a session in
     this revision; compaction is deliberately out of scope and motivates a future revision (Out Of Scope).
@@ -274,6 +288,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - Continuation admission and confirmation settlement.
 - Composition-time binding of watch tools with AI-010.
 - Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
+- AI-013 visual-context integration: the auto-mode visual-context message slot (TR-2), the mode-dependent inventory
+  of the two zero-argument visual-context tools with unknown-tool rejection in `auto` and `off` modes (TR-13), their
+  accurate descriptions (TR-15–TR-16), and the scoped image-disposal exception to whole-exchange retention (TR-17),
+  specified normatively by AI-013.
 - Optional user-configured reasoning effort and reasoning summary verbosity: AI-owned configuration under CORE-006,
   value normalisation and validation, exact request-field emission per protocol with contained Chat Completions
   unsupported-summary handling, lifetime application across retries and continuations, and parsed-only reasoning
@@ -436,6 +454,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — parsed-only transcript diagnostics,
   reasoning-content rendering, invocation index, runtime-authored synthetic-exchange marking, and stripped-text
   records normative for reasoning surfacing and tolerated-text recording (TR-12, TR-31, TR-32)
+- [AI-013: Visual AI Context](../013-visual-context/index.md) — visual-context mode configuration, the zero-argument
+  minimap and view-capture tools, the auto-mode visual-context message, and the ephemeral image lifetime owning the
+  scoped TR-17 exception
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
 - [TEST-001: Integration Test Framework](../../testing/001-test-framework/index.md) — integration-session opt-in
   gate, `AITest` configuration boundary, live-LLM pathway, and framework-side acceptance coverage normative for

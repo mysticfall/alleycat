@@ -122,9 +122,11 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             Assert.Contains(owner.FullId, freshRequest.Instructions, StringComparison.Ordinal);
             Assert.DoesNotContain("{{", freshRequest.Instructions, StringComparison.Ordinal);
 
-            // The corrected tool metadata reaches the model on the same request.
+            // The corrected tool metadata reaches the model on the same request. The default `tools` visual-context
+            // mode composes the two zero-argument AI-013 visual tools beside the production inventory (AI-002 TR-13
+            // as amended; AI-013 TR-2).
             Assert.Equal(
-                ["read_lore", "speak", "unwatch", "wait", "watch_proximity"],
+                ["capture_view", "minimap", "read_lore", "speak", "unwatch", "wait", "watch_proximity"],
                 [.. freshRequest.Tools.Keys.OrderBy(static name => name, StringComparer.Ordinal)]);
             Assert.Contains("Lore Catalogue", freshRequest.Tools["read_lore"], StringComparison.Ordinal);
             Assert.Contains("not omniscient facts", freshRequest.Tools["read_lore"], StringComparison.Ordinal);

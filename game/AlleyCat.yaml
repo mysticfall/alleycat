@@ -40,6 +40,11 @@ AI:
     # configured value is rejected before dispatch when Chat Completions is selected. Returned summaries
     # are diagnostic provider renderings, not guaranteed reasoning: backends may return none at all.
     #ReasoningVerbosity: "detailed"
+    # Visual AI context delivery for character minds (AI-013). Accepted values: tools, auto, off.
+    # tools (the default): the model calls the minimap and view-capture tools itself; auto: both images
+    # are captured and attached to every request; off: no visual context at all. Unset or blank means
+    # tools. The mode is read once at session start and stays fixed for that session.
+    #VisualContextMode: "tools"
 
 # Live LLM test backend settings, read only by opt-in integration tests run with --live-llm.
 # Supply real values through the user override (user://AlleyCat.yaml) instead of committing them

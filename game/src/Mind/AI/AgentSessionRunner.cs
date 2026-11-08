@@ -73,6 +73,7 @@ internal sealed class AgentSessionRunner
     private ActivePhaseState? _activePhase;
     private int _freshInvalidation;
     private volatile bool _ended;
+    private bool _hasRetainedVisualContextImages;
 
     public AgentSessionRunner(
         IChatClient chatClient,
@@ -385,10 +386,21 @@ internal sealed class AgentSessionRunner
         {
             while (!lifetimeToken.IsCancellationRequested)
             {
+                bool freshReplacement = false;
                 while (Interlocked.Exchange(ref _freshInvalidation, 0) != 0)
                 {
                     // A fresh invalidation makes this boundary's request the replacement request (AI-002 TR-4).
                     // A second signal while reaching the boundary repeats the arbitration before context is sampled.
+                    freshReplacement = true;
+                }
+
+                if (freshReplacement)
+                {
+                    // The replacement request materialises a new logical request from the scheduling ladder, so the
+                    // current action chain — continuations, retries, and recovery rematerialisations included — ends
+                    // here: retained visual-context images are disposed to their textual placeholders before any
+                    // replacement context is sampled (AI-013 TR-9).
+                    DisposeRetainedVisualContextImages();
                 }
 
                 requestCount++;
@@ -417,6 +429,21 @@ internal sealed class AgentSessionRunner
                     RequestMessages = requestTranscript,
                     RequestOptions = _transcriptRequestOptions,
                 };
+                // Message-carried generated images (AI-013 TR-8): suffix messages are fresh per cycle and never
+                // retained, so every generated image part in them belongs to this cycle alone; its position within
+                // the frozen request drives the transcript's sibling file link (AI-011 TR-26–TR-27).
+                int suffixStartIndex = requestTranscript.Count - requestContext.SuffixMessages.Count;
+                for (int suffixIndex = 0; suffixIndex < requestContext.SuffixMessages.Count; suffixIndex++)
+                {
+                    foreach (AIContent content in requestContext.SuffixMessages[suffixIndex].Contents)
+                    {
+                        if (content is VisualContextImage image)
+                        {
+                            cycleTranscript.MessageImages.Add(
+                                new MindTranscriptMessageImage(suffixStartIndex + suffixIndex, image));
+                        }
+                    }
+                }
                 lock (_stateLock)
                 {
                     // Positions are stable within this frozen request: synthetic exchanges are retained forever
@@ -563,6 +590,7 @@ internal sealed class AgentSessionRunner
                 cycleTranscript.StrippedTexts.AddRange(toleratedTexts);
 
                 List<AIContent> results = new(calls.Length);
+                List<VisualContextImage> exchangeImages = [];
                 bool batchSkippedByInvalidation = false;
                 try
                 {
@@ -607,8 +635,22 @@ internal sealed class AgentSessionRunner
                         }
 
                         invocation.Status = MindTranscriptToolInvocationStatus.Completed;
-                        invocation.Result = toolResult;
-                        results.Add(new FunctionResultContent(call.CallId, toolResult));
+                        // An image-carrying delivery unwraps into its unchanged textual result plus the generated
+                        // image (AI-013 TR-5): the text becomes the function result content, the image is presented
+                        // within this exchange at retention and captured on the invocation for the transcript
+                        // sink's sibling file (AI-011 TR-26).
+                        if (toolResult is VisualContextDelivery delivery)
+                        {
+                            invocation.Result = delivery.Message;
+                            invocation.GeneratedImage = delivery.Image;
+                            exchangeImages.Add(delivery.Image);
+                            results.Add(new FunctionResultContent(call.CallId, delivery.Message));
+                        }
+                        else
+                        {
+                            invocation.Result = toolResult;
+                            results.Add(new FunctionResultContent(call.CallId, toolResult));
+                        }
                     }
                 }
                 catch (Exception exception)
@@ -641,6 +683,14 @@ internal sealed class AgentSessionRunner
                 lock (_stateLock)
                 {
                     _acceptedTranscript.Add(new ChatMessage(ChatRole.Tool, results));
+                    if (exchangeImages.Count > 0)
+                    {
+                        // The generated images are presented within the same exchange, immediately after its
+                        // tool-result message (AI-013 TR-10), and stay model-visible until the next fresh
+                        // scheduling turn disposes them (TR-9).
+                        _acceptedTranscript.Add(BuildVisualContextPresentation(exchangeImages));
+                        _hasRetainedVisualContextImages = true;
+                    }
                 }
 
                 CompleteCycleTranscript(cycleTranscript, cycleStopwatch, MindTranscriptCycleOutcome.Accepted);
@@ -974,6 +1024,69 @@ internal sealed class AgentSessionRunner
 
             requestEpoch = _invalidationEpoch;
             return [.. _acceptedTranscript, .. requestContext.SuffixMessages];
+        }
+    }
+
+    /// <summary>
+    /// Builds the exchange-adjacent image presentation of one settled tool batch (AI-013 TR-10): one user message
+    /// immediately after the exchange's tool-result message, carrying a brief textual label identifying each
+    /// generated image followed by the image parts themselves in the same order.
+    /// </summary>
+    /// <remarks>
+    /// This adjacent presentation is the mandatory mapping that preserves the pinned semantic on every shipped
+    /// protocol path by construction: the Chat Completions adapter maps tool-role messages to text-only tool
+    /// results and silently drops any other content part in them, while both shipped adapters carry data image
+    /// parts inside user messages — so the image is model-visible as an image at its exchange's position on both
+    /// paths (AI-013 TR-10).
+    /// </remarks>
+    private static ChatMessage BuildVisualContextPresentation(IReadOnlyList<VisualContextImage> images)
+    {
+        string label = images.Count == 1
+            ? $"Visual context from your tool action: {images[0].DescribeCapture()}."
+            : "Visual context from your tool actions:"
+                + string.Concat(images.Select(static image => $"\n- {image.DescribeCapture()}"));
+
+        List<AIContent> contents = [new TextContent(label), .. images];
+        return new ChatMessage(ChatRole.User, contents);
+    }
+
+    /// <summary>
+    /// Disposes every retained visual-context image at the fresh-scheduling-turn boundary (AI-013 TR-9, a scoped
+    /// exception to AI-002 TR-17): each image content is replaced in place — within its presentation message, at
+    /// its exchange position — by a textual placeholder recording the image kind, its area or centre, and the game
+    /// time of capture. Nothing is removed: the tool calls, their arguments, and the carrying messages remain
+    /// retained forever, keeping the action record truthful and exchange unit integrity intact (AI-002 TR-20).
+    /// </summary>
+    /// <remarks>
+    /// Message instances are replaced rather than mutated so already-issued requests keep the exact contents they
+    /// were sent with; the swap happens under the state lock, which owns every accepted-transcript mutation.
+    /// </remarks>
+    private void DisposeRetainedVisualContextImages()
+    {
+        lock (_stateLock)
+        {
+            if (!_hasRetainedVisualContextImages)
+            {
+                return;
+            }
+
+            for (int index = 0; index < _acceptedTranscript.Count; index++)
+            {
+                ChatMessage retained = _acceptedTranscript[index];
+                if (!retained.Contents.Any(static content => content is VisualContextImage))
+                {
+                    continue;
+                }
+
+                List<AIContent> replacedContents =
+                [
+                    .. retained.Contents.Select(static content =>
+                        content is VisualContextImage image ? new TextContent(image.ToDisposalPlaceholder()) : content),
+                ];
+                _acceptedTranscript[index] = new ChatMessage(retained.Role, replacedContents);
+            }
+
+            _hasRetainedVisualContextImages = false;
         }
     }
 

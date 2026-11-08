@@ -64,6 +64,12 @@ internal static partial class MindSessionTranscriptFormatter
         ArgumentException.ThrowIfNullOrWhiteSpace(characterId);
         ArgumentOutOfRangeException.ThrowIfLessThan(turnNumber, 1);
 
+        IReadOnlyList<MindTranscriptImageFile> generatedImages =
+            MindSessionTranscriptRecorder.EnumerateCycleImageFiles(turnNumber, cycle);
+        List<MindTranscriptImageFile> messageImageFiles =
+        [
+            .. generatedImages.Where(static file => file.RequestMessageIndex is not null),
+        ];
         StringBuilder document = new();
         AppendHeader(document, cycle, turnNumber, characterId);
         AppendInstructions(document, cycle.Instructions);
@@ -73,10 +79,12 @@ internal static partial class MindSessionTranscriptFormatter
             "## Request Transcript",
             "Message",
             cycle.RequestMessages,
-            cycle.RuntimeAuthoredMessageIndexes);
+            cycle.RuntimeAuthoredMessageIndexes,
+            messageImageFiles);
         AppendStrippedTexts(document, cycle.StrippedTexts);
         AppendResponse(document, cycle);
-        AppendToolInvocations(document, cycle.ToolInvocations);
+        AppendToolInvocations(document, cycle.ToolInvocations, generatedImages);
+        AppendGeneratedImages(document, generatedImages);
         return document.ToString();
     }
 
@@ -485,7 +493,8 @@ internal static partial class MindSessionTranscriptFormatter
         string sectionHeading,
         string messageLabelPrefix,
         IReadOnlyList<ChatMessage> messages,
-        IReadOnlyList<int> runtimeAuthoredMessageIndexes)
+        IReadOnlyList<int> runtimeAuthoredMessageIndexes,
+        IReadOnlyList<MindTranscriptImageFile> messageImageFiles)
     {
         _ = document.Append(sectionHeading).Append(LineFeed).Append(LineFeed);
         if (messages.Count == 0)
@@ -501,10 +510,15 @@ internal static partial class MindSessionTranscriptFormatter
             string runtimeAuthoredMark = runtimeAuthoredMessageIndexes.Contains(index)
                 ? " *(runtime-authored scene update)*"
                 : string.Empty;
+            // A fresh request-suffix message of this cycle carries its generated images' sibling-file links at its
+            // own position (AI-011 TR-27); retained replays of other cycles' messages render textual references.
+            Queue<MindTranscriptImageFile> linkedImages =
+                new(messageImageFiles.Where(file => file.RequestMessageIndex == index));
             AppendMessage(
                 document,
                 messages[index],
-                $"{messageLabelPrefix} {index + 1} of {messages.Count}{runtimeAuthoredMark}");
+                $"{messageLabelPrefix} {index + 1} of {messages.Count}{runtimeAuthoredMark}",
+                linkedImages);
         }
     }
 
@@ -582,7 +596,11 @@ internal static partial class MindSessionTranscriptFormatter
         _ = document.Append(LineFeed);
     }
 
-    private static void AppendMessage(StringBuilder document, ChatMessage message, string label)
+    private static void AppendMessage(
+        StringBuilder document,
+        ChatMessage message,
+        string label,
+        Queue<MindTranscriptImageFile>? linkedImages = null)
     {
         _ = document
             .Append("### ").Append(label).Append(" — ").Append(message.Role.Value)
@@ -596,11 +614,14 @@ internal static partial class MindSessionTranscriptFormatter
 
         foreach (AIContent content in message.Contents)
         {
-            AppendContent(document, content);
+            AppendContent(document, content, linkedImages);
         }
     }
 
-    private static void AppendContent(StringBuilder document, AIContent content)
+    private static void AppendContent(
+        StringBuilder document,
+        AIContent content,
+        Queue<MindTranscriptImageFile>? linkedImages)
     {
         switch (content)
         {
@@ -615,6 +636,49 @@ internal static partial class MindSessionTranscriptFormatter
                 break;
             case FunctionResultContent result:
                 AppendFunctionResultBlock(document, result.CallId, result.Result);
+                break;
+            case VisualContextImage image:
+                if (linkedImages is { Count: > 0 } queue && ReferenceEquals(queue.Peek().Image, image))
+                {
+                    // This cycle's own request-suffix message carried the image: embed its sibling file's relative
+                    // link at this carrying position (AI-011 TR-27), exactly as an invocation-generating block does.
+                    MindTranscriptImageFile file = queue.Dequeue();
+                    _ = document
+                        .Append("![")
+                        .Append(VisualContextImage.DescribeKind(file.Image.Kind))
+                        .Append("](")
+                        .Append(file.FileName)
+                        .Append(")")
+                        .Append(LineFeed)
+                        .Append(LineFeed)
+                        .Append("- ")
+                        .Append(file.Image.DescribeCapture())
+                        .Append(LineFeed)
+                        .Append(LineFeed);
+                }
+                else
+                {
+                    // A still-live AI-013 image replays inside its retained presentation message: rendered as a
+                    // textual reference only, because its sibling file belongs to the cycle that generated it
+                    // (AI-011 TR-26–TR-27); a disposed presentation renders as plain placeholder text instead.
+                    _ = document
+                        .Append("_(image content — ")
+                        .Append(image.DescribeCapture())
+                        .Append("; ")
+                        .Append(image.MediaType)
+                        .Append(")_")
+                        .Append(LineFeed)
+                        .Append(LineFeed);
+                }
+
+                break;
+            case DataContent data:
+                _ = document
+                    .Append("_(data content — ")
+                    .Append(string.IsNullOrWhiteSpace(data.MediaType) ? "untyped" : data.MediaType)
+                    .Append(")_")
+                    .Append(LineFeed)
+                    .Append(LineFeed);
                 break;
             default:
                 _ = document
@@ -994,30 +1058,78 @@ internal static partial class MindSessionTranscriptFormatter
 
     private static void AppendToolInvocations(
         StringBuilder document,
-        IReadOnlyList<MindTranscriptToolInvocation> invocations)
+        IReadOnlyList<MindTranscriptToolInvocation> invocations,
+        IReadOnlyList<MindTranscriptImageFile> generatedImages)
     {
         if (invocations.Count == 0)
         {
             return;
         }
 
+        Dictionary<MindTranscriptToolInvocation, string> imageFileNames = [];
+        foreach (MindTranscriptImageFile file in generatedImages)
+        {
+            if (file.Invocation is { } invocation)
+            {
+                imageFileNames[invocation] = file.FileName;
+            }
+        }
+
         _ = document.Append("## Tool Invocations").Append(LineFeed).Append(LineFeed);
         foreach (MindTranscriptToolInvocation invocation in invocations)
         {
-            AppendToolInvocationBlock(document, invocation, turnPageLink: null);
+            AppendToolInvocationBlock(
+                document,
+                invocation,
+                turnPageLink: null,
+                imageFileName: imageFileNames.GetValueOrDefault(invocation));
         }
+    }
+
+    /// <summary>
+    /// Lists the cycle's generated images per cycle with kind and relative link (AI-011 TR-27): each entry names
+    /// the sibling file written beside this turn page. Cycles that generated no image — including placeholder-only
+    /// replays of disposed images — list nothing.
+    /// </summary>
+    private static void AppendGeneratedImages(
+        StringBuilder document,
+        IReadOnlyList<MindTranscriptImageFile> generatedImages)
+    {
+        if (generatedImages.Count == 0)
+        {
+            return;
+        }
+
+        _ = document.Append("## Generated Images").Append(LineFeed).Append(LineFeed);
+        foreach (MindTranscriptImageFile file in generatedImages)
+        {
+            _ = document
+                .Append("- **")
+                .Append(VisualContextImage.DescribeKind(file.Image.Kind))
+                .Append(":** [")
+                .Append(file.FileName)
+                .Append("](")
+                .Append(file.FileName)
+                .Append(") — ")
+                .Append(file.Image.DescribeCapture())
+                .Append(LineFeed);
+        }
+
+        _ = document.Append(LineFeed);
     }
 
     /// <summary>
     /// Renders one tool invocation block — heading, pretty-printed JSON arguments, and the delivered result — as
     /// the single shared rendering path of the turn pages and the invocation index (AI-011 TR-17). The index passes
     /// a relative turn-page link so each invocation event links to its own turn (TR-16); the heading text itself is
-    /// identical in both documents.
+    /// identical in both documents. An image-generating invocation embeds its sibling image's relative link at this
+    /// carrying position on the turn page alone (AI-011 TR-27): the index carries no image links.
     /// </summary>
     private static void AppendToolInvocationBlock(
         StringBuilder document,
         MindTranscriptToolInvocation invocation,
-        string? turnPageLink)
+        string? turnPageLink,
+        string? imageFileName = null)
     {
         StringBuilder heading = new();
         _ = heading.Append(invocation.ToolName);
@@ -1044,6 +1156,34 @@ internal static partial class MindSessionTranscriptFormatter
         _ = invocation.Status == MindTranscriptToolInvocationStatus.Interrupted
             ? document.Append("_(interrupted before a result was delivered)_").Append(LineFeed).Append(LineFeed)
             : document.Append(RenderResultText(invocation.Result)).Append(LineFeed).Append(LineFeed);
+        if (invocation.GeneratedImage is { } generatedImage)
+        {
+            _ = document.Append("**Generated Image**").Append(LineFeed).Append(LineFeed);
+            if (imageFileName is null)
+            {
+                // The index path carries no image links (AI-011 TR-27): the capture description alone renders.
+                _ = document
+                    .Append("- ")
+                    .Append(generatedImage.DescribeCapture())
+                    .Append(LineFeed)
+                    .Append(LineFeed);
+            }
+            else
+            {
+                _ = document
+                    .Append("![")
+                    .Append(VisualContextImage.DescribeKind(generatedImage.Kind))
+                    .Append("](")
+                    .Append(imageFileName)
+                    .Append(")")
+                    .Append(LineFeed)
+                    .Append(LineFeed)
+                    .Append("- ")
+                    .Append(generatedImage.DescribeCapture())
+                    .Append(LineFeed)
+                    .Append(LineFeed);
+            }
+        }
     }
 
     private static void AppendJsonBlock(StringBuilder document, IDictionary<string, object?>? arguments)

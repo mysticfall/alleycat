@@ -174,7 +174,9 @@ public abstract partial class AgentTool : Resource
             }
 
             mind.IngestToolObservations(result.Observations);
-            return result.Message;
+            // An image-carrying result travels in the delivery envelope so the runner can present it within the
+            // tool exchange (AI-013 TR-5/TR-10); a text-only result keeps its plain message value.
+            return result.Image is { } image ? new VisualContextDelivery(result.Message, image) : result.Message;
         }
     }
 }

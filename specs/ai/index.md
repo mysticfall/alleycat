@@ -68,7 +68,7 @@ roleplay without breaking immersion or performance.
 - Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
   Source Compilation, AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Gaze Target Selection,
   AI-008: Scenario, AI-009: Attention-Driven Head Orientation, AI-010: Agent Watches, AI-011: Mind Session
-  Transcripts, and AI-012: Character Dialogue Examples.
+  Transcripts, AI-012: Character Dialogue Examples, and AI-013: Visual AI Context.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
 
@@ -100,9 +100,9 @@ roleplay without breaking immersion or performance.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory Source Compilation,
    AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Head Target Selection, AI-008: Scenario,
-   AI-009: Attention-Driven Head Orientation, AI-010: Agent Watches, AI-011: Mind Session Transcripts, and
-   AI-012: Character Dialogue Examples are identified as current normative child contracts for their respective
-   scopes.
+   AI-009: Attention-Driven Head Orientation, AI-010: Agent Watches, AI-011: Mind Session Transcripts,
+   AI-012: Character Dialogue Examples, and AI-013: Visual AI Context are identified as current normative child
+   contracts for their respective scopes.
 
 ## Specifications
 
@@ -117,6 +117,7 @@ roleplay without breaking immersion or performance.
 - [AI-010: Agent Watches](010-agent-watches/index.md)
 - [AI-011: Mind Session Transcripts](011-mind-session-transcripts/index.md)
 - [AI-012: Character Dialogue Examples](012-dialogue-examples/index.md)
+- [AI-013: Visual AI Context](013-visual-context/index.md)
 - [SCN-001: Scene Context API](../scene/001-scene-context-api/index.md)
 
 ## References
@@ -132,4 +133,5 @@ roleplay without breaking immersion or performance.
 - AI-010: Agent Watches
 - AI-011: Mind Session Transcripts
 - AI-012: Character Dialogue Examples
+- AI-013: Visual AI Context
 - SCN-001: Scene Context API

@@ -107,6 +107,51 @@ public sealed class AgentToolTests
     }
 
     /// <summary>
+    /// Result envelopes carry an optional generated image payload (AI-013 TR-5) without changing the message or
+    /// observation channels.
+    /// </summary>
+    [Fact]
+    public void AgentToolResult_CarriesAnOptionalImagePayload()
+    {
+        var image = VisualContextImage.Minimap(
+            [1, 2],
+            centreX: 1,
+            centreY: 2,
+            radiusMetres: 3,
+            gameTimeSeconds: 4);
+
+        var carrying = new AgentToolResult("Map ready.", image: image);
+        var textOnly = new AgentToolResult("Done.");
+
+        Assert.Same(image, carrying.Image);
+        Assert.Empty(carrying.Observations);
+        Assert.Null(textOnly.Image);
+    }
+
+    /// <summary>
+    /// The runtime-bound wrapper returns an image-carrying result as the delivery envelope — message plus image
+    /// (AI-013 TR-5/TR-9) — while a text-only result keeps its plain message value.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_ReturnsImageCarryingResultsAsDeliveryEnvelopes()
+    {
+        var fixture = new ToolFixture();
+        var image = VisualContextImage.View([7], gameTimeSeconds: 2.5);
+        AIFunction imageTool = fixture.CreateFunction(
+            (CancellationToken _) => Task.FromResult(new AgentToolResult("Seen.", image: image)),
+            "capture_view");
+        AIFunction textTool = fixture.CreateFunction(
+            (CancellationToken _) => Task.FromResult(new AgentToolResult("Done.")),
+            "speak");
+
+        VisualContextDelivery delivery = Assert.IsType<VisualContextDelivery>(
+            await imageTool.InvokeAsync([], CancellationToken.None));
+        Assert.Equal("Seen.", delivery.Message);
+        Assert.Same(image, delivery.Image);
+        Assert.Equal("Done.", await textTool.InvokeAsync([], CancellationToken.None));
+    }
+
+    /// <summary>
     /// Tool delegates with non-envelope return contracts are rejected before invocation.
     /// </summary>
     [Fact]

@@ -15,6 +15,7 @@ using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
+using AlleyCat.Scene.MiniMap;
 using AlleyCat.Templating;
 using Godot;
 using Microsoft.Extensions.AI;
@@ -44,8 +45,11 @@ public partial class AgenticMind : MindBase
 
     private readonly SpeechTurnContinuationCoordinator _speechContinuations;
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
+    private Func<VisualContextMode> _visualContextModeLoader = VisualContextModeSettings.LoadOrDefault;
+    private Func<MiniMapRenderer?> _miniMapRendererLoader = TryResolveDefaultMiniMapRenderer;
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
     private volatile AgentSessionRunner? _activeRunner;
+    private volatile MindRequestContextSource? _activeRequestContextSource;
     private WatchRegistry? _boundWatchRegistry;
     private volatile bool _sessionStarted;
 
@@ -246,7 +250,11 @@ public partial class AgenticMind : MindBase
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         IGameClock clock = GameClock;
         ToolAdmissionBroker toolAdmission = new();
-        List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, clock, toolAdmission);
+        // The AI-013 mode resolves once here — from the injected loader — and stays fixed for this session
+        // (AI-013 TR-1); the prepared session carries it for tool composition and request-context authoring.
+        VisualContextMode visualContextMode = _visualContextModeLoader();
+        MiniMapRenderer? miniMapRenderer = _miniMapRendererLoader();
+        List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, clock, toolAdmission, visualContextMode, miniMapRenderer);
         var invalidResponseRecoveryPolicy = new InvalidResponseRecoveryPolicy(
             InvalidResponseRecoveryBudget,
             [.. InvalidResponseRecoveryBackoffSeconds.Select(static seconds => TimeSpan.FromSeconds(seconds))]);
@@ -272,7 +280,8 @@ public partial class AgenticMind : MindBase
             invalidResponseRecoveryPolicy,
             toolAdmission,
             compiledCurrentSceneStatus,
-            transcriptSink);
+            transcriptSink,
+            visualContextMode);
     }
 
     /// <summary>
@@ -280,6 +289,11 @@ public partial class AgenticMind : MindBase
     /// </summary>
     internal async Task ExecuteSessionAsync(AgentSession session, CancellationToken cancellationToken)
     {
+        MindRequestContextSource requestContextSource = new(
+            this,
+            session,
+            _speechContinuations,
+            Game.Instance.GetRequiredService<IMainThreadDispatcher>());
         AgentSessionRunner runner = new(
             session.ChatClient,
             session.Instructions,
@@ -288,10 +302,11 @@ public partial class AgenticMind : MindBase
             GameLoggerResolver.ResolveRequired<AgenticMind>(),
             session.EnableReasoningLogging,
             invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy,
-            requestContextSource: new MindRequestContextSource(this, session, _speechContinuations),
+            requestContextSource: requestContextSource,
             transcriptSink: session.TranscriptSink);
         session.ToolAdmission.AttachRunner(runner);
         _activeRunner = runner;
+        _activeRequestContextSource = requestContextSource;
         try
         {
             await runner.RunAsync(cancellationToken);
@@ -299,6 +314,7 @@ public partial class AgenticMind : MindBase
         finally
         {
             _activeRunner = null;
+            _activeRequestContextSource = null;
         }
     }
 
@@ -325,6 +341,10 @@ public partial class AgenticMind : MindBase
 
         if (signal.Urgency is ObservationDeliveryUrgency.Fresh)
         {
+            // A fresh invalidation supersedes the current logical request (AI-002 TR-4/5), so its auto-mode
+            // visual-context message ends with it: the replacement request rebuilds the message from fresh
+            // captures instead of reusing it (AI-013 TR-8).
+            _activeRequestContextSource?.NoteVisualContextSuperseded();
             // A wait owns its normal completion and therefore is not cancelled. The following replacement request
             // rematerialises the timeline instead of receiving a rendered observation payload.
             IReadOnlySet<SpeechContinuationKey> readyContinuations = _speechContinuations.GetReadyContinuationKeys();
@@ -353,7 +373,9 @@ public partial class AgenticMind : MindBase
         ScenarioContext context,
         IMainThreadDispatcher dispatcher,
         IGameClock clock,
-        ToolAdmissionBroker toolAdmission)
+        ToolAdmissionBroker toolAdmission,
+        VisualContextMode visualContextMode,
+        MiniMapRenderer? miniMapRenderer)
     {
         // Concrete capabilities bind typed to their concrete tool here at composition (AI-002 TR-13):
         // Speech-admission arbitration reaches only the speak tool; canonical request context owns all observation
@@ -381,6 +403,18 @@ public partial class AgenticMind : MindBase
             readLoreTool.CreateFunction(context, this, dispatcher, sessionServices),
             new UnwatchTool(watchRegistry).CreateFunction(context, this, dispatcher, sessionServices),
         ];
+        if (visualContextMode == VisualContextMode.Tools)
+        {
+            // AI-013 TR-2–TR-4: the two zero-argument visual tools join the production inventory only in `tools`
+            // mode. Both bind their subject through the trusted session context and their typed capture
+            // dependencies here at composition; `auto` and `off` compose neither, so a model attempt hits the
+            // generic unknown-tool rejection (AI-013 TR-7/TR-12).
+            MinimapTool minimapTool = new(miniMapRenderer, GameLoggerResolver.ResolveRequired<MinimapTool>());
+            CaptureViewTool captureViewTool = new(GameLoggerResolver.ResolveRequired<CaptureViewTool>());
+            functions.Add(minimapTool.CreateFunction(context, this, dispatcher, sessionServices));
+            functions.Add(captureViewTool.CreateFunction(context, this, dispatcher, sessionServices));
+        }
+
         if (watchRegistry is not null)
         {
             IReadOnlyList<AITool> watchTools = watchRegistry.BindSessionAndCreateTools(
@@ -638,16 +672,22 @@ public partial class AgenticMind : MindBase
     /// <summary>
     /// Composes Mind's synthetic scene-update delivery and fresh scene status into the generic runner
     /// request-context boundary (AI-002 TR-2, TR-18, TR-19). The source owns the delivered event watermark; it never
-    /// exposes Mind, projectors, observations, or tools to <see cref="AgentSessionRunner" />.
+    /// exposes Mind, projectors, observations, or tools to <see cref="AgentSessionRunner" />. In <c>auto</c>
+    /// visual-context mode it also authors the per-logical-request visual-context message (AI-013 TR-8), captured
+    /// on the main thread and attached immediately before the fresh current-scene message.
     /// </summary>
     private sealed class MindRequestContextSource(
         AgenticMind mind,
         AgentSession session,
-        SpeechTurnContinuationCoordinator continuations) : IAgentRequestContextSource
+        SpeechTurnContinuationCoordinator continuations,
+        IMainThreadDispatcher dispatcher) : IAgentRequestContextSource
     {
         private readonly Lock _watermarkLock = new();
         private long _deliveredEventSequenceID;
         private long _syntheticCallSequence;
+        private long _visualContextGeneration;
+        private ChatMessage? _visualContextMessage;
+        private long _visualContextMessageGeneration = -1;
 
         public async ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
         {
@@ -677,6 +717,14 @@ public partial class AgenticMind : MindBase
                     session.Context.Character,
                     NextSyntheticCallId());
 
+                // AI-013 TR-8: auto mode captures both images per logical request and attaches exactly one
+                // runtime-authored user visual-context message — reused across that request's transport retries and
+                // recovery rematerialisations — immediately before the fresh current-scene message. Every other
+                // mode attaches nothing.
+                ChatMessage? visualContext = session.VisualContextMode == VisualContextMode.Auto
+                    ? await BuildVisualContextMessageAsync(cancellationToken)
+                    : null;
+
                 // The fresh current-scene message renders last, after every retained exchange (AI-002 TR-2/TR-6).
                 string sceneStatus = await mind.RenderCurrentSceneStatusAsync(session, cancellationToken);
 
@@ -685,10 +733,109 @@ public partial class AgenticMind : MindBase
                 var confirmation = new Confirmation(eventWatermark, schedulingWatermark);
                 return new AgentRequestContext(
                     delivery,
-                    [new ChatMessage(ChatRole.User, sceneStatus)],
+                    visualContext is null
+                        ? [new ChatMessage(ChatRole.User, sceneStatus)]
+                        : [visualContext, new ChatMessage(ChatRole.User, sceneStatus)],
                     confirmation);
             }
         }
+
+        /// <summary>
+        /// Builds or reuses the current logical request's auto-mode visual-context message (AI-013 TR-8): the
+        /// message of the pending request is reused by its transport retries and recovery rematerialisations, while
+        /// an accepted response or a fresh-turn invalidation supersedes it — through <see cref="Confirm" /> or
+        /// <see cref="NoteVisualContextSuperseded" /> — so the next logical request rebuilds from fresh captures.
+        /// A mid-build supersede is detected through the generation tag and discards the stale build. Each failed
+        /// capture is omitted with a logged warning and the turn proceeds; a cycle where nothing captured
+        /// successfully presents no message.
+        /// </summary>
+        private async Task<ChatMessage?> BuildVisualContextMessageAsync(CancellationToken cancellationToken)
+        {
+            long generation = Volatile.Read(ref _visualContextGeneration);
+            ChatMessage? reusable = _visualContextMessage;
+            if (reusable is not null && Volatile.Read(ref _visualContextMessageGeneration) == generation)
+            {
+                return reusable;
+            }
+
+            ICharacter subject = session.Context.Character;
+            IGameClock clock = mind.GameClock;
+            ILogger logger = GameLoggerResolver.ResolveRequired<AgenticMind>();
+            List<VisualContextImage> images = [];
+
+            MiniMapRenderer? renderer = mind.ResolveSessionMiniMapRenderer();
+            if (renderer is null)
+            {
+                LogCaptureOmission(logger, VisualContextImageKind.Minimap, "the minimap renderer service is unavailable");
+            }
+            else
+            {
+                VisualContextCaptureOutcome minimap = default;
+                await dispatcher.InvokeAsync(
+                    token =>
+                    {
+                        token.ThrowIfCancellationRequested();
+                        minimap = VisualContextCapture.TryRenderMinimap(renderer, subject, clock);
+                        return ValueTask.CompletedTask;
+                    },
+                    cancellationToken);
+                if (minimap.Image is { } minimapImage)
+                {
+                    images.Add(minimapImage);
+                }
+                else
+                {
+                    LogCaptureOmission(logger, VisualContextImageKind.Minimap, minimap.Failure);
+                }
+            }
+
+            VisualContextCaptureOutcome view = default;
+            await dispatcher.InvokeAsync(
+                async token => view = await VisualContextCapture.TryCaptureViewAsync(subject, clock, token),
+                cancellationToken);
+            if (view.Image is { } viewImage)
+            {
+                images.Add(viewImage);
+            }
+            else
+            {
+                LogCaptureOmission(logger, VisualContextImageKind.View, view.Failure);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            ChatMessage? message = images.Count == 0 ? null : ComposeVisualContextMessage(images);
+            _visualContextMessage = message;
+            Volatile.Write(ref _visualContextMessageGeneration, generation);
+            return message;
+        }
+
+        /// <summary>
+        /// Composes the runtime-authored user visual-context message (AI-013 TR-8): brief label text identifying
+        /// which part is the minimap and which the view, followed by the image parts themselves in the same order.
+        /// </summary>
+        private static ChatMessage ComposeVisualContextMessage(IReadOnlyList<VisualContextImage> images)
+        {
+            string label = images.Count == 1
+                ? $"Current visual context: {images[0].DescribeCapture()}."
+                : "Current visual context:"
+                    + string.Concat(images.Select(static image => $"\n- {image.DescribeCapture()}"));
+            return new ChatMessage(ChatRole.User, [new TextContent(label), .. images]);
+        }
+
+        private void LogCaptureOmission(ILogger logger, VisualContextImageKind kind, string? failure)
+            => logger.LogWarning(
+                "Omitting the auto-mode {Kind} visual context for character '{CharacterId}': {Failure}. "
+                    + "The request proceeds without it (AI-013 TR-8).",
+                VisualContextImage.DescribeKind(kind),
+                session.Context.Character.Id,
+                failure ?? "the capture failed");
+
+        /// <summary>
+        /// Ends the pending logical request's visual-context message (AI-013 TR-8): called on a fresh-turn
+        /// invalidation, whose replacement request is a new logical request that rebuilds from fresh captures.
+        /// </summary>
+        internal void NoteVisualContextSuperseded()
+            => Interlocked.Increment(ref _visualContextGeneration);
 
         public void Retain(object? confirmation)
         {
@@ -715,6 +862,9 @@ public partial class AgenticMind : MindBase
 
             mind.ConfirmProviderRequestContext(snapshot.SchedulingSequenceID);
             continuations.ConfirmThrough(snapshot.EventSequenceID);
+            // The accepted response completes the logical request, so its auto-mode visual-context message ends
+            // with it: the next logical request rebuilds from fresh captures (AI-013 TR-8).
+            NoteVisualContextSuperseded();
         }
 
         public void Discard(object? confirmation)
@@ -778,10 +928,51 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
+    /// Internal test seam for the session-fixed AI-013 mode resolution (AI-013 TR-1): replaces the loader consulted
+    /// exactly once at session start. Not public API and not game configuration.
+    /// </summary>
+    internal void SetVisualContextModeLoaderForTesting(Func<VisualContextMode> visualContextModeLoader)
+    {
+        ArgumentNullException.ThrowIfNull(visualContextModeLoader);
+        _visualContextModeLoader = visualContextModeLoader;
+    }
+
+    /// <summary>
+    /// Resolves the SCN-002 minimap renderer service (CORE-004) for this session's visual context: once for
+    /// <c>tools</c>-mode composition and per capture in <c>auto</c> mode. A null renderer is a legal contained
+    /// degradation (AI-013 TR-5), never a session failure.
+    /// </summary>
+    internal MiniMapRenderer? ResolveSessionMiniMapRenderer() => _miniMapRendererLoader();
+
+    private static MiniMapRenderer? TryResolveDefaultMiniMapRenderer()
+    {
+        try
+        {
+            return Game.Instance.GetService<MiniMapRenderer>();
+        }
+        catch (InvalidOperationException)
+        {
+            // Visual context is optional gameplay plumbing: isolated contexts without the Game service provider
+            // run with the renderer unavailable, and every capture degrades to a contained failure (AI-013 TR-5).
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Internal test seam for the AI-013 renderer resolution: replaces the loader consulted at session start and
+    /// per auto-mode capture. Not public API and not game configuration.
+    /// </summary>
+    internal void SetMiniMapRendererLoaderForTesting(Func<MiniMapRenderer?> miniMapRendererLoader)
+    {
+        ArgumentNullException.ThrowIfNull(miniMapRendererLoader);
+        _miniMapRendererLoader = miniMapRendererLoader;
+    }
+
+    /// <summary>
     /// Prepared session state captured once at session start (AI-002 TR-2): the trusted binding, the rendered
     /// system instruction, the session-owner bootstrap input message, the decorated chat client, the bound
-    /// tools, the tool-admission carrier whose runner is attached at execution, and the session transcript sink
-    /// (AI-011 TR-5).
+    /// tools, the tool-admission carrier whose runner is attached at execution, the session transcript sink
+    /// (AI-011 TR-5), and the session-fixed AI-013 visual-context mode (AI-013 TR-1).
     /// </summary>
     internal sealed record AgentSession(
         ScenarioContext Context,
@@ -793,5 +984,6 @@ public partial class AgenticMind : MindBase
         IInvalidResponseRecoveryPolicy InvalidResponseRecoveryPolicy,
         ToolAdmissionBroker ToolAdmission,
         CompiledSceneStatusPrompt CurrentSceneStatus,
-        IAgentSessionTranscriptSink TranscriptSink);
+        IAgentSessionTranscriptSink TranscriptSink,
+        VisualContextMode VisualContextMode);
 }
