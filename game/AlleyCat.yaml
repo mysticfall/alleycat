@@ -81,8 +81,9 @@ Logging:
         System.ClientModel.Primitives.MessageLoggingPolicy: Warning
         System.ClientModel.Primitives.PipelineTransport: Warning
 
-# Independent typed decisions (optional). Real credentials belong only in user://AlleyCat.yaml.
-# Host includes the API base prefix; do not append /decisions here.
+# Independent typed decisions. Zero-configuration default: the local Docker kev-decision-api service
+# (SystemOne at http://localhost:8081/v1/systemone) — no key or model needed, nothing sent until a caller asks.
+# Host includes the API base prefix; do not append /decisions or /systemone here.
 # Decision:
 #     APIKind: OpenRouter
 #     Host: "https://openrouter.ai/api/alpha"
@@ -90,3 +91,4 @@ Logging:
 #     ApiKey: "<set only in user://AlleyCat.yaml>"
 #     Timeout: 30
 # OpenAI alternative: APIKind: OpenAI, Host: "https://api.openai.com/v1", Model: "gpt-6-luna".
+# SystemOne overrides (all optional): APIKind: SystemOne, Host: "http://localhost:8081/v1", Timeout: 30.

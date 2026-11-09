@@ -12,16 +12,19 @@ This is the normative contract for implementing and reviewing the decision subsy
 
 ## Goal
 
-Allow developers to evaluate the same bounded questions through OpenRouter or OpenAI without confusing their wire
-formats, inheriting conversational settings, or making unintended paid requests. OpenRouter is the first intended
-hosted experiment provider; documented compatibility does not establish live availability or model quality.
+Allow developers to evaluate the same bounded questions through the local SystemOne service, OpenRouter or OpenAI
+without confusing their wire formats, inheriting conversational settings, or making unintended paid requests. The
+unauthenticated local service is the zero-configuration default; OpenRouter remains the first intended hosted
+experiment provider, and documented compatibility does not establish live availability or model quality.
 
 ## User Requirements
 
 1. Developers can submit text or structured JSON evidence with named boolean, choice and ordered-score questions,
    receiving typed answers whose question and option identities remain intact.
 2. Users can configure a decision backend separately from conversational AI through shipped/user YAML precedence.
-   Ordinary gameplay starts without decision configuration and never automatically sends decision requests.
+   With no decision configuration, the default backend is the local unauthenticated SystemOne service, so a consumer
+   gets working typed decisions with zero configuration and no API key. Ordinary gameplay still starts without
+   sending decision requests automatically.
 3. Callers can cancel evaluation and distinguish refusal, configuration, transport and invalid-output failures from
    valid decisions. Missing optional metadata must not become invented confidence, probabilities or cost.
 
@@ -71,22 +74,27 @@ hosted experiment provider; documented compatibility does not establish live ava
 
 ### Explicit Provider Dialects
 
-7. `APIKind`, not hostname inference, selects one of two supported JSON/bearer-authenticated POST adapters:
+7. `APIKind`, not hostname inference, selects one of three supported JSON POST adapters; the hosted kinds are
+   bearer-authenticated, SystemOne sends no credential:
 
-   | Mapping | OpenRouter | OpenAI |
-   |---|---|---|
-   | Default example endpoint | `https://openrouter.ai/api/alpha/decisions` | `https://api.openai.com/v1/decisions` |
-   | Evidence | `state`: text or JSON object/array | `input`: text or user message with `input_json.data` |
-   | Questions/answers | Maps keyed by question name | Arrays carrying question `name` |
-   | Boolean | `noul` question; answer `noul` probability | `predicate` question; answer `probability` |
-   | Choice criteria | `criteria` map: value → text | `choices` array: `value` and `description` |
-   | Score criteria | Ordered `criteria` array | Ordered `levels` array using criterion text as `label` |
-   | Distributions | Maps keyed by option value or score index | Arrays carrying `value` and `probability` |
+   | Mapping | OpenRouter | OpenAI | SystemOne |
+   |---|---|---|---|
+   | Default example endpoint | `https://openrouter.ai/api/alpha/decisions` | `https://api.openai.com/v1/decisions` | `http://localhost:8081/v1/systemone` |
+   | Evidence | `state`: text or JSON object/array | `input`: text or user message with `input_json.data` | `state`: text or JSON object/array |
+   | Questions/answers | Maps keyed by question name | Arrays carrying question `name` | Maps keyed by question name |
+   | Boolean | `noul` question; answer `noul` probability | `predicate` question; answer `probability` | `noul` question; answer `noul` probability |
+   | Choice criteria | `criteria` map: value → text | `choices` array: `value` and `description` | `criteria` map: value → text |
+   | Score criteria | Ordered `criteria` array | Ordered `levels` array using criterion text as `label` | Ordered `criteria` array |
+   | Distributions | Maps keyed by option value or score index | Arrays carrying `value` and `probability` | Maps keyed by option value or score index |
 
    OpenAI score labels preserve criterion text; no separate level-description input is required by this subset.
    Map provider results back to the common identities, including OpenAI's explicit refusal answers. The linked
    provider references define exact wire fields; these are distinct dialects, not host-only compatibility.
-   OpenRouter's operation-specific `/api/alpha/decisions` route overrides its generic API server example.
+   OpenRouter's operation-specific `/api/alpha/decisions` route overrides its generic API server example. SystemOne
+   is the local llama.cpp `/v1/systemone` surface: it reuses the OpenRouter wire shapes, writes the configured
+   `Model` (or an empty string when unset; the service accepts both), always reports the service's launch-time model
+   rather than the configured value, omits request identity/provider/cost metadata, sends no credential, and has no
+   refusal answers — provider refusals remain an OpenAI-dialect concept.
 8. Use managed, reusable HTTP transport and existing supported dependencies. Do not assume the conversational
    OpenAI .NET `ChatClient` implements Decisions; typed .NET Decisions support is not established by this contract.
    Do not upgrade SDKs speculatively or introduce a generic provider framework.
@@ -97,15 +105,23 @@ hosted experiment provider; documented compatibility does not establish live ava
    configuration must not reference concrete decision options. Bind the separate `Decision` section from the shared
    `IConfiguration`: user overrides in `user://AlleyCat.yaml` take precedence over `res://AlleyCat.yaml` defaults.
    No credentials, model or reasoning controls fall back to `AI`.
-10. The keys are `APIKind` (`OpenRouter` or `OpenAI`), `Host` (API base URL), `Model` (provider-specific identifier),
-    `ApiKey` (bearer credential), and `Timeout` (finite positive seconds). Validate required settings when a decision
-    client is explicitly requested, before network access; an absent section must not break ordinary startup.
-    Invalid configuration identifies the affected key without exposing its secret value.
-11. Append exactly one `decisions` segment to the configured API base path, preserving `/api/alpha` or `/v1` with
-    or without a trailing slash. `Host` is a base URL, not an already-composed operation URL. Shipped examples stay
-    commented/inactive; real secrets belong only in the user override. Example values are not active defaults:
+10. The keys are `APIKind` (`OpenRouter`, `OpenAI` or `SystemOne`), `Host` (API base URL), `Model` (provider-specific
+    identifier), `ApiKey` (bearer credential), and `Timeout` (finite positive seconds). Absent keys default only on
+    the SystemOne dialect: `APIKind` itself defaults to `SystemOne` when absent, `Host` defaults to
+    `http://localhost:8081/v1`, `Timeout` defaults to 30 seconds, and `Model`/`ApiKey` are optional and unused (no
+    credential is sent). Explicitly selected hosted kinds keep requiring `Host`, `Model`, `ApiKey` and `Timeout`
+    exactly as before; any present key overrides its default, and any invalid value still fails naming the affected
+    key without exposing its secret value. Validate when a decision client is explicitly requested, before network
+    access; an absent section must not break ordinary startup and yields the SystemOne defaults.
+11. Append exactly one operation segment to the configured API base path — `decisions` for the hosted kinds,
+    `systemone` for SystemOne — preserving `/api/alpha` or `/v1` with or without a trailing slash. `Host` is a base
+    URL including its version prefix, never an already-composed operation URL: it must carry a nonempty path and must
+    not end with a supported dialect's operation segment (`decisions` or `systemone`). Shipped examples stay
+    commented/inactive; real secrets belong only in the user override. With the whole section commented out, the
+    zero-configuration default targets the local Docker `kev-decision-api` service:
 
     ```yaml
+    # Zero-configuration default: SystemOne at http://localhost:8081/v1/systemone (no key, no model needed).
     # Decision:
     #     APIKind: OpenRouter
     #     Host: "https://openrouter.ai/api/alpha"
@@ -115,8 +131,10 @@ hosted experiment provider; documented compatibility does not establish live ava
     ```
 
     An OpenAI example uses `APIKind: OpenAI`, `Host: "https://api.openai.com/v1"` and `Model: "gpt-6-luna"` with
-    independently supplied credentials. These are documented model examples, not measured quality winners or
-    inferred equivalents; model availability can change.
+    independently supplied credentials. An explicit SystemOne section may pin `Host` (default
+    `http://localhost:8081/v1`) and `Model` (advisory only: the service's model is fixed at launch, so the value is
+    neither validated against nor reported by the server). These are documented model examples, not measured quality
+    winners or inferred equivalents; model availability can change.
 12. Honour caller cancellation and configured timeout through request dispatch and response reading. Expose
     distinguishable typed outcomes/errors for invalid configuration/input, unsupported features, cancellation,
     timeout, transport failure, non-success HTTP status, invalid response and provider refusal. Exception versus
@@ -128,7 +146,9 @@ hosted experiment provider; documented compatibility does not establish live ava
 
 ## In Scope
 
-- The common C# decision boundary, independent configuration, both wire adapters and managed transport lifecycle.
+- The common C# decision boundary, independent configuration, all three wire adapters and managed transport
+  lifecycle.
+- The zero-configuration SystemOne default targeting the shipped local Docker `kev-decision-api` service.
 - Deterministic fixtures, focused validation and a small explicit-client consumer example without gameplay changes.
 
 ## Out Of Scope
@@ -140,15 +160,20 @@ hosted experiment provider; documented compatibility does not establish live ava
   changes or watch fixes. This API does not establish AI-010/runtime-experiment acceptance.
 - Live hosted tests, quality/latency claims or hosted/local comparisons. Paid experiments require separate approval
   of models, fixed cases, request count and spend cap; deterministic compatibility is not live verification.
+  Automated tests must not depend on any live container: one-off live validation of the default SystemOne backend is
+  a delivery activity whose evidence is retained under `game/temp/`, not a test-suite dependency.
 
 ## Acceptance Criteria
 
-1. **UR-1; TR-1–8:** Deterministic documented request/response fixtures cover both complete dialects for boolean,
-   choice and score, text/JSON evidence, identity/order, fractional zero-based score semantics, optional metadata and
-   OpenAI refusal. A consumer example chooses the configured decision client without using the conversational client.
-2. **UR-2; TR-9–11, 13:** Verify independent section binding, shipped/user precedence, both base paths with/without
-   trailing slash, missing/invalid settings and finite positive timeout. Missing configuration allows ordinary
-   startup; examples are inactive, credentials remain user-owned and startup/tests send no automatic paid requests.
+1. **UR-1; TR-1–8:** Deterministic documented request/response fixtures cover all three complete dialects for
+   boolean, choice and score, text/JSON evidence, identity/order, fractional zero-based score semantics, optional
+   metadata and OpenAI refusal; SystemOne fixtures derive from retained real service captures. A consumer example
+   chooses the configured decision client without using the conversational client.
+2. **UR-2; TR-9–11, 13:** Verify independent section binding, shipped/user precedence, base paths with/without
+   trailing slash for every dialect, missing/invalid settings and finite positive timeout. Missing configuration
+   allows ordinary startup and yields the SystemOne defaults; explicitly selected hosted kinds still fail on
+   missing required settings; examples are inactive, credentials remain user-owned and startup/tests send no
+   automatic requests.
 3. **UR-3; TR-2–6, 12–13:** Focused tests cover cancellation, timeout, non-success HTTP, bounded responses,
    malformed/mismatched answers, invalid options/probabilities, the single symmetric distribution-sum and
    score-consistency allowance (drift in both directions accepted, sums outside it rejected) and unsupported
@@ -156,13 +181,17 @@ hosted experiment provider; documented compatibility does not establish live ava
    credentials nor raw bodies.
 4. **TR-1, 8–13:** Affected deterministic tests, solution formatting verification and warnings-as-errors build pass.
    Independent review checks both directions of code/spec alignment, configuration ownership and secret safety;
-   live endpoint behaviour, model quality and runtime outcomes remain unproved by these checks.
+   live endpoint behaviour, model quality and runtime outcomes remain unproved by these checks. One-off live
+   validation evidence for the default SystemOne backend, when performed, is retained under `game/temp/` outside the
+   automated suites.
 
 ## References
 
 - [AI System](../index.md) and [AI-002: Agent Runtime](../002-agent-runtime/index.md):
   separate conversational ownership.
 - [CORE-002: Configuration API][core-options] and [CORE-006: Microsoft Configuration Integration][core-config].
+- [kev decision service](../../../docker/docker-compose.yml): the shipped local Docker `kev-decision-api` backend
+  (llama.cpp `llama-server` exposing `/v1/systemone`), normative for the SystemOne dialect's live surface.
 - [OpenRouter Decisions Operation][or]: normative OpenRouter schema and operation-specific route.
 - [OpenAI Decisions Guide][openai]: normative OpenAI dialect and decision semantics.
 - [OpenAI .NET SDK](https://github.com/openai/openai-dotnet): verify actual SDK support before relying on typed APIs.

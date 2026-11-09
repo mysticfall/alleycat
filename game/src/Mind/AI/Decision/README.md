@@ -7,6 +7,13 @@ The provider owns its reusable HTTP transport until DI disposal. Direct `Decisio
 `HttpClient`, which must use infinite timeout and should disable redirects and automatic retries.
 `Decision:Timeout` is positive finite seconds, up to `4294967` (the managed cancellation timer's supported range).
 
+With no `Decision` configuration at all, the client defaults to the `SystemOne` dialect at
+`http://localhost:8081/v1/systemone` — the local Docker `kev-decision-api` service — with a 30-second timeout and no
+credentials or model, so typed decisions work out of the box against the local service. Absent `APIKind` defaults to
+`SystemOne`; every present key overrides its default, and explicitly hosted kinds (`OpenRouter`, `OpenAI`) still
+require `Host`, `Model`, `ApiKey` and `Timeout` exactly as before. `Model` and `ApiKey` are optional and unused for
+`SystemOne` (the service's model is fixed at launch; no `Authorization` header is sent).
+
 ```csharp
 using AlleyCat.Mind.AI.Decision;
 using Microsoft.Extensions.DependencyInjection;

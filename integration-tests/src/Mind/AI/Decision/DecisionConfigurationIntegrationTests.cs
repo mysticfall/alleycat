@@ -46,4 +46,31 @@ public class DecisionConfigurationIntegrationTests
         Assert.Same(provider.GetClient(), provider.GetClient());
         // Explicit acquisition validates locally; only EvaluateAsync can dispatch a paid request.
     }
+
+    /// <summary>Without any Decision keys, the production YAML pipeline yields the local SystemOne defaults.</summary>
+    [Fact]
+    public void ZeroConfigurationDefaultsToLocalSystemOne()
+    {
+        IConfigurationPathResolver resolver = Game.Instance.GetRequiredService<IConfigurationPathResolver>();
+        string directory = resolver.ToPhysicalPath("res://temp/decision-systemone-01/zero-config-fixture");
+        _ = Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "shipped.yaml"), """
+            AI:
+                Model: conversational-only
+            """);
+        File.WriteAllText(Path.Combine(directory, "user.yaml"), """
+            Diagnostics: {}
+            """);
+        IConfigurationRoot configuration = GameConfiguration.Build(resolver,
+            Path.Combine(directory, "shipped.yaml"), Path.Combine(directory, "user.yaml"));
+        using var configurationLifetime = (IDisposable)configuration;
+        var options = DecisionOptions.FromConfiguration(configuration);
+        Assert.Null(options.APIKind);
+        DecisionSettings settings = options.Validate();
+        Assert.Equal(DecisionAPIKind.SystemOne, settings.Kind);
+        Assert.Equal("http://localhost:8081/v1/systemone", settings.Endpoint.AbsoluteUri);
+        Assert.Null(settings.ApiKey);
+        using DecisionClientProvider provider = new(configuration, NullLogger<DecisionClient>.Instance);
+        Assert.NotNull(provider.GetClient());
+    }
 }

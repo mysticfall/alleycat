@@ -31,9 +31,12 @@ public partial class DecisionClientTests
     [InlineData("OpenAI", "\"value\":2", "\"value\":3")]
     [InlineData("OpenAI", "\"label\":\"Now\"", "\"label\":\"Wrong\"")]
     [InlineData("OpenAI", "\"value\":\"frontend\"", "\"value\":\"payments\"")]
+    [InlineData("SystemOne", "\"noul\":0.96", "\"noul\":1.1")]
+    [InlineData("SystemOne", "\"choice\":\"payments\"", "\"choice\":\"unknown\"")]
+    [InlineData("SystemOne", "\"score\":1.99", "\"score\":0.5")]
     public async Task RejectsInvalidCompleteBatch(string kind, string before, string after)
     {
-        string response = (kind == "OpenRouter" ? RouterResponse : OpenAIResponse).Replace(before, after, StringComparison.Ordinal);
+        string response = (kind == "OpenAI" ? OpenAIResponse : RouterResponse).Replace(before, after, StringComparison.Ordinal);
         using HttpClient http = new(new Handler((_, _) => Task.FromResult(Response(response))))
         {
             Timeout = Timeout.InfiniteTimeSpan
@@ -325,6 +328,32 @@ public partial class DecisionClientTests
             new DecisionClient(http, Options(), NullLogger<DecisionClient>.Instance).EvaluateAsync(Request("evidence")));
         Assert.Equal(DecisionFailure.Transport, error.Failure);
         Assert.DoesNotContain("fixture-key", error.ToString());
+        Assert.Null(error.InnerException);
+    }
+
+    /// <summary>An unreachable SystemOne service fails closed as an immediate typed transport failure.</summary>
+    [Fact]
+    public async Task ConnectionRefusedFailsClosedAsTransportFailure()
+    {
+        System.Net.Sockets.TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        using HttpClient http = new()
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        DecisionOptions options = new()
+        {
+            APIKind = "SystemOne",
+            Host = $"http://127.0.0.1:{port}/v1",
+            Timeout = 5
+        };
+        DecisionException error = await Assert.ThrowsAsync<DecisionException>(() =>
+            new DecisionClient(http, options, NullLogger<DecisionClient>.Instance)
+                .EvaluateAsync(new DecisionRequest("evidence", [new BooleanQuestion("bug", "Is it broken?")])));
+        Assert.Equal(DecisionFailure.Transport, error.Failure);
+        Assert.Null(error.StatusCode);
         Assert.Null(error.InnerException);
     }
 

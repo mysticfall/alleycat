@@ -39,7 +39,10 @@ public sealed class DecisionClient : IDecisionClient
         try
         {
             using HttpRequestMessage message = new(HttpMethod.Post, _settings.Endpoint);
-            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+            if (_settings.ApiKey is not null)
+            {
+                message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+            }
             message.Content = new ByteArrayContent(body);
             message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             _logger.LogDebug("Dispatching decision request using {APIKind} with {QuestionCount} questions.", _settings.Kind, snapshot.Questions.Count);

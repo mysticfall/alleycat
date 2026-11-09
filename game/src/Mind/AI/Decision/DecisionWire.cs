@@ -12,6 +12,9 @@ internal static class DecisionWire
     // Float epsilon added to the allowance so exact-boundary sums survive accumulation error.
     private const double SumAllowanceEpsilon = 1e-9;
 
+    /// <summary>OpenRouter and SystemOne share the map-based wire shapes; only OpenAI uses named arrays.</summary>
+    private static bool MapsByName(DecisionAPIKind kind) => kind != DecisionAPIKind.OpenAI;
+
     internal static DecisionRequest Snapshot(DecisionRequest request)
     {
         if (request is null || request.Questions is null || request.Questions.Count == 0)
@@ -78,12 +81,12 @@ internal static class DecisionWire
         {
             writer.WriteStartObject();
             writer.WriteString("model", model);
-            writer.WritePropertyName(kind == DecisionAPIKind.OpenRouter ? "state" : "input");
+            writer.WritePropertyName(MapsByName(kind) ? "state" : "input");
             if (request.Evidence is string text)
             {
                 writer.WriteStringValue(text);
             }
-            else if (kind == DecisionAPIKind.OpenRouter)
+            else if (MapsByName(kind))
             {
                 ((JsonElement)request.Evidence).WriteTo(writer);
             }
@@ -103,7 +106,7 @@ internal static class DecisionWire
                 writer.WriteEndArray();
             }
             writer.WritePropertyName("questions");
-            if (kind == DecisionAPIKind.OpenRouter)
+            if (MapsByName(kind))
             {
                 writer.WriteStartObject();
             }
@@ -114,7 +117,7 @@ internal static class DecisionWire
 
             foreach (DecisionQuestion question in request.Questions)
             {
-                if (kind == DecisionAPIKind.OpenRouter)
+                if (MapsByName(kind))
                 {
                     writer.WritePropertyName(question.Name);
                 }
@@ -129,7 +132,7 @@ internal static class DecisionWire
                 writer.WriteString("instructions", question.Instructions);
                 if (question is ChoiceQuestion choice)
                 {
-                    if (kind == DecisionAPIKind.OpenRouter)
+                    if (MapsByName(kind))
                     {
                         writer.WriteStartObject("criteria");
                         foreach (DecisionOption option in choice.Options)
@@ -154,10 +157,10 @@ internal static class DecisionWire
                 }
                 if (question is ScoreQuestion score)
                 {
-                    writer.WriteStartArray(kind == DecisionAPIKind.OpenRouter ? "criteria" : "levels");
+                    writer.WriteStartArray(MapsByName(kind) ? "criteria" : "levels");
                     foreach (string level in score.Levels)
                     {
-                        if (kind == DecisionAPIKind.OpenRouter)
+                        if (MapsByName(kind))
                         {
                             writer.WriteStringValue(level);
                         }
@@ -172,7 +175,7 @@ internal static class DecisionWire
                 }
                 writer.WriteEndObject();
             }
-            if (kind == DecisionAPIKind.OpenRouter)
+            if (MapsByName(kind))
             {
                 writer.WriteEndObject();
             }
@@ -188,7 +191,7 @@ internal static class DecisionWire
 
     private static string TypeName(DecisionQuestion question, DecisionAPIKind kind) => question switch
     {
-        BooleanQuestion => kind == DecisionAPIKind.OpenRouter ? "noul" : "predicate",
+        BooleanQuestion => kind == DecisionAPIKind.OpenAI ? "predicate" : "noul",
         ChoiceQuestion => "choice",
         ScoreQuestion => "score",
         _ => throw Invalid()
@@ -208,7 +211,7 @@ internal static class DecisionWire
 
             Dictionary<string, JsonElement> received = new(StringComparer.Ordinal);
             JsonElement answers = root.GetProperty("answers");
-            if (kind == DecisionAPIKind.OpenRouter)
+            if (MapsByName(kind))
             {
                 foreach (JsonProperty item in answers.EnumerateObject())
                 {
@@ -281,7 +284,7 @@ internal static class DecisionWire
         switch (question)
         {
             case BooleanQuestion boolean:
-                return new BooleanAnswer(boolean, Number(item.GetProperty(kind == DecisionAPIKind.OpenRouter ? "noul" : "probability"), 1), confidence);
+                return new BooleanAnswer(boolean, Number(item.GetProperty(MapsByName(kind) ? "noul" : "probability"), 1), confidence);
             case ChoiceQuestion choice:
                 {
                     string value = RequiredString(item, "choice");
@@ -334,7 +337,7 @@ internal static class DecisionWire
         }
 
         Dictionary<string, double> values = new(StringComparer.Ordinal);
-        if (kind == DecisionAPIKind.OpenRouter)
+        if (MapsByName(kind))
         {
             foreach (JsonProperty entry in distribution.EnumerateObject())
             {
