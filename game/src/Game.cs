@@ -5,6 +5,7 @@ using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
@@ -170,6 +171,7 @@ public partial class Game : Node, IServiceProvider
     /// <param name="services">Service collection to populate.</param>
     protected virtual void RegisterServices(IServiceCollection services)
         => _ = services
+            .AddDecisionClient()
             .AddSingleton<IContentResolver, ContentResolver>()
             .AddSingleton<ISceneContextProvider>(provider => new SceneContextProvider(
                 this,

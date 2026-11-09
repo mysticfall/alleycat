@@ -32,6 +32,7 @@
 - [AI-011: Mind Session Transcripts](ai/011-mind-session-transcripts/index.md)
 - [AI-012: Character Dialogue Examples](ai/012-dialogue-examples/index.md)
 - [AI-013: Visual AI Context](ai/013-visual-context/index.md)
+- [AI-014: Decision Model API](ai/014-decision-model-api/index.md)
 
 ## Navigation
 

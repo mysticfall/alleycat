@@ -80,3 +80,13 @@ Logging:
         Microsoft.Extensions.AI.LoggingChatClient: Trace
         System.ClientModel.Primitives.MessageLoggingPolicy: Warning
         System.ClientModel.Primitives.PipelineTransport: Warning
+
+# Independent typed decisions (optional). Real credentials belong only in user://AlleyCat.yaml.
+# Host includes the API base prefix; do not append /decisions here.
+# Decision:
+#     APIKind: OpenRouter
+#     Host: "https://openrouter.ai/api/alpha"
+#     Model: "typesafe/jev-1.14-20261014"
+#     ApiKey: "<set only in user://AlleyCat.yaml>"
+#     Timeout: 30
+# OpenAI alternative: APIKind: OpenAI, Host: "https://api.openai.com/v1", Model: "gpt-6-luna".
