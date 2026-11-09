@@ -1206,7 +1206,7 @@ public sealed class VisualContextIntegrationTests
         public void EnqueueResponse(ChatMessage message)
             => _steps.Enqueue(_ => Task.FromResult(new ChatResponse(message)));
 
-        public override IChatClient CreateChatClient() => new CapturingClient(this);
+        public override IChatClient CreateChatClient(string subjectFullId) => new CapturingClient(this);
 
         private sealed class CapturingClient(CapturingSessionClientProvider owner) : IChatClient
         {

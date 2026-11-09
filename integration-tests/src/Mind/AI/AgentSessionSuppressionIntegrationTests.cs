@@ -204,7 +204,7 @@ public sealed partial class AgentSessionSuppressionIntegrationTests
         public bool EndedByCancellation()
             => Volatile.Read(ref _endedByCancellation) != 0;
 
-        public override IChatClient CreateChatClient()
+        public override IChatClient CreateChatClient(string subjectFullId)
         {
             _ = Interlocked.Increment(ref _createChatClientCallCount);
             return new ScriptedClient(this);

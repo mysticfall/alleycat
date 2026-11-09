@@ -22,8 +22,13 @@ public abstract partial class ClientProvider : Resource
     public virtual OpenAIChatClientKind? EffectiveChatClientKind => null;
 
     /// <summary>
-    /// Creates a valid chat client for tool-only agent session execution.
+    /// Creates a valid chat client for tool-only agent session execution on behalf of the subject character.
     /// </summary>
+    /// <param name="subjectFullId">
+    /// Canonical identity (<c>FullId</c>) of the subject character whose session this client serves (AI-002
+    /// TR-37): providers resolve per-character request properties — such as the llama-server slot pin — from it
+    /// once at construction, never per call.
+    /// </param>
     /// <returns>A chat client ready for tool-only agent session execution.</returns>
-    public abstract IChatClient CreateChatClient();
+    public abstract IChatClient CreateChatClient(string subjectFullId);
 }

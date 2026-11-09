@@ -708,7 +708,7 @@ internal sealed partial class VadimInterrogationScenario
         /// <summary>Number of requests that have started, including any still awaiting their response.</summary>
         public int StartedRequestCount => _client?.StartedCount ?? 0;
 
-        public override IChatClient CreateChatClient()
+        public override IChatClient CreateChatClient(string subjectFullId)
         {
             if (_client is null)
             {

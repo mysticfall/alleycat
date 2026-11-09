@@ -765,7 +765,7 @@ public sealed partial class ScenarioIntegrationTests
 
         public void ScriptCall(int call, params string[] toolNames) => _scriptedCalls[call] = toolNames;
 
-        public override IChatClient CreateChatClient() => new ScriptedClient(this);
+        public override IChatClient CreateChatClient(string subjectFullId) => new ScriptedClient(this);
 
         private sealed class ScriptedClient(ScriptedClientProvider owner) : IChatClient
         {

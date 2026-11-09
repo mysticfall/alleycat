@@ -192,7 +192,7 @@ public sealed class LoreReferenceRenderingIntegrationTests
                 return new ChatResponse();
             });
 
-        public override IChatClient CreateChatClient() => new ScriptedClient(this);
+        public override IChatClient CreateChatClient(string subjectFullId) => new ScriptedClient(this);
 
         private sealed class ScriptedClient(ScriptedFlowClientProvider owner) : IChatClient
         {

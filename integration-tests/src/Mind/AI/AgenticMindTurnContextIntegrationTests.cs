@@ -56,6 +56,10 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             Assert.Same(capturedScene, tool.CapturedContext!.SceneContext);
             Assert.Same(owner, tool.CapturedContext.Character);
             Assert.Equal("after", owner.State);
+            // The owning character's canonical identity reaches provider construction (AI-002 TR-37): the
+            // session resolves the owner before creating the client and passes the identity through, so
+            // per-character provider properties such as slot pinning follow the subject character.
+            Assert.Equal("char:owner", clientProvider.ReceivedSubjectFullId);
             // Two-phase rendering builds the core render context before prompt construction: the section's
             // mid-compile mutation happens after the owner's curated view entered the context, so the prompt renders
             // the canonical identity while the live character object already reflects the state mutation.
@@ -172,12 +176,22 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
 
         public string Instructions { get; private set; } = string.Empty;
 
+        /// <summary>The subject identity the production session preparation passed to client construction.</summary>
+        public string? ReceivedSubjectFullId
+        {
+            get; private set;
+        }
+
         public int CallCount
         {
             get; private set;
         }
 
-        public override IChatClient CreateChatClient() => new CapturingClient(this);
+        public override IChatClient CreateChatClient(string subjectFullId)
+        {
+            ReceivedSubjectFullId = subjectFullId;
+            return new CapturingClient(this);
+        }
 
         private sealed class CapturingClient(CancellingClientProvider owner) : IChatClient
         {

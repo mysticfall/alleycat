@@ -26,7 +26,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// <remarks>
 /// <para>
 /// A scene-started AgenticMind defaults its <c>ClientProvider</c> to <see cref="OpenAIClientProvider" />,
-/// whose instance <see cref="OpenAIClientProvider.CreateChatClient()" /> path loads merged production
+/// whose instance <see cref="OpenAIClientProvider.CreateChatClient(string)" /> path loads merged production
 /// settings — including the private user override — and builds the real transport. The required boundary:
 /// in an integration-test session, that instance path must reject with one fixed, secret-free diagnostic
 /// before production settings loading or transport construction. The static internal construction path
@@ -80,7 +80,7 @@ public sealed class ProductionAIProviderBoundaryIntegrationTests
         try
         {
             InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-                provider.CreateChatClient);
+                () => provider.CreateChatClient("char:owner"));
 
             // The fixed, secret-free rejection names the disabled production boundary.
             Assert.Contains(GuardDiagnostic, exception.Message, StringComparison.Ordinal);
@@ -124,7 +124,8 @@ public sealed class ProductionAIProviderBoundaryIntegrationTests
     /// The provider's effective chat client kind falls back to its resource property before any construction
     /// (AI-002 TR-36): the resource property defaults to Responses, an exported override is honoured, and a
     /// provider that declares no kind reports none — the Responses default the session composition then applies
-    /// (AI-013 TR-10).
+    /// (AI-013 TR-10). The slot-pinning switch is a resource property too and defaults to off (AI-002 TR-37):
+    /// a fresh provider injects nothing.
     /// </summary>
     [Fact]
     public void ProviderEffectiveChatClientKind_FallsBackToTheResourcePropertyWithoutConstruction()
@@ -138,6 +139,8 @@ public sealed class ProductionAIProviderBoundaryIntegrationTests
         {
             Assert.Equal(OpenAIChatClientKind.Responses, defaultsProvider.EffectiveChatClientKind);
             Assert.Equal(OpenAIChatClientKind.ChatCompletions, chatCompletionsProvider.EffectiveChatClientKind);
+            Assert.False(defaultsProvider.EnableSlotPinning);
+            Assert.False(chatCompletionsProvider.EnableSlotPinning);
         }
         finally
         {

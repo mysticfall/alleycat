@@ -1,4 +1,7 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
+using System.Text;
+using System.Text.Json;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
 using AlleyCat.Testing;
@@ -64,8 +67,34 @@ public partial class OpenAIClientProvider : ClientProvider
     public override OpenAIChatClientKind? EffectiveChatClientKind
         => _constructedChatClientKind ?? ChatClientKind;
 
+    /// <summary>
+    /// Pins every request of this provider's constructed clients to the subject character's own llama-server
+    /// slot (AI-002 TR-37–TR-38) by injecting a top-level <c>"id_slot"</c> field whose value is derived from the
+    /// character's canonical identity.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Enable only against backends that tolerate extra top-level request fields — llama.cpp and similar
+    /// OpenAI-compatible servers. Strict providers such as the real OpenAI API may reject requests carrying the
+    /// field; the default <see langword="false" /> injects nothing, so request bodies stay byte-identical to an
+    /// unconfigured provider's.
+    /// </para>
+    /// <para>
+    /// The slot value follows the subject character automatically: it is derived deterministically from the
+    /// character's <c>FullId</c> at client construction and stays fixed for that client's lifetime, so authors
+    /// enable this switch once per provider and never assign slot numbers. Concurrent characters sharing one
+    /// provider resource pin to their own slots; a derivation collision merely shares a slot, which llama-server
+    /// serves by wrapping the value modulo its slot count.
+    /// </para>
+    /// </remarks>
+    [Export]
+    public bool EnableSlotPinning
+    {
+        get; set;
+    }
+
     /// <inheritdoc />
-    public override IChatClient CreateChatClient()
+    public override IChatClient CreateChatClient(string subjectFullId)
     {
         // Fail closed in integration-test sessions: a scene-started mind defaults to this provider, so an
         // ordinary test session must never reach production settings loading or transport construction — only
@@ -82,7 +111,41 @@ public partial class OpenAIClientProvider : ClientProvider
         OpenAIClientProviderSettings settings = _settings ??= OpenAIClientProviderSettings.Load(ConfigPath);
         OpenAIChatClientKind effectiveKind = ResolveEffectiveChatClientKind(settings.ChatClientKind, ChatClientKind);
         _constructedChatClientKind = effectiveKind;
-        return CreateChatClient(effectiveKind, settings);
+        // The slot pin resolves here — once per subject character, fixed for the constructed client's lifetime
+        // (AI-002 TR-37): the value follows the character, not the resource, so minds sharing one provider
+        // resource pin to their own slots.
+        return CreateChatClient(effectiveKind, settings, slotId: ResolveSlotId(EnableSlotPinning, subjectFullId));
+    }
+
+    /// <summary>
+    /// Resolves the construction-fixed slot id (AI-002 TR-37): <see langword="null" /> — no injection, bodies
+    /// byte-identical to an unconfigured provider's — unless the switch is enabled, in which case the value is
+    /// derived from the subject character's canonical identity.
+    /// </summary>
+    internal static int? ResolveSlotId(bool enableSlotPinning, string subjectFullId)
+        => enableSlotPinning ? DeriveSlotId(subjectFullId) : null;
+
+    /// <summary>
+    /// Derives the llama-server slot id for a subject character (AI-002 TR-38): a deterministic FNV-1a 64-bit
+    /// hash over the identity's UTF-8 bytes, folded to a non-negative 31-bit integer. The mapping is stable
+    /// across sessions, process launches, and machines — .NET's per-process randomised
+    /// <c>string.GetHashCode()</c> is unsuitable — and collisions between different characters are permitted:
+    /// llama-server wraps an out-of-range id modulo its slot count, so a colliding pair merely shares a slot.
+    /// </summary>
+    internal static int DeriveSlotId(string fullId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fullId);
+
+        const ulong FnvOffsetBasis = 14695981039346656037UL;
+        const ulong FnvPrime = 1099511628211UL;
+        ulong hash = FnvOffsetBasis;
+        foreach (byte octet in Encoding.UTF8.GetBytes(fullId))
+        {
+            hash ^= octet;
+            hash *= FnvPrime;
+        }
+
+        return (int)((hash ^ (hash >> 32)) & 0x7FFF_FFFF);
     }
 
     /// <summary>
@@ -98,9 +161,19 @@ public partial class OpenAIClientProvider : ClientProvider
     internal static IChatClient CreateChatClient(
         OpenAIChatClientKind chatClientKind,
         OpenAIClientProviderSettings settings,
-        OpenAIClientOptions? clientOptions = null)
+        OpenAIClientOptions? clientOptions = null,
+        int? slotId = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        if (slotId is { } derivedSlotId)
+        {
+            // Provider- and character-scoped (AI-002 TR-37): the policy joins the pipeline once at construction
+            // and stamps every outgoing request body of this client — on both endpoint kinds — with the fixed
+            // derived value.
+            clientOptions ??= settings.CreateClientOptions();
+            clientOptions.AddPolicy(new SlotPinningRequestPolicy(derivedSlotId), PipelinePosition.BeforeTransport);
+        }
+
         return chatClientKind switch
         {
             OpenAIChatClientKind.ChatCompletions => CreateChatCompletionsChatClient(settings, clientOptions),
@@ -242,6 +315,92 @@ public partial class OpenAIClientProvider : ClientProvider
     private static ReadOnlySpan<byte> ReasoningEffortJsonPath => "$.reasoning.effort"u8;
 #pragma warning restore OPENAI001
 
+    /// <summary>
+    /// Pipeline policy stamping every outgoing request body with the construction-fixed slot pin
+    /// (<c>"id_slot"</c>, AI-002 TR-37): it runs before the transport — once per message, so exact transport
+    /// retries reuse the already-rewritten body — and applies identically to the Chat Completions and Responses
+    /// kinds, whose request bodies are JSON objects. Rewriting preserves every original top-level field; an
+    /// <c>id_slot</c> field that somehow pre-exists is replaced, never duplicated.
+    /// </summary>
+    private sealed class SlotPinningRequestPolicy(int slotId) : PipelinePolicy
+    {
+        private static ReadOnlySpan<byte> IdSlotPropertyName => "id_slot"u8;
+
+        public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        {
+            RewriteRequestContent(message);
+            ProcessNext(message, pipeline, currentIndex);
+        }
+
+        public override async ValueTask ProcessAsync(
+            PipelineMessage message,
+            IReadOnlyList<PipelinePolicy> pipeline,
+            int currentIndex)
+        {
+            RewriteRequestContent(message);
+            await ProcessNextAsync(message, pipeline, currentIndex);
+        }
+
+        private void RewriteRequestContent(PipelineMessage message)
+        {
+            BinaryContent? content = message.Request.Content;
+            if (content is null)
+            {
+                // No body means nothing to pin; chat request bodies are never null, so this only guards
+                // degenerate pipeline reuse.
+                return;
+            }
+
+            using var buffered = new MemoryStream();
+            content.WriteTo(buffered, message.CancellationToken);
+            message.Request.Content = BinaryContent.Create(BinaryData.FromBytes(AddSlotField(buffered.ToArray())));
+        }
+
+        private byte[] AddSlotField(byte[] body)
+        {
+            using JsonDocument document = ParseBody(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    "Slot pinning could not inject 'id_slot' because the outgoing request body is not a JSON "
+                    + "object.");
+            }
+
+            using var rewritten = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(rewritten))
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber(IdSlotPropertyName, slotId);
+                foreach (JsonProperty property in document.RootElement.EnumerateObject())
+                {
+                    if (property.NameEquals(IdSlotPropertyName))
+                    {
+                        continue;
+                    }
+
+                    property.WriteTo(writer);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            return rewritten.ToArray();
+        }
+
+        private static JsonDocument ParseBody(byte[] body)
+        {
+            try
+            {
+                return JsonDocument.Parse(body);
+            }
+            catch (JsonException exception)
+            {
+                throw new InvalidOperationException(
+                    "Slot pinning could not parse the outgoing request body to inject 'id_slot'.", exception);
+            }
+        }
+    }
+
     internal sealed record OpenAIClientProviderSettings(
         string Host,
         string? ApiKey,
@@ -284,7 +443,11 @@ public partial class OpenAIClientProvider : ClientProvider
             return endpointUri;
         }
 
-        private OpenAIClientOptions CreateClientOptions()
+        /// <summary>
+        /// Creates the default endpoint options; also materialised directly when slot pinning must attach its
+        /// pipeline policy to a caller-supplied-options-free construction (AI-002 TR-37).
+        /// </summary>
+        internal OpenAIClientOptions CreateClientOptions()
             => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds);
 
         internal string SectionName { get; init; } = ConfigSection;

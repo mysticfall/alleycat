@@ -48,7 +48,7 @@ public sealed partial class MindSessionTranscriptIntegrationTests
                 deliveredArgument = text;
                 return new Dictionary<string, string> { ["reply"] = text };
             }, name: "echo_korean");
-            using IChatClient client = provider.CreateChatClient();
+            using IChatClient client = provider.CreateChatClient("char:owner");
             var recorder = new MindSessionTranscriptRecorder("owner", () => root, NullLogger.Instance);
             var runner = new AgentSessionRunner(
                 client, "Scripted Korean JSON regression.", [new ChatMessage(ChatRole.User, "Begin.")],

@@ -65,6 +65,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
     Completions adapter and `responses` the Responses adapter. An unset or blank value keeps the provider
     resource's own kind; a misconfigured nonblank value fails locally with a diagnostic naming the configuration
     key and the permitted values.
+15. With a provider's slot-pinning switch enabled, every request of each NPC session using that provider is pinned
+    automatically to that NPC's own stable llama-server slot — no slot numbers are authored anywhere — so
+    concurrent NPCs on a multi-slot server stop thrashing each other's prompt caches; a provider with the switch
+    disabled, the default, sends requests exactly as before.
 
 ## Technical Requirements
 
@@ -301,6 +305,45 @@ persistent event timeline remains canonical memory; the provider transcript is d
     through AI-013 TR-10, the visual-context transport path; the resolved effective kind must be available to the
     session composition (AI-013).
 
+### Provider Slot Pinning
+
+37. `OpenAIClientProvider` gains the exported boolean property `EnableSlotPinning`, default `false`: opting in is
+    mandatory because strict providers such as the real OpenAI API reject unknown top-level request fields, so a
+    disabled provider injects nothing and its outgoing request bodies stay byte-identical to an unconfigured
+    provider's. When the switch is enabled, the provider derives the slot value from the subject character's
+    canonical identity (`FullId`) under the TR-38 determinism contract, and every outgoing chat request body of
+    that provider's constructed client — on both the Chat Completions and Responses kinds — carries a top-level
+    `"id_slot": N` field with the derived value, pinning each NPC's agent session to a specific llama-server slot,
+    which the server then selects by ID — logging `selected slot by id (N)` — instead of by LRU/LCP eviction.
+    Resolution mirrors TR-36's semantics at character granularity: the character identity reaches provider
+    construction — `AgenticMind` resolves the owning character before creating the client and passes the identity
+    through, and the base `ClientProvider` construction surface gains that parameter, with the signature shape
+    implementation-owned — and the slot value is applied at `CreateChatClient()` construction, one construction
+    per subject character, provider-scoped and character-scoped, fixed for the constructed client's lifetime, with
+    no per-call variation. The switch is a per-provider resource property rather than a configuration key, in
+    contrast with the global `AI:ChatClientKind` binding (TR-35–TR-36), yet per-NPC granularity is automatic: any
+    number of minds sharing one provider resource pin to distinct slots, because the value follows the character,
+    not the resource. The observable contract is that field's presence and value in every outgoing request body
+    of the client; the injection mechanism — a System.ClientModel pipeline policy or
+    `HttpClientPipelineTransport` interception — is implementation-owned.
+
+    Design note: the OpenAI .NET SDK supports unmodelled request fields natively via
+    `ChatCompletionOptions.Patch.Set("$.id_slot", …)`, but the Microsoft.Extensions.AI adapter constructs that
+    options object internally from per-call `ChatOptions`, which has no arbitrary-key passthrough — hence
+    provider-scoped pipeline injection at construction, carrying a value derived from the character rather than
+    an authored integer.
+
+38. The slot-value derivation is deterministic: the same character identity always maps to the same non-negative
+    integer, stable across sessions, process launches, and machines. Per-process randomised hashing must not be
+    used — .NET `string.GetHashCode()` is randomised per process and is explicitly unsuitable — the mapping must
+    be a stable hash over the identity's bytes; the exact algorithm is implementation-owned. Collisions between
+    different characters are permitted and harmless: llama-server wraps an out-of-range `id_slot` value modulo
+    its slot count, so a colliding pair merely shares a slot, which is the un-pinned status quo. Authoring
+    documentation for the property states that it exists for backends that tolerate extra top-level request
+    fields — llama.cpp and similar OpenAI-compatible servers — that strict providers may reject requests carrying
+    the field, and that the slot value follows the subject character automatically: authors enable the switch
+    once per provider and never assign slot numbers.
+
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, at-least-one-call response validation with tolerated
@@ -326,6 +369,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
   config-over-resource precedence with unset or blank falling back to the provider resource property, local
   rejection of unrecognised nonblank values, and the effective kind driving chat client adapter selection and the
   AI-013 visual-context transport path (TR-35–TR-36).
+- Provider slot pinning (`OpenAIClientProvider.EnableSlotPinning`): default-off no-op, character-derived top-level
+  `"id_slot"` injection into every outgoing request body on both client kinds, character identity reaching
+  provider construction, construction-time character-scoped resolution, deterministic stable derivation, and
+  authoring documentation (TR-37–TR-38).
 - Optional user-configured reasoning effort and reasoning summary verbosity: AI-owned configuration under CORE-006,
   value normalisation and validation, exact request-field emission per protocol with contained Chat Completions
   unsupported-summary handling, lifetime application across retries and continuations, and parsed-only reasoning
@@ -351,6 +398,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - Final timeout, threshold, and retry tuning values.
 - Hot reload, in-game configuration UI, and model switching for these settings; configured values apply at provider
   construction and remain fixed for the client's lifetime.
+- Runtime slot-availability negotiation, per-session dynamic slot assignment, any configuration-file key for slot
+  pinning, and any manual or authored slot value — the slot value is always derived from the subject character
+  (TR-37) — plus non-llama backend behaviour beyond the TR-38 tolerance caveat.
 - Guaranteeing backend or model support for the emitted parameters, that any provider returns reasoning summaries or
   reasoning content at all, or that either exposes raw or internal chain-of-thought; and live-model behaviour
   experiments beyond the approved single-model validation run (Acceptance Criteria). Provider-specific
@@ -401,6 +451,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
 12. Acceptance shows a configured `AI:ChatClientKind` value overriding the provider resource property, an unset or
     blank value falling back to it so existing provider resources behave unchanged, and a misconfigured nonblank
     value rejected locally with a diagnostic naming the key and its permitted values (UR-14).
+13. Acceptance shows an enabled provider pinning every request of each NPC session to that character's stable
+    llama-server slot — concurrent NPCs on one provider each keeping their own slot — and a provider with the
+    default disabled switch sending request bodies identical to today's, with no `id_slot` field (UR-15).
 
 ### Technical Requirements
 
@@ -486,6 +539,13 @@ persistent event timeline remains canonical memory; the provider transcript is d
     defaulting to Responses), local rejection diagnostics naming `AI:ChatClientKind` and its permitted values for
     unrecognised nonblank values, and the resolved effective kind selecting the chat client adapter and reaching
     AI-013's visual-context transport-path selection (AI-013 TR-10).
+23. Tests verify slot pinning (TR-37–TR-38): the default `false` injects no field; an enabled provider injects
+    `"id_slot": N` as a top-level field with the character-derived value into every outgoing request body on both
+    the Chat Completions and Responses kinds, with no per-call variation; the character identity reaches provider
+    construction and the value is fixed at construction for the constructed client's lifetime; and the derivation
+    is deterministic and process-stable — re-derived across simulated sessions and process launches it yields the
+    same non-negative integer for the same character, and minds sharing one provider resource resolve
+    per-character values.
 
 ## References
 

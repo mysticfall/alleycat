@@ -3071,7 +3071,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         public bool EndedByCancellation()
             => Volatile.Read(ref _endedByCancellation) != 0;
 
-        public override IChatClient CreateChatClient() => new ScriptedClient(this);
+        public override IChatClient CreateChatClient(string subjectFullId) => new ScriptedClient(this);
 
         private void EnqueueHoldStep(TaskCompletionSource? started)
         {

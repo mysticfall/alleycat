@@ -260,8 +260,11 @@ public partial class AgenticMind : MindBase
             [.. InvalidResponseRecoveryBackoffSeconds.Select(static seconds => TimeSpan.FromSeconds(seconds))]);
 
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
+        // The owning character's canonical identity reaches provider construction (AI-002 TR-37) so that
+        // provider-level per-character properties — slot pinning above all — derive from the subject character,
+        // never from the shared provider resource.
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
-            clientProvider.CreateChatClient(),
+            clientProvider.CreateChatClient(character.FullId),
             diagnosticsSettings,
             GameLoggerResolver.ResolveFactoryRequired);
         // The endpoint kind resolved at client construction (AI-002 TR-36) reaches the session composition: it

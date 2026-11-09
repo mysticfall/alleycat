@@ -278,7 +278,7 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
 
         public void EnqueueHoldForever() => EnqueueHoldStep(null);
 
-        public override IChatClient CreateChatClient() => new CapturingClient(this);
+        public override IChatClient CreateChatClient(string subjectFullId) => new CapturingClient(this);
 
         private void EnqueueHoldStep(TaskCompletionSource? started)
         {
