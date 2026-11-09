@@ -59,6 +59,12 @@ persistent event timeline remains canonical memory; the provider transcript is d
 13. A blank user override clears a shipped setting, and a configured value governs every provider request of the
     session, including retries and continuations. A misconfigured nonblank value fails locally with a diagnostic
     naming the configuration key and the permitted values.
+14. The user can configure the provider endpoint's chat client kind through the `AI` section of the shipped
+    `AlleyCat.yaml` — `AI:ChatClientKind` — switching between Responses-capable endpoints and OpenAI-compatible
+    backends such as OpenRouter and llama.cpp without editing scene resources: `chatcompletions` selects the Chat
+    Completions adapter and `responses` the Responses adapter. An unset or blank value keeps the provider
+    resource's own kind; a misconfigured nonblank value fails locally with a diagnostic naming the configuration
+    key and the permitted values.
 
 ## Technical Requirements
 
@@ -70,10 +76,12 @@ persistent event timeline remains canonical memory; the provider transcript is d
 2. The static system instruction is rendered once at session start under AI-003. Every logical provider request then
    uses, in order: the static system instruction; the bootstrap user input; every retained accepted exchange in
    chronological order, real and synthetic interleaved; and one fresh user current-scene message rendered last. In
-   `auto` visual-context mode (AI-013) exactly one runtime-authored user visual-context message is presented
-   immediately before that current-scene message; no such message exists in `tools` or `off` modes. Each request
-   carries exactly one current-scene message, at most one visual-context message, and delivered content is never
-   duplicated elsewhere in the request.
+   `auto` visual-context mode (AI-013) exactly one runtime-fabricated visual-context exchange — an assistant
+   tool-call message plus its tool-result messages, never appended to the retained transcript — is presented
+   immediately before that current-scene message, with any transport-determined image carriers following it
+   (AI-013 TR-10); no such exchange exists in `tools` or `off` modes. Each request carries exactly one
+   current-scene message, at most one fabricated visual-context exchange, and delivered content is never duplicated
+   elsewhere in the request.
 3. The request context contains no event-history message and no model-facing newly-presented marking. Model-visible
    event text reaches the model only through retained exchanges: the NPC's own tool calls and results, and the
    synthetic scene-update exchanges of TR-17–TR-22.
@@ -111,8 +119,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
      responses have no transcript, observation, action, or watermark effect and use bounded recovery; transport retry
      and recovery remain contained.
 13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, authorable watch tools from
-     AI-010, and, in the default `tools` visual-context mode, the two zero-argument visual-context tools (minimap
-     and view capture) composed at AgenticMind under AI-013. In `auto` and `off` visual-context modes those two
+     AI-010, and, in the `tools` and `auto` visual-context modes, the two zero-argument visual-context tools
+     (minimap and view capture) composed at AgenticMind under AI-013; in `auto` mode a model-initiated call to
+     either behaves exactly as in `tools` mode. In `off` visual-context mode those two
      tools are absent from the inventory, and a model attempt to call either is rejected as an unknown tool under
      existing validation, mirroring the synthetic-delivery precedent (TR-18). The synthetic delivery tool (TR-18)
      is runtime-authored only: it is not offered to the model, and a model attempt to call it is rejected as an
@@ -161,7 +170,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
     first materialisation needs no special case and delivers whatever has accumulated. The exact tool name stays
     tunable; the one-exchange consolidation and runtime authorship are the contract. Synthetic call IDs use a
     distinct namespace, and session-wide duplicate-call-ID validation spans real and synthetic exchanges: a consumed
-    call ID stays consumed for the whole session.
+    call ID stays consumed for the whole session. The namespace also supplies the fabricated visual-context call IDs
+    of AI-013's auto mode, which must never collide with a real tool call ID or a `scene_update` ID (AI-013 TR-8).
 19. Delivery is marked when the synthetic exchange is appended to the retained transcript and is irrevocable: exact
     transport retries, invalid-response recovery, and fresh replacement requests never redeliver an already-delivered
     observation. Rematerialisation after recovery or replacement consolidates only observations that became pending
@@ -272,6 +282,25 @@ persistent event timeline remains canonical memory; the provider transcript is d
     unaffected so scripted sessions keep dispatching and completing. TEST-001 owns the framework-side gate,
     configuration boundary, and acceptance coverage this boundary serves.
 
+### Chat Client Kind Configuration
+
+35. `AIOptions` owns the optional setting `AI:ChatClientKind`, bound by the AI subsystem from the core-provided
+    `IConfiguration` under CORE-006, whose sourcing, merge precedence, and subsystem ownership rules (UR-1–3,
+    TR-2–4, TR-6–7) are normative here, with `user://AlleyCat.yaml` overrides taking standard merge precedence.
+    Values are trimmed and parsed case-insensitively and accept `chatcompletions` or `responses`. The shipped
+    `res://AlleyCat.yaml` documents the setting through comments only, with no value set, and that documentation
+    states that OpenAI-compatible backends — OpenRouter, llama.cpp, and similar — must be declared
+    `chatcompletions`: such backends drop image parts inside tool outputs, so a `responses` misconfiguration fails
+    silently as image loss in AI-013 visual-context tool results.
+36. A configured nonblank value overrides the provider resource property (`OpenAIClientProvider.ChatClientKind`,
+    itself defaulting to Responses); an unset or blank value falls back to that property, so existing provider
+    resources behave unchanged unless the configuration key is set. An unrecognised nonblank value is rejected
+    locally, before any provider request, with a diagnostic naming the configuration key and the permitted values.
+    The effective kind — the configuration override when present, otherwise the resource property — is resolved at
+    provider/client construction, remains in force for that client's lifetime, selects the chat client adapter and,
+    through AI-013 TR-10, the visual-context transport path; the resolved effective kind must be available to the
+    session composition (AI-013).
+
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, at-least-one-call response validation with tolerated
@@ -288,10 +317,15 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - Continuation admission and confirmation settlement.
 - Composition-time binding of watch tools with AI-010.
 - Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
-- AI-013 visual-context integration: the auto-mode visual-context message slot (TR-2), the mode-dependent inventory
-  of the two zero-argument visual-context tools with unknown-tool rejection in `auto` and `off` modes (TR-13), their
-  accurate descriptions (TR-15–TR-16), and the scoped image-disposal exception to whole-exchange retention (TR-17),
-  specified normatively by AI-013.
+- AI-013 visual-context integration: the auto-mode fabricated visual-context exchange slot (TR-2), the inventory of
+  the two zero-argument visual-context tools in `tools` and `auto` modes with unknown-tool rejection in `off` mode
+  (TR-13), their accurate descriptions (TR-15–TR-16), the scoped image-disposal exception to whole-exchange
+  retention (TR-17), and the synthetic call-ID namespace covering fabricated visual calls (TR-18), specified
+  normatively by AI-013.
+- User-configured chat client kind (`AI:ChatClientKind`): CORE-006 binding with trimmed case-insensitive values,
+  config-over-resource precedence with unset or blank falling back to the provider resource property, local
+  rejection of unrecognised nonblank values, and the effective kind driving chat client adapter selection and the
+  AI-013 visual-context transport path (TR-35–TR-36).
 - Optional user-configured reasoning effort and reasoning summary verbosity: AI-owned configuration under CORE-006,
   value normalisation and validation, exact request-field emission per protocol with contained Chat Completions
   unsupported-summary handling, lifetime application across retries and continuations, and parsed-only reasoning
@@ -364,6 +398,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
     within the observation window after a player's line is delivered into model-visible context, an accepted
     response's `speak` content engages with the delivered line's substance; invalid-response discards do not exceed
     the baseline's; and per-turn provider roundtrips do not increase (UR-1, UR-2).
+12. Acceptance shows a configured `AI:ChatClientKind` value overriding the provider resource property, an unset or
+    blank value falling back to it so existing provider resources behave unchanged, and a misconfigured nonblank
+    value rejected locally with a diagnostic naming the key and its permitted values (UR-14).
 
 ### Technical Requirements
 
@@ -444,6 +481,11 @@ persistent event timeline remains canonical memory; the provider transcript is d
     or transport creation with the contained, secret-free diagnostic across the complete ordinary fixture
     lifecycle, while injected offline providers still construct, dispatch, and complete sessions in the same runs
     (TR-34). Framework-side selection, opt-in, and `AITest` acceptance coverage is TEST-001's normative layer.
+22. Tests verify the chat client kind binding (TR-35–TR-36): trimmed case-insensitive parsing of both values,
+    config-over-resource precedence with unset or blank falling back to the provider resource property (itself
+    defaulting to Responses), local rejection diagnostics naming `AI:ChatClientKind` and its permitted values for
+    unrecognised nonblank values, and the resolved effective kind selecting the chat client adapter and reaching
+    AI-013's visual-context transport-path selection (AI-013 TR-10).
 
 ## References
 
@@ -455,8 +497,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
   reasoning-content rendering, invocation index, runtime-authored synthetic-exchange marking, and stripped-text
   records normative for reasoning surfacing and tolerated-text recording (TR-12, TR-31, TR-32)
 - [AI-013: Visual AI Context](../013-visual-context/index.md) — visual-context mode configuration, the zero-argument
-  minimap and view-capture tools, the auto-mode visual-context message, and the ephemeral image lifetime owning the
-  scoped TR-17 exception
+  minimap and view-capture tools, the auto-mode fabricated visual-context exchange, and the ephemeral image lifetime
+  owning the scoped TR-17 exception
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
 - [TEST-001: Integration Test Framework](../../testing/001-test-framework/index.md) — integration-session opt-in
   gate, `AITest` configuration boundary, live-LLM pathway, and framework-side acceptance coverage normative for

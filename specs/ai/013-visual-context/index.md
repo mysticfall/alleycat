@@ -9,10 +9,12 @@ title: Visual AI Context
 
 AgenticMind sessions must gain live visual context by consuming the SCN-002 minimap renderer and the VISION-001
 on-demand vision capture under one configuration key, `AI:VisualContextMode`: in the default `tools` mode the model
-calls two zero-argument tools (a self-centred minimap and a first-person view capture); in `auto` mode both images are
-captured and attached automatically to every logical request; `off` disables all of it. Generated images are
-model-visible for a bounded ephemeral lifetime — disposed to a textual placeholder at the next fresh scheduling turn —
-and, when AI-011 transcript logging is enabled, written as sibling image files beside the turn page.
+calls two zero-argument tools (a self-centred minimap and a first-person view capture); in `auto` mode the same two
+tools remain callable and both images are additionally delivered automatically with every logical request through a
+runtime-fabricated tool exchange; `off` disables all of it. Generated images are model-visible for a bounded ephemeral
+lifetime — retained images are disposed to a textual placeholder at the next fresh scheduling turn, and automatically
+delivered images never outlive the request cycle that created them — and, when AI-011 transcript logging is enabled,
+written as sibling image files beside the turn page.
 
 ## Goal
 
@@ -33,15 +35,17 @@ plumbing that SCN-002's Out Of Scope deferred.
    with the NPC's own marker highlighted — and a fresh still of what the NPC currently sees through its own eyes.
    Both arrive in its reasoning context without the NPC choosing where to look from or how far to map.
 3. In `auto` mode, the NPC receives both images automatically with every logical request, immediately before its
-   current scene status, and is offered no visual tools.
+   current scene status, while the two visual tools remain available for its own on-demand calls, which behave
+   exactly as in `tools` mode.
 4. In `off` mode, the NPC has no visual tools, no images are captured or generated, and no image files are written.
 5. Visual requests never break the NPC: a character with no vision rig, a failed capture, or an unavailable renderer
    yields a contained error tool result in `tools` mode, and in `auto` mode the failed image is omitted with a
    warning while the turn proceeds.
-6. Images are fresh, never stale: after the NPC's next fresh scheduling turn, earlier image content is gone from its
-   context — replaced by a short textual record of what was captured and when — while the NPC's own request that
-   produced the image remains in its context as a truthful action record. An NPC that needs current visuals asks
-   again.
+6. Images are fresh, never stale: image content never survives beyond the action chain that created it. After the
+   NPC's next fresh scheduling turn, an image from its own tool call is gone from its context — replaced by a short
+   textual record of what was captured and when, while the call that produced the image remains as a truthful action
+   record — and an automatically delivered image is gone without a trace, never appearing in any later request. An
+   NPC that needs current visuals asks again.
 7. With AI-011 transcript logging enabled, a developer finds every generated image as a file beside the relevant turn
    page — minimap PNG, view-capture JPEG — relatively linked and listed per cycle; with logging disabled, no image
    files are written anywhere.
@@ -60,9 +64,9 @@ plumbing that SCN-002's Out Of Scope deferred.
    permitted values. Unlike the reasoning settings, the mode is read once at AgenticMind session start (AI-002 TR-1)
    and stays fixed for that session.
 
-   Authoring note: authored prompt stacks that reference the visual tools (AI-003 shared instructions) mismatch
-   `auto` and `off` modes, where the tools do not exist. This is a documentation concern for prompt authors, not a
-   runtime requirement: the runtime neither rewrites nor validates instruction text against the active mode.
+   Authoring note: authored prompt stacks that reference the visual tools (AI-003 shared instructions) mismatch `off`
+   mode, where the tools do not exist. This is a documentation concern for prompt authors, not a runtime
+   requirement: the runtime neither rewrites nor validates instruction text against the active mode.
 
 ### Tools Mode
 
@@ -74,11 +78,11 @@ plumbing that SCN-002's Out Of Scope deferred.
    services.
 3. The minimap tool renders through the SCN-002 `MiniMapRenderer` service (CORE-004 resolution): the centre is always
    the subject character's live world position at call time; the inclusion distance is the renderer's documented
-   service default (SCN-002 TR-9), never model-settable; framing is the TR-10 auto-scale viewport; and the request
-   carries `MarkerOverrides` (SCN-002 TR-19) keyed by the subject's resolved `FullId`, with a fixed documented gold
-   highlight colour and label text `*You*` — literal asterisks, replacing the text of both label flavours. A subject
-   hosting no discoverable marker makes the override key match nothing: the render still succeeds, apart from
-   SCN-002's informational `UnusedOverride` diagnostic. SCN-002's edge contracts apply unchanged, including
+   service default (SCN-002 TR-9), never model-settable; framing is the SCN-002 TR-10 auto-scale viewport; and the
+   request carries `MarkerOverrides` (SCN-002 TR-19) keyed by the subject's resolved `FullId`, with a fixed documented
+   gold highlight colour and label text `*You*` — literal asterisks, replacing the text of both label flavours. A
+   subject hosting no discoverable marker makes the override key match nothing: the render still succeeds, apart
+   from SCN-002's informational `UnusedOverride` diagnostic. SCN-002's edge contracts apply unchanged, including
    zero-markers-in-range success. The tool returns the renderer's raster image; the SVG document is not
    model-facing. There are deliberately no centre, radius, or size arguments: the model cannot know distances to
    important objects before reading a map. The tool is read-only — no Mind observations and no world effects.
@@ -99,46 +103,78 @@ plumbing that SCN-002's Out Of Scope deferred.
 
 ### Auto Mode
 
-7. In `auto` mode neither tool of TR-2 is model-visible, and a model attempt to call either is rejected as an
-   unknown tool under existing validation, mirroring the synthetic-delivery precedent (AI-002 TR-18).
-8. At every logical request materialisation (AI-002 TR-2, TR-4), both images are captured under the TR-3 and TR-4
-   contracts — a minimap centred on the subject with the same gold `*You*` override, a view from the subject's own
-   rig — and attached as exactly one runtime-authored user visual-context message: brief label text identifying
-   which part is the minimap and which is the view, plus the two image parts, placed immediately before that
-   request's fresh current-scene message. Each request carries at most one visual-context message, and image content
-   is never duplicated elsewhere in the request. The message persists through the request cycle that created it —
-   exact transport retries and that cycle's recovery rematerialisations reuse it — and is rebuilt at the next
-   materialisation; an earlier cycle's images never appear in a later request. Each failed capture is omitted with
-   a logged warning and the turn proceeds; a cycle in which no image captured successfully presents no
-   visual-context message.
+7. In `auto` mode both tools of TR-2 stay model-visible and callable, and a model-initiated call to either behaves
+   exactly as in `tools` mode: the capture contracts of TR-3 and TR-4 apply unchanged, the accepted exchange is
+   retained like any real exchange, with its image content under the TR-9 disposal rule, and the result's image is
+   presented under TR-10's retained-exchange rule. Only `off` mode removes the tools from the model-facing inventory
+   (TR-13).
+8. At every logical request materialisation (AI-002 TR-2, TR-4) in `auto` mode, both images are captured under the
+   TR-3 and TR-4 contracts — a minimap centred on the subject with the same gold `*You*` override, a view from the
+   subject's own rig — and the runtime fabricates from the successful captures exactly one synthetic visual-context
+   exchange per logical request: an assistant message carrying one `minimap` and/or `capture_view` function call —
+   the real tool names of TR-2 with zero-argument arguments — followed by the corresponding tool-result messages,
+   placed immediately before that request's fresh current-scene message. Fabricated call IDs draw from the synthetic
+   call-ID namespace (AI-002 TR-18) and never collide with a real tool call ID or a `scene_update` ID. The
+   fabricated exchange is a per-request suffix presentation only: it is never appended to the retained accepted
+   transcript; exact transport retries and that cycle's recovery rematerialisations reuse it — generation-tagged,
+   with the captures of the materialising cycle — and the next materialisation rebuilds it from fresh captures, so
+   an earlier cycle's fabricated exchange or images never appear in a later request. Each failed capture is omitted
+   — its fabricated call is not composed — with a logged warning, and the turn proceeds; a cycle in which no image
+   captured successfully presents no fabricated exchange.
 
 ### Ephemeral Image Lifetime
 
-9. Generated image content is ephemeral in both modes — a deliberate, scoped exception to AI-002 TR-17's no-disposal
-   rule, amended there:
-   - Tools mode: image content within a retained tool-result exchange is presented as an image at its exchange
-     position in every request of the action chain that created it — continuations, exact transport retries, and
-     recovery rematerialisations included. At the materialisation of the next fresh scheduling turn — a new logical
-     request from the AI-002 TR-7 ladder, not a continuation or rematerialisation of the current chain — the image
-     content is disposed: the pixels are replaced by a textual placeholder recording the image kind (minimap or
-     view), its area or centre, and the game time of capture. The exchange, its tool call, and its arguments remain
-     retained forever, keeping the action record truthful; the tool-result message remains, carrying the
-     placeholder, so exchange unit integrity (AI-002 TR-20) is preserved — the exception replaces image content in
-     place and removes no part of the exchange.
-   - Auto mode: the TR-8 per-cycle rebuild disposes structurally — a visual-context message never appears in any
-     request after the cycle that created it, so no placeholder is required.
+9. Generated image content is ephemeral in both modes:
+   - Retained exchanges — a `tools`-mode tool result, or a model-initiated call under auto mode's TR-7: image
+     content within the retained tool-result exchange is presented as an image at its exchange position in every
+     request of the action chain that created it — continuations, exact transport retries, and recovery
+     rematerialisations included. At the materialisation of the next fresh scheduling turn — a new logical request
+     from the AI-002 TR-7 ladder, not a continuation or rematerialisation of the current chain — the image content
+     is disposed: the pixels are replaced by a textual placeholder recording the image kind (minimap or view), its
+     area or centre, and the game time of capture. The exchange, its tool call, and its arguments remain retained
+     forever, keeping the action record truthful; the tool-result message remains, carrying the placeholder, so
+     exchange unit integrity (AI-002 TR-20) is preserved — the placeholder replaces image content in place and
+     removes no part of the exchange. This disposal is a deliberate, scoped exception to AI-002 TR-17's no-disposal
+     rule, amended there.
+   - Fabricated auto-mode delivery: the TR-8 fabricated exchange never enters the retained transcript, so no
+     disposal rule is engaged — an automatically delivered image is model-visible only within the request cycle
+     that created it and disappears without a placeholder at the next materialisation.
    - Rationale: spatial and visual state goes stale as characters move; lingering pixels would mislead the model.
-10. Transport neutrality: the pinned semantic is that a generated image is model-visible as an image at its
-    exchange's or message's position in every request within the TR-9 lifetime. The exact wire mapping — an image
-    part inside the tool-result message, or an equivalent image-carrying presentation within the same exchange — is
-    an implementation decision per provider protocol shape, because wire shapes vary (for example, custom-tool
-    output that is text-only). Every shipped protocol path must preserve the semantic by construction or by an
-    explicit fallback presentation; silently degrading to text-only where the protocol supports images anywhere is
-    not acceptable. Tests assert the semantic, not one fixed wire shape.
+10. Endpoint-aware transport: the pinned semantic is that a generated image is model-visible as an image at its
+    exchange's or message's position in every request within the TR-9 lifetime, on every shipped protocol path;
+    silently degrading to text-only is not acceptable. The provider endpoint kind — the effective chat client kind,
+    Responses or Chat Completions, resolved under the `AI:ChatClientKind` binding (AI-002 TR-35–TR-36: a configured
+    nonblank value overrides the provider resource property; unset or blank falls back to it) — must reach the
+    visual-context presentation composition, and each path preserves the semantic by construction:
+    - Retained exchanges (TR-9): a successful tool result presents its image through one exchange-adjacent user
+      message — factual capture-record text plus the image parts — placed after the tool exchange, identically on
+      both endpoint kinds.
+    - Fabricated auto-mode exchange on Responses-capable endpoints (the provider default): each fabricated tool
+      result of TR-8 carries its image in-result — result content of the TR-11 instructional text for its kind plus
+      the image part — so the image rides inside the function-call output; no adjacent user message exists on this
+      path.
+    - Fabricated auto-mode exchange on Chat Completions and compatible backends: each fabricated tool result of
+      TR-8 is text-only — the TR-11 instructional text for its kind — and each image rides an adjacent user message
+      — that image's instructional text plus the image parts — placed after the fabricated exchange and before the
+      current-scene message.
+    Tests assert the semantic on both endpoint paths, not one fixed wire shape.
+
+### Auto-Mode Instructional Texts
+
+11. The text accompanying a live auto-mode image — inside a fabricated tool result on the Responses path, or as the
+    label of its adjacent fallback user message — is a brief instruction, not a capture record: it explains what the
+    image represents and tells the agent to treat it as a visual cue for the current scene. It must not carry
+    `DescribeCapture()`-style capture facts — no coordinates, radii, or game-time prose. The normative texts, one
+    per kind, are exactly:
+    - Minimap: "A top-down minimap of your current surroundings, centred on your own position with your marker
+      highlighted. Consider it a visual cue for where things stand around you in the current scene."
+    - View: "This is what you currently see through your own eyes at this moment. Consider it a visual cue for the
+      current scene."
+    The tools-mode disposal placeholder of TR-9 keeps its factual capture record, unchanged.
 
 ### Transcript Images
 
-11. When `Diagnostics:AI:EnableSessionTranscriptLogging` is enabled, every image generated under this spec — in both
+12. When `Diagnostics:AI:EnableSessionTranscriptLogging` is enabled, every image generated under this spec — in both
     modes — is written exactly once as a sibling file beside the turn page of the cycle that generated it (minimap
     PNG, view JPEG), relatively linked from the turn page at the position of the exchange or message that carried it
     and listed per cycle; a disposed placeholder renders as text and writes no file. When the toggle is disabled,
@@ -147,9 +183,9 @@ plumbing that SCN-002's Out Of Scope deferred.
 
 ### Off Mode
 
-12. In `off` mode none of this spec's machinery is active: the two tools are absent from the model-facing inventory,
-    no captures or renders are requested, no visual-context message exists, and no image files are written. SCN-002
-    and VISION-001 remain available to every other caller unchanged.
+13. In `off` mode none of this spec's machinery is active: the two tools are absent from the model-facing inventory,
+    no captures or renders are requested, no fabricated visual-context exchange exists, and no image files are
+    written. SCN-002 and VISION-001 remain available to every other caller unchanged.
 
 ## In Scope
 
@@ -157,10 +193,12 @@ plumbing that SCN-002's Out Of Scope deferred.
   lifetime.
 - Tools mode: the two zero-argument, subject-bound visual tools with the fixed gold `*You*` minimap override and
   contained error results.
-- Auto mode: per-cycle visual-context message capture, placement, reuse, rebuild, and failure omission, with both
-  tools hidden.
-- The ephemeral image lifetime with textual-placeholder disposal, as a scoped exception to AI-002 TR-17 (amended).
-- Transport-neutral image visibility with a semantic-preserving fallback on every shipped protocol path.
+- Auto mode: the fabricated per-request visual-context exchange — capture, composition, placement, per-cycle reuse,
+  rebuild, failure omission, and instructional label texts — with both tools remaining model-visible.
+- The ephemeral image lifetime: placeholder disposal for retained images as a scoped exception to AI-002 TR-17
+  (amended), and per-request non-retention for fabricated exchanges.
+- Endpoint-aware image transport: in-result images on Responses-capable endpoints and the documented adjacent
+  user-message fallback on Chat Completions and compatible backends.
 - Transcript sibling images under the AI-011 toggle, through AI-011's amended TR-26–TR-28.
 - `off`-mode inactivity.
 
@@ -192,14 +230,16 @@ plumbing that SCN-002's Out Of Scope deferred.
    carries the image at the exchange position: the minimap centred on the calling NPC with its marker gold and
    labelled `*You*` under auto-scale framing, the view a fresh capture from its rig; failure paths return contained
    error results while the session continues normally (UR-2, UR-5).
-3. Auto-mode acceptance shows neither tool model-visible, a model attempt rejected as an unknown tool, every logical
-   request carrying exactly one visual-context message with both images immediately before the current-scene
-   message, and a failed capture omitted with a warning while the turn proceeds (UR-3, UR-5).
-4. Off-mode acceptance shows no visual tools, no captures, no visual-context message, and no image files (UR-4).
+3. Auto-mode acceptance shows both tools model-visible and callable with model-initiated calls behaving exactly as
+   in `tools` mode, every logical request carrying exactly one fabricated visual-context exchange with the fresh
+   images presented immediately before the current-scene message, and a failed capture omitted with a warning while
+   the turn proceeds (UR-3, UR-5).
+4. Off-mode acceptance shows no visual tools, no captures, no fabricated visual-context exchange, and no image files
+   (UR-4).
 5. Lifetime acceptance shows images present through their creating action chain — continuations, retries, and
-   recovery — then a textual placeholder carrying kind, area or centre, and capture game time in requests after the
-   next fresh scheduling turn, with the original tool call and arguments retained and no earlier image ever
-   appearing in a later request (UR-6).
+   recovery — then, for images from the NPC's own tool calls, a textual placeholder carrying kind, area or centre,
+   and capture game time in requests after the next fresh scheduling turn, with the original tool call and
+   arguments retained, and automatically delivered images never appearing in any later request (UR-6).
 6. Transcript acceptance shows, with logging enabled, sibling minimap PNGs and view JPEGs beside the generating turn
    pages with relative links and per-cycle listing, and, with logging disabled, no image files written anywhere
    (UR-7).
@@ -208,9 +248,9 @@ plumbing that SCN-002's Out Of Scope deferred.
 
 1. Configuration tests verify value parsing, default, precedence, the rejection diagnostic, and the session-fixed
    read (TR-1).
-2. Inventory tests verify the two tools appear only in `tools` mode with zero-argument schemas, bind at AgenticMind
-   composition only, and are absent — with unknown-tool rejection — in `auto` and `off` modes (TR-2, TR-7, TR-12;
-   AI-002 TR-13).
+2. Inventory tests verify the two tools appear in `tools` and `auto` modes with zero-argument schemas, bind at
+   AgenticMind composition only, and are absent — with unknown-tool rejection — only in `off` mode (TR-2, TR-7,
+   TR-13; AI-002 TR-13).
 3. Minimap tool tests verify the centre is the subject's live world position, the inclusion distance is the
    renderer's documented default, the override is keyed by the subject's `FullId` with the gold colour and `*You*`
    label replacing both label flavours, framing follows SCN-002 TR-10, a markerless subject still succeeds through
@@ -220,22 +260,31 @@ plumbing that SCN-002's Out Of Scope deferred.
 5. Containment tests verify every failure path of TR-5 yields a contained error tool result with no observation,
    watermark, scheduling, or session effect.
 6. Description tests verify the TR-6 accuracy claims against the shipped descriptions.
-7. Auto-mode tests verify per-materialisation capture, exactly one message placed immediately before the
-   current-scene message, reuse across that cycle's retries and recovery rematerialisations, rebuild at the next
-   materialisation, no earlier-cycle image in any later request, and omission of failed captures with a cycle where
-   nothing captured presenting no message (TR-8).
+7. Auto-mode tests verify per-materialisation capture, exactly one fabricated exchange — real tool names,
+   zero-argument arguments, results for the successful captures — placed immediately before the current-scene
+   message, fabricated call IDs drawn from the synthetic namespace with no collision against a real tool call ID or
+   a `scene_update` ID, suffix-only non-retention with reuse across that cycle's retries and recovery
+   rematerialisations, rebuild at the next materialisation, no earlier-cycle image in any later request, and
+   omission of failed captures with a cycle where nothing captured presenting no exchange (TR-8; AI-002 TR-18).
 8. Lifetime tests verify the disposal boundary is exactly the next fresh scheduling turn — a continuation of the
    chain does not dispose — the placeholder's recorded kind, area or centre, and game time, retained tool calls and
-   arguments, and no orphaned or duplicated parts (TR-9; AI-002 TR-17 as amended).
-9. Captured-request tests verify, for every shipped protocol path, that the image is model-visible at its position
-   within the TR-9 lifetime, including through the fallback mapping where the primary wire shape cannot carry it
-   (TR-10).
-10. Transcript tests verify sibling PNG and JPEG files, relative links at the carrying position, per-cycle listing,
-    exactly-once writes, placeholder-only cycles writing no file, and no image files on the disabled path (TR-11;
+   arguments, no orphaned or duplicated parts, and fabricated auto-mode exchanges never entering retained-transcript
+   state (TR-9; AI-002 TR-17 as amended).
+9. Captured-request tests verify both endpoint paths of TR-10: on a Responses-kind client the fabricated tool result
+   carries its image in-result on the wire, and on a Chat-Completions-kind client the fabricated result is
+   text-only with each image riding its adjacent user message; retained tool exchanges keep the exchange-adjacent
+   user-message presentation on both paths; the transport path follows the effective kind resolved under
+   `AI:ChatClientKind` — a configured override and the resource-property fallback each selecting their path — and
+   the image is model-visible at its position within the TR-9 lifetime on every path (TR-10; AI-002 TR-35–TR-36).
+10. Text tests verify the TR-11 instructional texts accompany every live auto-mode image — fabricated results on the
+    Responses path and fallback carriers alike — with no capture-fact content, and that the tools-mode disposal
+    placeholder keeps its factual capture record (TR-11).
+11. Transcript tests verify sibling PNG and JPEG files, relative links at the carrying position, per-cycle listing,
+    exactly-once writes, placeholder-only cycles writing no file, and no image files on the disabled path (TR-12;
     AI-011 TR-26–TR-28 as amended).
-11. Existing AI-002 and AI-011 suites pass with the amendments; assertions sensitive to the model-visible inventory
+12. Existing AI-002 and AI-011 suites pass with the amendments; assertions sensitive to the model-visible inventory
     are updated against the amended AI-002 TR-13 rather than weakened.
-12. Formatting verification, the warning-as-error solution build, unit tests, and affected Godot integration suites
+13. Formatting verification, the warning-as-error solution build, unit tests, and affected Godot integration suites
     pass under repository skills; an independent review checks code–spec consistency in both directions.
 
 ## References
@@ -243,9 +292,10 @@ plumbing that SCN-002's Out Of Scope deferred.
 Normative dependencies:
 
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md) — amended by this spec: request shape with the auto-mode
-  visual-context message slot (TR-2), the mode-dependent tool inventory (TR-13), description accuracy (TR-15–TR-16),
-  and the scoped image-disposal exception (TR-17). Consumed unchanged: the session lifecycle (TR-1), materialisation
-  (TR-4), the scheduling ladder (TR-7), and the synthetic-delivery unknown-tool precedent (TR-18).
+  fabricated visual-context exchange slot (TR-2), the mode-dependent tool inventory (TR-13), description accuracy
+  (TR-15–TR-16), the scoped image-disposal exception (TR-17), and the synthetic call-ID namespace covering
+  fabricated visual calls (TR-18). Consumed unchanged: the session lifecycle (TR-1), materialisation (TR-4), the
+  scheduling ladder (TR-7), the synthetic-delivery precedent (TR-18), and the chat client kind binding (TR-35–TR-36).
 - [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — amended by this spec with the
   transcript-image contracts (TR-26–TR-28); the toggle, storage layout, and containment are consumed unchanged.
 - [SCN-002: Spatial Minimap](../../scene/002-spatial-minimap/index.md) — consumed unchanged: the character-agnostic
@@ -260,7 +310,7 @@ Normative dependencies:
 Implementation surfaces:
 
 - `game/src/Mind/AI/AgenticMind.cs` — composition point for session tools, mode binding, and the auto-mode
-  attachment.
+  fabricated-exchange composition.
 - `game/src/Mind/AI/Provider/AIOptions.cs` and `game/AlleyCat.yaml` — the configuration key and its documented
   default, following the `AI:ReasoningEffort` pattern.
 - `game/src/Mind/AI/Tool/AgentToolResult.cs`, `game/src/Mind/AI/AgentSessionRunner.cs`, and

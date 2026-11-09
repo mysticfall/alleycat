@@ -15,7 +15,9 @@ public enum VisualContextMode
     Tools,
 
     /// <summary>
-    /// Both images are captured and attached to every logical request; no visual tools exist.
+    /// Both images are captured and delivered automatically with every logical request through a runtime-fabricated
+    /// visual-context exchange, while the two visual tools remain callable and behave exactly as in
+    /// <see cref="Tools" /> mode.
     /// </summary>
     Auto,
 

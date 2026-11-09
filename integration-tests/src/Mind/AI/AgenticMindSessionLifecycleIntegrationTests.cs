@@ -54,6 +54,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -108,6 +111,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -174,6 +180,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -594,6 +603,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, speaker, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         mind.AddChild(new SpeechPerception());
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -1803,6 +1815,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         };
         mind.AddChild(watchRegistry);
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -1925,6 +1940,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2027,6 +2045,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = visualDescriptionDeliveryThreshold,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2083,6 +2104,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2133,6 +2157,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2184,6 +2211,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2237,6 +2267,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2295,6 +2328,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
         // Sub-threshold: the observation must not interrupt the held generation, unlike node exit.
         mind.ObserveForTest(new TestObservation(0.5f, "persisted"));
@@ -2343,6 +2379,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2395,6 +2434,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             InvalidResponseRecoveryBackoffSeconds = [0f],
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2450,6 +2492,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -2535,6 +2580,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         };
         mind.SetSceneContextLoaderForTesting(
             () => new SceneContext(extraSceneMember is null ? [owner, speaker, player] : [owner, speaker, player, extraSceneMember]));
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         mind.AddChild(new SpeechPerception());
         // Start and resume cues are gated by source-generic attention, so the routed speaker stays attended for
         // the whole session without relying on decay-sensitive defaults.

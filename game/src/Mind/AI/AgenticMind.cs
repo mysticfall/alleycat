@@ -264,6 +264,11 @@ public partial class AgenticMind : MindBase
             clientProvider.CreateChatClient(),
             diagnosticsSettings,
             GameLoggerResolver.ResolveFactoryRequired);
+        // The endpoint kind resolved at client construction (AI-002 TR-36) reaches the session composition: it
+        // stays fixed for the session and selects the AI-013 visual-context transport path (AI-013 TR-10). A
+        // provider that declares no kind speaks the OpenAI Responses default.
+        OpenAIChatClientKind chatClientKind = clientProvider.EffectiveChatClientKind
+            ?? OpenAIClientProvider.DefaultChatClientKind;
         IAgentSessionTranscriptSink transcriptSink = CreateTranscriptSink(
             diagnosticsSettings,
             character.Id,
@@ -281,7 +286,8 @@ public partial class AgenticMind : MindBase
             toolAdmission,
             compiledCurrentSceneStatus,
             transcriptSink,
-            visualContextMode);
+            visualContextMode,
+            chatClientKind);
     }
 
     /// <summary>
@@ -342,8 +348,8 @@ public partial class AgenticMind : MindBase
         if (signal.Urgency is ObservationDeliveryUrgency.Fresh)
         {
             // A fresh invalidation supersedes the current logical request (AI-002 TR-4/5), so its auto-mode
-            // visual-context message ends with it: the replacement request rebuilds the message from fresh
-            // captures instead of reusing it (AI-013 TR-8).
+            // fabricated visual-context exchange ends with it: the replacement request rebuilds the exchange from
+            // fresh captures instead of reusing it (AI-013 TR-8).
             _activeRequestContextSource?.NoteVisualContextSuperseded();
             // A wait owns its normal completion and therefore is not cancelled. The following replacement request
             // rematerialises the timeline instead of receiving a rendered observation payload.
@@ -403,12 +409,13 @@ public partial class AgenticMind : MindBase
             readLoreTool.CreateFunction(context, this, dispatcher, sessionServices),
             new UnwatchTool(watchRegistry).CreateFunction(context, this, dispatcher, sessionServices),
         ];
-        if (visualContextMode == VisualContextMode.Tools)
+        if (visualContextMode != VisualContextMode.Off)
         {
-            // AI-013 TR-2–TR-4: the two zero-argument visual tools join the production inventory only in `tools`
-            // mode. Both bind their subject through the trusted session context and their typed capture
-            // dependencies here at composition; `auto` and `off` compose neither, so a model attempt hits the
-            // generic unknown-tool rejection (AI-013 TR-7/TR-12).
+            // AI-013 TR-2/TR-7: the two zero-argument visual tools join the production inventory in `tools` and
+            // `auto` modes alike — a model-initiated call under `auto` behaves exactly as in `tools` mode. Both
+            // bind their subject through the trusted session context and their typed capture dependencies here at
+            // composition; `off` composes neither, so a model attempt hits the generic unknown-tool rejection
+            // (AI-013 TR-13).
             MinimapTool minimapTool = new(miniMapRenderer, GameLoggerResolver.ResolveRequired<MinimapTool>());
             CaptureViewTool captureViewTool = new(GameLoggerResolver.ResolveRequired<CaptureViewTool>());
             functions.Add(minimapTool.CreateFunction(context, this, dispatcher, sessionServices));
@@ -673,8 +680,8 @@ public partial class AgenticMind : MindBase
     /// Composes Mind's synthetic scene-update delivery and fresh scene status into the generic runner
     /// request-context boundary (AI-002 TR-2, TR-18, TR-19). The source owns the delivered event watermark; it never
     /// exposes Mind, projectors, observations, or tools to <see cref="AgentSessionRunner" />. In <c>auto</c>
-    /// visual-context mode it also authors the per-logical-request visual-context message (AI-013 TR-8), captured
-    /// on the main thread and attached immediately before the fresh current-scene message.
+    /// visual-context mode it also fabricates the per-logical-request visual-context exchange (AI-013 TR-8),
+    /// captured on the main thread and presented immediately before the fresh current-scene message.
     /// </summary>
     private sealed class MindRequestContextSource(
         AgenticMind mind,
@@ -685,9 +692,10 @@ public partial class AgenticMind : MindBase
         private readonly Lock _watermarkLock = new();
         private long _deliveredEventSequenceID;
         private long _syntheticCallSequence;
+        private long _fabricatedVisualCallSequence;
         private long _visualContextGeneration;
-        private ChatMessage? _visualContextMessage;
-        private long _visualContextMessageGeneration = -1;
+        private IReadOnlyList<ChatMessage>? _visualContextExchange;
+        private long _visualContextExchangeGeneration = -1;
 
         public async ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
         {
@@ -717,12 +725,12 @@ public partial class AgenticMind : MindBase
                     session.Context.Character,
                     NextSyntheticCallId());
 
-                // AI-013 TR-8: auto mode captures both images per logical request and attaches exactly one
-                // runtime-authored user visual-context message — reused across that request's transport retries and
-                // recovery rematerialisations — immediately before the fresh current-scene message. Every other
-                // mode attaches nothing.
-                ChatMessage? visualContext = session.VisualContextMode == VisualContextMode.Auto
-                    ? await BuildVisualContextMessageAsync(cancellationToken)
+                // AI-013 TR-8: auto mode captures both images per logical request and fabricates exactly one
+                // synthetic visual-context exchange — reused across that request's transport retries and recovery
+                // rematerialisations — immediately before the fresh current-scene message, after any scene-update
+                // exchange. Every other mode fabricates nothing.
+                IReadOnlyList<ChatMessage>? visualContext = session.VisualContextMode == VisualContextMode.Auto
+                    ? await BuildVisualContextExchangeAsync(cancellationToken)
                     : null;
 
                 // The fresh current-scene message renders last, after every retained exchange (AI-002 TR-2/TR-6).
@@ -735,25 +743,27 @@ public partial class AgenticMind : MindBase
                     delivery,
                     visualContext is null
                         ? [new ChatMessage(ChatRole.User, sceneStatus)]
-                        : [visualContext, new ChatMessage(ChatRole.User, sceneStatus)],
+                        : [.. visualContext, new ChatMessage(ChatRole.User, sceneStatus)],
                     confirmation);
             }
         }
 
         /// <summary>
-        /// Builds or reuses the current logical request's auto-mode visual-context message (AI-013 TR-8): the
-        /// message of the pending request is reused by its transport retries and recovery rematerialisations, while
-        /// an accepted response or a fresh-turn invalidation supersedes it — through <see cref="Confirm" /> or
-        /// <see cref="NoteVisualContextSuperseded" /> — so the next logical request rebuilds from fresh captures.
-        /// A mid-build supersede is detected through the generation tag and discards the stale build. Each failed
-        /// capture is omitted with a logged warning and the turn proceeds; a cycle where nothing captured
-        /// successfully presents no message.
+        /// Builds or reuses the current logical request's fabricated auto-mode visual-context exchange (AI-013
+        /// TR-8): the exchange of the pending request is reused by its transport retries and recovery
+        /// rematerialisations, while an accepted response or a fresh-turn invalidation supersedes it — through
+        /// <see cref="Confirm" /> or <see cref="NoteVisualContextSuperseded" /> — so the next logical request
+        /// rebuilds from fresh captures. A mid-build supersede is detected through the generation tag and discards
+        /// the stale build. Each failed capture is omitted — its fabricated call is not composed — with a logged
+        /// warning and the turn proceeds; a cycle where nothing captured successfully presents no fabricated
+        /// exchange. The exchange is a per-request suffix presentation only: it is never appended to the retained
+        /// transcript, so its images never outlive the request cycle that created them (AI-013 TR-9).
         /// </summary>
-        private async Task<ChatMessage?> BuildVisualContextMessageAsync(CancellationToken cancellationToken)
+        private async Task<IReadOnlyList<ChatMessage>?> BuildVisualContextExchangeAsync(CancellationToken cancellationToken)
         {
             long generation = Volatile.Read(ref _visualContextGeneration);
-            ChatMessage? reusable = _visualContextMessage;
-            if (reusable is not null && Volatile.Read(ref _visualContextMessageGeneration) == generation)
+            IReadOnlyList<ChatMessage>? reusable = _visualContextExchange;
+            if (reusable is not null && Volatile.Read(ref _visualContextExchangeGeneration) == generation)
             {
                 return reusable;
             }
@@ -803,23 +813,12 @@ public partial class AgenticMind : MindBase
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            ChatMessage? message = images.Count == 0 ? null : ComposeVisualContextMessage(images);
-            _visualContextMessage = message;
-            Volatile.Write(ref _visualContextMessageGeneration, generation);
-            return message;
-        }
-
-        /// <summary>
-        /// Composes the runtime-authored user visual-context message (AI-013 TR-8): brief label text identifying
-        /// which part is the minimap and which the view, followed by the image parts themselves in the same order.
-        /// </summary>
-        private static ChatMessage ComposeVisualContextMessage(IReadOnlyList<VisualContextImage> images)
-        {
-            string label = images.Count == 1
-                ? $"Current visual context: {images[0].DescribeCapture()}."
-                : "Current visual context:"
-                    + string.Concat(images.Select(static image => $"\n- {image.DescribeCapture()}"));
-            return new ChatMessage(ChatRole.User, [new TextContent(label), .. images]);
+            IReadOnlyList<ChatMessage>? exchange = images.Count == 0
+                ? null
+                : VisualContextAutoExchange.Compose(images, session.ChatClientKind, NextFabricatedVisualCallId);
+            _visualContextExchange = exchange;
+            Volatile.Write(ref _visualContextExchangeGeneration, generation);
+            return exchange;
         }
 
         private void LogCaptureOmission(ILogger logger, VisualContextImageKind kind, string? failure)
@@ -831,8 +830,9 @@ public partial class AgenticMind : MindBase
                 failure ?? "the capture failed");
 
         /// <summary>
-        /// Ends the pending logical request's visual-context message (AI-013 TR-8): called on a fresh-turn
-        /// invalidation, whose replacement request is a new logical request that rebuilds from fresh captures.
+        /// Ends the pending logical request's fabricated visual-context exchange (AI-013 TR-8): called on a
+        /// fresh-turn invalidation, whose replacement request is a new logical request that rebuilds from fresh
+        /// captures.
         /// </summary>
         internal void NoteVisualContextSuperseded()
             => Interlocked.Increment(ref _visualContextGeneration);
@@ -862,8 +862,8 @@ public partial class AgenticMind : MindBase
 
             mind.ConfirmProviderRequestContext(snapshot.SchedulingSequenceID);
             continuations.ConfirmThrough(snapshot.EventSequenceID);
-            // The accepted response completes the logical request, so its auto-mode visual-context message ends
-            // with it: the next logical request rebuilds from fresh captures (AI-013 TR-8).
+            // The accepted response completes the logical request, so its auto-mode fabricated visual-context
+            // exchange ends with it: the next logical request rebuilds from fresh captures (AI-013 TR-8).
             NoteVisualContextSuperseded();
         }
 
@@ -889,6 +889,22 @@ public partial class AgenticMind : MindBase
             }
 
             return SyntheticSceneUpdateExchange.FormatCallId(sequence);
+        }
+
+        /// <summary>
+        /// Draws the next fabricated visual-context call ID from its distinct sub-namespace of the synthetic
+        /// call-ID namespace (AI-002 TR-18, AI-013 TR-8): the prefix can never collide with a real tool call ID or
+        /// a <c>scene_update</c> ID, and a superseded build may consume its ID without delivery.
+        /// </summary>
+        private string NextFabricatedVisualCallId()
+        {
+            long sequence;
+            lock (_watermarkLock)
+            {
+                sequence = ++_fabricatedVisualCallSequence;
+            }
+
+            return VisualContextAutoExchange.FormatCallId(sequence);
         }
 
         private readonly record struct Confirmation(long EventSequenceID, long SchedulingSequenceID);
@@ -972,7 +988,8 @@ public partial class AgenticMind : MindBase
     /// Prepared session state captured once at session start (AI-002 TR-2): the trusted binding, the rendered
     /// system instruction, the session-owner bootstrap input message, the decorated chat client, the bound
     /// tools, the tool-admission carrier whose runner is attached at execution, the session transcript sink
-    /// (AI-011 TR-5), and the session-fixed AI-013 visual-context mode (AI-013 TR-1).
+    /// (AI-011 TR-5), the session-fixed AI-013 visual-context mode (AI-013 TR-1), and the effective chat client
+    /// kind resolved at client construction (AI-002 TR-36), which selects the AI-013 transport path.
     /// </summary>
     internal sealed record AgentSession(
         ScenarioContext Context,
@@ -985,5 +1002,6 @@ public partial class AgenticMind : MindBase
         ToolAdmissionBroker ToolAdmission,
         CompiledSceneStatusPrompt CurrentSceneStatus,
         IAgentSessionTranscriptSink TranscriptSink,
-        VisualContextMode VisualContextMode);
+        VisualContextMode VisualContextMode,
+        OpenAIChatClientKind ChatClientKind);
 }

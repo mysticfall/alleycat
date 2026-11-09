@@ -635,7 +635,7 @@ internal static partial class MindSessionTranscriptFormatter
                 AppendFunctionCallBlock(document, call.Name, call.CallId, call.Arguments, call.Exception);
                 break;
             case FunctionResultContent result:
-                AppendFunctionResultBlock(document, result.CallId, result.Result);
+                AppendFunctionResultBlock(document, result.CallId, result.Result, linkedImages);
                 break;
             case VisualContextImage image:
                 if (linkedImages is { Count: > 0 } queue && ReferenceEquals(queue.Peek().Image, image))
@@ -1028,13 +1028,29 @@ internal static partial class MindSessionTranscriptFormatter
         AppendJsonBlock(document, arguments);
     }
 
-    private static void AppendFunctionResultBlock(StringBuilder document, string? callId, object? result)
+    private static void AppendFunctionResultBlock(
+        StringBuilder document,
+        string? callId,
+        object? result,
+        Queue<MindTranscriptImageFile>? linkedImages)
     {
         _ = document.Append("**Tool Result**");
         AppendCallIdentifier(document, callId);
+        _ = document.Append(LineFeed).Append(LineFeed);
+        if (result is IEnumerable<AIContent> parts)
+        {
+            // A multi-part tool result — the in-result image transport of a fabricated auto-mode exchange (AI-013
+            // TR-10) — renders like any other content: each part at this result's position, so a carried image
+            // embeds its sibling file's relative link exactly here (AI-011 TR-27).
+            foreach (AIContent part in parts)
+            {
+                AppendContent(document, part, linkedImages);
+            }
+
+            return;
+        }
+
         _ = document
-            .Append(LineFeed)
-            .Append(LineFeed)
             .Append(RenderResultText(result))
             .Append(LineFeed)
             .Append(LineFeed);

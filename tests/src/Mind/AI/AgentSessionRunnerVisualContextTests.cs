@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
@@ -246,6 +247,70 @@ public sealed class AgentSessionRunnerVisualContextTests
         Assert.Equal(_viewBytes, images[1].Data.ToArray());
     }
 
+    /// <summary>
+    /// The fabricated auto-mode exchange arrives through the request-context suffix exactly once per request,
+    /// immediately before the fresh scene-status message (AI-013 TR-8): it is never appended to the retained
+    /// transcript — a later request carries no earlier cycle's fabricated call IDs — its images flow through the
+    /// cycle-image capture at their carrying message position, including an image nested inside a fabricated
+    /// tool-result's content (AI-011 TR-26–TR-27), and a plain scene-status-only suffix is unaffected.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithAFabricatedAutoExchangeSuffix_PresentsItOncePerRequestAndNeverRetainsIt()
+    {
+        using CancellationTokenSource lifetime = new();
+        var contextSource = new FabricatedExchangeContextSource(OpenAIChatClientKind.Responses);
+        var sink = new RecordingTranscriptSink();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("plain-call", "plain_action")),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = new(
+            client,
+            Instructions,
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            [CreatePlainFunction()],
+            NullLogger.Instance,
+            invalidResponseRecoveryPolicy: new InvalidResponseRecoveryPolicy(3, [TimeSpan.Zero]),
+            requestContextSource: contextSource,
+            transcriptSink: sink);
+
+        await runner.RunAsync(lifetime.Token);
+
+        IReadOnlyList<ChatMessage> first = client.Requests[0];
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            first.Select(static message => message.Role));
+        Assert.Equal("scene:0", first[^1].Text);
+        string[] firstCallIds = [.. first[1].Contents.OfType<FunctionCallContent>().Select(static call => call.CallId!)];
+        Assert.All(firstCallIds, callId => Assert.StartsWith("runtime-visual-context-", callId, StringComparison.Ordinal));
+
+        // The accepted response completed the logical request, so the next request rebuilds the fabricated
+        // exchange from fresh captures: new call IDs, and no earlier fabricated call anywhere in the replay.
+        IReadOnlyList<ChatMessage> second = client.Requests[1];
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            second.Select(static message => message.Role));
+        string[] secondCallIds = [.. second[3].Contents.OfType<FunctionCallContent>().Select(static call => call.CallId!)];
+        Assert.All(secondCallIds, callId => Assert.StartsWith("runtime-visual-context-", callId, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            second.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+            call => firstCallIds.Contains(call.CallId));
+
+        // Each cycle's transcript captured both fabricated images at the fabricated tool-result message's
+        // position — the in-result Responses transport — and nothing else claims an image (AI-011 TR-26–TR-27).
+        int[] fabricatedToolMessageIndexes = [2, 4];
+        Assert.Equal(2, sink.Cycles.Count);
+        for (int cycleIndex = 0; cycleIndex < sink.Cycles.Count; cycleIndex++)
+        {
+            MindSessionCycleTranscript cycle = sink.Cycles[cycleIndex];
+            Assert.Equal(
+                [fabricatedToolMessageIndexes[cycleIndex], fabricatedToolMessageIndexes[cycleIndex]],
+                cycle.MessageImages.Select(static messageImage => messageImage.RequestMessageIndex));
+            Assert.Equal(
+                [VisualContextImageKind.Minimap, VisualContextImageKind.View],
+                cycle.MessageImages.Select(static messageImage => messageImage.Image.Kind));
+        }
+    }
+
     /// <summary>The image parts of one captured request — the transport-neutral model-visible image surface.</summary>
     private static DataContent[] ImageParts(IReadOnlyList<ChatMessage> request)
         => [.. request
@@ -273,6 +338,16 @@ public sealed class AgentSessionRunnerVisualContextTests
         => new(
             ChatRole.Assistant,
             [new FunctionCallContent(callId, name, arguments ?? new Dictionary<string, object?>())]);
+
+    private static AIFunction CreatePlainFunction()
+        => AIFunctionFactory.Create(
+            () => "Done.",
+            new AIFunctionFactoryOptions
+            {
+                Name = "plain_action",
+                Description = "Do nothing, successfully.",
+                ExcludeResultSchema = true,
+            });
 
     private static Func<CancellationToken, Task<ChatResponse>> Respond(ChatMessage message)
         => _ => Task.FromResult(new ChatResponse(message));
@@ -325,6 +400,59 @@ public sealed class AgentSessionRunnerVisualContextTests
             invalidResponseRecoveryPolicy: invalidResponseRecoveryPolicy
                 ?? new InvalidResponseRecoveryPolicy(3, [TimeSpan.Zero]),
             requestContextSource: new SceneStatusContextSource());
+
+    /// <summary>
+    /// Request-context source fabricating the auto-mode visual-context exchange through the production composer
+    /// (AI-013 TR-8): each materialisation rebuilds the exchange from fresh captures — distinct bytes and fresh
+    /// fabricated call IDs — and renders the fresh scene-status message last.
+    /// </summary>
+    private sealed class FabricatedExchangeContextSource(OpenAIChatClientKind chatClientKind)
+        : IAgentRequestContextSource
+    {
+        private long _callSequence;
+        private int _materialisationCount;
+
+        public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int index = _materialisationCount++;
+            VisualContextImage minimap = CreateMinimap(
+                centreX: index,
+                centreY: index,
+                radius: 10,
+                gameTime: index,
+                bytes: [(byte)(0x10 + index), 0x11]);
+            VisualContextImage view = CreateView(gameTime: index, bytes: [(byte)(0x20 + index), 0x21]);
+            IReadOnlyList<ChatMessage> exchange = VisualContextAutoExchange.Compose(
+                [minimap, view],
+                chatClientKind,
+                () => VisualContextAutoExchange.FormatCallId(++_callSequence));
+            return ValueTask.FromResult(new AgentRequestContext(
+                [],
+                [.. exchange, new ChatMessage(ChatRole.User, $"scene:{index}")],
+                index));
+        }
+
+        public void Retain(object? confirmation)
+        {
+        }
+
+        public void Confirm(object? confirmation)
+        {
+        }
+
+        public void Discard(object? confirmation)
+        {
+        }
+    }
+
+    /// <summary>Captures every recorded cycle for transcript assertions.</summary>
+    private sealed class RecordingTranscriptSink : IAgentSessionTranscriptSink
+    {
+        public List<MindSessionCycleTranscript> Cycles { get; } = [];
+
+        public void Record(MindSessionCycleTranscript cycle) => Cycles.Add(cycle);
+    }
 
     /// <summary>Context source rendering only the fresh scene-status suffix, as the production source does.</summary>
     private sealed class SceneStatusContextSource : IAgentRequestContextSource

@@ -80,6 +80,9 @@ public sealed class LoreReferenceRenderingIntegrationTests
             Registry = watchRegistry,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try

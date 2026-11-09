@@ -69,6 +69,21 @@ public sealed class AIOptions
     }
 
     /// <summary>
+    /// Optional chat client kind selecting the provider endpoint's protocol adapter: <c>chatcompletions</c> or
+    /// <c>responses</c>.
+    /// </summary>
+    /// <remarks>
+    /// Parsed case-insensitively after trimming; a nonblank value overrides the provider resource property, while
+    /// unset or blank falls back to it (AI-002 TR-35–TR-36). The resolved kind stays fixed for the constructed
+    /// client's lifetime and also selects the AI-013 visual-context transport path (AI-013 TR-10).
+    /// </remarks>
+    public string? ChatClientKind
+    {
+        get;
+        init;
+    }
+
+    /// <summary>
     /// Optional AI-013 visual-context delivery mode: <c>tools</c>, <c>auto</c>, or <c>off</c>.
     /// </summary>
     /// <remarks>

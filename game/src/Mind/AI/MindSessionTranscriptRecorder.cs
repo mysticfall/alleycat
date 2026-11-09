@@ -214,9 +214,10 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
     /// <summary>
     /// Enumerates one cycle's generated images with their derived sibling file names (AI-011 TR-26): every
     /// invocation that generated an AI-013 image in invocation order, then every message-carried image of the
-    /// cycle's fresh request suffix in request order — the auto-mode visual-context message — numbered per kind
-    /// within the cycle so the names stay unique within the character folder. The recorder and the formatter share
-    /// this single enumeration, so written files and rendered links cannot diverge.
+    /// cycle's fresh request suffix in request order — the fabricated auto-mode visual-context exchange and its
+    /// fallback carriers — numbered per kind within the cycle so the names stay unique within the character
+    /// folder. The recorder and the formatter share this single enumeration, so written files and rendered links
+    /// cannot diverge.
     /// </summary>
     internal static IReadOnlyList<MindTranscriptImageFile> EnumerateCycleImageFiles(
         int turnNumber,

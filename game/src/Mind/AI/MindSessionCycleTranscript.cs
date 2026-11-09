@@ -127,9 +127,10 @@ internal sealed record MindTranscriptIndexEntry(
     IReadOnlyList<MindTranscriptToolInvocation> ToolInvocations);
 
 /// <summary>
-/// One AI-013 image carried by this cycle's fresh request-suffix message — the auto-mode visual-context message —
-/// with its position within <see cref="MindSessionCycleTranscript.RequestMessages" /> (AI-013 TR-8). Because
-/// suffix messages are never retained, the image belongs to this cycle alone and never appears in a later request.
+/// One AI-013 image carried by this cycle's fresh request-suffix messages — the fabricated auto-mode
+/// visual-context exchange or its adjacent fallback carriers — with its position within
+/// <see cref="MindSessionCycleTranscript.RequestMessages" /> (AI-013 TR-8). Because suffix messages are never
+/// retained, the image belongs to this cycle alone and never appears in a later request.
 /// </summary>
 internal sealed record MindTranscriptMessageImage(int RequestMessageIndex, VisualContextImage Image);
 

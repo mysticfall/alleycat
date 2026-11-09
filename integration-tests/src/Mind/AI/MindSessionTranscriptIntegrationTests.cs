@@ -1109,6 +1109,9 @@ public sealed partial class MindSessionTranscriptIntegrationTests
             EnableReasoningLogging: true,
             EnableSessionTranscriptLogging: enableTranscriptLogging));
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // The exact request-shape expectations pin the default `tools` visual-context mode, so a developer
+        // machine's `AI:VisualContextMode` override cannot reshape these transcripts.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         return mind;
     }
 

@@ -42,6 +42,7 @@ public partial class OpenAIClientProvider : ClientProvider
     internal const OpenAIChatClientKind DefaultChatClientKind = OpenAIChatClientKind.Responses;
 
     private OpenAIClientProviderSettings? _settings;
+    private OpenAIChatClientKind? _constructedChatClientKind;
 
     /// <summary>
     /// Config file used to resolve OpenAI-compatible AI settings.
@@ -54,6 +55,14 @@ public partial class OpenAIClientProvider : ClientProvider
     /// </summary>
     [Export]
     public OpenAIChatClientKind ChatClientKind { get; set; } = DefaultChatClientKind;
+
+    /// <summary>
+    /// The effective chat client kind of the last constructed client (AI-002 TR-36): the configuration override
+    /// when one is set, otherwise this resource's own <see cref="ChatClientKind" />. Never resolved before the
+    /// first construction, so reading it cannot trigger production settings loading.
+    /// </summary>
+    public override OpenAIChatClientKind? EffectiveChatClientKind
+        => _constructedChatClientKind ?? ChatClientKind;
 
     /// <inheritdoc />
     public override IChatClient CreateChatClient()
@@ -71,8 +80,20 @@ public partial class OpenAIClientProvider : ClientProvider
         }
 
         OpenAIClientProviderSettings settings = _settings ??= OpenAIClientProviderSettings.Load(ConfigPath);
-        return CreateChatClient(ChatClientKind, settings);
+        OpenAIChatClientKind effectiveKind = ResolveEffectiveChatClientKind(settings.ChatClientKind, ChatClientKind);
+        _constructedChatClientKind = effectiveKind;
+        return CreateChatClient(effectiveKind, settings);
     }
+
+    /// <summary>
+    /// Resolves the effective chat client kind (AI-002 TR-36): a configured nonblank value overrides the provider
+    /// resource property; an unset or blank value falls back to it, so existing provider resources behave
+    /// unchanged unless the configuration key is set.
+    /// </summary>
+    internal static OpenAIChatClientKind ResolveEffectiveChatClientKind(
+        OpenAIChatClientKind? configuredKind,
+        OpenAIChatClientKind resourceKind)
+        => configuredKind ?? resourceKind;
 
     internal static IChatClient CreateChatClient(
         OpenAIChatClientKind chatClientKind,
@@ -227,7 +248,8 @@ public partial class OpenAIClientProvider : ClientProvider
         string Model,
         int? TimeoutSeconds,
         ReasoningEffort? ReasoningEffortLevel = null,
-        string? ReasoningVerbosity = null)
+        string? ReasoningVerbosity = null,
+        OpenAIChatClientKind? ChatClientKind = null)
     {
         public string GetApiKeyOrDefault()
             => string.IsNullOrWhiteSpace(ApiKey) ? DefaultCompatibleBackendApiKey : ApiKey.Trim();
@@ -289,7 +311,8 @@ public partial class OpenAIClientProvider : ClientProvider
                 Clean(options.Model) ?? DefaultModel,
                 options.Timeout,
                 ParseReasoningEffort(Clean(options.ReasoningEffort), sectionName),
-                ParseReasoningVerbosity(Clean(options.ReasoningVerbosity), sectionName))
+                ParseReasoningVerbosity(Clean(options.ReasoningVerbosity), sectionName),
+                ParseChatClientKind(Clean(options.ChatClientKind), sectionName))
             {
                 ConfigPathDescription = configPathDescription,
                 SectionName = sectionName,
@@ -378,6 +401,22 @@ public partial class OpenAIClientProvider : ClientProvider
                 _ => throw new InvalidOperationException(
                     $"Config key '{sectionName}/ReasoningVerbosity' must be one of 'auto', 'concise', or "
                     + $"'detailed'. Got '{value}'."),
+            };
+
+        /// <summary>
+        /// Parses the configured chat client kind case-insensitively (AI-002 TR-35): unset or blank means no
+        /// override — the provider resource property applies — and an unrecognised nonblank value is rejected
+        /// locally before any provider request.
+        /// </summary>
+        private static OpenAIChatClientKind? ParseChatClientKind(string? value, string sectionName)
+            => value?.ToLowerInvariant() switch
+            {
+                null => null,
+                "chatcompletions" => OpenAIChatClientKind.ChatCompletions,
+                "responses" => OpenAIChatClientKind.Responses,
+                _ => throw new InvalidOperationException(
+                    $"Config key '{sectionName}/ChatClientKind' must be one of 'chatcompletions' or 'responses'. "
+                    + $"Got '{value}'."),
             };
 
     }

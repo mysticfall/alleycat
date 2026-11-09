@@ -22,12 +22,13 @@ using CharacterHub = AlleyCat.Character.Character;
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
-/// Godot-runtime coverage for the behavioural half of AI-013: the mode-dependent inventory of the two
-/// zero-argument visual tools with unknown-tool rejection in the other modes, the minimap tool's real render path
-/// through the DI renderer with the gold <c>*You*</c> subject override, the view tool's fresh capture and
-/// contained failure results, and the auto-mode per-logical-request visual-context message — placement, reuse
-/// within its request cycle, rebuild at the next logical request, and failure omission (TR-2–TR-8, TR-12).
-/// Real captures and renders need the actual renderer, so the class runs windowed.
+/// Godot-runtime coverage for the behavioural half of AI-013: the inventory of the two zero-argument visual
+/// tools in <c>tools</c> and <c>auto</c> modes with unknown-tool rejection in <c>off</c>, the minimap tool's
+/// real render path through the DI renderer with the gold <c>*You*</c> subject override, the view tool's fresh
+/// capture and contained failure results, and the auto-mode per-logical-request fabricated visual-context
+/// exchange — placement, exactly-one shape, reuse within its request cycle, rebuild at the next logical
+/// request, failure omission, and the endpoint-aware transport on both kinds (TR-2–TR-10, TR-12). Real
+/// captures and renders need the actual renderer, so the class runs windowed.
 /// </summary>
 public sealed class VisualContextIntegrationTests
 {
@@ -36,15 +37,15 @@ public sealed class VisualContextIntegrationTests
     private static readonly Vector3 _subjectPosition = new(10f, 0f, -5f);
 
     /// <summary>
-    /// The <c>tools</c> default composes both zero-argument visual tools beside the production inventory, with the
-    /// shipped descriptions and empty model-facing schemas; <c>auto</c> and <c>off</c> compose neither
-    /// (AI-013 TR-2, TR-7, TR-12).
+    /// The <c>tools</c> default and <c>auto</c> both compose the two zero-argument visual tools beside the
+    /// production inventory, with the shipped descriptions and empty model-facing schemas; <c>off</c> composes
+    /// neither (AI-013 TR-2, TR-7, TR-13).
     /// </summary>
     [Theory]
     [InlineData(VisualContextMode.Tools)]
     [InlineData(VisualContextMode.Auto)]
     [InlineData(VisualContextMode.Off)]
-    public async Task Inventory_ComposesBothVisualToolsOnlyInToolsMode(VisualContextMode mode)
+    public async Task Inventory_ComposesBothVisualToolsInToolsAndAutoModes(VisualContextMode mode)
     {
         SceneTree sceneTree = GetSceneTree();
         SessionFixture fixture = new(mode);
@@ -56,12 +57,12 @@ public sealed class VisualContextIntegrationTests
 
             IReadOnlyDictionary<string, CapturedTool> tools = fixture.Provider.Captures[0].Tools;
             Assert.Equal(
-                mode == VisualContextMode.Tools,
+                mode != VisualContextMode.Off,
                 tools.ContainsKey(MinimapTool.ProductionToolName));
             Assert.Equal(
-                mode == VisualContextMode.Tools,
+                mode != VisualContextMode.Off,
                 tools.ContainsKey(CaptureViewTool.ProductionToolName));
-            if (mode != VisualContextMode.Tools)
+            if (mode == VisualContextMode.Off)
             {
                 return;
             }
@@ -92,38 +93,58 @@ public sealed class VisualContextIntegrationTests
     }
 
     /// <summary>
-    /// In <c>auto</c> mode a model attempt to call <c>minimap</c> is rejected as an unknown tool by the existing
-    /// validation — the invalid response is discarded, the call never executes, recovery issues a fresh request,
-    /// and the session continues (AI-013 TR-7).
+    /// In <c>auto</c> mode a model-initiated <c>minimap</c> call behaves exactly as in <c>tools</c> mode
+    /// (AI-013 TR-7): the accepted exchange is retained with its image under the retained-exchange presentation
+    /// — the factual capture-record label, not the auto-mode instructional text — while the fabricated
+    /// visual-context exchange continues to arrive through the request suffix.
     /// </summary>
     [Fact]
-    public async Task AutoMode_ModelAttemptToCallTheMinimapTool_IsRejectedAsAnUnknownTool()
+    public async Task AutoMode_ModelInitiatedMinimapCall_BehavesExactlyAsInToolsMode()
     {
         SceneTree sceneTree = GetSceneTree();
-        SessionFixture fixture = new(VisualContextMode.Auto, enableTranscriptLogging: true);
+        SessionFixture fixture = new(VisualContextMode.Auto);
         try
         {
-            MindSessionTranscriptRecorder.ResetTurnCountersForTesting();
-            MindSessionTranscriptRecorder.SetRootPathOverrideForTesting(fixture.TranscriptRoot);
             fixture.Provider.EnqueueCall(MinimapTool.ProductionToolName);
+            fixture.Provider.EnqueueCall(DummyToolName);
             fixture.EnqueueHoldForever();
             await fixture.StartAsync(sceneTree);
-            await WaitUntilAsync(sceneTree, () => fixture.Provider.Captures.Count >= 2);
+            await WaitUntilAsync(sceneTree, () => fixture.Provider.Captures.Count >= 3);
 
-            // The rejected call never executed: no tool result for it exists in any request, and recovery
-            // proceeded to a follow-up request.
-            foreach (CapturedRequest request in fixture.Provider.Captures)
-            {
-                Assert.DoesNotContain(
-                    request.Messages.SelectMany(static message => message.Contents)
-                        .OfType<FunctionResultContent>(),
-                    static result => result.Result?.ToString()?.Contains("Minimap", StringComparison.Ordinal) == true);
-            }
+            // The settled model-initiated exchange presents the image within the exchange, immediately after
+            // its tool result, under the retained-exchange rule (AI-013 TR-5/TR-10) — identical to tools mode.
+            IReadOnlyList<ChatMessage> replay = fixture.Provider.Captures[1].Messages;
+            FunctionCallContent call = Assert.Single(
+                replay.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                candidate => candidate.Name == MinimapTool.ProductionToolName
+                    && !candidate.CallId!.StartsWith(VisualContextAutoExchange.SyntheticCallIDPrefix, StringComparison.Ordinal));
+            FunctionResultContent result = Assert.Single(
+                replay.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                candidate => candidate.CallId == call.CallId);
+            Assert.Contains("Minimap delivered: minimap image centred at (10, -5)", result.Result?.ToString(), StringComparison.Ordinal);
+            int toolResultIndex = Assert.Single(
+                Enumerable.Range(0, replay.Count),
+                index => replay[index].Role == ChatRole.Tool
+                    && replay[index].Contents.OfType<FunctionResultContent>()
+                        .Any(toolResult => toolResult.CallId == call.CallId));
+            ChatMessage presentation = replay[toolResultIndex + 1];
+            Assert.Equal(ChatRole.User, presentation.Role);
+            Assert.Contains(
+                "Visual context from your tool action:",
+                presentation.Text,
+                StringComparison.Ordinal);
+            VisualContextImage minimap = Assert.IsType<VisualContextImage>(
+                Assert.Single(presentation.Contents.OfType<VisualContextImage>()));
+            Assert.Equal(VisualContextImageKind.Minimap, minimap.Kind);
+            AssertPng(minimap.Data.ToArray());
 
-            string firstTurnPage = File.ReadAllText(Path.Combine(
-                fixture.CharacterTranscriptDirectory,
-                MindSessionTranscriptRecorder.CreateTurnFileName(1)));
-            Assert.Contains("unknown tool 'minimap'", firstTurnPage, StringComparison.Ordinal);
+            // The retained model-initiated exchange stays in later requests of the same action chain, while the
+            // fabricated exchange keeps arriving fresh before every scene status (AI-013 TR-7/TR-8).
+            IReadOnlyList<ChatMessage> later = fixture.Provider.Captures[2].Messages;
+            Assert.Contains(
+                later.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                retainedResult => retainedResult.CallId == call.CallId);
+            AssertFabricatedExchangeBeforeSceneStatus(later);
         }
         finally
         {
@@ -299,16 +320,76 @@ public sealed class VisualContextIntegrationTests
     }
 
     /// <summary>
-    /// In <c>auto</c> mode every logical request carries exactly one visual-context user message immediately
-    /// before its fresh scene-status message, with both captures — minimap PNG then view JPEG — labelled by kind
-    /// and never duplicated elsewhere in the request (AI-013 TR-8).
+    /// In <c>auto</c> mode every logical request carries exactly one fabricated visual-context exchange
+    /// immediately before its fresh scene-status message (AI-013 TR-8): the assistant message calls both real
+    /// tools by name with zero-argument arguments and synthetic call IDs from the distinct sub-namespace, and
+    /// — on the fixture's Responses-kind endpoint — each fabricated result carries its image in-result with the
+    /// verbatim TR-11 instructional text. The images appear nowhere else, and no earlier request's fabricated
+    /// call ID is ever retained.
     /// </summary>
     [Fact]
-    public async Task AutoMode_EveryLogicalRequestCarriesExactlyOneVisualContextMessageBeforeTheSceneStatus()
+    public async Task AutoMode_EveryLogicalRequestCarriesExactlyOneFabricatedExchangeBeforeTheSceneStatus()
     {
         SceneTree sceneTree = GetSceneTree();
         CountingVision vision = new();
         SessionFixture fixture = new(VisualContextMode.Auto, visionOverride: vision);
+        try
+        {
+            fixture.Provider.EnqueueCall(DummyToolName);
+            fixture.EnqueueHoldForever();
+            await fixture.StartAsync(sceneTree);
+            await WaitUntilAsync(sceneTree, () => fixture.Provider.Captures.Count >= 2);
+
+            List<string[]> seenFabricatedCallIds = [];
+            foreach (CapturedRequest request in fixture.Provider.Captures)
+            {
+                IReadOnlyList<ChatMessage> messages = request.Messages;
+                ChatMessage sceneStatus = messages[^1];
+                Assert.Equal(ChatRole.User, sceneStatus.Role);
+                Assert.Contains("Fresh scene status.", sceneStatus.Text, StringComparison.Ordinal);
+                AssertFabricatedExchangeBeforeSceneStatus(messages);
+                seenFabricatedCallIds.Add([.. FabricatedCallIdsOf(messages)]);
+
+                // Exactly one fabricated exchange per request, and the images appear nowhere else (TR-8).
+                VisualContextImage[] images = ImagePartsOf(request);
+                Assert.Equal(2, images.Length);
+                Assert.Equal(VisualContextImageKind.Minimap, images[0].Kind);
+                Assert.Equal("image/png", images[0].MediaType);
+                Assert.Equal(VisualContextImageKind.View, images[1].Kind);
+                Assert.Equal("image/jpeg", images[1].MediaType);
+            }
+
+            // Each materialisation rebuilds the exchange from fresh captures: new fabricated call IDs every
+            // request, and no earlier fabricated call ID survives anywhere (TR-8/TR-9 non-retention).
+            Assert.Equal(2, seenFabricatedCallIds.Count);
+            Assert.NotEqual(seenFabricatedCallIds[0], seenFabricatedCallIds[1]);
+            Assert.DoesNotContain(
+                fixture.Provider.Captures[1].Messages.SelectMany(static message => message.Contents)
+                    .OfType<FunctionCallContent>(),
+                call => seenFabricatedCallIds[0].Contains(call.CallId));
+
+            Assert.Equal(2, vision.CaptureCount);
+        }
+        finally
+        {
+            await fixture.CleanupAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// On a Chat-Completions-kind endpoint — pinned through the provider's effective kind, the binding the
+    /// <c>AI:ChatClientKind</c> configuration drives (AI-002 TR-35–TR-36) — each fabricated result stays
+    /// text-only with its TR-11 instructional text, and each image rides exactly one adjacent user message
+    /// carrier after the fabricated exchange and before the scene-status message (AI-013 TR-10).
+    /// </summary>
+    [Fact]
+    public async Task AutoMode_OnAChatCompletionsEndpoint_RidesEachImageInAnAdjacentUserCarrier()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SessionFixture fixture = new(
+            VisualContextMode.Auto,
+            visionOverride: new CountingVision(),
+            chatClientKind: OpenAIChatClientKind.ChatCompletions);
         try
         {
             fixture.Provider.EnqueueCall(DummyToolName);
@@ -322,25 +403,58 @@ public sealed class VisualContextIntegrationTests
                 ChatMessage sceneStatus = messages[^1];
                 Assert.Equal(ChatRole.User, sceneStatus.Role);
                 Assert.Contains("Fresh scene status.", sceneStatus.Text, StringComparison.Ordinal);
-                ChatMessage visualContext = messages[^2];
-                Assert.Equal(ChatRole.User, visualContext.Role);
-                Assert.StartsWith("Current visual context:", visualContext.Text, StringComparison.Ordinal);
-                Assert.Contains("minimap image centred at (10, -5)", visualContext.Text, StringComparison.Ordinal);
-                Assert.Contains("view capture through your own eyes", visualContext.Text, StringComparison.Ordinal);
-                VisualContextImage[] images =
-                    [.. visualContext.Contents.OfType<VisualContextImage>()];
-                Assert.Equal(VisualContextImageKind.Minimap, images[0].Kind);
-                Assert.Equal("image/png", images[0].MediaType);
-                Assert.Equal(VisualContextImageKind.View, images[1].Kind);
-                Assert.Equal("image/jpeg", images[1].MediaType);
-                // Exactly one visual-context message per request, and the images appear nowhere else (TR-8).
-                Assert.Equal(2, images.Length);
-                _ = Assert.Single(
-                    messages,
-                    static message => message.Contents.Any(static content => content is VisualContextImage));
+
+                // The fabricated exchange itself: assistant calls then text-only results (TR-10).
+                ChatMessage fabricatedCalls = messages[^5];
+                Assert.Equal(ChatRole.Assistant, fabricatedCalls.Role);
+                FunctionCallContent[] calls = [.. fabricatedCalls.Contents.OfType<FunctionCallContent>()];
+                Assert.Equal(
+                    [MinimapTool.ProductionToolName, CaptureViewTool.ProductionToolName],
+                    calls.Select(static call => call.Name));
+                Assert.All(
+                    calls,
+                    call => Assert.StartsWith(
+                        VisualContextAutoExchange.SyntheticCallIDPrefix,
+                        call.CallId,
+                        StringComparison.Ordinal));
+                ChatMessage fabricatedResults = messages[^4];
+                Assert.Equal(ChatRole.Tool, fabricatedResults.Role);
+                FunctionResultContent[] results =
+                    [.. fabricatedResults.Contents.OfType<FunctionResultContent>()];
+                Assert.Equal(calls.Select(static call => call.CallId), results.Select(static result => result.CallId));
+                Assert.All(results, static result => Assert.IsType<string>(result.Result));
+                Assert.Equal(VisualContextAutoExchange.MinimapInstruction, Assert.IsType<string>(results[0].Result));
+                Assert.Equal(VisualContextAutoExchange.ViewInstruction, Assert.IsType<string>(results[1].Result));
+
+                // One adjacent user carrier per image: that image's instructional text plus the image part
+                // (TR-10/TR-11).
+                (string instruction, VisualContextImageKind kind)[] carriers =
+                    [(VisualContextAutoExchange.MinimapInstruction, VisualContextImageKind.Minimap), (VisualContextAutoExchange.ViewInstruction, VisualContextImageKind.View)];
+                for (int index = 0; index < carriers.Length; index++)
+                {
+                    ChatMessage carrier = messages[messages.Count - 3 + index];
+                    Assert.Equal(ChatRole.User, carrier.Role);
+                    Assert.Equal(
+                        carriers[index].instruction,
+                        Assert.IsType<TextContent>(Assert.Single(carrier.Contents.OfType<TextContent>())).Text);
+                    VisualContextImage carrierImage = Assert.IsType<VisualContextImage>(
+                        Assert.Single(carrier.Contents.OfType<VisualContextImage>()));
+                    Assert.Equal(carriers[index].kind, carrierImage.Kind);
+                }
+
+                // The images appear nowhere else (TR-8).
+                Assert.Equal(2, ImagePartsOf(request).Length);
             }
 
-            Assert.Equal(2, vision.CaptureCount);
+            // The review evidence artefact: the fabricated exchange's captured request on the Chat Completions
+            // transport path — the text-only results and both adjacent user carriers, in message order.
+            string evidenceDirectory = ProjectSettings.GlobalizePath("res://temp/visual-context");
+            _ = DirAccess.MakeDirRecursiveAbsolute(evidenceDirectory);
+            CapturedRequest evidenceRequest = fixture.Provider.Captures[^1];
+            File.WriteAllLines(
+                Path.Combine(evidenceDirectory, "auto-fabricated-exchange-request-chatcompletions.md"),
+                evidenceRequest.Messages.Select((message, messageIndex) =>
+                    $"{messageIndex}: {message.Role.Value} :: {DescribeContents(message)}"));
         }
         finally
         {
@@ -348,13 +462,32 @@ public sealed class VisualContextIntegrationTests
         }
     }
 
+    private static string DescribeContents(ChatMessage message)
+        => string.Join(
+            " | ",
+            message.Contents.Select(static content => content switch
+            {
+                TextContent text => $"text: {text.Text}",
+                FunctionCallContent call => $"call: {call.Name} ({call.CallId})",
+                FunctionResultContent result when result.Result is IEnumerable<AIContent> parts => "result: "
+                    + string.Join("; ", parts.Select(static part => part switch
+                    {
+                        TextContent resultText => $"text: {resultText.Text}",
+                        VisualContextImage image => $"image: {image.MediaType}, {image.Data.Length} bytes",
+                        _ => part.GetType().Name,
+                    })),
+                FunctionResultContent result => $"result: {result.Result}",
+                VisualContextImage image => $"image: {image.MediaType}, {image.Data.Length} bytes",
+                _ => content.GetType().Name,
+            }));
+
     /// <summary>
-    /// The visual-context message persists through its request cycle's recovery rematerialisation — the recovery
+    /// The fabricated exchange persists through its request cycle's recovery rematerialisation — the recovery
     /// request reuses the same captures, so the view capture count does not grow — and is rebuilt at the next
     /// logical request after an accepted response, which captures afresh (AI-013 TR-8).
     /// </summary>
     [Fact]
-    public async Task AutoMode_RecoveryRematerialisationReusesTheMessageAndTheNextLogicalRequestRebuilds()
+    public async Task AutoMode_RecoveryRematerialisationReusesTheExchangeAndTheNextLogicalRequestRebuilds()
     {
         SceneTree sceneTree = GetSceneTree();
         CountingVision vision = new();
@@ -388,12 +521,12 @@ public sealed class VisualContextIntegrationTests
     }
 
     /// <summary>
-    /// Each failed auto-mode capture is omitted with a warning while the turn proceeds: a character with no vision
-    /// rig presents the minimap alone, and a cycle where nothing captured successfully presents no visual-context
-    /// message at all (AI-013 TR-8).
+    /// Each failed auto-mode capture is omitted — its fabricated call is not composed — with the turn
+    /// proceeding (AI-013 TR-8): a character with no vision rig presents the minimap alone, and a cycle where
+    /// nothing captured successfully presents no fabricated exchange at all.
     /// </summary>
     [Fact]
-    public async Task AutoMode_FailedCapturesAreOmittedAndATotallyFailedCyclePresentsNoMessage()
+    public async Task AutoMode_FailedCapturesAreOmittedAndATotallyFailedCyclePresentsNoExchange()
     {
         SceneTree sceneTree = GetSceneTree();
 
@@ -405,11 +538,12 @@ public sealed class VisualContextIntegrationTests
             await WaitUntilAsync(sceneTree, () => minimapOnly.Provider.Captures.Count >= 1);
 
             IReadOnlyList<ChatMessage> messages = minimapOnly.Provider.Captures[0].Messages;
-            ChatMessage visualContext = messages[^2];
-            VisualContextImage image = Assert.IsType<VisualContextImage>(
-                Assert.Single(visualContext.Contents.OfType<VisualContextImage>()));
+            AssertFabricatedExchangeBeforeSceneStatus(messages);
+            FunctionCallContent singleCall = Assert.Single(
+                messages.SelectMany(static message => message.Contents).OfType<FunctionCallContent>());
+            Assert.Equal(MinimapTool.ProductionToolName, singleCall.Name);
+            VisualContextImage image = Assert.IsType<VisualContextImage>(Assert.Single(ImagePartsOf(minimapOnly.Provider.Captures[0])));
             Assert.Equal(VisualContextImageKind.Minimap, image.Kind);
-            Assert.StartsWith("Current visual context: minimap image", visualContext.Text, StringComparison.Ordinal);
         }
         finally
         {
@@ -431,8 +565,8 @@ public sealed class VisualContextIntegrationTests
                 messages.SelectMany(static message => message.Contents),
                 static content => content is VisualContextImage);
             Assert.DoesNotContain(
-                messages,
-                static message => message.Text.StartsWith("Current visual context:", StringComparison.Ordinal));
+                messages.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                call => call.CallId!.StartsWith(VisualContextAutoExchange.SyntheticCallIDPrefix, StringComparison.Ordinal));
         }
         finally
         {
@@ -441,12 +575,13 @@ public sealed class VisualContextIntegrationTests
     }
 
     /// <summary>
-    /// With transcript logging enabled, an auto-mode cycle's message-carried images are written exactly once as
-    /// sibling PNG/JPEG files beside the generating turn page and relatively linked at the carrying message's
-    /// position (AI-013 TR-8; AI-011 TR-26–TR-27).
+    /// With transcript logging enabled, an auto-mode cycle's fabricated-exchange images are written exactly once
+    /// as sibling PNG/JPEG files beside the generating turn page, relatively linked at the carrying fabricated
+    /// result's position — the Responses in-result transport — with the fabricated exchange rendered like any
+    /// other transcript content (AI-013 TR-8; AI-011 TR-26–TR-27).
     /// </summary>
     [Fact]
-    public async Task AutoMode_WithTranscriptLogging_WritesMessageCarriedSiblingFilesBesideTheTurnPage()
+    public async Task AutoMode_WithTranscriptLogging_WritesFabricatedExchangeSiblingFilesBesideTheTurnPage()
     {
         SceneTree sceneTree = GetSceneTree();
         SessionFixture fixture = new(VisualContextMode.Auto, visionOverride: new CountingVision(), enableTranscriptLogging: true);
@@ -474,9 +609,19 @@ public sealed class VisualContextIntegrationTests
             byte[] minimapPng = File.ReadAllBytes(Path.Combine(characterDirectory, "turn-0001-minimap-1.png"));
             AssertPng(minimapPng);
             string turnPage = File.ReadAllText(Path.Combine(characterDirectory, "turn-0001.md"));
+            // The fabricated exchange renders like any other transcript content: its assistant calls and tool
+            // results carry the real tool names, the synthetic call IDs, and the TR-11 instructional texts
+            // (AI-011 TR-27).
+            Assert.Contains(
+                $"**Function Call:** minimap — call `runtime-visual-context-1`",
+                turnPage,
+                StringComparison.Ordinal);
+            Assert.Contains("**Function Call:** capture_view", turnPage, StringComparison.Ordinal);
+            Assert.Contains(VisualContextAutoExchange.MinimapInstruction, turnPage, StringComparison.Ordinal);
+            Assert.Contains(VisualContextAutoExchange.ViewInstruction, turnPage, StringComparison.Ordinal);
+            // The sibling images link at the carrying fabricated result's position and list per cycle.
             Assert.Contains("![minimap](turn-0001-minimap-1.png)", turnPage, StringComparison.Ordinal);
             Assert.Contains("![view](turn-0001-view-1.jpg)", turnPage, StringComparison.Ordinal);
-            Assert.Contains("Current visual context:", turnPage, StringComparison.Ordinal);
             Assert.Contains(
                 "- **minimap:** [turn-0001-minimap-1.png](turn-0001-minimap-1.png) —",
                 turnPage,
@@ -490,6 +635,14 @@ public sealed class VisualContextIntegrationTests
             string index = File.ReadAllText(Path.Combine(characterDirectory, "index.md"));
             Assert.DoesNotContain(".png)", index, StringComparison.Ordinal);
             Assert.DoesNotContain(".jpg)", index, StringComparison.Ordinal);
+
+            // The review evidence artefact: the fabricated exchange's turn page on the Responses transport path.
+            string evidenceDirectory = ProjectSettings.GlobalizePath("res://temp/visual-context");
+            _ = DirAccess.MakeDirRecursiveAbsolute(evidenceDirectory);
+            File.Copy(
+                Path.Combine(characterDirectory, "turn-0001.md"),
+                Path.Combine(evidenceDirectory, "auto-fabricated-exchange-turn-page-responses.md"),
+                overwrite: true);
         }
         finally
         {
@@ -499,7 +652,7 @@ public sealed class VisualContextIntegrationTests
 
     /// <summary>
     /// In <c>off</c> mode nothing visual exists at all: neither tool is offered, no capture or render is requested,
-    /// and no request message carries image content (AI-013 TR-12).
+    /// and no request message carries image content or a fabricated visual-context exchange (AI-013 TR-13).
     /// </summary>
     [Fact]
     public async Task OffMode_ComposesNoToolsAndAttachesNoImagesAnywhere()
@@ -522,8 +675,8 @@ public sealed class VisualContextIntegrationTests
                     request.Messages.SelectMany(static message => message.Contents),
                     static content => content is VisualContextImage);
                 Assert.DoesNotContain(
-                    request.Messages,
-                    static message => message.Text.StartsWith("Current visual context:", StringComparison.Ordinal));
+                    request.Messages.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                    call => call.CallId!.StartsWith(VisualContextAutoExchange.SyntheticCallIDPrefix, StringComparison.Ordinal));
             }
         }
         finally
@@ -534,10 +687,80 @@ public sealed class VisualContextIntegrationTests
 
     private const string DummyToolName = "dummy_action";
 
+    /// <summary>The image parts of one captured request, including images nested in fabricated tool results.</summary>
     private static VisualContextImage[] ImagePartsOf(CapturedRequest request)
-        => [.. request.Messages
-            .SelectMany(static message => message.Contents)
-            .OfType<VisualContextImage>()];
+    {
+        List<VisualContextImage> images = [];
+        foreach (AIContent content in request.Messages.SelectMany(static message => message.Contents))
+        {
+            if (content is VisualContextImage direct)
+            {
+                images.Add(direct);
+            }
+            else if (content is FunctionResultContent { Result: IEnumerable<AIContent> parts })
+            {
+                images.AddRange(parts.OfType<VisualContextImage>());
+            }
+        }
+
+        return [.. images];
+    }
+
+    /// <summary>The fabricated call IDs of one captured request, in order.</summary>
+    private static IEnumerable<string> FabricatedCallIdsOf(IReadOnlyList<ChatMessage> messages)
+        => messages.SelectMany(static message => message.Contents)
+            .OfType<FunctionCallContent>()
+            .Where(call => call.CallId!.StartsWith(VisualContextAutoExchange.SyntheticCallIDPrefix, StringComparison.Ordinal))
+            .Select(static call => call.CallId!);
+
+    /// <summary>
+    /// Asserts the Responses-path fabricated exchange immediately before the fresh scene-status message
+    /// (AI-013 TR-8/TR-10): an assistant message carrying one call per successful capture under its real tool
+    /// name with zero-argument arguments and a distinct-namespace call ID, followed by one tool-result message
+    /// whose in-result content pairs each TR-11 instructional text with its image.
+    /// </summary>
+    private static void AssertFabricatedExchangeBeforeSceneStatus(IReadOnlyList<ChatMessage> messages)
+    {
+        ChatMessage fabricatedCalls = messages[^3];
+        Assert.Equal(ChatRole.Assistant, fabricatedCalls.Role);
+        FunctionCallContent[] calls = [.. fabricatedCalls.Contents.OfType<FunctionCallContent>()];
+        Assert.NotEmpty(calls);
+        Assert.All(
+            calls,
+            call =>
+            {
+                Assert.Empty(call.Arguments ?? new Dictionary<string, object?>());
+                Assert.StartsWith(
+                    VisualContextAutoExchange.SyntheticCallIDPrefix,
+                    call.CallId,
+                    StringComparison.Ordinal);
+            });
+
+        ChatMessage fabricatedResults = messages[^2];
+        Assert.Equal(ChatRole.Tool, fabricatedResults.Role);
+        FunctionResultContent[] results = [.. fabricatedResults.Contents.OfType<FunctionResultContent>()];
+        Assert.Equal(
+            calls.Select(static call => call.CallId),
+            results.Select(static result => result.CallId));
+
+        for (int index = 0; index < calls.Length; index++)
+        {
+            string name = calls[index].Name!;
+            Assert.True(
+                name is MinimapTool.ProductionToolName or CaptureViewTool.ProductionToolName,
+                $"The fabricated exchange must call a real visual tool name, not '{name}'.");
+            VisualContextImageKind kind = name == MinimapTool.ProductionToolName
+                ? VisualContextImageKind.Minimap
+                : VisualContextImageKind.View;
+            AIContent[] parts = Assert.IsType<AIContent[]>(results[index].Result);
+            Assert.Equal(
+                VisualContextAutoExchange.DescribeInstruction(kind),
+                Assert.IsType<TextContent>(parts[0]).Text);
+            VisualContextImage image = Assert.IsType<VisualContextImage>(
+                Assert.Single(parts.OfType<VisualContextImage>()));
+            Assert.Equal(kind, image.Kind);
+        }
+    }
 
     private static void AssertPng(byte[] png)
         => Assert.True(
@@ -614,7 +837,8 @@ public sealed class VisualContextIntegrationTests
             bool rendererAvailable = true,
             bool useReferenceNpcRig = false,
             IVision? visionOverride = null,
-            bool enableTranscriptLogging = false)
+            bool enableTranscriptLogging = false,
+            OpenAIChatClientKind chatClientKind = OpenAIChatClientKind.Responses)
         {
             _rendererAvailable = rendererAvailable;
             _fixtureRoot = new Node3D { Name = $"VisualContext-{mode}-{Guid.NewGuid():N}" };
@@ -669,7 +893,7 @@ public sealed class VisualContextIntegrationTests
                 _owner = host;
             }
 
-            Provider = new CapturingSessionClientProvider();
+            Provider = new CapturingSessionClientProvider(chatClientKind);
             TranscriptRoot = Path.Combine(
                 Path.GetTempPath(),
                 "AlleyCat.VisualContextIntegrationTests",
@@ -947,11 +1171,19 @@ public sealed class VisualContextIntegrationTests
     /// <summary>Immutable snapshot of one provider request: messages plus the model-facing tool surface.</summary>
     private sealed record CapturedRequest(IReadOnlyList<ChatMessage> Messages, IReadOnlyDictionary<string, CapturedTool> Tools);
 
-    private sealed partial class CapturingSessionClientProvider : ClientProvider
+    private sealed partial class CapturingSessionClientProvider(
+        OpenAIChatClientKind chatClientKind) : ClientProvider
     {
         private readonly Queue<Func<CancellationToken, Task<ChatResponse>>> _steps = new();
 
         public List<CapturedRequest> Captures { get; } = [];
+
+        /// <summary>
+        /// The endpoint kind this offline provider declares (AI-002 TR-36): the session composition reads it
+        /// exactly as it would the production provider's, selecting the AI-013 fabricated-exchange transport
+        /// path (AI-013 TR-10).
+        /// </summary>
+        public override OpenAIChatClientKind? EffectiveChatClientKind => chatClientKind;
 
         public void EnqueueHoldForever()
             => _steps.Enqueue(async cancellationToken =>

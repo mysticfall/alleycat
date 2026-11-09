@@ -86,6 +86,9 @@ public sealed class ReadLoreFlowIntegrationTests
             Registry = watchRegistry,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, ally, vadim, player], content));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try
@@ -215,6 +218,9 @@ public sealed class ReadLoreFlowIntegrationTests
             Registry = watchRegistry,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
         try

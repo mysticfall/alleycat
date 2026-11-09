@@ -431,7 +431,9 @@ internal sealed class AgentSessionRunner
                 };
                 // Message-carried generated images (AI-013 TR-8): suffix messages are fresh per cycle and never
                 // retained, so every generated image part in them belongs to this cycle alone; its position within
-                // the frozen request drives the transcript's sibling file link (AI-011 TR-26–TR-27).
+                // the frozen request drives the transcript's sibling file link (AI-011 TR-26–TR-27). A fabricated
+                // tool-result message may carry its image inside the result content itself — the Responses
+                // transport path — while carrier and presentation messages carry theirs directly.
                 int suffixStartIndex = requestTranscript.Count - requestContext.SuffixMessages.Count;
                 for (int suffixIndex = 0; suffixIndex < requestContext.SuffixMessages.Count; suffixIndex++)
                 {
@@ -441,6 +443,14 @@ internal sealed class AgentSessionRunner
                         {
                             cycleTranscript.MessageImages.Add(
                                 new MindTranscriptMessageImage(suffixStartIndex + suffixIndex, image));
+                        }
+                        else if (content is FunctionResultContent { Result: IEnumerable<AIContent> resultParts })
+                        {
+                            foreach (VisualContextImage resultPart in resultParts.OfType<VisualContextImage>())
+                            {
+                                cycleTranscript.MessageImages.Add(
+                                    new MindTranscriptMessageImage(suffixStartIndex + suffixIndex, resultPart));
+                            }
                         }
                     }
                 }

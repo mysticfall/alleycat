@@ -121,6 +121,32 @@ public sealed class ProductionAIProviderBoundaryIntegrationTests
     }
 
     /// <summary>
+    /// The provider's effective chat client kind falls back to its resource property before any construction
+    /// (AI-002 TR-36): the resource property defaults to Responses, an exported override is honoured, and a
+    /// provider that declares no kind reports none — the Responses default the session composition then applies
+    /// (AI-013 TR-10).
+    /// </summary>
+    [Fact]
+    public void ProviderEffectiveChatClientKind_FallsBackToTheResourcePropertyWithoutConstruction()
+    {
+        OpenAIClientProvider defaultsProvider = new();
+        OpenAIClientProvider chatCompletionsProvider = new()
+        {
+            ChatClientKind = OpenAIChatClientKind.ChatCompletions,
+        };
+        try
+        {
+            Assert.Equal(OpenAIChatClientKind.Responses, defaultsProvider.EffectiveChatClientKind);
+            Assert.Equal(OpenAIChatClientKind.ChatCompletions, chatCompletionsProvider.EffectiveChatClientKind);
+        }
+        finally
+        {
+            defaultsProvider.Free();
+            chatCompletionsProvider.Free();
+        }
+    }
+
+    /// <summary>
     /// A mind left on the production default composition — no <c>ClientProvider</c> injected, so
     /// <c>AgenticMind</c>'s default <c>OpenAIClientProvider</c> with the default merged-configuration path —
     /// fails contained through the ordinary session-start path across the complete fixture lifecycle:

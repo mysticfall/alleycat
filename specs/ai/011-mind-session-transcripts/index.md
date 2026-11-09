@@ -212,15 +212,17 @@ transcripts or capturing provider-wire payloads.
 ### Transcript Images
 
 26. When the toggle is enabled, every AI-013-generated image — a tools-mode tool-result image or an auto-mode
-    visual-context message image alike — is written exactly once as a sibling file of the turn page belonging to the
+    fabricated visual-context image alike — is written exactly once as a sibling file of the turn page belonging to the
     cycle in which the image was generated, in the same character folder: a minimap image as PNG and a view capture
     as JPEG. File names derive from the cycle's turn number and the image kind and remain unique within the
     character folder; the exact naming is implementation-owned. The written file is the generated image itself as
     first captured or rendered — recording performs no re-render.
-27. The turn page renders the AI-013 auto-mode visual-context message like any other transcript message, and embeds
-    a relative Markdown link to each sibling image at the position of the exchange or message that carried the
-    image, listing the cycle's images per cycle with kind and link. A later cycle's rendering of a disposed AI-013
-    presentation shows the textual placeholder; no image file is written for a placeholder, and a cycle that
+27. The turn page renders the AI-013 auto-mode fabricated visual-context exchange — and its adjacent fallback
+    carrier message where the endpoint's transport presents one (AI-013 TR-10) — like any other transcript content,
+    and embeds a relative Markdown link to each sibling image at the position of the exchange or message that
+    carried the image, listing the cycle's images per cycle with kind and link. A later cycle's rendering of a
+    disposed retained AI-013 presentation shows the textual placeholder; no image file is written for a
+    placeholder, a fabricated auto-mode exchange never appears in a later cycle's request, and a cycle that
     generated no image writes none. The character invocation index (TR-15–TR-19) is unchanged by this amendment and
     carries no image links.
 28. With the toggle disabled, the null-object path (TR-5) writes no image files anywhere: AI-013 images exist only
@@ -343,10 +345,10 @@ transcripts or capturing provider-wire payloads.
    tool serialisation changes.
 10. Tests verify transcript images (TR-26–TR-28): sibling placement and per-kind encoding, turn-derived unique
     naming within the character folder, exactly-once writes per generated image, relative links at the carrying
-    position with per-cycle listing, the visual-context message rendered like any other transcript message,
-    placeholder-only cycles writing no file, index output unchanged, the disabled path writing no image files, and
-    contained image-write failures leaving an already-written turn page intact, with the root-path seam redirecting
-    image output.
+    position with per-cycle listing, the fabricated visual-context exchange and any fallback carrier rendered like
+    any other transcript content, placeholder-only cycles writing no file, index output unchanged, the disabled
+    path writing no image files, and contained image-write failures leaving an already-written turn page intact,
+    with the root-path seam redirecting image output.
 
 ## References
 

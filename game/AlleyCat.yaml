@@ -45,6 +45,12 @@ AI:
     # are captured and attached to every request; off: no visual context at all. Unset or blank means
     # tools. The mode is read once at session start and stays fixed for that session.
     #VisualContextMode: "tools"
+    # Chat client adapter kind selecting the provider endpoint's protocol (AI-002). Accepted values:
+    # chatcompletions, responses. A configured value overrides the provider resource's own kind; unset
+    # or blank keeps it (default responses). OpenAI-compatible backends — OpenRouter, llama.cpp, and
+    # similar — must be declared chatcompletions: such backends drop image parts inside tool outputs,
+    # so a responses misconfiguration fails silently as image loss in AI-013 visual-context results.
+    #ChatClientKind: "chatcompletions"
 
 # Live LLM test backend settings, read only by opt-in integration tests run with --live-llm.
 # Supply real values through the user override (user://AlleyCat.yaml) instead of committing them

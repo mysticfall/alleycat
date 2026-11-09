@@ -99,6 +99,82 @@ public sealed class MindSessionTranscriptImageTests : IDisposable
     }
 
     /// <summary>
+    /// A cycle whose fresh request suffix carried the fabricated auto-mode exchange — the Responses in-result
+    /// transport — writes each fabricated image exactly once as a sibling file beside its turn page and embeds
+    /// the relative links at the carrying tool-result's position, rendering the exchange like any other
+    /// transcript content with its instructional texts (AI-011 TR-26–TR-27; AI-013 TR-8/TR-10).
+    /// </summary>
+    [Fact]
+    public void Record_WithAFabricatedAutoExchange_LinksItsImagesAtTheResultPosition()
+    {
+        var minimap = VisualContextImage.Minimap([3, 3], centreX: 0, centreY: 0, radiusMetres: 5, gameTimeSeconds: 1);
+        var view = VisualContextImage.View([4], gameTimeSeconds: 1);
+        MindSessionCycleTranscript cycle = CreateCycle(
+            requestMessages:
+            [
+                new ChatMessage(ChatRole.User, "Begin."),
+                new ChatMessage(
+                    ChatRole.Assistant,
+                    [
+                        new FunctionCallContent(
+                            "runtime-visual-context-1",
+                            "minimap",
+                            new Dictionary<string, object?>()),
+                        new FunctionCallContent(
+                            "runtime-visual-context-2",
+                            "capture_view",
+                            new Dictionary<string, object?>()),
+                    ]),
+                new ChatMessage(
+                    ChatRole.Tool,
+                    [
+                        new FunctionResultContent(
+                            "runtime-visual-context-1",
+                            (AIContent[])[new TextContent(VisualContextAutoExchange.MinimapInstruction), minimap]),
+                        new FunctionResultContent(
+                            "runtime-visual-context-2",
+                            (AIContent[])[new TextContent(VisualContextAutoExchange.ViewInstruction), view]),
+                    ]),
+                new ChatMessage(ChatRole.User, "Fresh scene status."),
+            ]);
+        cycle.MessageImages.Add(new MindTranscriptMessageImage(2, minimap));
+        cycle.MessageImages.Add(new MindTranscriptMessageImage(2, view));
+
+        CreateRecorder("luna").Record(cycle);
+
+        string characterDirectory = GetCharacterDirectory();
+        Assert.Equal(
+            ["turn-0001-minimap-1.png", "turn-0001-view-1.jpg"],
+            Directory.GetFiles(characterDirectory)
+                .Select(Path.GetFileName)
+                .Where(static name => name is { } fileName && !fileName.EndsWith(".md", StringComparison.Ordinal))
+                .OrderBy(static name => name));
+        Assert.Equal([3, 3], File.ReadAllBytes(Path.Combine(characterDirectory, "turn-0001-minimap-1.png")));
+        Assert.Equal([4], File.ReadAllBytes(Path.Combine(characterDirectory, "turn-0001-view-1.jpg")));
+        string turnPage = File.ReadAllText(Path.Combine(characterDirectory, "turn-0001.md"));
+        Assert.Contains(
+            "**Function Call:** minimap — call `runtime-visual-context-1`",
+            turnPage,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "**Function Call:** capture_view — call `runtime-visual-context-2`",
+            turnPage,
+            StringComparison.Ordinal);
+        Assert.Contains(VisualContextAutoExchange.MinimapInstruction, turnPage, StringComparison.Ordinal);
+        Assert.Contains(VisualContextAutoExchange.ViewInstruction, turnPage, StringComparison.Ordinal);
+        Assert.Contains("![minimap](turn-0001-minimap-1.png)", turnPage, StringComparison.Ordinal);
+        Assert.Contains("![view](turn-0001-view-1.jpg)", turnPage, StringComparison.Ordinal);
+        Assert.Contains(
+            "- **minimap:** [turn-0001-minimap-1.png](turn-0001-minimap-1.png) —",
+            turnPage,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "- **view:** [turn-0001-view-1.jpg](turn-0001-view-1.jpg) —",
+            turnPage,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Two images of the same kind in one cycle receive distinct per-kind ordinals, keeping file names unique
     /// within the character folder (AI-011 TR-26).
     /// </summary>
