@@ -27,6 +27,7 @@ metadata/_custom_type_script = "uid://ddcbvkm0k6w2b"
 [node name="MiniMapLabel" type="Node3D" parent="." unique_id=1465768925]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.5389039)
 script = ExtResource("4_x8ts7")
+Flavour = 1
 Text = "Actor"
 TextSize = 42
 FillColour = Color(0, 0, 0, 1)
