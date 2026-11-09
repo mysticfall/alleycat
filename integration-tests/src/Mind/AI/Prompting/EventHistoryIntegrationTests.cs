@@ -2,7 +2,6 @@ using System.Globalization;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Tool;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Observation;
 using AlleyCat.TestFramework;
 using Xunit;
@@ -16,15 +15,13 @@ public sealed class EventHistoryIntegrationTests
     /// <summary>
     /// Tool descriptions remain the sole source of tool-specific mechanics and etiquette, and state the corrected
     /// context-delivery contract: automatic per-request delivery, payload-free wait results that promise no
-    /// observable feedback, and watch registration semantics (AI-002 TR-15/16; AI-010 TR-14/15).
+    /// observable feedback (AI-002 TR-15/16).
     /// </summary>
     [Fact]
     public void ProductionToolDescriptions_CarryPerToolMechanicsAndEtiquette()
     {
         using WaitTool waitTool = new();
         using SpeechTool speechTool = new();
-        using ProximityWatchTool proximityWatchTool = new();
-        UnwatchTool unwatchTool = new(registry: null);
 
         // wait: fresh context arrives automatically; waiting is deliberate yielding whose exchange persists in
         // context like any other exchange, and an answer already visible is distinguished from a reply not yet
@@ -38,19 +35,6 @@ public sealed class EventHistoryIntegrationTests
         Assert.DoesNotContain("nothing new reaches you", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("wait a reasonable duration", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("Returns only why the wait ended", waitTool.ToolDescription, StringComparison.Ordinal);
-
-        // watch_proximity: immediate registration returning an opaque ID plus current evidence, persistent
-        // monitoring without re-arming, and transitions delivered through automatic scene updates (AI-010 TR-15).
-        Assert.Contains("opaque watch ID", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("not an activation event", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("never re-arm to keep it active", proximityWatchTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains(
-            "ordinary remembered events delivered through automatic scene updates",
-            proximityWatchTool.ToolDescription,
-            StringComparison.Ordinal);
-
-        // unwatch: removal by the opaque ID returned at arming or listed in current-scene status.
-        Assert.Contains("opaque watch ID", unwatchTool.ToolDescription, StringComparison.Ordinal);
 
         Assert.Contains("optional and repeatable", speechTool.ToolDescription, StringComparison.Ordinal);
         // speak: the call remains in context as the record of the speech (AI-002 TR-15/16).
@@ -67,10 +51,7 @@ public sealed class EventHistoryIntegrationTests
             new ObservedSpeech("char:test_character", "Self line.") { ObservedAt = 100.2d },
             new TestObservation("world.changed") { ObservedAt = 300.55d },
             new ObservedSpeech("char:rin", "Known line.") { ObservedAt = 7200d },
-            new ObservedProximityTransition("char:rin", ProximityTransition.Entered, 1.4f, 1f, requiresFreshTurn: true)
-            {
-                ObservedAt = 900100d,
-            },
+            new TestObservation("world.changed_later") { ObservedAt = 900100d },
         ];
 
         string output = await renderer.RenderAsync(observations);
@@ -79,10 +60,8 @@ public sealed class EventHistoryIntegrationTests
             "I said: Self line. (at 100.2s game time)\n"
                 + "((Received world.changed event.)) (at 300.6s game time)\n"
                 + "Heard `char:rin` say: Known line. (at 7200.0s game time)\n"
-                + "`char:rin` entered the proximity condition at 1.4 m. (at 900100.0s game time)",
+                + "((Received world.changed_later event.)) (at 900100.0s game time)",
             output);
-        Assert.DoesNotContain("w1", output, StringComparison.Ordinal);
-        Assert.DoesNotContain("Watch", output, StringComparison.Ordinal);
     }
 
     /// <summary>Speech wording is owner-relative while transport provenance remains private.</summary>

@@ -782,13 +782,13 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A batch mixing a speak call with a watch call is retained whole: the assistant batch and every tool result
+    /// A batch mixing a speak call with an ordinary tool call is retained whole: the assistant batch and every tool result
     /// stay in the next request, with no partial removal and no orphaned call or result (AI-002 TR-17/20).
     /// </summary>
     [Fact]
-    public async Task RunAsync_WithMixedOptedAndRetainedBatch_RetainsTheWholeExchange()
+    public async Task RunAsync_WithSpeechAndOrdinaryToolBatch_RetainsTheWholeExchange()
     {
-        const string watchToolName = "watch_like";
+        const string ordinaryToolName = "ordinary_action";
         using CancellationTokenSource lifetime = new();
         List<string> speech = [];
         var context = new RecordingContextSource();
@@ -796,7 +796,7 @@ public sealed class AgentSessionRunnerTests
             ChatRole.Assistant,
             [
                 new FunctionCallContent("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Kept" }),
-                new FunctionCallContent("watch-call", watchToolName, new Dictionary<string, object?>()),
+                new FunctionCallContent("ordinary-call", ordinaryToolName, new Dictionary<string, object?>()),
             ]);
         ScriptedSessionClient client = new(
             Respond(mixedBatch),
@@ -805,7 +805,7 @@ public sealed class AgentSessionRunnerTests
             client,
             [
                 CreateSpeakFunction(speech.Add),
-                CreateInstantFunction(watchToolName),
+                CreateInstantFunction(ordinaryToolName),
             ],
             [new ChatMessage(ChatRole.User, "Bootstrap")]);
 
@@ -819,7 +819,7 @@ public sealed class AgentSessionRunnerTests
             replay.Select(message => message.Role));
         Assert.Same(mixedBatch, replay[1]);
         FunctionResultContent[] results = [.. replay[2].Contents.OfType<FunctionResultContent>()];
-        Assert.Equal(["speak-call", "watch-call"], results.Select(result => result.CallId));
+        Assert.Equal(["speak-call", "ordinary-call"], results.Select(result => result.CallId));
         Assert.Equal("Spoken.", results[0].Result?.ToString());
     }
 

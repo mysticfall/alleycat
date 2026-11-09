@@ -81,7 +81,7 @@ public sealed class VisualContextIntegrationTests
             }
 
             // The visual tools sit beside the production inventory without displacing it (AI-002 TR-13 as amended).
-            foreach (string productionName in (string[])["speak", "wait", "read_lore", "unwatch"])
+            foreach (string productionName in (string[])["speak", "wait", "read_lore"])
             {
                 Assert.True(tools.ContainsKey(productionName), $"Expected production tool '{productionName}'.");
             }

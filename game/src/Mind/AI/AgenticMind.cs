@@ -11,7 +11,6 @@ using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.SceneStatus;
 using AlleyCat.Mind.AI.Tool;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -50,7 +49,6 @@ public partial class AgenticMind : MindBase
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
     private volatile AgentSessionRunner? _activeRunner;
     private volatile MindRequestContextSource? _activeRequestContextSource;
-    private WatchRegistry? _boundWatchRegistry;
     private volatile bool _sessionStarted;
 
     /// <summary>Occurs after an observation has been committed to this Mind's timeline.</summary>
@@ -200,7 +198,6 @@ public partial class AgenticMind : MindBase
             ObservationDeliverySignalled -= HandleObservationDeliverySignalled;
             SpeechSegmentLifecycleNotified -= HandleSpeechSegmentLifecycleNotified;
             _speechContinuations.ClearContinuationExpectations();
-            EndWatchSession();
         }
     }
 
@@ -399,7 +396,6 @@ public partial class AgenticMind : MindBase
             Game.Instance.GetRequiredService<ILorePromptFormatter>(),
             GameLoggerResolver.ResolveRequired<ReadLoreTool>());
         AgentToolSession sessionServices = new(context, this, clock);
-        WatchRegistry? watchRegistry = DiscoverWatchRegistry();
         // Composition registers the speak tool's per-function phase policy (AI-002 TR-14): its invocation phase
         // executes under admission arbitration, and the runner consults only this generic descriptor — never a
         // concrete tool, function name, or tool type. The production inventory is available without scene-authored
@@ -410,7 +406,6 @@ public partial class AgenticMind : MindBase
                 speechTool.CreateFunction(context, this, dispatcher, sessionServices)),
             waitTool.CreateFunction(context, this, dispatcher, sessionServices),
             readLoreTool.CreateFunction(context, this, dispatcher, sessionServices),
-            new UnwatchTool(watchRegistry).CreateFunction(context, this, dispatcher, sessionServices),
         ];
         if (visualContextMode != VisualContextMode.Off)
         {
@@ -425,15 +420,6 @@ public partial class AgenticMind : MindBase
             functions.Add(captureViewTool.CreateFunction(context, this, dispatcher, sessionServices));
         }
 
-        if (watchRegistry is not null)
-        {
-            IReadOnlyList<AITool> watchTools = watchRegistry.BindSessionAndCreateTools(
-                context,
-                this,
-                dispatcher);
-            _boundWatchRegistry = watchRegistry;
-            functions.AddRange(watchTools);
-        }
         foreach (AgentTool? extra in Tools)
         {
             if (extra is not null)
@@ -443,34 +429,6 @@ public partial class AgenticMind : MindBase
         }
 
         return functions;
-    }
-
-    private WatchRegistry? DiscoverWatchRegistry()
-    {
-        WatchRegistry[] registries = [.. GetChildren().OfType<WatchRegistry>()];
-        return registries.Length switch
-        {
-            0 => null,
-            1 => registries[0],
-            _ => throw new InvalidOperationException("AgenticMind supports exactly one direct-child WatchRegistry."),
-        };
-    }
-
-    private void EndWatchSession()
-    {
-        WatchRegistry? registry = Interlocked.Exchange(ref _boundWatchRegistry, null);
-        registry?.EndSession();
-    }
-
-    /// <inheritdoc />
-    protected override IEnumerable<IObservationLifetimePolicy> CreateLifetimePolicies()
-        => [.. base.CreateLifetimePolicies(), new NeverExpireObservationLifetimePolicy<ObservedProximityTransition>(eventEligible: true)];
-
-    /// <inheritdoc />
-    protected override void OnNodeLifetimeEnding()
-    {
-        EndWatchSession();
-        base.OnNodeLifetimeEnding();
     }
 
     /// <summary>

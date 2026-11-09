@@ -20,7 +20,7 @@ per-request scene context.
 2. Repeated unchanged scene information does not flood an NPC's memory or prompt context, while meaningful changes
    remain
    available for reasoning.
-3. Speech and condition-owned watch transitions are durable events. Visual presence remains attention-only, and
+3. Speech is a durable event. Visual presence remains attention-only, and
    ordinary visual scene state remains current context rather than an event stream.
 4. Removing transient retained evidence must not look like a new NPC experience.
 5. An NPC's own successfully committed speech remains remembered exactly once for that Mind's lifetime.
@@ -52,7 +52,6 @@ per-request scene context.
      as current-scene input.
    - `ObservedRelativePosition`: equal values suppress; changed values retain a finite evidence window adequate for
      hysteresis; normally event-ineligible and supplied as current-scene input.
-    - dedicated typed proximity-transition observations: `NeverExpire`, event-eligible.
    - visual presence: attention-only; it creates no retained observation initially.
 6. Mind independently appends every event-eligible accepted entry to a persistent event timeline. Active-log expiry or
    supersession never removes timeline entries. AI-002 delivers this timeline's entries to the model through
@@ -68,9 +67,9 @@ per-request scene context.
    committed identity is rejected before acceptance; this identity mechanism remains independent of lifetime-policy
    matching. Raw voice provenance and automatic continuation/group identity remain private ingestion metadata beside
    the accepted payload, never public `ObservedSpeech` API.
-10. Mind discovers direct-child projectors and watches as specified by AI-003 and AI-010. It owns their node-lifetime
+10. Mind discovers direct-child projectors as specified by AI-003. It owns their node-lifetime
     registration, validation, and teardown.
-11. Node exit is terminal: intake, queued work, projectors, watches, session work, and deferred callbacks must not
+11. Node exit is terminal: intake, queued work, projectors, session work, and deferred callbacks must not
      produce
      post-exit observation, projection, or world effects.
 12. Every `Observation` owns canonical model-facing text through a public framing method and a protected, overridable
@@ -107,12 +106,11 @@ per-request scene context.
 - Projector notification on active-log removal without a synthetic semantic observation.
 - Speech commit-identity exact-once enforcement for the Mind lifetime.
 - Observer-relative speech-addressee states and their importance, fresh-turn, attention, and rendering policies.
-- Integration boundaries for AI-002 request scheduling, AI-003 current-scene projection, AI-006 perception, and AI-010
-  watches.
+- Integration boundaries for AI-002 request scheduling, AI-003 current-scene projection, and AI-006 perception.
 
 ## Out Of Scope
 
-- Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
+- Expressions, planner agent behaviour, compaction, and broader perception changes.
 - Final importance thresholds and finite-evidence-window tuning values.
 - Live-LLM behavioural validation of the addressee policy in multi-NPC scenes; deterministic acceptance covers this
   delivery.
@@ -121,9 +119,8 @@ per-request scene context.
 
 ### User Requirements
 
-1. Acceptance shows that speech and condition-owned watch transitions remain recallable after active retained evidence
-   expires, while routine
-   visual state is not presented as a new event.
+1. Acceptance shows that speech remains recallable after active retained evidence expires, while routine visual state
+   is not presented as a new event.
 2. Acceptance shows that unchanged descriptions and positions do not repeatedly reach the NPC, changed values do, and
    visual presence affects attention only.
 3. Acceptance shows that expiring or superseding retained evidence produces no synthetic observation or model-facing
@@ -165,4 +162,3 @@ per-request scene context.
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
-- [AI-010: Agent Watches](../010-agent-watches/index.md)

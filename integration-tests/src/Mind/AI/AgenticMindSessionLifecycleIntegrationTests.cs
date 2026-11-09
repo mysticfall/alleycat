@@ -6,7 +6,6 @@ using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
@@ -1779,85 +1778,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             clientProvider.Free();
             player.Free();
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
-        }
-    }
-
-    /// <summary>
-    /// Watch arming and unwatch settle as ordinary retained exchanges whose assistant calls and tool results
-    /// replay in later requests, and neither arming nor removal fabricates timeline observations (AI-002 TR-17,
-    /// TR-20; AI-010).
-    /// </summary>
-    [Fact]
-    public async Task WatchToolExchanges_AreRetainedInLaterRequestsWithoutFabricatedObservations()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        WatchRegistry watchRegistry = new()
-        {
-            Conditions = [new ProximityWatchTool()],
-        };
-        ScriptedSessionClientProvider clientProvider = new();
-        clientProvider.EnqueueCallBatch(new FunctionCallContent(
-            "arm-call",
-            "watch_proximity",
-            new Dictionary<string, object?> { ["subject_id"] = player.FullId, ["maximum_distance"] = 2f }));
-        clientProvider.EnqueueCallBatch(new FunctionCallContent(
-            "unwatch-call",
-            "unwatch",
-            new Dictionary<string, object?> { ["watch_id"] = "w1" }));
-        clientProvider.EnqueueHoldForever();
-        TestAgenticMind mind = new(owner)
-        {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
-        };
-        mind.AddChild(watchRegistry);
-        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
-        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
-        // independent of a developer machine's `AI:VisualContextMode` override.
-        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
-
-        try
-        {
-            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
-            IReadOnlyList<ChatMessage> afterArm = clientProvider.Requests[1];
-            // The settled arming exchange is retained whole (AI-002 TR-20): its assistant call and opaque-ID tool
-            // result replay in the next request.
-            Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-                afterArm.Select(static message => message.Role));
-            FunctionResultContent armResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(afterArm[2].Contents.OfType<FunctionResultContent>()));
-            Assert.Equal("arm-call", armResult.CallId);
-            Assert.Contains("w1", armResult.Result?.ToString(), StringComparison.Ordinal);
-
-            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 3);
-            IReadOnlyList<ChatMessage> afterRemoval = clientProvider.Requests[2];
-            // Both settled watch exchanges stay retained, and neither arming nor removal invented an event.
-            Assert.Equal(
-                [
-                    ChatRole.User,
-                    ChatRole.Assistant, ChatRole.Tool,
-                    ChatRole.Assistant, ChatRole.Tool,
-                    ChatRole.User,
-                ],
-                afterRemoval.Select(static message => message.Role));
-            FunctionResultContent removalResult = Assert.IsType<FunctionResultContent>(
-                Assert.Single(afterRemoval[4].Contents.OfType<FunctionResultContent>()));
-            Assert.Equal("unwatch-call", removalResult.CallId);
-            Assert.Contains("Removed watch w1.", removalResult.Result?.ToString(), StringComparison.Ordinal);
-            Assert.Empty(mind.GetTimelineForTest());
-            Assert.Empty(watchRegistry.GetActiveWatchSnapshot());
-        }
-        finally
-        {
-            watchRegistry.EndSession();
-            mind.Free();
-            clientProvider.Free();
-            player.Free();
         }
     }
 

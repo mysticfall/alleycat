@@ -6,7 +6,6 @@ using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.SceneStatus;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
@@ -65,19 +64,9 @@ public sealed class LoreReferenceRenderingIntegrationTests
             ObservationImportanceThreshold = 1f,
             AttentionDecayPerSecond = 0f,
         };
-        WatchRegistry watchRegistry = new()
-        {
-            Conditions = [new ProximityWatchTool()]
-        };
-        mind.AddChild(watchRegistry);
         mind.AddChild(new AttendedCharacterSceneStatusProjector
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
-        });
-        mind.AddChild(new WatchSceneStatusProjector
-        {
-            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
-            Registry = watchRegistry,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite

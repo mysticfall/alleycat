@@ -2,10 +2,8 @@ using System.Collections;
 using System.Reflection;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.SceneStatus;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Transcription;
-using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -24,7 +22,6 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
     private const string ReferenceFemaleBaseScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferenceMaleBaseScenePath = "res://assets/characters/templates/reference_male/reference_male_base.tscn";
-    private const string CurrentScenePromptPath = "res://assets/characters/prompts/current_scene.tres";
     private const string AgenticMindTypeName = "AlleyCat.Mind.AI.AgenticMind";
     private const string AIVoiceTypeName = "AlleyCat.Speech.Voice.AIVoice";
     private const string A2FLipSyncPlayerTypeName = "AlleyCat.Speech.LipSync.A2FLipSyncPlayer";
@@ -45,44 +42,6 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         AssertReferenceFemalePlayerVoice();
         AssertNpcVoiceAndSharedMindPrompt();
         AssertCharacterBaseTemplatesDoNotAuthorContextSources();
-    }
-
-    /// <summary>
-    /// The authored active-watches projection exposes only stable generic watch identifiers.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public async Task CurrentSceneActiveWatches_RenderGenericDetailsOnlyWhenPopulated()
-    {
-        PromptStack currentSceneStatus = Assert.IsType<PromptStack>(
-            ResourceLoader.Load(CurrentScenePromptPath),
-            exactMatch: false);
-        ProjectionPromptSection activeWatchesSection = Assert.IsType<ProjectionPromptSection>(
-            currentSceneStatus.Sections[1],
-            exactMatch: false);
-        IRootedTemplate template = Assert.IsAssignableFrom<IRootedTemplate>(
-            new FluidTemplateCompiler().Compile(activeWatchesSection.TemplateSource));
-
-        string populated = await template.RenderRootedAsync(
-            new ActiveWatchesSceneStatus(
-            [
-                new WatchStatusSnapshot(
-                    "w17",
-                    "proximity",
-                    "char:ally",
-                    new ProximityWatchStatus("Inside", null)),
-            ]),
-            new Dictionary<string, object?>());
-        string empty = await template.RenderRootedAsync(
-            new ActiveWatchesSceneStatus([]),
-            new Dictionary<string, object?>());
-
-        Assert.Equal("- WatchId: w17, ConditionId: proximity, SubjectId: `char:ally`\n", populated);
-        Assert.Equal(string.Empty, empty);
-        Assert.DoesNotContain("watch.Status", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("State", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("Evidence", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("proximity", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
     }
 
     private static void AssertReferencePlayerSceneDoesNotSerialiseConversationNodes()
@@ -267,17 +226,15 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sectionText = ReadResourceText(sectionFilePath);
         // The shared instruction stays a character-parameterised template rather than fixed prose.
         Assert.Contains("{{ character.FullId }}", sectionText, StringComparison.Ordinal);
-        // Shared context-interpretation guidance (AI-003 TR-12–18): the five mandatory concepts — scene
-        // delivery, current-scene interpretation, action selection, watches, and lore discovery/retrieval —
+        // Shared context-interpretation guidance (AI-003): the mandatory concepts — scene
+        // delivery, current-scene interpretation, action selection, and lore discovery/retrieval —
         // stay authored as sections, character-neutrally. Exact prose wording is game content and stays tunable, so
         // only section structure and character neutrality are asserted.
         Assert.Contains("# Scene Delivery", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Current Scene", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Choosing Actions", sectionText, StringComparison.Ordinal);
         Assert.Contains("# Lore", sectionText, StringComparison.Ordinal);
-        Assert.Contains("# Watches", sectionText, StringComparison.Ordinal);
         Assert.Contains("read_lore", sectionText, StringComparison.Ordinal);
-        Assert.DoesNotContain("watch_proximity", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection", orderedSections[1].GetType().FullName);
@@ -306,7 +263,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         PromptStack currentSceneStatus = Assert.IsType<PromptStack>(
             GetRequiredPropertyValue(mind, "CurrentSceneStatus"),
             exactMatch: false);
-        Assert.Equal(2, currentSceneStatus.Sections.Count());
+        _ = Assert.Single(currentSceneStatus.Sections);
         ProjectionPromptSection projectionSection = Assert.IsType<ProjectionPromptSection>(currentSceneStatus.Sections[0], exactMatch: false);
         Assert.Equal("Attended Characters", projectionSection.Name);
         Assert.Equal(AttendedCharacterSceneStatusProjector.ProjectorIDValue, projectionSection.ProjectorID);
@@ -319,25 +276,6 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             npc.GetNodeOrNull("Mind/AttendedCharacterSceneStatusProjector"),
             exactMatch: false);
         Assert.Equal(AttendedCharacterSceneStatusProjector.ProjectorIDValue, projector.ProjectorID);
-
-        ProjectionPromptSection watchSection = Assert.IsType<ProjectionPromptSection>(currentSceneStatus.Sections[1], exactMatch: false);
-        Assert.Equal("Active Watches", watchSection.Name);
-        Assert.Equal(WatchSceneStatusProjector.ProjectorIDValue, watchSection.ProjectorID);
-        Assert.Equal(typeof(ActiveWatchesSceneStatus).FullName, watchSection.RootTypeName);
-        Assert.Contains("{{ watch.WatchId }}", watchSection.TemplateSource, StringComparison.Ordinal);
-        Assert.Contains("{{ watch.ConditionId }}", watchSection.TemplateSource, StringComparison.Ordinal);
-        Assert.Contains("{{ watch.SubjectId }}", watchSection.TemplateSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("watch.Status", watchSection.TemplateSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("State", watchSection.TemplateSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("Evidence", watchSection.TemplateSource, StringComparison.Ordinal);
-        WatchRegistry registry = Assert.IsType<WatchRegistry>(npc.GetNodeOrNull("Mind/WatchRegistry"), exactMatch: false);
-        _ = Assert.Single(registry.Conditions);
-        _ = Assert.IsType<ProximityWatchTool>(registry.Conditions[0], exactMatch: false);
-        WatchSceneStatusProjector watchProjector = Assert.IsType<WatchSceneStatusProjector>(
-            npc.GetNodeOrNull("Mind/WatchSceneStatusProjector"),
-            exactMatch: false);
-        Assert.Equal(WatchSceneStatusProjector.ProjectorIDValue, watchProjector.ProjectorID);
-        Assert.Same(registry, watchProjector.Registry);
     }
 
     private static Node RequireScriptedNode(Node root, string path, string expectedTypeName)

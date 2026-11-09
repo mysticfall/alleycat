@@ -19,7 +19,7 @@ act on information it has already been supplied.
 ## User Requirements
 
 1. Authors can provide one stable system instruction and a separately authored, fresh current-scene status.
-2. NPCs see current attended characters and active watches in current scene status without changing their fixed
+2. NPCs see current attended characters in current scene status without changing their fixed
    scenario.
 3. Delivered scene events use the canonical text owned by each observation type. Unknown types receive safe fallback
    text that discloses only their `TypeKey`.
@@ -29,8 +29,6 @@ act on information it has already been supplied.
 6. Shared guidance distinguishes acting on an available reply from waiting for a future one: an NPC is never told that
    waiting is necessary to receive context. NPCs normally make room for replies after conversational contributions,
    while initiative, silence, and waiting remain legitimate in-character choices rather than forced alternating turns.
-7. Shared watch guidance refers to available watch tools rather than a fixed tool set and presents listed watches as
-   monitoring registrations, not assertions that a condition is currently true.
 8. An NPC always sees the current game time in its current scene status — including when no character is attended — on
     the same clock as its delivered event timestamps.
 9. An NPC keeps its automatic lore context and receives a stable, grouped catalogue of remaining available lore, with
@@ -52,7 +50,7 @@ act on information it has already been supplied.
    projection data, or invalid stack wiring fail session start clearly.
 4. `ProjectionPromptSection` binds an explicitly typed projector root. It must reject an unavailable, wrongly typed, or
    otherwise invalid root rather than silently rendering unrelated data.
-5. Initial current-scene projections include attended characters and active watches. Future projectors must use the same
+5. Initial current-scene projections include attended characters. Future projectors must use the same
    typed, immutable, stable-ID contract.
 6. `CurrentSceneStatus` renders the request snapshot's current game time unconditionally, including when the attended
    list is empty. The rendered time uses the game clock's invariant one-decimal (`F1`) form — the same clock that
@@ -83,9 +81,8 @@ act on information it has already been supplied.
 12. The authored shared instruction content — currently the `game/prompts/mind.md` file section of the static
     instruction — must carry character-neutral guidance covering how the scene reaches the NPC (its own retained
     exchanges and automatic scene updates), speech-addressee interpretation, current-scene interpretation,
-    action selection, available watch tools,
-    and lore discovery/retrieval. These are mandatory content; exact prose stays tunable. Guidance must not
-    contradict AI-002's automatic scene-update delivery, payload-free wait semantics, or exchange retention
+    action selection, and lore discovery/retrieval. These are mandatory content; exact prose stays tunable. Guidance
+    must not contradict AI-002's automatic scene-update delivery, payload-free wait semantics, or exchange retention
     (AI-002 TR-17–TR-22).
 13. Scene-delivery guidance must match AI-002's delivery contract: the NPC's own prior tool calls and their results
     remain in its context as its record of what it said and did; scene updates it did not initiate arrive
@@ -113,10 +110,6 @@ act on information it has already been supplied.
     Startup, empty history, repeated requests, wait
     expiry, or silence alone must not require speech or repeated prompting. Preserve initiative without fixed delays,
     word caps, or forced turns.
-16. Watch guidance must refer to available watch tools because authored composition varies (AI-010 TR-2). It must
-    describe them as persistent monitoring registration rather than condition truth, state that watch transitions
-    arrive as ordinary remembered events delivered through automatic scene updates (AI-010 TR-10/TR-11), and
-    identify the listed or returned watch ID as the removal handle (AI-010 TR-5).
 17. The shared NPC static stack preserves essential-world bodies followed by scene-character bodies, then renders
     AI-004's grouped catalogue of all remaining eligible observer/content-scoped entries. AI-004 normatively owns
     metadata, shared selection/exclusion, ordering, canonical-ID presentation, empty output, formatting, and
@@ -139,13 +132,12 @@ act on information it has already been supplied.
 - Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
 - Session-fixed scenario context and fresh request-scene snapshot separation.
 - Character-neutral shared context-interpretation guidance (scene delivery, speech-addressee interpretation,
-  current scene, action selection,
-  watches, lore) in the authored static instruction.
+  current scene, action selection, lore) in the authored static instruction.
 - Session-start grouped lore catalogue after unchanged automatic lore bodies, under AI-004's normative contracts.
 
 ## Out Of Scope
 
-- Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
+- Expressions, planner agent behaviour, compaction, and broader perception changes.
 - Prompt-editor preview tooling and exact final authored wording. This exclusion covers prose styling only: the
   guidance concepts required under Shared Context Interpretation Guidance are core delivery content and cannot be
   deferred by this section.
@@ -155,13 +147,13 @@ act on information it has already been supplied.
 
 ### User Requirements
 
-1. Acceptance shows an NPC receives stable guidance alongside fresh attended-character and active-watch status on each
+1. Acceptance shows an NPC receives stable guidance alongside fresh attended-character status on each
    request without its scenario changing mid-session.
 2. Acceptance shows event wording is supplied by each observation type, and an unknown future observation type has
    safe fallback wording that exposes no payload fields.
 3. Acceptance shows speech text remains actor-relative without exposing raw voice provenance or continuation metadata.
 4. Acceptance shows the shared instruction explains how the scene reaches the NPC — its own retained exchanges,
-   automatic scene updates, and the fresh evidence-limited current-scene status — and watch registration, and never
+   automatic scene updates, and the fresh evidence-limited current-scene status — and never
    states that waiting is necessary to receive supplied context.
 5. Acceptance shows action-selection guidance distinguishes engaging with an available reply from waiting for a future
    one using chronology and the NPC's own conversation record rather than assumptions about already-addressed speech.
@@ -189,23 +181,19 @@ act on information it has already been supplied.
    for
    duplicate, missing, invalid, or wrongly typed wiring.
 3. Tests verify `ProjectionPromptSection` binds only its declared typed root.
-4. Tests verify initial attended-character and active-watch projections and that fresh snapshots never mutate
+4. Tests verify initial attended-character projections and that fresh snapshots never mutate
    session-fixed
    `ScenarioContext` or scenario.
 5. Tests verify event rendering invokes observation-owned canonical text, applies exactly one newline between entries,
    and has no standalone event-history asset or parser, `EventHistoryPath`, fragment catalogue, authored `TypeKey`
-   dispatch, or `ObservedWatchOutcome` requirement.
+   dispatch.
 6. Tests verify continuation projection preserves segment grouping, ordering, correlation, and latest-event placement,
    and carries no model-facing newly-presented marking or confirmed-watermark derivation (AI-002 TR-3), while
    projected speech uses canonical observation-owned text.
 7. Tests verify the authored shared instruction contains guidance covering each required concept — how the scene
     reaches the NPC, speech-addressee wording, current-scene evidence limits and timestamps, action selection,
-    watches, and lore retrieval — and
-    stays consistent with AI-002's automatic scene-update delivery, payload-free wait semantics, and exchange
-    retention.
-8. Tests verify shared watch guidance is composition-neutral, referring to available watch tools and presenting listed
-   watches as registrations rather than condition truth, and that it routes watch transitions through automatic
-   scene updates as ordinary remembered events.
+    and lore retrieval — and stays consistent with AI-002's automatic scene-update delivery, payload-free wait
+    semantics, and exchange retention.
 9. Tests verify the scene status renders its snapshot's current game time unconditionally — including with an empty
    attended list — in the invariant one-decimal form on the same clock as event-timestamp suffixes, and that rendered
    events keep their original observation times.
@@ -227,4 +215,3 @@ act on information it has already been supplied.
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
-- [AI-010: Agent Watches](../010-agent-watches/index.md)

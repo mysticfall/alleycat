@@ -126,23 +126,6 @@ public sealed class ModuleBoundaryDependencyTests
     }
 
     /// <summary>
-    /// WatchRegistry forwards generic retained-observation changes and snapshots only; condition-specific evidence
-    /// selection and transitions remain entirely within their concrete watch runtime.
-    /// </summary>
-    [Fact]
-    public void WatchRegistry_DoesNotInterpretConditionSpecificEvidence()
-    {
-        AssertSourcesContainNoTokens(
-            "WatchRegistry must not dispatch concrete condition evidence or outcomes.",
-            [RequireSourceFile("game", "src", "Mind", "AI", "Watch", "WatchRegistry.cs")],
-            StringComparison.Ordinal,
-            "ObservedRelativePosition",
-            "ProximityWatch",
-            "RelativePositionEvidence",
-            "ObservedProximityTransition");
-    }
-
-    /// <summary>
     /// Mind's generic ingestion enforces commit identity without any modality-specific branch (AI-001 TR-9):
     /// speech observations supply their <c>(VoiceId, SpeechGroupID, SegmentIndex)</c> identity through the
     /// generic commit-identity contract, and speech correlation belongs to the session coordinator rather than

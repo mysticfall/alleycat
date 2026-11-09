@@ -19,9 +19,8 @@ event-eligible observations.
 
 1. NPCs notice eligible speech and visual subjects without routine visual presence becoming memory or event history.
 2. A focused subject's description is available as current scene state. The attended-character projection may retain and
-   render relevant non-expired relative-position evidence, including relative position or distance and its timestamp;
-   condition-owned proximity watch evaluation may consume the same retained evidence. Unchanged information does not
-   repeatedly flood the NPC.
+   render relevant non-expired relative-position evidence, including relative position or distance and its timestamp.
+   Unchanged information does not repeatedly flood the NPC.
 3. Material relative-position changes can support stable focus and hysteresis while stale evidence disappears after its
    evidence window.
 4. Sensing and semantic interpretation do not select gaze or alter eye presentation.
@@ -54,20 +53,16 @@ event-eligible observations.
 6. `RelativePositionPerception` emits focus-limited `ObservedRelativePosition` evidence only while its subject is active
    and the evidence is non-expired. Its policy suppresses equal values, supersedes changed values, and retains changed
    evidence for a finite window adequate for hysteresis. The [AI-003](../003-prompt-api/index.md) attended-character
-   projection may retain and render relevant position or distance evidence and its timestamp; condition-owned proximity
-   watch evaluation may consume that retained evidence. It is event-ineligible. Raw relative-position evidence must not
-   be wrapped in a generic watch outcome or evidence payload.
+   projection may retain and render relevant position or distance evidence and its timestamp. This evidence is
+   event-ineligible.
 7. Relative-position equality, material-change thresholds, finite evidence duration, and direction thresholds are
    tunable
    policy or faculty details. They must be finite and validated before use; their precise values are not normative.
 8. Each accepted observation applies attention and Mind acceptance atomically. AI-001 owns retention, timestamps,
    scheduler metadata, event eligibility, expiry, and persistent timeline append.
 9. Attention remains an immutable snapshot keyed by canonical character ID. It is the source for attended-character
-   scene status, which may retain and render relevant non-expired position or distance evidence and its timestamp, and
-   for condition-owned watch evaluation; it does not itself create event history.
-   [AI-010](../010-agent-watches/index.md) owns active-watch current-scene status only: a generic management/process
-   list containing `WatchId`, condition ID, and subject ID, with no state or condition-specific evidence. An empty
-   active-watch list emits no section or fallback.
+   scene status, which may retain and render relevant non-expired position or distance evidence and its timestamp.
+   Attention does not itself create event history.
 10. Sensing, faculties, and attention mutation must not call look-target assignment APIs. AI-007 remains the separately
     composed gaze consumer.
 11. Addressee inference uses the speaker's facing as its only v1 cue: every other current-scene character within the
@@ -85,12 +80,11 @@ event-eligible observations.
 - Attention-only visual presence, focused descriptions, and focus-limited relative-position evidence.
 - Observer-side speech-addressee inference from speaker facing at perception time.
 - Policy-directed suppression, supersession, finite evidence, and event eligibility through AI-001.
-- Attention snapshots used by [AI-003](../003-prompt-api/index.md) attended-character current-scene status and
-  [AI-010](../010-agent-watches/index.md) condition-owned watch evaluation.
+- Attention snapshots used by [AI-003](../003-prompt-api/index.md) attended-character current-scene status.
 
 ## Out Of Scope
 
-- Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
+- Expressions, planner agent behaviour, compaction, and broader perception changes.
 - Gaze selection, direct look-target assignment, and final perception or hysteresis tuning values.
 - Addressee-inference extensions beyond speaker facing: vocative (name-mention) matching, dyadic-recency cues,
   decision-model (LLM) inference, and distance gating of the facing cone.
@@ -104,11 +98,9 @@ event-eligible observations.
 1. Acceptance shows visual surveys update attention without creating memory or event history.
 2. Acceptance shows a focused subject's unchanged description and position do not repeatedly reach the NPC, while
    changed description state and relevant retained position or distance evidence with its timestamp may appear in
-   attended-character current-scene status, and condition-owned proximity watch evaluation may consume that evidence.
+   attended-character current-scene status.
 3. Acceptance shows position evidence is unavailable after expiry or loss of focus and does not become an expiry event.
 4. Acceptance shows sensing leaves gaze and eye presentation unchanged.
-5. Acceptance shows active-watch status is a generic list containing only `WatchId`, condition ID, and subject ID,
-   with no state or condition-specific evidence; an empty active-watch list emits no section or fallback.
 6. Acceptance shows a hearing NPC's addressee conclusion is its own, derived from the speaker's facing at perception
    time rather than any declared recipient, and that unrecognised speech is undecided.
 
@@ -121,10 +113,7 @@ event-eligible observations.
    effects.
 3. Tests verify the initial description and relative-position policy outcomes: equal suppression, changed supersession,
    finite non-expired position evidence, ordinary event ineligibility, attended-character current-scene availability of
-   relevant position or distance evidence and its timestamp, and condition-owned proximity watch-evaluation
-   availability without a generic watch evidence or outcome payload. They verify [AI-010](../010-agent-watches/index.md)
-   active-watch status contains only `WatchId`, condition ID, and subject ID, with no state or condition-specific
-   evidence, and that an empty list emits no section or fallback.
+   relevant position or distance evidence and its timestamp.
 4. Tests verify relative-position evidence is focus-limited and that configuration validation rejects non-finite values.
 5. Tests verify attention snapshots are immutable and no sensing or attention path assigns a look target.
 6. Tests verify facing-cone addressee resolution — single addressee, multiple addressees, empty-cone undecided,
@@ -137,5 +126,4 @@ event-eligible observations.
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
 - [AI-009: Attention-Driven Head Orientation](../009-attention-head-orientation/index.md)
-- [AI-010: Agent Watches](../010-agent-watches/index.md)
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)

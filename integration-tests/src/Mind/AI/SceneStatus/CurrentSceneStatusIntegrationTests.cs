@@ -5,7 +5,6 @@ using AlleyCat.Core.Threading;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.SceneStatus;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -68,28 +67,18 @@ public sealed class CurrentSceneStatusIntegrationTests
     }
 
     /// <summary>
-    /// The compiled authored current-scene stack omits an empty watch section and preserves the populated generic watch identity output.
+    /// The compiled authored current-scene stack states game time even when no characters are attended.
     /// </summary>
     [Fact]
-    public async Task CompiledCurrentSceneStatus_OmitsEmptyWatchesAndRendersPopulatedGenericIdentifiersOnly()
+    public async Task CompiledCurrentSceneStatus_StatesGameTimeWithoutAttendedCharacters()
     {
         FakeCharacter owner = new("owner");
         FakeCharacter subject = new("subject");
         TestAgenticMind mind = new(owner);
-        WatchRegistry watchRegistry = new();
-        ProximityWatchTool watchTool = new();
-        watchRegistry.Conditions = [watchTool];
-        WatchSceneStatusProjector watchProjector = new()
-        {
-            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
-            Registry = watchRegistry,
-        };
         mind.AddChild(new AttendedCharacterSceneStatusProjector
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
-        mind.AddChild(watchRegistry);
-        mind.AddChild(watchProjector);
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())
             .BuildServiceProvider();
@@ -103,32 +92,12 @@ public sealed class CurrentSceneStatusIntegrationTests
             CompiledSceneStatusPrompt compiled = await stack.CompileSceneStatusAsync(promptContext, projectors);
             string empty = await compiled.RenderAsync(CreateStatusContext(owner, scene, timestamp: 1d));
 
-            Assert.DoesNotContain("<Active Watches>", empty, StringComparison.Ordinal);
-            Assert.DoesNotContain("</Active Watches>", empty, StringComparison.Ordinal);
-            Assert.DoesNotContain("Active Watches", empty, StringComparison.Ordinal);
-            Assert.DoesNotContain("No active watches", empty, StringComparison.OrdinalIgnoreCase);
             // The current game time is stated unconditionally, including with an empty attended-character list.
             Assert.Contains("Current game time: 1.0s", empty, StringComparison.Ordinal);
             Assert.Contains("No characters are currently attended.", empty, StringComparison.Ordinal);
-
-            _ = watchRegistry.BindSessionAndCreateTools(
-                new ScenarioContext(owner, scene),
-                mind,
-                new ImmediateDispatcher());
-            _ = await watchTool.ArmAsync(watchRegistry, subject.FullId, maximumDistance: 2f);
-
-            string populated = await compiled.RenderAsync(CreateStatusContext(owner, scene, timestamp: 2d));
-
-            Assert.Contains("Current game time: 2.0s", populated, StringComparison.Ordinal);
-            Assert.Contains("<Active Watches>", populated, StringComparison.Ordinal);
-            Assert.Contains("- WatchId: w1, ConditionId: proximity, SubjectId: `char:subject`", populated, StringComparison.Ordinal);
-            Assert.DoesNotContain("Unknown", populated, StringComparison.Ordinal);
-            Assert.DoesNotContain("Evidence", populated, StringComparison.Ordinal);
-            Assert.DoesNotContain("Status", populated, StringComparison.Ordinal);
         }
         finally
         {
-            watchRegistry.EndSession();
             mind.Free();
         }
     }
@@ -144,16 +113,9 @@ public sealed class CurrentSceneStatusIntegrationTests
         FakeCharacter owner = new("owner");
         FakeCharacter attended = new("attended");
         TestAgenticMind mind = new(owner);
-        WatchRegistry watchRegistry = new();
         mind.AddChild(new AttendedCharacterSceneStatusProjector
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
-        });
-        mind.AddChild(watchRegistry);
-        mind.AddChild(new WatchSceneStatusProjector
-        {
-            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
-            Registry = watchRegistry,
         });
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())

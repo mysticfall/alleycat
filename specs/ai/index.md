@@ -67,7 +67,7 @@ roleplay without breaking immersion or performance.
 - Parent index for AI character behaviour specifications.
 - Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
   Source Compilation, AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Gaze Target Selection,
-  AI-008: Scenario, AI-009: Attention-Driven Head Orientation, AI-010: Agent Watches, AI-011: Mind Session
+  AI-008: Scenario, AI-009: Attention-Driven Head Orientation, AI-011: Mind Session
   Transcripts, AI-012: Character Dialogue Examples, AI-013: Visual AI Context, and AI-014: Decision Model API.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
@@ -100,7 +100,7 @@ roleplay without breaking immersion or performance.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory Source Compilation,
    AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Head Target Selection, AI-008: Scenario,
-   AI-009: Attention-Driven Head Orientation, AI-010: Agent Watches, AI-011: Mind Session Transcripts,
+   AI-009: Attention-Driven Head Orientation, AI-011: Mind Session Transcripts,
    AI-012: Character Dialogue Examples, AI-013: Visual AI Context, and AI-014: Decision Model API are identified
    as current normative child contracts for their respective scopes.
 
@@ -114,7 +114,6 @@ roleplay without breaking immersion or performance.
 - [AI-007: Attention-Driven Gaze Target Selection](007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](008-scenario/index.md)
 - [AI-009: Attention-Driven Head Orientation](009-attention-head-orientation/index.md)
-- [AI-010: Agent Watches](010-agent-watches/index.md)
 - [AI-011: Mind Session Transcripts](011-mind-session-transcripts/index.md)
 - [AI-012: Character Dialogue Examples](012-dialogue-examples/index.md)
 - [AI-013: Visual AI Context](013-visual-context/index.md)
@@ -131,7 +130,6 @@ roleplay without breaking immersion or performance.
 - AI-007: Attention-Driven Gaze Target Selection
 - AI-008: Scenario
 - AI-009: Attention-Driven Head Orientation
-- AI-010: Agent Watches
 - AI-011: Mind Session Transcripts
 - AI-012: Character Dialogue Examples
 - AI-013: Visual AI Context

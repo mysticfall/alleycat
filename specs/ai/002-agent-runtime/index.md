@@ -76,7 +76,7 @@ persistent event timeline remains canonical memory; the provider transcript is d
 
 1. There is one logical session per AgenticMind, ending only on node exit or contained unrecoverable failure. The
    transient provider transcript is never Mind memory: it is derived presentation of Mind's canonical state, and
-   watches and time-based tasks read Mind's observation store, never the provider transcript.
+   time-based tasks read Mind's observation store, never the provider transcript.
 2. The static system instruction is rendered once at session start under AI-003. Every logical provider request then
    uses, in order: the static system instruction; the bootstrap user input; every retained accepted exchange in
    chronological order, real and synthetic interleaved; and one fresh user current-scene message rendered last. In
@@ -97,7 +97,7 @@ persistent event timeline remains canonical memory; the provider transcript is d
 5. Accepting a locally valid provider response atomically appends its valid protocol results and confirms that request
    snapshot's watermark. Failure, cancellation, stale response, and invalid response confirm nothing.
 6. `CurrentSceneStatus` is rendered freshly for every logical request under AI-003, as that request's final user
-   message. Its inputs include initial attended characters, active watches, and the request snapshot's current game
+   message. Its inputs include initial attended characters and the request snapshot's current game
    time (AI-003 TR-6).
 
 ### Scheduling And Wait
@@ -122,8 +122,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
      recorded in the transcript sink (AI-011). Every response is completely validated before any tool effect; invalid
      responses have no transcript, observation, action, or watermark effect and use bounded recovery; transport retry
      and recovery remain contained.
-13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, authorable watch tools from
-     AI-010, and, in the `tools` and `auto` visual-context modes, the two zero-argument visual-context tools
+13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, and, in the `tools` and `auto`
+     visual-context modes, the two zero-argument visual-context tools
      (minimap and view capture) composed at AgenticMind under AI-013; in `auto` mode a model-initiated call to
      either behaves exactly as in `tools` mode. In `off` visual-context mode those two
      tools are absent from the inventory, and a model attempt to call either is rejected as an unknown tool under
@@ -148,8 +148,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
       failure, and ephemeral image lifetime are described exactly as the runtime behaves.
 16. `wait` must be described as intentionally yielding until future developments or remaining silent, and `speak` as
       taking effect in the world with its call remaining in context as the record of the speech; timing is carried by
-      current scene status. Watch-tool descriptions follow AI-010's model-facing watch guidance; shared-instruction
-      guidance follows AI-003's Shared Context Interpretation Guidance (TR-12–TR-16). Visual-context tool
+      current scene status. Shared-instruction guidance follows AI-003's Shared Context Interpretation Guidance
+      (TR-12–TR-15). Visual-context tool
       descriptions follow AI-013's model-facing guidance (AI-013 TR-6).
 
 ### Exchange Retention And Scene Delivery
@@ -358,7 +358,6 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - Payload-free scheduling and wait semantics.
 - Accurate model-facing session-tool descriptions for automatic delivery, `wait`, and `speak`.
 - Continuation admission and confirmation settlement.
-- Composition-time binding of watch tools with AI-010.
 - Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
 - AI-013 visual-context integration: the auto-mode fabricated visual-context exchange slot (TR-2), the inventory of
   the two zero-argument visual-context tools in `tools` and `auto` modes with unknown-tool rejection in `off` mode
@@ -385,11 +384,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
 
 ## Out Of Scope
 
-- Expressions, additional watch types, planner agent behaviour, and broader perception changes.
+- Expressions, planner agent behaviour, and broader perception changes.
 - Summarisation-based transcript compaction and any generic retained-result or working-memory channel. In this
   revision the provider transcript grows unboundedly within a session; that accepted limitation is the recorded
-  motivation for the future compaction revision, not a hidden behaviour gap. Watch arming and acknowledgement
-  feedback stays model-visible per AI-010's current contracts, under the same uniform retention.
+  motivation for the future compaction revision, not a hidden behaviour gap.
 - A pull-style `observe` tool or any model-initiated scene-update pathway: delivery stays automatic and
   runtime-authored (TR-18).
 - Background-task infrastructure for delivery or summarisation, repetition-case capture, multi-model live-LLM
@@ -483,7 +481,6 @@ persistent event timeline remains canonical memory; the provider transcript is d
    synthetic scene-update tool results; and scheduling signals carry no payload.
 7. Tests verify the `S` admission and `PresentedAwaitingConfirmation` stages, including release on every non-confirming
    outcome.
-8. Tests verify watch-tool validation and typed binding occur only at AgenticMind composition.
 9. Tests verify the `wait` description presents yielding semantics, with no description text contradicting the
    payload-free wait contract, automatic delivery, retained-exchange persistence, or the `speak` call-record
    requirement (TR-15, TR-16).
@@ -552,7 +549,6 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
-- [AI-010: Agent Watches](../010-agent-watches/index.md)
 - [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — parsed-only transcript diagnostics,
   reasoning-content rendering, invocation index, runtime-authored synthetic-exchange marking, and stripped-text
   records normative for reasoning surfacing and tolerated-text recording (TR-12, TR-31, TR-32)

@@ -5,7 +5,6 @@ using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.SceneStatus;
-using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -22,7 +21,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 /// Godot-runtime coverage proving the authored shared guidance and the corrected tool metadata actually reach the
 /// model together with the context they describe: one captured provider request carries the rendered shared
 /// instruction, a new player reply marked newly presented in the event timeline, fresh current-scene status, and
-/// the corrected session-tool inventory (AI-002 TR-15/16; AI-003 TR-12–16; AI-010 TR-14/15).
+/// the session-tool inventory (AI-002 TR-15/16; AI-003).
 /// </summary>
 [Headless]
 public sealed partial class SharedGuidanceDeliveryIntegrationTests
@@ -44,10 +43,6 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         CapturingSessionClientProvider clientProvider = new();
         clientProvider.EnqueueHold(firstRequestStarted);
         clientProvider.EnqueueHoldForever();
-        WatchRegistry watchRegistry = new()
-        {
-            Conditions = [new ProximityWatchTool()],
-        };
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack
@@ -62,15 +57,9 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             // The attended player must survive the whole request cycle without decay-sensitive defaults.
             AttentionDecayPerSecond = 0f,
         };
-        mind.AddChild(watchRegistry);
         mind.AddChild(new AttendedCharacterSceneStatusProjector
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
-        });
-        mind.AddChild(new WatchSceneStatusProjector
-        {
-            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
-            Registry = watchRegistry,
         });
         // The exact request-shape and inventory expectations below pin the default `tools` visual-context mode, so
         // a developer machine's `AI:VisualContextMode` override cannot reshape this fixture's requests.
@@ -129,20 +118,13 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             // mode composes the two zero-argument AI-013 visual tools beside the production inventory (AI-002 TR-13
             // as amended; AI-013 TR-2).
             Assert.Equal(
-                ["capture_view", "minimap", "read_lore", "speak", "unwatch", "wait", "watch_proximity"],
+                ["capture_view", "minimap", "read_lore", "speak", "wait"],
                 [.. freshRequest.Tools.Keys.OrderBy(static name => name, StringComparer.Ordinal)]);
             Assert.Contains("Lore Catalogue", freshRequest.Tools["read_lore"], StringComparison.Ordinal);
             Assert.Contains("not omniscient facts", freshRequest.Tools["read_lore"], StringComparison.Ordinal);
             Assert.Contains("arrive automatically", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.DoesNotContain("nothing new reaches you", freshRequest.Tools["wait"], StringComparison.Ordinal);
             Assert.Contains("never what was observed", freshRequest.Tools["wait"], StringComparison.Ordinal);
-            Assert.Contains("opaque watch ID", freshRequest.Tools["watch_proximity"], StringComparison.Ordinal);
-            Assert.Contains("never re-arm to keep it active", freshRequest.Tools["watch_proximity"], StringComparison.Ordinal);
-            Assert.Contains(
-                "ordinary remembered events delivered through automatic scene updates",
-                freshRequest.Tools["watch_proximity"],
-                StringComparison.Ordinal);
-            Assert.Contains("opaque watch ID", freshRequest.Tools["unwatch"], StringComparison.Ordinal);
         }
         finally
         {
@@ -165,10 +147,6 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         FixturePlayerCharacter player = new();
         CapturingSessionClientProvider clientProvider = new();
         clientProvider.EnqueueHoldForever();
-        WatchRegistry watchRegistry = new()
-        {
-            Conditions = [new ProximityWatchTool()],
-        };
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack
@@ -180,15 +158,9 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
                 exactMatch: false),
             ClientProvider = clientProvider,
         };
-        mind.AddChild(watchRegistry);
         mind.AddChild(new AttendedCharacterSceneStatusProjector
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
-        });
-        mind.AddChild(new WatchSceneStatusProjector
-        {
-            ProjectorID = WatchSceneStatusProjector.ProjectorIDValue,
-            Registry = watchRegistry,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);

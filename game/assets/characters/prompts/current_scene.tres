@@ -16,14 +16,6 @@ No characters are currently attended.
 {% endif %}"
 Name = "Attended Characters"
 
-[sub_resource type="Resource" id="Resource_active_watches"]
-script = ExtResource("1_projection")
-ProjectorID = "active-watches"
-RootTypeName = "AlleyCat.Mind.AI.SceneStatus.ActiveWatchesSceneStatus"
-TemplateSource = "{% if Watches.size > 0 %}{% for watch in Watches %}- WatchId: {{ watch.WatchId }}, ConditionId: {{ watch.ConditionId }}, SubjectId: `{{ watch.SubjectId }}`
-{% endfor %}{% endif %}"
-Name = "Active Watches"
-
 [resource]
 script = ExtResource("2_stack")
-Sections = [SubResource("Resource_attended_characters"), SubResource("Resource_active_watches")]
+Sections = [SubResource("Resource_attended_characters")]

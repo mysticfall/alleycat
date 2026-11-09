@@ -28,7 +28,6 @@
 - [AI-007: Attention-Driven Gaze Target Selection](ai/007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](ai/008-scenario/index.md)
 - [AI-009: Attention-Driven Head Orientation](ai/009-attention-head-orientation/index.md)
-- [AI-010: Agent Watches](ai/010-agent-watches/index.md)
 - [AI-011: Mind Session Transcripts](ai/011-mind-session-transcripts/index.md)
 - [AI-012: Character Dialogue Examples](ai/012-dialogue-examples/index.md)
 - [AI-013: Visual AI Context](ai/013-visual-context/index.md)
