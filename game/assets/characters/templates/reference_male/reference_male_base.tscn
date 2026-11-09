@@ -20,6 +20,7 @@
 [ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Vision/SphereVisualBounds.cs" id="14_c6lj4"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bs4kur56aknxq" path="res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres" id="19_4r77l"]
 [ext_resource type="PackedScene" uid="uid://dmt0tevnp51it" path="res://assets/markers/minimap/actor.tscn" id="20_8w862"]
+[ext_resource type="Script" uid="uid://wvo7oit10cmg" path="res://src/Markings/SurfaceMarkings.cs" id="20_surfacemarkings"]
 
 [sub_resource type="Resource" id="Resource_c6lj4"]
 script = ExtResource("14_c6lj4")
@@ -501,3 +502,7 @@ TransitionDuration = 0.2
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
 
 [node name="MiniMapMarker" parent="." index="6" unique_id=1485608118 instance=ExtResource("20_8w862")]
+
+[node name="SurfaceMarkings" type="Node" parent="." index="7"]
+script = ExtResource("20_surfacemarkings")
+metadata/_custom_type_script = "uid://wvo7oit10cmg"
