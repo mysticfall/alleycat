@@ -23,6 +23,11 @@ public sealed class NPCVisionCaptureVisualIntegrationTests
 
     private const float ConversationalDistanceMetres = 2.4f;
 
+    private const int StableSettleSampleCount = 5;
+    private const float StableSettlePositionEpsilonMetres = 0.001f;
+    private const float StableSettleRotationEpsilonDegrees = 0.1f;
+    private const ulong SettleBudgetMilliseconds = 10_000;
+
     /// <summary>
     /// Produces the AC78 capture set: neutral glance plus ±30° turned-head captures of a facing
     /// person at ~2.4 m. Every scenario yields a distinct, correctly sized, non-empty image from
@@ -56,11 +61,15 @@ public sealed class NPCVisionCaptureVisualIntegrationTests
         person.Basis = Basis.FromEuler(new Vector3(0f, Mathf.Pi, 0f));
         root.AddChild(person);
 
-        // Let the observer process briefly so the skeleton drives its bone attachments into the
-        // settled pose (the authored attachment transform alone is not the bind pose), then freeze
-        // for deterministic evidence captures.
+        // Let the observer settle before freezing it for deterministic evidence captures: the
+        // skeleton must drive its bone attachments into the settled pose (the authored attachment
+        // transform alone is not the bind pose), and a fixed frame count can catch the skeleton
+        // mid-settle under full-suite load. The poll steps physics ticks — the rig's skeleton
+        // solvers settle there, and any process-driven change is still observable at the next
+        // physics sample — and freezes the observer only after both tracked transforms have held
+        // still for several consecutive samples within a bounded wall-clock budget.
         await AddChildToRootAsync(sceneTree, root);
-        await WaitForFramesAsync(sceneTree, 5);
+        await WaitForRigSettleAsync(sceneTree, observer, person);
         observer.ProcessMode = Node.ProcessModeEnum.Disabled;
         await WaitForFramesAsync(sceneTree, 1);
         try
@@ -106,6 +115,65 @@ public sealed class NPCVisionCaptureVisualIntegrationTests
             root.QueueFree();
             await WaitForFramesAsync(sceneTree, 2);
         }
+    }
+
+    /// <summary>
+    /// Advances physics ticks until the observer's eye origin and the person's viewpoint hold their
+    /// global transforms stable for several consecutive samples, or fails when the settle budget is
+    /// exhausted — never a fixed frame count, which can catch the skeleton mid-settle under load.
+    /// </summary>
+    private static async Task WaitForRigSettleAsync(SceneTree sceneTree, Node3D observer, Node3D person)
+    {
+        EyesBehaviour eyes = observer.GetNode<EyesBehaviour>("Eyes");
+        Node3D eyeOrigin = eyes.EyeOrigin
+            ?? throw new InvalidOperationException("Expected the NPC template to author an eye origin.");
+        Node3D personViewpoint = person.GetNode<Node3D>("Male/GeneralSkeleton/Head/Viewpoint");
+
+        Transform3D previousEye = eyeOrigin.GlobalTransform;
+        Transform3D previousPerson = personViewpoint.GlobalTransform;
+        float lastEyePositionDelta = 0f;
+        float lastEyeRotationDelta = 0f;
+        float lastPersonPositionDelta = 0f;
+        float lastPersonRotationDelta = 0f;
+        int stableSamples = 1;
+        ulong startMilliseconds = Time.GetTicksMsec();
+
+        while (stableSamples < StableSettleSampleCount)
+        {
+            if (Time.GetTicksMsec() - startMilliseconds > SettleBudgetMilliseconds)
+            {
+                throw new InvalidOperationException(
+                    $"The observer rig did not settle within {SettleBudgetMilliseconds} ms; last per-sample deltas "
+                    + $"— eye {lastEyePositionDelta:F4} m/{lastEyeRotationDelta:F3}°, person {lastPersonPositionDelta:F4} m/"
+                    + $"{lastPersonRotationDelta:F3}° (limits {StableSettlePositionEpsilonMetres:F3} m/"
+                    + $"{StableSettleRotationEpsilonDegrees:F1}°).");
+            }
+
+            await WaitForNextPhysicsFrameAsync(sceneTree);
+
+            Transform3D currentEye = eyeOrigin.GlobalTransform;
+            Transform3D currentPerson = personViewpoint.GlobalTransform;
+            lastEyePositionDelta = previousEye.Origin.DistanceTo(currentEye.Origin);
+            lastEyeRotationDelta = RotationDifferenceDegrees(previousEye.Basis, currentEye.Basis);
+            lastPersonPositionDelta = previousPerson.Origin.DistanceTo(currentPerson.Origin);
+            lastPersonRotationDelta = RotationDifferenceDegrees(previousPerson.Basis, currentPerson.Basis);
+
+            bool stable = lastEyePositionDelta <= StableSettlePositionEpsilonMetres
+                && lastEyeRotationDelta <= StableSettleRotationEpsilonDegrees
+                && lastPersonPositionDelta <= StableSettlePositionEpsilonMetres
+                && lastPersonRotationDelta <= StableSettleRotationEpsilonDegrees;
+            stableSamples = stable ? stableSamples + 1 : 1;
+            previousEye = currentEye;
+            previousPerson = currentPerson;
+        }
+    }
+
+    private static float RotationDifferenceDegrees(Basis previous, Basis current)
+    {
+        Quaternion previousRotation = new(previous.Orthonormalized());
+        Quaternion currentRotation = new(current.Orthonormalized());
+        float absoluteDot = Mathf.Clamp(Mathf.Abs(previousRotation.Dot(currentRotation)), 0.0f, 1.0f);
+        return Mathf.RadToDeg(2.0f * MathF.Acos(absoluteDot));
     }
 
     private static void AssertCaptureLooksRendered(Image image, string scenario)

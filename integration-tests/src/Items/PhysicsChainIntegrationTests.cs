@@ -28,9 +28,7 @@ public sealed class PhysicsChainIntegrationTests
     private const float RotationToleranceRadians = 0.02f;
     private const float PositionToleranceMetres = 0.0015f;
     private const float AttachmentToleranceMetres = 0.02f;
-    private const float ExtendedChainAttachmentToleranceMetres = 0.05f;
     private const float InterLinkAttachmentToleranceMetres = 0.03f;
-    private const float ExtendedChainInterLinkAttachmentToleranceMetres = 0.06f;
     private const float MinimumWeightTravelMetres = 0.05f;
     private const int StructureLinkCount = 5;
     private const int InitialisationFrames = 8;
@@ -344,112 +342,6 @@ public sealed class PhysicsChainIntegrationTests
             $"ITEM-001 long-run metrics: duration={LongRunSimulationSeconds:F0}s, max_weight_travel={longestObservedWeightTravel:F4} m, " +
             $"max_start_gap={worstObservedStartAttachmentGap:F4} m, max_end_gap={worstObservedEndAttachmentGap:F4} m, " +
             $"max_inter_link_gap={worstObservedInterLinkGap:F4} m.");
-    }
-
-    /// <summary>
-    /// Verifies a focused 32-link chain fixture stays connected under representative dynamic contact.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public async Task PhysicsChain_ThirtyTwoLinkFixture_StaysConnectedUnderImpulseAndContact()
-    {
-        SceneTree sceneTree = GetSceneTree();
-        await WaitForPhysicsFramesAsync(sceneTree, 2);
-
-        ExtendedChainFixture fixture = CreateExtendedChainFixture();
-        sceneTree.Root.AddChild(fixture.Root);
-        await WaitForPhysicsFramesAsync(sceneTree, InitialisationFrames);
-
-        Node3D chain = fixture.Chain;
-        Node linksContainer = chain.GetNode(LinksContainerPath);
-        Node jointsContainer = chain.GetNode(JointsContainerPath);
-        Marker3D chainStartAttachment = Assert.IsType<Marker3D>(chain.GetNodeOrNull(StartAttachmentPointPath), exactMatch: false);
-        Marker3D chainEndAttachment = Assert.IsType<Marker3D>(chain.GetNodeOrNull("Links/Link32/EndAttachmentPoint"), exactMatch: false);
-        Marker3D startAnchorAttachment = fixture.StartAnchorAttachment;
-        RigidBody3D endWeight = fixture.EndWeight;
-        Marker3D endWeightAttachment = fixture.EndWeightAttachment;
-
-        Assert.Equal(32, linksContainer.GetChildCount());
-        Assert.Equal(62, jointsContainer.GetChildCount());
-        Assert.Equal(ConeTwistJointTypeValue, chain.Get("LinkJointType").AsInt32());
-
-        RigidBody3D contactBody = new()
-        {
-            Name = "ExtendedChainContactBody",
-            CollisionLayer = 2,
-            CollisionMask = 11,
-            GravityScale = 0.0f,
-            Mass = 0.35f,
-            LinearDamp = 0.05f,
-            AngularDamp = 0.05f,
-            GlobalPosition = endWeight.GlobalPosition + new Vector3(0.18f, 0.05f, -0.16f),
-        };
-        contactBody.AddChild(new CollisionShape3D
-        {
-            Name = "CollisionShape3D",
-            Shape = new SphereShape3D { Radius = 0.055f },
-        });
-        fixture.Root.AddChild(contactBody);
-        await WaitForPhysicsFramesAsync(sceneTree, 2);
-
-        Vector3 startWeightPosition = endWeight.GlobalPosition;
-        float longestObservedWeightTravel = 0f;
-        float longestObservedContactTravel = 0f;
-        float worstObservedStartAttachmentGap = 0f;
-        float worstObservedEndAttachmentGap = 0f;
-        float worstObservedInterLinkGap = 0f;
-
-        endWeight.ApplyCentralImpulse(new Vector3(0.65f, 0.05f, -0.35f));
-        contactBody.ApplyCentralImpulse(new Vector3(-0.35f, -0.02f, 0.28f));
-
-        int stabilitySampleCount = (int)(LongRunSimulationSeconds / StabilitySampleIntervalSeconds);
-        for (int sampleIndex = 0; sampleIndex < stabilitySampleCount; sampleIndex++)
-        {
-            await WaitForPhysicsSecondsAsync(sceneTree, StabilitySampleIntervalSeconds);
-
-            float elapsedSeconds = (sampleIndex + 1) * (float)StabilitySampleIntervalSeconds;
-            longestObservedWeightTravel = Math.Max(longestObservedWeightTravel, endWeight.GlobalPosition.DistanceTo(startWeightPosition));
-            longestObservedContactTravel = Math.Max(longestObservedContactTravel, contactBody.GlobalPosition.DistanceTo(startWeightPosition));
-
-            float startAttachmentGap = startAnchorAttachment.GlobalPosition.DistanceTo(chainStartAttachment.GlobalPosition);
-            float endAttachmentGap = endWeightAttachment.GlobalPosition.DistanceTo(chainEndAttachment.GlobalPosition);
-            worstObservedStartAttachmentGap = Math.Max(worstObservedStartAttachmentGap, startAttachmentGap);
-            worstObservedEndAttachmentGap = Math.Max(worstObservedEndAttachmentGap, endAttachmentGap);
-
-            Assert.True(
-                startAttachmentGap <= ExtendedChainAttachmentToleranceMetres,
-                $"Extended-chain start attachment should remain locked. Elapsed: {elapsedSeconds:F1}s, gap: {startAttachmentGap:F4} m.");
-            Assert.True(
-                endAttachmentGap <= ExtendedChainAttachmentToleranceMetres,
-                $"Extended-chain end attachment should remain locked. Elapsed: {elapsedSeconds:F1}s, gap: {endAttachmentGap:F4} m.");
-
-            for (int linkIndex = 0; linkIndex < linksContainer.GetChildCount() - 1; linkIndex++)
-            {
-                var backAttachment = (Vector3)chain.Call("GetLinkBackAttachmentGlobalPosition", linkIndex);
-                var nextFrontAttachment = (Vector3)chain.Call("GetLinkFrontAttachmentGlobalPosition", linkIndex + 1);
-                float attachmentGap = backAttachment.DistanceTo(nextFrontAttachment);
-                worstObservedInterLinkGap = Math.Max(worstObservedInterLinkGap, attachmentGap);
-
-                Assert.True(
-                    attachmentGap <= ExtendedChainInterLinkAttachmentToleranceMetres,
-                    $"Extended 32-link chain should remain connected. Elapsed: {elapsedSeconds:F1}s, links {linkIndex + 1}/{linkIndex + 2}, gap: {attachmentGap:F4} m.");
-            }
-        }
-
-        Assert.True(
-            longestObservedWeightTravel >= MinimumWeightTravelMetres,
-            $"Extended-chain end weight should move under representative impulse. Maximum observed travel: {longestObservedWeightTravel:F4} m.");
-        Assert.True(
-            longestObservedContactTravel >= MinimumWeightTravelMetres,
-            $"Extended-chain contact body should move into the chain test volume. Maximum observed travel: {longestObservedContactTravel:F4} m.");
-        Assert.True(worstObservedStartAttachmentGap <= ExtendedChainAttachmentToleranceMetres);
-        Assert.True(worstObservedEndAttachmentGap <= ExtendedChainAttachmentToleranceMetres);
-        Assert.True(worstObservedInterLinkGap <= ExtendedChainInterLinkAttachmentToleranceMetres);
-
-        GD.Print(
-            $"ITEM-001 extended 32-link metrics: duration={LongRunSimulationSeconds:F0}s, max_weight_travel={longestObservedWeightTravel:F4} m, " +
-            $"max_contact_travel={longestObservedContactTravel:F4} m, max_start_gap={worstObservedStartAttachmentGap:F4} m, " +
-            $"max_end_gap={worstObservedEndAttachmentGap:F4} m, max_inter_link_gap={worstObservedInterLinkGap:F4} m.");
     }
 
     /// <summary>

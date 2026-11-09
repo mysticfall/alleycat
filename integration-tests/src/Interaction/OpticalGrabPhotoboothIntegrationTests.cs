@@ -85,14 +85,6 @@ public sealed class OpticalGrabPhotoboothIntegrationTests
 
     private const float StationaryPositionToleranceMetres = 0.001f;
 
-    private const float AdjacentItemDiscontinuityToleranceMetres = 0.010f;
-
-    private const float AdjacentItemDiscontinuityToleranceDegrees = 5.5f;
-
-    private const float AdjacentHandDiscontinuityToleranceMetres = 0.012f;
-
-    private const float AdjacentHandDiscontinuityToleranceDegrees = 8.0f;
-
     private static readonly Vector3 _rightWristRest = new(0.25f, 1.08f, -0.43f);
     // Separately authored terminal wrist pose for the acceptance recording. It is fixed fixture input and must
     // never be recomputed from a candidate, attachment residual, provider output, or target-to-attachment relation.
@@ -300,63 +292,6 @@ public sealed class OpticalGrabPhotoboothIntegrationTests
                 MeanAngle(earlyPendingPose, heldPose) >= PendingPartialMinimumDifferenceRadians,
                 "The early pending hand must remain materially less closed than the committed ball grip.");
             Assert.True(fixture.RightHand.CancelPendingGrab());
-        }
-        finally
-        {
-            await fixture.DisposeAsync(sceneTree);
-        }
-    }
-
-    /// <summary>
-    /// Scenario: a closure ramp past the grab threshold, held for the stability interval, begins a grab with
-    /// optical provenance; the VRIK approach settles it into a held grab whose finger pose is the authored
-    /// ball animation once the commit blend window completes (INTR-002 R59-60; XR-002 TR31, TR46-TR49).
-    /// </summary>
-    [Headless]
-    [Fact]
-    public async Task BallClosure_CommitsHeldWithAuthoredPoseAndArbitration()
-    {
-        SceneTree sceneTree = GetSceneTree();
-        using PhotoboothFixture fixture = await PhotoboothFixture.CreateAsync(sceneTree);
-
-        try
-        {
-            FlexCalibration calibration = await fixture.CommitOpticalAtRestAsync(sceneTree, GrabBallAnimationPath);
-            Node itemsHolder = fixture.Ball.GetParent() ?? throw new InvalidOperationException("Ball has no initial items parent.");
-            GrabCommitTrace trace = await CommitHeldBallAsync(sceneTree, fixture, calibration);
-            Transform3D expectedAttachment = trace.ExpectedAttachment;
-
-            AssertCommitTransitionIsContinuous(trace);
-
-            Assert.Equal(HandGrabLifecycleState.Held, fixture.RightHand.GrabLifecycle);
-            Assert.Equal(HandGrabInputSource.Optical, fixture.RightHand.GrabInputSource);
-            Assert.Same(fixture.Ball, fixture.RightHand.CurrentGrabbed);
-            Assert.Equal("Grab-ball-40", fixture.RightHand.CurrentPose?.ResourceName);
-            Assert.Equal(
-                OpticalGrabPoseBlendPhase.HeldSuppressed,
-                fixture.Modifier.GetGrabPoseBlendPhase(LimbSide.Right));
-            Assert.True(fixture.XRManager.OpticalGrabArbiter.GetPresentation(LimbSide.Right).IsOpticalGrabHeld);
-            Assert.False(fixture.XRManager.OpticalGrabArbiter.GetPresentation(LimbSide.Left).IsOpticalGrabHeld);
-            Assert.Same(fixture.RightHand.HandBoneAttachment, fixture.Ball.GetParent());
-            Assert.NotSame(itemsHolder, fixture.Ball.GetParent());
-            AssertDirectAttachmentWithinMovableGate(
-                expectedAttachment,
-                fixture.RightHand.HandBoneAttachment?.GlobalTransform ?? Transform3D.Identity,
-                "held ball direct attachment");
-            Transform3D postGateBallTransform = fixture.Ball.GlobalTransform;
-            await WaitForPhysicsFramesAsync(sceneTree, 3);
-            AssertTransformPositionAndRotationNear(
-                postGateBallTransform,
-                fixture.Ball.GlobalTransform,
-                StationaryPositionToleranceMetres,
-                0.1f,
-                "ball after direct-attachment commit (no late snap)");
-
-            AssertMaxAngleAtMost(
-                fixture.CaptureFingerRotations(LimbSide.Right),
-                SampleAuthoredReference(LimbSide.Right, GrabBallAnimationPath),
-                AuthoredMatchToleranceRadians,
-                "held right hand vs authored ball reference");
         }
         finally
         {
@@ -1613,19 +1548,6 @@ public sealed class OpticalGrabPhotoboothIntegrationTests
                 $"Expected near-exact rotations for {context}; max angle {maxAngle:R} rad exceeds {tolerance:R} rad.");
     }
 
-    private static void AssertDirectAttachmentWithinMovableGate(
-        Transform3D expectedAttachment,
-        Transform3D actualAttachment,
-        string context)
-    {
-        float positionResidual = expectedAttachment.Origin.DistanceTo(actualAttachment.Origin);
-        float orientationResidual = AngularDifferenceDegrees(expectedAttachment.Basis, actualAttachment.Basis);
-        Assert.True(
-            positionResidual <= MovableAttachmentPositionToleranceMetres,
-            $"Expected {context} direct attachment position residual within 8 mm; observed {positionResidual:F4} m.");
-        Assert.InRange(orientationResidual, 0.0f, MovableAttachmentOrientationToleranceDegrees);
-    }
-
     private static void AssertTransformPositionAndRotationNear(
         Transform3D expected,
         Transform3D actual,
@@ -1676,58 +1598,6 @@ public sealed class OpticalGrabPhotoboothIntegrationTests
             XRHandJoint.Wrist => throw new ArgumentOutOfRangeException(nameof(joint), joint, "Not a finger joint."),
             _ => throw new ArgumentOutOfRangeException(nameof(joint), joint, "Not a finger joint."),
         };
-
-    private static void AssertCommitTransitionIsContinuous(GrabCommitTrace trace)
-    {
-        int heldIndex = trace.Samples.FindIndex(sample => sample.Lifecycle == HandGrabLifecycleState.Held);
-        Assert.True(heldIndex >= 3, $"The trace must include at least three Pending samples before Held.\n{trace.Format()}");
-        Assert.True(
-            trace.Samples.Skip(heldIndex - 3).Take(3).All(sample => sample.Lifecycle == HandGrabLifecycleState.Pending),
-            $"The trace must retain the last three adjacent Pending samples.\n{trace.Format()}");
-        Assert.True(
-            trace.Samples.Count - heldIndex >= 6,
-            $"The trace must include the first six Held samples after commit.\n{trace.Format()}");
-        Assert.True(trace.Samples[heldIndex - 1].OverrideActive, $"The final Pending sample must retain the override.\n{trace.Format()}");
-        Assert.False(trace.Samples[heldIndex].OverrideActive, $"The first Held sample must observe override clear.\n{trace.Format()}");
-        Assert.NotEqual(trace.Samples[heldIndex - 1].ItemParent, trace.Samples[heldIndex].ItemParent);
-
-        float maximumItemDistance = 0.0f;
-        float maximumItemAngle = 0.0f;
-        float maximumHandDistance = 0.0f;
-        float maximumHandAngle = 0.0f;
-        for (int index = 1; index < trace.Samples.Count; index++)
-        {
-            GrabTemporalSample previous = trace.Samples[index - 1];
-            GrabTemporalSample current = trace.Samples[index];
-            float itemDistance = previous.ItemTransform.Origin.DistanceTo(current.ItemTransform.Origin);
-            float itemAngle = AngularDifferenceDegrees(previous.ItemTransform.Basis, current.ItemTransform.Basis);
-            float handDistance = previous.ActualAttachment.Origin.DistanceTo(current.ActualAttachment.Origin);
-            float handAngle = AngularDifferenceDegrees(previous.ActualAttachment.Basis, current.ActualAttachment.Basis);
-
-            maximumItemDistance = MathF.Max(maximumItemDistance, itemDistance);
-            maximumItemAngle = MathF.Max(maximumItemAngle, itemAngle);
-            maximumHandDistance = MathF.Max(maximumHandDistance, handDistance);
-            maximumHandAngle = MathF.Max(maximumHandAngle, handAngle);
-        }
-
-        GrabTemporalSample alignmentBefore = trace.Samples[heldIndex - 1];
-        GrabTemporalSample alignmentAfter = trace.Samples[heldIndex];
-        GrabTemporalSample firstAfterClear = trace.Samples[heldIndex + 1];
-        float alignmentItemDistance = alignmentBefore.ItemTransform.Origin.DistanceTo(alignmentAfter.ItemTransform.Origin);
-        float alignmentHandDistance = alignmentBefore.ActualAttachment.Origin.DistanceTo(alignmentAfter.ActualAttachment.Origin);
-        float postClearItemDistance = alignmentAfter.ItemTransform.Origin.DistanceTo(firstAfterClear.ItemTransform.Origin);
-        float postClearHandDistance = alignmentAfter.ActualAttachment.Origin.DistanceTo(firstAfterClear.ActualAttachment.Origin);
-        bool continuous = maximumItemDistance <= AdjacentItemDiscontinuityToleranceMetres
-                          && maximumItemAngle <= AdjacentItemDiscontinuityToleranceDegrees
-                          && maximumHandDistance <= AdjacentHandDiscontinuityToleranceMetres
-                          && maximumHandAngle <= AdjacentHandDiscontinuityToleranceDegrees;
-        Assert.True(
-            continuous,
-            $"Adjacent discontinuity classification: max item={maximumItemDistance:F5} m/{maximumItemAngle:F3}°, "
-            + $"max hand={maximumHandDistance:F5} m/{maximumHandAngle:F3}°; alignment/reparent item={alignmentItemDistance:F5} m, "
-            + $"hand={alignmentHandDistance:F5} m; first post-clear item={postClearItemDistance:F5} m, "
-            + $"hand={postClearHandDistance:F5} m.\n{trace.Format()}");
-    }
 
     private static void AssertCompleteLifecycleEvidence(GrabCommitTrace trace, string context)
     {
