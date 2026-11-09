@@ -44,14 +44,32 @@ internal static class VisualContextCapture
     /// <summary>The gold colour value of <see cref="SubjectHighlightGoldHtml" />.</summary>
     internal static readonly Color SubjectHighlightColour = Color.FromHtml(SubjectHighlightGoldHtml);
 
+    /// <summary>The per-request bounding margin the composed minimap settings carry (AI-013 TR-3): 0.25
+    /// metres on every side of the content bounds — a small breathing border keeping the self-centred subject,
+    /// its neighbours and their labels clear of the image edge — never model-settable.</summary>
+    internal const float MarginMetres = 0.25f;
+
+    /// <summary>The fixed minimap output width the composed settings pin (AI-013 TR-3): 512 pixels, portrait;
+    /// never model-settable.</summary>
+    internal const int MinimapWidthPixels = 512;
+
+    /// <summary>The fixed minimap output height the composed settings pin (AI-013 TR-3): 1024 pixels, portrait;
+    /// never model-settable.</summary>
+    internal const int MinimapHeightPixels = 1024;
+
     /// <summary>
-    /// Composes the minimap render settings of one subject (AI-013 TR-3): the only per-request input is the
-    /// TR-19 marker override keyed by the subject's resolved <see cref="IIdentifiable.FullId" /> with the fixed
-    /// documented gold colour and the literal <c>*You*</c> label text; every other setting stays unset so the
-    /// renderer's documented service defaults apply — the inclusion distance is never caller-settable.
+    /// Composes the minimap render settings of one subject (AI-013 TR-3): the fixed per-request margin
+    /// <see cref="MarginMetres" /> and the fixed documented 512×1024 portrait output dimensions
+    /// (<see cref="MinimapWidthPixels" /> × <see cref="MinimapHeightPixels" />), plus the TR-19 marker override keyed
+    /// by the subject's resolved <see cref="IIdentifiable.FullId" /> with the fixed documented gold colour and the
+    /// literal <c>*You*</c> label text; every other setting stays unset so the renderer's documented service
+    /// defaults apply — the inclusion distance is never caller-settable.
     /// </summary>
     internal static MiniMapRenderSettings ComposeMinimapSettings(string subjectFullId)
         => new(
+            MarginMetres: MarginMetres,
+            Width: MinimapWidthPixels,
+            Height: MinimapHeightPixels,
             MarkerOverrides: new Dictionary<string, MiniMapMarkerOverride>
             {
                 [subjectFullId] = new(SubjectHighlightColour, SubjectHighlightLabel),

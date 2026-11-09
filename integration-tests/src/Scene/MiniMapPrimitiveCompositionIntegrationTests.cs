@@ -215,12 +215,12 @@ public sealed class MiniMapPrimitiveCompositionIntegrationTests
 
             MiniMapRenderResult upright = renderer.Render(Vector2.Zero, _smallSquare);
             Vector2[] uprightPoints = Assert.Single(MiniMapTestHarness.Polygons(MiniMapTestHarness.Svg(upright))).Points;
-            Assert.Equal(
-                [
-                    MiniMapTestHarness.ExpectedPixel(upright, new Vector2(-1, 1)),
-                    MiniMapTestHarness.ExpectedPixel(upright, new Vector2(1, 1)),
-                    MiniMapTestHarness.ExpectedPixel(upright, new Vector2(0, -1)),
-                ],
+            AssertApexNear(
+            [
+                MiniMapTestHarness.ExpectedPixel(upright, new Vector2(-1, 1)),
+                MiniMapTestHarness.ExpectedPixel(upright, new Vector2(1, 1)),
+                MiniMapTestHarness.ExpectedPixel(upright, new Vector2(0, -1)),
+            ],
                 uprightPoints);
 
             marker.RotationDegrees = new Vector3(0, 180, 0);
@@ -228,17 +228,34 @@ public sealed class MiniMapPrimitiveCompositionIntegrationTests
 
             MiniMapRenderResult reversed = renderer.Render(Vector2.Zero, _smallSquare);
             Vector2[] reversedPoints = Assert.Single(MiniMapTestHarness.Polygons(MiniMapTestHarness.Svg(reversed))).Points;
-            Assert.Equal(
-                [
-                    MiniMapTestHarness.ExpectedPixel(reversed, new Vector2(1, -1)),
-                    MiniMapTestHarness.ExpectedPixel(reversed, new Vector2(-1, -1)),
-                    MiniMapTestHarness.ExpectedPixel(reversed, new Vector2(0, 1)),
-                ],
+            AssertApexNear(
+            [
+                MiniMapTestHarness.ExpectedPixel(reversed, new Vector2(1, -1)),
+                MiniMapTestHarness.ExpectedPixel(reversed, new Vector2(-1, -1)),
+                MiniMapTestHarness.ExpectedPixel(reversed, new Vector2(0, 1)),
+            ],
                 reversedPoints);
         }
         finally
         {
             await MiniMapTestHarness.RemoveFromTreeAsync(sceneTree, root);
+        }
+    }
+
+    /// <summary>
+    /// Compares yawed triangle apex points against the harness's projection arithmetic within a sub-pixel
+    /// tolerance: the 180° yaw basis carries the float32 π-rounding epsilon (~8.7e-8 rad), which the projection
+    /// scale can amplify into a last-ulp difference between the two independently computed float paths — far
+    /// below any visible geometry, so exact float equality over-asserts.
+    /// </summary>
+    private static void AssertApexNear(Vector2[] expected, Vector2[] actual)
+    {
+        Assert.Equal(expected.Length, actual.Length);
+        for (int index = 0; index < expected.Length; index++)
+        {
+            Assert.True(MathF.Abs(expected[index].X - actual[index].X) < 0.01f
+                    && MathF.Abs(expected[index].Y - actual[index].Y) < 0.01f,
+                $"Apex point {index}: expected {expected[index]}, rendered {actual[index]}.");
         }
     }
 

@@ -33,9 +33,20 @@ request, and quits. It also runs clean headless (`--headless --xr-mode off`).
   renders gold with the label "You", while every other marker, the geometry, the framing, the draw order and the
   grid are those of the plain request. The styling lives in the request only; the scene is never edited, and the
   three earlier plain renders are unaffected.
-- **Unsupported-glyph diagnostic (TR-7/TR-15)** — `Minsu` carries the Korean `FullId` `char:민수`, which bundled
-  Inter does not cover: the render succeeds, the label is omitted, and an `UnsupportedGlyph` diagnostic is reported.
-  This is legitimate CORE-009 identity and must not be transliterated.
+- **Native Hangul identity (TR-15)** — `Minsu` carries the Korean `FullId` `char:민수`, which the bundled
+  fallback chain renders natively in Hangul glyphs (Inter first for Latin, then the bundled NanumGothic
+  fallback). Identity text is never transliterated or dropped to work around glyph coverage.
+- **Unsupported-script diagnostic (TR-15/TR-16)** — `Relic`'s configured label is the emoji `😀`, a script no
+  bundled font covers: the render succeeds, the whole label is omitted, and an `UnsupportedGlyph` diagnostic is
+  reported. Hangul no longer exercises this path — the fallback chain covers it.
+- **Label collision displacement (TR-20)** — `Bench` and `StreetLamp` are exactly co-located, and both authored
+  labels share one anchor, so their glyph boxes intersect at the base position: the render displaces one label up
+  the fixed candidate stack (32 px steps) instead of merging them into an unreadable blob. `Milestone`'s label is
+  authored exactly under neighbouring `Planter`'s circle — another marker's shape ink — so TR-20's shape
+  clearance walks it up the candidate stack until its box sits clear of the circle's projected footprint box. A
+  label's own marker's shapes are exempt (the authored anchor is designed against them); only extreme crowding
+  beyond the bounded candidate list omits the lowest-priority labels (`LabelOverlaps` diagnostic), and a label
+  emphasised through `MarkerOverrides` is never omitted.
 - **Editor note** — in the editor preview, identity labels hosted under non-`[Tool]` ancestors (the production
   `Character`) report `MissingIdentity`, because those scripts do not instantiate in the editor. The same scene at
   runtime resolves them. This is the TR-16 identity edge contract working as specified, not a wiring error.
@@ -76,7 +87,7 @@ _ = local.Image.SavePng("map.png");
 
 Per-request settings (all optional, overriding documented service defaults): `MaximumDistance` (default 100 m,
 `float.PositiveInfinity` includes everything), `Width`/`Height` (default 1024×1024), `MarginMetres` (default 2),
-`GridTextSizePixels` (default 16) and `GridMinimumSpacingPixels` (default 64). The 8 m minimum world extent is a
+`GridTextSizePixels` (default 16) and `GridMinimumSpacingPixels` (default 64). The 2 m minimum world extent is a
 documented fixed service guard, not a setting. Failed renders return `Status = Failed` with diagnostics naming the
 marker node path and primitive; successful renders may still carry non-fatal diagnostics.
 

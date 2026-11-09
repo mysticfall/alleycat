@@ -338,7 +338,10 @@ public sealed class MiniMapRendererFramingIntegrationTests
             MiniMapRenderResult afterFree = renderer.Render(Vector2.Zero, settings);
             Assert.Equal(MiniMapRenderStatus.Ready, afterFree.Status);
             Assert.Empty(MiniMapTestHarness.Polygons(MiniMapTestHarness.Svg(afterFree)));
-            Assert.Equal(MiniMapRenderer.MinimumWorldExtentMetres, afterFree.Viewport.Size.X, 1);
+            // No geometry remains — the empty marker contributes no extent (TR-10) — so the viewport frames the
+            // requested centre grown by the documented default margin (2 m per side = 4 m); the 2 m guard floors
+            // it only from below (TR-9/TR-10).
+            Assert.Equal(4f, afterFree.Viewport.Size.X, 1);
         }
         finally
         {

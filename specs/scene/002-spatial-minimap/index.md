@@ -9,8 +9,10 @@ title: Spatial Minimap
 
 Deliver a runtime minimap built from scene-authored markers: `MiniMapMarker` nodes are discovered by scene-group
 membership, and a standalone `MiniMapRenderer` service composes and rasterises an image of a requested area on demand,
-with an always-visible adaptive world-coordinate grid and optional per-request marker style overrides, plus editor
-preview and authoring tooling.
+with an always-visible adaptive world-coordinate grid, marker labels kept legible through a bundled glyph fallback
+chain and deterministic collision displacement — clearing other labels and other markers' shapes, with omission
+only as a bounded last resort — plus optional per-request marker style overrides, editor preview and authoring
+tooling.
 
 ## Goal
 
@@ -35,7 +37,8 @@ with no character-specific or category-specific machinery.
    triangle parented under a character renders that character's heading for free.
 5. **UR-5 — Labels:** A label shows either authored text or the canonical `FullId` identity automatically resolved from
    the nearest identifiable ancestor, so a marker hosted under a character is labelled by that character's identity
-   without configuration.
+   without configuration. Wherever the bundled fonts cover the identity's script, the label renders natively — a
+   Korean character's identity shows in Hangul — never transliterated or dropped to work around glyph coverage.
 6. **UR-6 — Deterministic Output:** The same scene state and settings always produce the same self-contained SVG and
    image. Text renders identically in editor and runtime with no external fonts, scripts or network dependencies.
 7. **UR-7 — Editor Tooling:** Authors preview the whole authored map on opening the tool, pan by dragging and zoom in
@@ -45,6 +48,10 @@ with no character-specific or category-specific machinery.
    character's marker, for example, or relabelling it — without editing the scene. Overrides live in the request
    only: renders without them are unchanged, and the renderer gains no character or identity API beyond the `FullId`
    it already resolves.
+9. **UR-9 — Legible Under Crowding:** Co-located markers still show their labels: overlapping labels are displaced
+   apart — kept clear of other labels and of other markers' shape ink, never hidden under a neighbouring marker's
+   shape or merged into an unreadable blob — and only extreme crowding omits the lowest-priority labels. A label
+   emphasised through per-request overrides is never omitted.
 
 ## Technical Requirements
 
@@ -90,10 +97,13 @@ with no character-specific or category-specific machinery.
 7. **TR-7:** Labels come in two flavours on one primitive type: (a) a configured text property; (b) automatic identity
    text resolved at render time from the nearest ancestor node implementing CORE-009 `IIdentifiable` — walking up the
    scene tree from the marker; the marker node itself is not consulted — displayed as the canonical `FullId`. Labels
-   carry an authored local offset from the marker origin and a configurable text size with documented defaults. There
-   is no automatic placement, collision avoidance or truncation. CORE-009 permits non-ASCII local IDs — for example
-   Korean — that the bundled Inter font does not cover: such identity labels legitimately exercise TR-15's
-   unsupported-glyph diagnostic and must not be "fixed" by transliteration or normalisation, which CORE-009 forbids.
+   carry an authored local offset from the marker origin and a configurable text size with documented defaults. A
+   label draws at its authored anchor unless the TR-20 collision rule displaces it under crowding; displacement
+   moves only the rendered label — anchors remain authored data, and identity resolution and the grid are
+   untouched — and there is no truncation. CORE-009 permits
+   non-ASCII local IDs — for example Korean — which the TR-15 fallback chain renders natively in the authored
+   script; identity text must never be "fixed" by transliteration or normalisation, which CORE-009 forbids, and a
+   script no bundled font covers still omits the whole label through TR-15's `UnsupportedGlyph` diagnostic.
    Identity resolution requires an instantiated `IIdentifiable` ancestor. Ancestor scripts that do not run in the
    editor — for example the production character — therefore genuinely provide none in the editor preview. In an
    editor-tool context — tool scripts running under the editor, discriminated by `Engine.IsEditorHint()` — such a
@@ -116,16 +126,20 @@ with no character-specific or category-specific machinery.
    accessor. A render request supplies a required world centre coordinate and optional per-request settings, each
    overriding a documented service default: maximum marker inclusion distance (sensible default), output pixel
    dimensions, bounding margin, grid text settings, the TR-14 grid minimum pixel spacing and the TR-19 marker style
-   overrides (`MarkerOverrides`, default none). The TR-10 minimum world extent is the one exception — a documented
-   fixed service guard, not a per-request setting. Tuning values stay configurable; their structure is fixed by
+   overrides (`MarkerOverrides`, default none). The TR-10 minimum world extent is the one exception — a fixed
+   service guard of 2 metres, not a per-request setting. The guard is a degenerate-zoom floor for genuinely sparse
+   scenes — a single or collinear marker set — so the map never extreme-zooms onto a lone marker; the breathing
+   space that separates included geometry such as walls from the image edge is the per-request margin's job, not
+   the guard's. Tuning values stay configurable; their structure is fixed by
    this specification.
 10. **TR-10:** A marker is included if and only if the X/Z-plane distance from the requested centre to the marker's
     world origin is at most the inclusion distance. The viewport is the axis-aligned bounding box of all included
     markers' projected footprints, unioned with the requested centre, expanded by the per-request margin on every side,
     then widened along one axis to the image aspect ratio under a single uniform pixels-per-metre scale — never
     distortion. A label's world anchor — its authored offset position under the marker — counts as footprint extent, so
-    included label content is never projected out of view. A documented fixed minimum world extent (TR-9) keeps single
-    or collinear marker sets legible, and markers contributing no geometry contribute no extent.
+    included label content is never projected out of view. The fixed 2-metre minimum world extent (TR-9) floors
+    single or collinear marker sets against degenerate extreme zoom; separating included geometry from the image
+    edge is the margin's role, and markers contributing no geometry contribute no extent.
 11. **TR-11:** Capture runs on the Godot main thread in a single pass: live group membership, transforms and identity
     text are read once into an immutable snapshot before composition, so one result never mixes states. Markers freed
     or queued for deletion are excluded. Later requests capture anew; no live-pose caching.
@@ -150,11 +164,16 @@ with no character-specific or category-specific machinery.
 
 ### Text Pipeline
 
-15. **TR-15:** All rendered text — labels and grid numbers — is converted to filled glyph outline paths from the
-    bundled Inter font via the carried-over in-process pipeline. The SVG never depends on SVG text support, external
-    fonts or external conversion processes. Unsupported glyphs produce a diagnostic, never silently empty text. All
-    user-supplied strings are escaped for their SVG/XML context. Editor and runtime produce identical fragments for
-    the same scene state.
+15. **TR-15:** All rendered text — labels and grid numbers — is converted to filled glyph outline paths via the
+    carried-over in-process pipeline, resolving each rune through a fixed bundled fallback chain: Inter first — so
+    Latin metrics are unchanged — then a bundled OFL-licensed Hangul-capable fallback font under `game/assets/fonts/`
+    (exact family and file tunable; the licence, the directory and the Inter-first order are fixed). The first chain
+    font that supports a rune supplies its glyph, so mixed-script labels render natively — a Korean `FullId` shows
+    Hangul, not transliteration (CORE-009). A rune no chain font covers omits the whole label with the
+    `UnsupportedGlyph` diagnostic — never partial text, never silently empty. The SVG never depends on SVG text
+    support, external fonts or external conversion processes, and every fragment stays self-contained glyph paths
+    (TR-5). All user-supplied strings are escaped for their SVG/XML context. Editor and runtime produce identical
+    fragments for the same scene state.
 
 ### Error and Edge Contracts
 
@@ -172,6 +191,12 @@ with no character-specific or category-specific machinery.
       authoring time rather than silently omitting.
     - Transient degenerate projection — a footprint collapsing to zero area from a live pose, for example a pitched
       marker: the affected primitive is skipped for that render with a diagnostic; the render continues.
+    - Label collision (TR-20): a marker label that exhausts the TR-20 candidate list without finding a position
+      that clears all already-placed marker label boxes and all other markers' shape boxes, and fits inside the
+      image, is omitted for that render with the informational `LabelOverlaps` diagnostic naming the label and its
+      marker by scope-relative node path; the render continues. It is not a failure — the diagnostic fires only
+      after displacement is exhausted against both clearance checks, and extreme crowding is normal transient
+      scene state.
     - Unused marker override key: a `MarkerOverrides` (TR-19) key matching no discovered marker — group membership,
       considered before the distance filter — is reported as the informational `UnusedOverride` diagnostic and the
       render continues. A key matching a distance-excluded marker is not unused.
@@ -204,7 +229,11 @@ with no character-specific or category-specific machinery.
     primitive transforms, both label flavours, renderer requests, distance filtering, auto-scale with margin, the
     grid, and the editor workflow. The scene exercises every primitive type, both label kinds, a live `ICharacter`
     carrying a marker that translates and rotates, at least one included and one excluded marker, and at least two
-    distinct scales.
+    distinct scales. It also carries a Korean-ID identity label rendered natively in Hangul (TR-15); a label
+    authored in a script no bundled font covers — an emoji, for example; the exercise must not use Hangul, which the
+    TR-15 fallback chain covers — exercising the `UnsupportedGlyph` whole-label omission (TR-15); and co-located
+    labelled markers exercising the TR-20 displacement rule, including a label authored to sit under a
+    neighbouring marker's shape and displaced clear of it (TR-20 shape clearance).
 
 ### Per-Request Marker Style Overrides
 
@@ -234,12 +263,61 @@ with no character-specific or category-specific machinery.
     - **Determinism:** override application is a per-marker lookup with no iteration-order effects, and requests
       without overrides render byte-identically to the same request without the feature (TR-13).
 
+### Label Collision Handling
+
+20. **TR-20:** Marker labels stay legible under crowding through a deterministic single-pass placement rule that
+    resolves overlaps by displacement, with omission only as a bounded last resort.
+    - **Base position:** a label's base position is its authored anchor (TR-7); every label attempts its base
+      position first. Displacement moves only the rendered label: anchors remain authored data, and identity
+      resolution, glyph output and the grid are untouched.
+    - **Participants:** every marker label of an included marker that still renders glyphs after identity resolution
+      and glyph conversion — both flavours (TR-7) and `LabelText`-overridden text (TR-19) alike. A marker matched by
+      any TR-19 override, colour-only included, confers placement priority on its labels. Labels already omitted for
+      that render (`MissingIdentity`, `IdentityResolvesAtRuntime`, `UnsupportedGlyph`) are absent and inert, and
+      empty text (TR-16) renders no glyphs and owns no box. Grid labels never participate: their spacing is TR-14's
+      adaptive rule alone, and marker labels neither check against nor yield to grid labels.
+    - **Order:** labels of markers matched by a TR-19 override place first, then every remaining label; within each
+      group, ascending marker draw-order ordinal tie-broken by scene node path (TR-12's order), then authored
+      collection order among one marker's own labels.
+    - **Rule:** placement proceeds in that order. A label places at the first candidate position from the fixed,
+      bounded, ordered candidate list whose axis-aligned pixel bounding box — the box of its rendered glyph paths in
+      image pixel space — intersects no already-placed marker label's box, intersects no other included marker's
+      shape box, and lies fully inside the image.
+    - **Shape clearance:** a shape box is the axis-aligned pixel box of one projected shape primitive — the same
+      projected footprint boxes that feed TR-10's viewport extent, taken from the snapshot. A candidate must
+      intersect no shape box of any other included marker; the label's own marker's shapes are exempt, since the
+      authored anchor is designed against them. Grid lines and grid labels are not shape ink and never participate
+      (TR-14).
+    - **Candidate list:** offsets from the base position (+x right, +y down in image pixel space), in order: (1) the
+      base position; (2) the vertical stack above it — (0, −k·S) for k = 1…D; (3) the diagonal fan — for k = 1…D the
+      four offsets (±k·S, ±k·S) in the fixed order up-right, up-left, down-right, down-left. The step S and depth D
+      are documented tunable service constants, not per-request settings (TR-9 is unchanged).
+    - **Defaults:** S = 32 image pixels — one typical label row (about 24 px) plus a gap, so the first stack step
+      alone separates a co-located pair, and because offsets live in pixel space they hold at any zoom. D = 4 — up
+      to five labels stacked or fanned from one anchor, beyond the co-located pairs and triples real scenes produce,
+      bounding the pass at 21 candidate positions per label.
+    - **Last resort:** if the candidate list is exhausted, a non-overridden label is omitted for that render with
+      the informational `LabelOverlaps` diagnostic (TR-16). An overridden label is never omitted: it places at its
+      base position, where only other overridden labels' boxes can already sit — later non-overridden labels
+      displace around it — so label-box overlap is confined to overridden-versus-overridden, and only in this
+      exhausted case does a label sit over another marker's shape ink. The AI-013 subject's `*You*` label places at
+      its authored anchor whenever that anchor is clear — of other labels and of neighbouring shape ink alike —
+      and otherwise displaces like any other label, still never omitted.
+    - **Displaced labels:** keep their authored text, size, colour and draw order; only the position changes, and
+      painting order still follows TR-12.
+    - **Determinism and boundaries:** one pass, no animation, no leader lines, no iterative optimisation — assigned
+      positions are a pure function of the snapshot and settings (TR-11, TR-13), so identical inputs produce
+      identical placements and byte-identical SVG. Displacement never alters the viewport: extent is still computed
+      from authored anchors (TR-10), so a label pushed closer to the image edge than its anchor changes no framing,
+      and geometry, extent, inclusion and draw order are untouched in every case.
+
 ## In Scope
 
 - Marker, primitive, element and renderer contracts under `AlleyCat.Scene.MiniMap`, including group discovery,
-  distance filtering, auto-scale with margin, deterministic ordering, the adaptive grid and per-request marker
-  style overrides.
-- Self-contained text-to-glyph-path rendering and in-process rasterisation.
+  distance filtering, auto-scale with margin, deterministic ordering, the adaptive grid, per-request marker style
+  overrides, and deterministic label collision handling with bounded displacement (TR-20).
+- Self-contained text-to-glyph-path rendering with the bundled per-rune font fallback chain (TR-15), and in-process
+  rasterisation.
 - Editor preview (whole-coverage open, pan, zoom) and footprint gizmos using production composition.
 - Demonstration scene, authoring and API instructions, and automated/visual validation.
 
@@ -250,8 +328,10 @@ with no character-specific or category-specific machinery.
 - Multi-storey mapping and floor selection.
 - Runtime player-facing minimap UI.
 - New interaction-state subsystems.
-- Automatic label placement or collision handling, and built-in rendered legends or category palettes: creators author
-  their own.
+- Leader lines, animation, and dynamic or runtime-adaptive label placement beyond TR-20's fixed candidate list:
+  displacement is bounded and deterministic, never interactive or self-optimising.
+- Grid-label collision handling: grid labels keep TR-14's adaptive spacing and never participate in TR-20.
+- Built-in rendered legends or category palettes: creators author their own.
 - Editor-preview override affordances: the preview passes no overrides (TR-17).
 - Per-primitive override granularity, overlay annotation elements, and path-keyed overrides for non-identifiable
   markers: TR-19 keys are resolved `FullId` strings and restyle whole markers.
@@ -262,7 +342,8 @@ with no character-specific or category-specific machinery.
 
 - **UA-1 (UR-1, UR-5, UR-6):** Independently inspect actual rendered demonstration images. Verify every primitive type
   is visible with its authored colours, both label flavours are legible, identity labels show canonical `FullId`
-  values, and SVG text is glyph paths with no external dependencies. Capture success alone is not evidence.
+  values — the Korean identity in Hangul glyphs, never transliterated — and SVG text is glyph paths with no external
+  dependencies. Capture success alone is not evidence.
 - **UA-2 (UR-2):** Observe markers added and removed at runtime through scene-tree lifecycle: they appear and
   disappear on subsequent renders without renderer API calls or character-side changes.
 - **UA-3 (UR-3):** Request renders around different centres and inclusion distances. Verify excluded markers are
@@ -277,6 +358,13 @@ with no character-specific or category-specific machinery.
 - **UA-6 (UR-8):** From a requester's seat, request a render emphasising a chosen character — for example a gold
   fill and/or a "You" label — and observe only that marker restyled: same geometry, positions, draw order and grid,
   with later plain requests showing the marker in its authored style again.
+- **UA-7 (UR-9):** Independently inspect renders containing co-located labelled markers at more than one spacing:
+  where label boxes would intersect, both labels render legibly, displaced apart — never a merged unreadable blob —
+  and no label hides under another marker's shape: a label authored or pushed into a neighbouring marker's shape
+  ink is displaced clear of it. At spacings clear of other labels and shapes, labels sit at their authored anchors.
+  Under extreme crowding beyond the bounded candidate list the rule degrades gracefully, omitting the
+  lowest-priority labels with the `LabelOverlaps` diagnostic. A render emphasising a marker through
+  `MarkerOverrides` shows that marker's label placed even under crowding.
 
 ### Technical Requirement Acceptance
 
@@ -294,7 +382,9 @@ with no character-specific or category-specific machinery.
   of a stable scene produce byte-identical SVG; ordinal changes reorder predictably), exact output dimensions,
   escaping and invariant formatting.
 - **TA-5 (TR-14, TR-15):** Tests verify world-zero-anchored adaptive steps at more than one scale including negative
-  coordinates, minimum pixel spacing, grid labels, and unsupported-glyph diagnostics.
+  coordinates, minimum pixel spacing, grid labels, the Inter-first per-rune fallback chain — Latin metrics
+  unchanged, Hangul-covered runes supplied by the bundled fallback font — and whole-label `UnsupportedGlyph`
+  omission with its diagnostic for a script no bundled font covers.
 - **TA-6 (TR-16):** Tests verify each edge contract behaves exactly as specified: zero-marker success with
   diagnostic, empty label text, authored degenerate failure, and transient projection skip. For an identity label
   with no instantiated `IIdentifiable` ancestor, tests verify the runtime `MissingIdentity` error naming the marker
@@ -319,6 +409,16 @@ with no character-specific or category-specific machinery.
   and does not fire when the only match is distance-excluded; markers sharing one `FullId` are all styled; null
   keys and null entries are rejected loudly; and extent, inclusion, draw order, framing and grid are unchanged
   under overrides.
+- **TA-10 (TR-20):** Tests verify placement order — labels of TR-19-matched markers first, then draw order with
+  node-path tie-break, authored collection order among one marker's labels — the candidate walk in list order with
+  its three checks: no intersection with already-placed marker label boxes, none with other included markers'
+  shape boxes (the label's own marker's shapes exempt), and fully inside the image — displaced labels keeping
+  their authored text, size, colour and draw order, last-resort omission after list exhaustion with the
+  informational `LabelOverlaps` diagnostic naming the label and its marker by scope-relative node path, overridden
+  labels never omitted and a lone one placing at its authored anchor whenever that anchor is clear of labels and
+  shape ink, grid labels neither omitted nor displaced, geometry, framing, extent, inclusion and draw order
+  unchanged under displacement and omission alike, and determinism: repeated renders of one snapshot and settings
+  produce identical placements and byte-identical SVG (TR-13).
 
 ## References
 
@@ -341,6 +441,7 @@ Supporting references:
   scene only.
 - [Project Specifications](../../index.md) — entry point for implementers and reviewers.
 - `game/src/Scene/MiniMap/` — implementation home created by this feature.
-- `game/assets/fonts/Inter/Inter_18pt-Medium.ttf` — bundled font consumed by the text pipeline.
+- `game/assets/fonts/` — bundled text-pipeline fonts: `Inter/Inter_18pt-Medium.ttf` (fallback-chain head; Latin
+  metrics) and the OFL-licensed Hangul-capable fallback font of TR-15.
 - [Godot SVG Import](https://docs.godotengine.org/en/stable/tutorials/assets_pipeline/importing_images.html) — SVG
   text is unsupported; rationale for TR-15.

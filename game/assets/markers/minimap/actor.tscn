@@ -12,23 +12,23 @@ metadata/_custom_type_script = "uid://j5nt48a08vbv"
 
 [node name="MiniMapCircle" type="Node3D" parent="." unique_id=1635719248]
 script = ExtResource("2_i2obb")
-Radius = 0.3
+Radius = 0.2
 FillColour = Color(0.050980393, 0.17254902, 0.77254903, 1)
 metadata/_custom_type_script = "uid://bdq4e5dko6vhv"
 
 [node name="MiniMapTriangle" type="Node3D" parent="." unique_id=1959024747]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.3802556)
 script = ExtResource("3_vt4rx")
-Width = 0.2
-Length = 0.2
+Width = 0.15
+Length = 0.15
 FillColour = Color(0.050980393, 0.17254902, 0.77254903, 1)
 metadata/_custom_type_script = "uid://ddcbvkm0k6w2b"
 
 [node name="MiniMapLabel" type="Node3D" parent="." unique_id=1465768925]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.5389039)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.35)
 script = ExtResource("4_x8ts7")
 Flavour = 1
 Text = "Actor"
-TextSize = 42
+TextSize = 18
 FillColour = Color(0, 0, 0, 1)
 metadata/_custom_type_script = "uid://bi286ig2oimvg"

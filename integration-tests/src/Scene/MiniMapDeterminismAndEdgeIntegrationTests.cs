@@ -262,7 +262,9 @@ public sealed class MiniMapDeterminismAndEdgeIntegrationTests
         (int vertical, int horizontal) = MiniMapTestHarness.GridLineCounts(MiniMapTestHarness.Svg(result));
         Assert.True(vertical > 0 && horizontal > 0, "The grid must still draw with zero markers.");
         Assert.True(result.Viewport.HasPoint(new Vector2(3, 4)));
-        Assert.Equal(MiniMapRenderer.MinimumWorldExtentMetres, result.Viewport.Size.X, 1);
+        // The default extent around the requested centre is the centre point grown by the documented default
+        // margin (2 m per side = 4 m); the 2 m guard floors it only from below (TR-9/TR-10, TR-16).
+        Assert.Equal(4f, result.Viewport.Size.X, 1);
         Assert.Contains("ZeroMarkers", Assert.Single(result.Diagnostics).Code, StringComparison.Ordinal);
     }
 
@@ -698,8 +700,9 @@ public sealed class MiniMapDeterminismAndEdgeIntegrationTests
     }
 
     /// <summary>
-    /// Text the bundled Inter font does not cover — non-Latin identity is legitimate — produces an unsupported-glyph
-    /// diagnostic and omits the glyphs without failing the render (TR-15/TR-16).
+    /// Text no font in the bundled fallback chain covers — an emoji label, since TR-15 now renders Hangul
+    /// natively — produces an unsupported-glyph diagnostic and omits the whole label without failing the render
+    /// (TR-15/TR-16).
     /// </summary>
     [Fact]
     public async Task UnsupportedGlyph_DiagnosesWithoutFailingTheRender()
@@ -709,8 +712,8 @@ public sealed class MiniMapDeterminismAndEdgeIntegrationTests
         {
             Name = "MinimapGlyphRoot"
         };
-        MiniMapMarker marker = MiniMapTestHarness.CreateMarker("Korean", 0,
-            new MiniMapLabel { Name = "Caption", Text = "민수", TextSize = 16 },
+        MiniMapMarker marker = MiniMapTestHarness.CreateMarker("Emoji", 0,
+            new MiniMapLabel { Name = "Caption", Text = "😀", TextSize = 16 },
             new MiniMapRectangle { Name = "Box", Width = 2, Depth = 2, FillColour = new Color("287fa0") });
 
         root.AddChild(marker);
@@ -722,10 +725,10 @@ public sealed class MiniMapDeterminismAndEdgeIntegrationTests
 
             Assert.Equal(MiniMapRenderStatus.Ready, result.Status);
             Assert.Contains("#287fa0", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
-            Assert.DoesNotContain("민수", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
+            Assert.DoesNotContain("😀", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
             MiniMapDiagnostic diagnostic = Assert.Single(result.Diagnostics);
             Assert.Equal("UnsupportedGlyph", diagnostic.Code);
-            Assert.Equal("Korean", diagnostic.Reference, StringComparer.Ordinal);
+            Assert.Equal("Emoji", diagnostic.Reference, StringComparer.Ordinal);
         }
         finally
         {

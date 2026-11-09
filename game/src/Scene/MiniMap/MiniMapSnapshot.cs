@@ -58,7 +58,10 @@ public sealed record MiniMapScriptedAncestor(string Name, string Path)
 /// path; the render continues (TR-16). Outside editor-tool contexts the diagnostic is the runtime
 /// <c>MissingIdentity</c> error; in an editor-tool context (TR-7) it is the informational
 /// <c>IdentityResolvesAtRuntime</c> notice explaining that the ancestor's script does not run in the editor, so the
-/// label will show its identity in play mode. Empty or whitespace-only text legitimately renders no glyphs.
+/// label will show its identity in play mode. Empty or whitespace-only text legitimately renders no glyphs. Text
+/// that renders glyphs is placed by the renderer's TR-20 pass before composition: the fragment renders at the
+/// recorded placement — its base position plus any displacement offset — or reports the placement pass's carried
+/// omission diagnostic (<c>LabelOverlaps</c>, or <c>UnsupportedGlyph</c> for text the fallback chain rejects).
 /// </summary>
 /// <param name="MarkerPath">Owning marker node path, scope-relative (TR-16).</param>
 /// <param name="PrimitivePath">Primitive node path, scope-relative (TR-16).</param>
@@ -88,7 +91,25 @@ public sealed record MiniMapLabelSnapshot(
             return string.Empty;
         }
 
-        return projection.WriteText(Text, projection.WorldToPixel(Anchor), TextSizePixels, Fill, MarkerPath);
+        if (string.IsNullOrWhiteSpace(Text))
+        {
+            return string.Empty;
+        }
+
+        // TR-20: the placement pass decided this label's position (or omission) before composition. No recorded
+        // outcome — the live authoring convenience path, which runs no placement pass — renders at the authored
+        // anchor, where WriteText itself reports any unsupported-glyph diagnostic.
+        MiniMapLabelPlacement? placement = projection.LabelPlacement(PrimitivePath);
+        switch (placement)
+        {
+            case MiniMapLabelPlacement.Omitted omitted:
+                projection.Report(new MiniMapDiagnostic(omitted.Code, MarkerPath, omitted.Message));
+                return string.Empty;
+            case MiniMapLabelPlacement.Placed placed:
+                return projection.WriteText(Text, projection.WorldToPixel(Anchor) + placed.Offset, TextSizePixels, Fill, MarkerPath);
+            default:
+                return projection.WriteText(Text, projection.WorldToPixel(Anchor), TextSizePixels, Fill, MarkerPath);
+        }
     }
 
     private MiniMapDiagnostic MissingIdentity() => new("MissingIdentity", MarkerPath,
@@ -113,11 +134,14 @@ public sealed record MiniMapLabelSnapshot(
 /// <param name="DrawOrder">Authored draw-order ordinal.</param>
 /// <param name="Origin">World X/Z origin in metres.</param>
 /// <param name="Primitives">Primitive snapshots in authored collection order.</param>
+/// <param name="MatchedOverride">True when a TR-19 override matched this marker — colour-only included: its labels
+/// place first and are never omitted under the TR-20 collision rule.</param>
 public sealed record MiniMapMarkerSnapshot(
     string NodePath,
     int DrawOrder,
     Vector2 Origin,
-    ImmutableArray<IMiniMapElement> Primitives) : IMiniMapElement
+    ImmutableArray<IMiniMapElement> Primitives,
+    bool MatchedOverride = false) : IMiniMapElement
 {
     /// <inheritdoc />
     public string BuildSvgFragment(MiniMapProjection projection) =>

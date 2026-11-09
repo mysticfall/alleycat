@@ -19,9 +19,11 @@ public enum MiniMapLabelFlavour
 /// Label primitive (SCN-002 TR-7). The authored local offset from the marker origin is the node's authored position
 /// under the marker (map up is −Z). Text renders as filled glyph paths in image pixels at the authored
 /// <see cref="TextSize" />, so labels stay legible at every map scale. Empty or whitespace-only configured text
-/// renders no glyphs and is legal. Identity text with no identifiable ancestor, and glyphs the bundled Inter font
-/// does not cover — non-Latin FullIds are legitimate — are diagnosed and omitted, never invented or transliterated.
-/// There is no automatic placement, collision avoidance or truncation.
+/// renders no glyphs and is legal. Identity text with no identifiable ancestor is diagnosed and omitted, never
+/// invented or transliterated; text renders through the bundled fallback chain (TR-15) — Latin from Inter, Hangul
+/// from the bundled fallback — and a script no chain font covers is diagnosed and omitted whole. Under crowding the
+/// renderer's TR-20 rule may displace the rendered label from its authored anchor, or omit it as a bounded last
+/// resort; the anchor itself stays authored data and there is no truncation.
 /// </summary>
 [Tool]
 [GlobalClass]

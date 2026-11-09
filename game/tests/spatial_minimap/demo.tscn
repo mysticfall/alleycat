@@ -83,6 +83,89 @@ script = ExtResource("4_circle")
 Radius = 0.8
 FillColour = Color(0.16, 0.5, 0.63, 1)
 
+[node name="Relic" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, 1.5)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Charm"), NodePath("Caption")]
+
+[node name="Charm" type="Node3D" parent="Relic"]
+script = ExtResource("4_circle")
+Radius = 0.45
+FillColour = Color(0.66, 0.29, 0.55, 1)
+
+[node name="Caption" type="Node3D" parent="Relic"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+script = ExtResource("6_label")
+Flavour = 0
+Text = "😀"
+TextSize = 18
+FillColour = Color(0.36, 0.1, 0.3, 1)
+
+[node name="Bench" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 0, 4.5)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Seat"), NodePath("Caption")]
+
+[node name="Seat" type="Node3D" parent="Bench"]
+script = ExtResource("3_rectangle")
+Width = 1.2
+Depth = 0.5
+FillColour = Color(0.45, 0.33, 0.2, 1)
+
+[node name="Caption" type="Node3D" parent="Bench"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+script = ExtResource("6_label")
+Flavour = 0
+Text = "Bench"
+TextSize = 18
+FillColour = Color(0.24, 0.17, 0.1, 1)
+
+[node name="StreetLamp" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 0, 4.5)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Post"), NodePath("Caption")]
+
+[node name="Post" type="Node3D" parent="StreetLamp"]
+script = ExtResource("5_triangle")
+Width = 0.7
+Length = 1.0
+FillColour = Color(0.85, 0.68, 0.2, 1)
+
+[node name="Caption" type="Node3D" parent="StreetLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+script = ExtResource("6_label")
+Flavour = 0
+Text = "Lamp"
+TextSize = 18
+FillColour = Color(0.4, 0.3, 0.05, 1)
+
+[node name="Planter" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, -4.5)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Bed")]
+
+[node name="Bed" type="Node3D" parent="Planter"]
+script = ExtResource("4_circle")
+Radius = 0.8
+FillColour = Color(0.29, 0.52, 0.31, 1)
+
+[node name="Milestone" type="Node3D" parent="." node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, -4.5)
+script = ExtResource("2_marker")
+DrawOrder = 1
+Primitives = [NodePath("Caption")]
+
+[node name="Caption" type="Node3D" parent="Milestone"]
+script = ExtResource("6_label")
+Flavour = 0
+Text = "Milestone"
+TextSize = 18
+FillColour = Color(0.09, 0.27, 0.12, 1)
+
 [node name="Alice" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 0)
 script = ExtResource("1_character")

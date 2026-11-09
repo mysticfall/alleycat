@@ -21,11 +21,27 @@ namespace AlleyCat.Scene.MiniMap;
 public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
 {
     /// <summary>
-    /// Fixed minimum world extent guard in metres (TR-9/TR-10): the viewport never shows less than this per axis, so
-    /// single or collinear marker sets stay legible, and a zero-marker render frames this extent around the requested
-    /// centre. Documented fixed guard — deliberately not a per-request setting.
+    /// Fixed minimum world extent guard in metres (TR-9/TR-10): the spec pins this at exactly 2 metres — a
+    /// degenerate-zoom floor for genuinely sparse scenes (a single or collinear marker set) so the map never
+    /// extreme-zooms onto a lone marker, and the extent a zero-marker render frames around the requested
+    /// centre. Separating included geometry from the image edge is the per-request margin's job, not the
+    /// guard's. Documented fixed guard — deliberately not a per-request setting.
     /// </summary>
-    public const float MinimumWorldExtentMetres = 8f;
+    public const float MinimumWorldExtentMetres = 2f;
+
+    /// <summary>
+    /// TR-20 label displacement step in image pixels (documented tunable service constant — deliberately not a
+    /// per-request setting, TR-9 is unchanged): one typical label row (about 24 px) plus a gap, so the first stack
+    /// step alone separates a co-located pair, and because offsets live in pixel space they hold at any zoom.
+    /// </summary>
+    public const float LabelDisplacementStepPixels = 32f;
+
+    /// <summary>
+    /// TR-20 label displacement depth (documented tunable service constant — deliberately not a per-request
+    /// setting): up to five labels stacked or fanned from one anchor, beyond the co-located pairs and triples real
+    /// scenes produce, bounding the pass at 21 candidate positions per label.
+    /// </summary>
+    public const int LabelDisplacementDepth = 4;
 
     /// <summary>Documented output size bounds in pixels; requests outside them fail loudly with a diagnostic.</summary>
     public const int MaximumImageDimension = 16384;
@@ -370,7 +386,11 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
             + $"viewBox=\"0 0 {settings.Width} {settings.Height}\">");
         _ = svg.Append($"<rect x=\"0\" y=\"0\" width=\"{settings.Width}\" height=\"{settings.Height}\" fill=\"{BackgroundFill}\"/>");
         AppendGrid(svg, projection, gridStep, settings);
+        // Marker labels place through the deterministic TR-20 pass before composition; grid labels never
+        // participate — their spacing is TR-14's adaptive rule alone.
+        PlaceMarkerLabels(markers, projection);
         // Markers paint in ascending draw order, tie-broken by node path; primitives in collection order (TR-12).
+        // Displacement moves only a label's rendered position — painting order is untouched (TR-20).
         foreach (MiniMapMarkerSnapshot marker in markers)
         {
             _ = svg.Append(marker.BuildSvgFragment(projection));
@@ -384,6 +404,76 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
             ? throw new MiniMapRenderException("RasterisationFailed", string.Empty,
                 "In-process SVG rasterisation failed or returned incorrect dimensions.")
             : new MiniMapRenderResult(MiniMapRenderStatus.Ready, source, image, viewport, scale, gridStep, projection.CollectDiagnostics());
+    }
+
+    /// <summary>
+    /// The deterministic single-pass TR-20 label placement, run after the grid and before marker composition:
+    /// gathers every marker label that still renders glyphs after identity resolution and glyph conversion — both
+    /// flavours and <c>LabelText</c>-overridden text alike — and records each label's placement outcome on the
+    /// projection. Labels omitted earlier (<c>MissingIdentity</c>, <c>IdentityResolvesAtRuntime</c>) and empty text
+    /// own no box and stay absent; a label whose glyphs the fallback chain rejects is omitted here with the
+    /// <c>UnsupportedGlyph</c> diagnostic its fragment later reports. Every included marker's projected shape
+    /// primitives feed the placement's shape-ink boxes — the same footprint boxes that computed TR-10's viewport
+    /// extent — which a candidate label box must clear unless the shape belongs to the label's own marker. Grid
+    /// lines and grid labels never participate (TR-14). Placement never alters the viewport, extent, inclusion or
+    /// draw order: extent is still computed from authored anchors (TR-10).
+    /// </summary>
+    /// <param name="markers">Included marker snapshots in TR-12 paint order.</param>
+    /// <param name="projection">Projection carrying the placement outcomes into composition.</param>
+    private static void PlaceMarkerLabels(ImmutableArray<MiniMapMarkerSnapshot> markers, MiniMapProjection projection)
+    {
+        List<MiniMapLabelPlacementRequest> requests = [];
+        List<MiniMapShapeInkBox> shapeInkBoxes = [];
+        foreach (MiniMapMarkerSnapshot marker in markers)
+        {
+            for (int index = 0; index < marker.Primitives.Length; index++)
+            {
+                switch (marker.Primitives[index])
+                {
+                    case MiniMapShapeSnapshot shape:
+                        // One ink box per projected shape primitive (TR-20 shape clearance): the axis-aligned
+                        // pixel bounding box of the same polygon points that fed TR-10's content extent.
+                        shapeInkBoxes.Add(new MiniMapShapeInkBox(marker.NodePath, BoundsOf(shape.Polygon, projection)));
+                        break;
+                    case MiniMapLabelSnapshot label when label.Text is { } text && !string.IsNullOrWhiteSpace(text):
+                        try
+                        {
+                            Rect2 baseBox = MiniMapProjection.TextInkBounds(text, projection.WorldToPixel(label.Anchor), label.TextSizePixels);
+                            requests.Add(new MiniMapLabelPlacementRequest(
+                                label.PrimitivePath, label.MarkerPath, marker.MatchedOverride, marker.DrawOrder, marker.NodePath, index, baseBox));
+                        }
+                        catch (InvalidOperationException exception)
+                        {
+                            // Glyph conversion failed (TR-15): the whole label is omitted and inert in placement.
+                            projection.SetLabelPlacement(label.PrimitivePath, new MiniMapLabelPlacement.Omitted("UnsupportedGlyph", exception.Message));
+                        }
+
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        foreach (KeyValuePair<MiniMapLabelPlacementRequest, MiniMapLabelPlacement> entry in MiniMapLabelPlacer.Place(
+                     requests, shapeInkBoxes, projection.ImageSize, LabelDisplacementStepPixels, LabelDisplacementDepth))
+        {
+            projection.SetLabelPlacement(entry.Key.PrimitivePath, entry.Value);
+        }
+    }
+
+    private static Rect2 BoundsOf(ImmutableArray<Vector2> polygon, MiniMapProjection projection)
+    {
+        Vector2 minimum = Vector2.Inf;
+        Vector2 maximum = -Vector2.Inf;
+        foreach (Vector2 point in polygon)
+        {
+            Vector2 pixel = projection.WorldToPixel(point);
+            minimum = minimum.Min(pixel);
+            maximum = maximum.Max(pixel);
+        }
+
+        return new Rect2(minimum, maximum - minimum);
     }
 
     private static float SelectGridStep(float scale, ResolvedSettings settings)

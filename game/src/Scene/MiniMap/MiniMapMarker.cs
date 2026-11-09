@@ -112,7 +112,8 @@ public partial class MiniMapMarker : Node3D, IMiniMapElement
             elements.Add(primitive.CaptureSnapshot(context, path, identity, markerOverride));
         }
 
-        return new MiniMapMarkerSnapshot(path, DrawOrder, new Vector2(transform.Origin.X, transform.Origin.Z), elements.ToImmutable());
+        return new MiniMapMarkerSnapshot(path, DrawOrder, new Vector2(transform.Origin.X, transform.Origin.Z), elements.ToImmutable(),
+            markerOverride is not null);
     }
 
     /// <summary>

@@ -201,8 +201,10 @@ public sealed class VisualContextIntegrationTests
             AssertPng(png);
             Image decoded = new();
             Assert.Equal(Error.Ok, decoded.LoadPngFromBuffer(png));
-            Assert.Equal(renderer.Defaults.Width, decoded.GetWidth());
-            Assert.Equal(renderer.Defaults.Height, decoded.GetHeight());
+            // The tool composes AI-013 TR-3's fixed documented 512×1024 portrait, not the renderer's square
+            // service defaults.
+            Assert.Equal(512, decoded.GetWidth());
+            Assert.Equal(1024, decoded.GetHeight());
             AssertGoldSubjectHighlightNearTheCentre(decoded);
 
             // The review evidence artefact: the exact tool-generated PNG through the real render path.

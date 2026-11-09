@@ -78,14 +78,18 @@ plumbing that SCN-002's Out Of Scope deferred.
    services.
 3. The minimap tool renders through the SCN-002 `MiniMapRenderer` service (CORE-004 resolution): the centre is always
    the subject character's live world position at call time; the inclusion distance is the renderer's documented
-   service default (SCN-002 TR-9), never model-settable; framing is the SCN-002 TR-10 auto-scale viewport; and the
-   request carries `MarkerOverrides` (SCN-002 TR-19) keyed by the subject's resolved `FullId`, with a fixed documented
-   gold highlight colour and label text `*You*` — literal asterisks, replacing the text of both label flavours. A
+   service default (SCN-002 TR-9), never model-settable; the bounding margin is a fixed documented 0.25 metres — a
+   small breathing border keeping the self-centred subject, its neighbours and their labels clear of the image
+   edge — and the output dimensions are a fixed documented 512×1024 pixels, portrait (Width 512, Height 1024);
+   neither margin nor dimensions is model-settable, and every other setting stays at its service default; framing
+   is the SCN-002 TR-10 auto-scale viewport; and the request carries
+   `MarkerOverrides` (SCN-002 TR-19) keyed by the subject's resolved `FullId`, with a fixed documented gold
+   highlight colour and label text `*You*` — literal asterisks, replacing the text of both label flavours. A
    subject hosting no discoverable marker makes the override key match nothing: the render still succeeds, apart
    from SCN-002's informational `UnusedOverride` diagnostic. SCN-002's edge contracts apply unchanged, including
    zero-markers-in-range success. The tool returns the renderer's raster image; the SVG document is not
-   model-facing. There are deliberately no centre, radius, or size arguments: the model cannot know distances to
-   important objects before reading a map. The tool is read-only — no Mind observations and no world effects.
+   model-facing. There are deliberately no centre, radius, size, or margin arguments: the model cannot know distances
+   to important objects before reading a map. The tool is read-only — no Mind observations and no world effects.
 4. The view-capture tool resolves the subject's own vision rig through `IHasVision` and takes exactly one fresh frame
    through `IVision.CaptureImage()` (VISION-001 TR-54), whose bounded freshness, no-polling, idle-cost, and
    side-effect contracts (VISION-001 TR-53–TR-62) apply unchanged. The tool returns the captured image and is
@@ -191,8 +195,8 @@ plumbing that SCN-002's Out Of Scope deferred.
 
 - The `AI:VisualContextMode` configuration key: binding, validation, shipped documentation, and the session-fixed
   lifetime.
-- Tools mode: the two zero-argument, subject-bound visual tools with the fixed gold `*You*` minimap override and
-  contained error results.
+- Tools mode: the two zero-argument, subject-bound visual tools with the fixed gold `*You*` minimap override, the
+  fixed 0.25-metre minimap margin and 512×1024 portrait minimap dimensions, and contained error results.
 - Auto mode: the fabricated per-request visual-context exchange — capture, composition, placement, per-cycle reuse,
   rebuild, failure omission, and instructional label texts — with both tools remaining model-visible.
 - The ephemeral image lifetime: placeholder disposal for retained images as a scoped exception to AI-002 TR-17
@@ -207,7 +211,7 @@ plumbing that SCN-002's Out Of Scope deferred.
 - Movement tools such as `walk_to`: the minimap makes coordinates legible for a future movement revision (SCN-002
   Goal).
 - Configurable highlight colour or label text: the gold `*You*` override is fixed (TR-3).
-- Model-supplied minimap framing — centre, radius, or size arguments: rejected by design (TR-3).
+- Model-supplied minimap framing — centre, radius, size, or margin arguments: rejected by design (TR-3).
 - Per-mind mode overrides, hot reload, and in-game mode switching; the mode is session-fixed (TR-1).
 - Per-request image size, format, or downscaling controls, and auto-mode frequency tuning or token-budget controls;
   the renderer's and vision rig's documented defaults apply unchanged.
@@ -252,9 +256,11 @@ plumbing that SCN-002's Out Of Scope deferred.
    AgenticMind composition only, and are absent — with unknown-tool rejection — only in `off` mode (TR-2, TR-7,
    TR-13; AI-002 TR-13).
 3. Minimap tool tests verify the centre is the subject's live world position, the inclusion distance is the
-   renderer's documented default, the override is keyed by the subject's `FullId` with the gold colour and `*You*`
-   label replacing both label flavours, framing follows SCN-002 TR-10, a markerless subject still succeeds through
-   the `UnusedOverride` diagnostic path, and no observations or world effects occur (TR-3).
+   renderer's documented default, the bounding margin is the fixed documented 0.25 metres and the output
+   dimensions are the fixed 512×1024 portrait, with every other setting at its service default, the override is
+   keyed by the subject's `FullId` with the gold colour and `*You*` label replacing both label flavours, framing
+   follows SCN-002 TR-10, a markerless subject still succeeds through the `UnusedOverride` diagnostic path, and no
+   observations or world effects occur (TR-3).
 4. Vision tool tests verify one fresh `CaptureImage()` frame from the subject's own rig with VISION-001's bounded,
    side-effect-free capture contract intact (TR-4).
 5. Containment tests verify every failure path of TR-5 yields a contained error tool result with no observation,
@@ -299,8 +305,10 @@ Normative dependencies:
 - [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — amended by this spec with the
   transcript-image contracts (TR-26–TR-28); the toggle, storage layout, and containment are consumed unchanged.
 - [SCN-002: Spatial Minimap](../../scene/002-spatial-minimap/index.md) — consumed unchanged: the character-agnostic
-  renderer (TR-4), per-request settings with the documented service default (TR-9), auto-scale framing (TR-10),
-  edge contracts (TR-16), and `MarkerOverrides` (TR-19). Its deferred AI plumbing is delivered here.
+  renderer (TR-4), per-request settings with the documented service default (TR-9; this spec pins only the bounding
+  margin and output dimensions, TR-3), auto-scale framing (TR-10), the glyph fallback text pipeline (TR-15) so
+  Korean identity labels render in minimap captures, edge contracts (TR-16), `MarkerOverrides` (TR-19), and label
+  collision handling (TR-20). Its deferred AI plumbing is delivered here.
 - [VISION-001: Eyes](../../vision/001-eyes/index.md) — consumed unchanged: `IVision.Camera` and `CaptureImage()` with
   bounded, side-effect-free one-shot capture (TR-53–TR-62).
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md) and

@@ -488,9 +488,9 @@ public sealed class MiniMapOverrideIntegrationTests
     }
 
     /// <summary>
-    /// Glyph diagnostics apply to the overridden text: an override replacing label text with glyphs the bundled Inter
-    /// font does not cover reports <c>UnsupportedGlyph</c> naming the marker and omits the glyphs while the render
-    /// continues Ready (TR-15/TR-19).
+    /// Glyph diagnostics apply to the overridden text: an override replacing label text with glyphs no bundled
+    /// font covers — an emoji, since TR-15 now renders Hangul natively — reports <c>UnsupportedGlyph</c> naming
+    /// the marker and omits the glyphs while the render continues Ready (TR-15/TR-19).
     /// </summary>
     [Fact]
     public async Task OverriddenLabelText_GlyphDiagnosticsApplyToTheOverriddenText()
@@ -508,11 +508,11 @@ public sealed class MiniMapOverrideIntegrationTests
         try
         {
             MiniMapRenderResult result = MiniMapTestHarness.CreateScopedRenderer(root)
-                .Render(Vector2.Zero, Overrides(("char:alice", new MiniMapMarkerOverride(LabelText: "민수"))));
+                .Render(Vector2.Zero, Overrides(("char:alice", new MiniMapMarkerOverride(LabelText: "😀"))));
 
             Assert.Equal(MiniMapRenderStatus.Ready, result.Status);
             Assert.Contains("#287fa0", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
-            Assert.DoesNotContain("민수", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
+            Assert.DoesNotContain("😀", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
             MiniMapDiagnostic diagnostic = Assert.Single(result.Diagnostics);
             Assert.Equal("UnsupportedGlyph", diagnostic.Code);
             Assert.Equal("Alice/AliceMarker", diagnostic.Reference, StringComparer.Ordinal);

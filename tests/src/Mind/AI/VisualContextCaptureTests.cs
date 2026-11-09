@@ -11,28 +11,30 @@ namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
 /// Unit coverage for the shared subject-bound AI-013 capture composition (TR-3–TR-5): the minimap render request
-/// carries the live subject centre, the renderer-default inclusion distance, and the gold <c>*You*</c> override
-/// keyed by the subject's resolved FullId; every capture failure is contained as an outcome, never a throw.
+/// carries the live subject centre, the renderer-default inclusion distance, the fixed 0.25 m margin, the fixed
+/// 512×1024 portrait output dimensions, and the gold <c>*You*</c> override keyed by the subject's resolved
+/// FullId; every capture failure is contained as an outcome, never a throw.
 /// </summary>
 public sealed class VisualContextCaptureTests
 {
     private const string SubjectFullId = "char:vadim";
 
     /// <summary>
-    /// The minimap settings bind exactly the TR-19 subject override — the fixed documented gold colour and the
-    /// literal <c>*You*</c> label replacing both label flavours — keyed by the subject's resolved FullId; every
-    /// other setting stays unset so the renderer's documented service defaults apply, and the inclusion distance
-    /// is never caller-settable (AI-013 TR-3).
+    /// The minimap settings bind exactly the fixed 0.25 m margin, the fixed documented 512×1024 portrait output
+    /// dimensions, and the TR-19 subject override — the fixed documented gold colour and the literal
+    /// <c>*You*</c> label replacing both label flavours — keyed by the subject's resolved FullId; every other
+    /// setting stays unset so the renderer's documented service defaults apply, and the inclusion distance is
+    /// never caller-settable (AI-013 TR-3).
     /// </summary>
     [Fact]
-    public void ComposeMinimapSettings_BindsOnlyTheGoldSubjectOverride()
+    public void ComposeMinimapSettings_BindsTheGoldSubjectOverrideTightMarginAndPortraitSize()
     {
         MiniMapRenderSettings settings = VisualContextCapture.ComposeMinimapSettings(SubjectFullId);
 
         Assert.Null(settings.MaximumDistance);
-        Assert.Null(settings.Width);
-        Assert.Null(settings.Height);
-        Assert.Null(settings.MarginMetres);
+        Assert.Equal(512, settings.Width);
+        Assert.Equal(1024, settings.Height);
+        Assert.Equal(0.25f, settings.MarginMetres);
         Assert.Null(settings.GridTextSizePixels);
         Assert.Null(settings.GridMinimumSpacingPixels);
         KeyValuePair<string, MiniMapMarkerOverride> entry = Assert.Single(settings.MarkerOverrides!);
@@ -93,6 +95,7 @@ public sealed class VisualContextCaptureTests
         Assert.Contains("NoSceneTree", outcome.Failure, StringComparison.Ordinal);
         Assert.Equal(new Vector2(3f, 7f), seenCentre);
         Assert.NotNull(seenSettings);
+        Assert.Equal(0.25f, seenSettings!.MarginMetres);
         Assert.Equal(
             VisualContextCapture.ComposeMinimapSettings(SubjectFullId).MarkerOverrides,
             seenSettings!.MarkerOverrides);

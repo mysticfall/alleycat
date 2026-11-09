@@ -6,7 +6,8 @@ namespace AlleyCat.Scene.MiniMap;
 /// <summary>
 /// World-to-image projection shared by every fragment in one render: the world X/Z viewport, the uniform
 /// pixels-per-metre scale, and the glyph pipeline. <c>+X</c> maps right and <c>+Z</c> maps down; the map never rotates.
-/// Also carries the render's diagnostics so fragment builders can report transient skips.
+/// Also carries the render's diagnostics so fragment builders can report transient skips, and the TR-20 label
+/// placement outcomes decided before composition so label fragments render at their placed positions.
 /// </summary>
 /// <param name="viewport">World X/Z rectangle mapped to the image.</param>
 /// <param name="scale">Uniform pixels-per-metre scale.</param>
@@ -14,6 +15,8 @@ namespace AlleyCat.Scene.MiniMap;
 /// <param name="diagnostics">Diagnostic sink shared by the whole render.</param>
 public sealed class MiniMapProjection(Rect2 viewport, float scale, Vector2I imageSize, List<MiniMapDiagnostic> diagnostics)
 {
+    private readonly Dictionary<string, MiniMapLabelPlacement> _labelPlacements = [];
+
     /// <summary>World X/Z rectangle mapped to the image.</summary>
     public Rect2 Viewport => viewport;
 
@@ -27,6 +30,19 @@ public sealed class MiniMapProjection(Rect2 viewport, float scale, Vector2I imag
     /// <param name="world">World X/Z position.</param>
     /// <returns>Image pixel position.</returns>
     public Vector2 WorldToPixel(Vector2 world) => (world - viewport.Position) * scale;
+
+    /// <summary>
+    /// Records the TR-20 placement outcome for one marker label, decided by the placement pass before
+    /// composition; grid labels never enter this table.
+    /// </summary>
+    /// <param name="primitivePath">Label primitive node path, scope-relative.</param>
+    /// <param name="placement">Placement outcome for the label.</param>
+    internal void SetLabelPlacement(string primitivePath, MiniMapLabelPlacement placement) => _labelPlacements[primitivePath] = placement;
+
+    /// <summary>The recorded TR-20 placement outcome for a marker label, when it participated in placement.</summary>
+    /// <param name="primitivePath">Label primitive node path, scope-relative.</param>
+    /// <returns>The placement outcome, or <c>null</c> when the label did not participate.</returns>
+    internal MiniMapLabelPlacement? LabelPlacement(string primitivePath) => _labelPlacements.GetValueOrDefault(primitivePath);
 
     /// <summary>
     /// Writes single-line text as filled glyph paths at image-pixel coordinates. Returns an empty fragment when the
@@ -48,10 +64,8 @@ public sealed class MiniMapProjection(Rect2 viewport, float scale, Vector2I imag
 
         try
         {
-            Vector2 measured = MiniMapGlyphs.Measure(text, size);
-            float x = pixel.X - (measured.X / 2);
-            float baseline = pixel.Y + (size * 0.36f);
-            return MiniMapGlyphs.Write(text, x, baseline, size, fill);
+            Vector2 pen = PenOrigin(text, pixel, size);
+            return MiniMapGlyphs.Write(text, pen.X, pen.Y, size, fill);
         }
         catch (InvalidOperationException exception)
         {
@@ -59,6 +73,30 @@ public sealed class MiniMapProjection(Rect2 viewport, float scale, Vector2I imag
             return string.Empty;
         }
     }
+
+    /// <summary>
+    /// The axis-aligned pixel bounding box of the glyph paths <see cref="WriteText" /> would render for this text
+    /// at this anchor — the TR-20 placement box. Throws <see cref="InvalidOperationException" /> on runes the
+    /// bundled fallback chain does not cover, so the placement pass can omit the label with the same diagnostic.
+    /// </summary>
+    /// <param name="text">Text to bound; must be non-empty and not whitespace.</param>
+    /// <param name="pixel">Anchor pixel position; glyphs are horizontally centred on it.</param>
+    /// <param name="size">Glyph pixel size.</param>
+    /// <returns>The glyph-path ink bounds in image pixels.</returns>
+    public static Rect2 TextInkBounds(string text, Vector2 pixel, int size)
+    {
+        Vector2 pen = PenOrigin(text, pixel, size);
+        Rect2 ink = MiniMapGlyphs.InkBounds(text, size);
+        return new Rect2(ink.Position + pen, ink.Size);
+    }
+
+    /// <summary>The pen origin <see cref="WriteText" /> uses: glyphs centred on the anchor, baseline below it.</summary>
+    /// <param name="text">Text to lay out.</param>
+    /// <param name="pixel">Anchor pixel position.</param>
+    /// <param name="size">Glyph pixel size.</param>
+    /// <returns>Pen origin pixel for the first glyph.</returns>
+    private static Vector2 PenOrigin(string text, Vector2 pixel, int size) =>
+        new(pixel.X - (MiniMapGlyphs.Measure(text, size).X / 2), pixel.Y + (size * 0.36f));
 
     /// <summary>Records one diagnostic for this render; diagnostics never change the SVG bytes.</summary>
     /// <param name="diagnostic">Diagnostic to record.</param>
