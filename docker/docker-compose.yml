@@ -27,8 +27,28 @@ services:
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+  kev-decision-api:
+    image: kev-decision-api
+    container_name: alleycat-kev-decision-api
+    build:
+      context: ./kev-decision-server
+    ports:
+      - "8081:8080"
+    volumes:
+      - kev-decision-data:/models
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15m
 volumes:
   whisper-data:
     name: whisper-data
   audio2face-data:
     name: audio2face-data
+  kev-decision-data:
+    name: kev-decision-data

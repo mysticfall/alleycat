@@ -41,6 +41,7 @@ docker compose -p alleycat -f docker/docker-compose.yml up -d
 |------------------| --- | --- | --- |
 | `whisper-api`    | `hwdsl2/whisper-live-server:cuda@sha256:5c92fd5e3305d98d3ade705aaf57664daf1fa8c3d97b5a31797a1f4edac05538` | `8000` (REST) | `whisper-live-data` → `/var/lib/whisper-live` (model cache) |
 | `audio2face-api` | `audio2face-api` (locally built) | `8765` | `audio2face-data` → `/app/models` |
+| `kev-decision-api` | `kev-decision-api` (locally built) | `8081` | `kev-decision-data` → `/models` (weights cache) |
 
 ### WhisperLive (`alleycat-whisper-api`)
 
@@ -60,6 +61,26 @@ Environment variables:
 
 See the [image documentation](https://github.com/hwdsl2/docker-whisper-live) for the full environment-variable
 reference.
+
+### kev Decision Server (`alleycat-kev-decision-api`)
+
+Typed-choice decision backend: the official `ggml-org/Kev-4B-GGUF` `Q4_K_M` build served by `llama-server`
+(llama.cpp build 12110, CUDA prebuilt, both release tarballs sha256-pinned at build time) through its native
+`POST /v1/systemone` endpoint. The image builds from `kev-decision-server/`; the ~2.9 GB weights are not baked
+in — on first start the entrypoint downloads them into the persisted `kev-decision-data` volume and verifies the
+sha256 before serving (later starts reuse the cached file).
+
+The service command pins the VRAM-bounded configuration validated by the local feasibility probe
+(`--ctx-size 8192 --parallel 1`, full GPU offload): llama-server's default context would allocate ~11.4 GiB
+VRAM on a 16 GiB card, the bounded configuration ~3.9 GiB. Do not remove these flags.
+
+The game's `DecisionClient` cannot point at `/v1/systemone` unchanged — wiring the game to this endpoint is a
+separate change. This service currently serves the probe protocol directly:
+
+```sh
+curl -X POST http://localhost:8081/v1/systemone -H 'Content-Type: application/json' \
+  -d '{"model":"kev-latest","state":"…","questions":{"q":{"type":"choice","instructions":"…","criteria":{"a":"…","b":"…"}}}}'
+```
 
 ### One-Time Multilingual Migration
 
