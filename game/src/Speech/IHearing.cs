@@ -22,4 +22,22 @@ public interface IHearing : ISense
 
     /// <summary>Receives speech with optional generic automatic-segment identity.</summary>
     void ReceiveVoice(string speech, IVoice source, SpeechSegmentMetadata? metadata) => ReceiveVoice(speech, source);
+
+    /// <summary>
+    /// Receives speech with optional automatic-segment identity and the speaker's explicitly declared
+    /// addressees.
+    /// </summary>
+    /// <param name="speech">Speech that was generated or handed off for playback.</param>
+    /// <param name="source">Voice instance that emitted the speech event.</param>
+    /// <param name="metadata">Optional automatic speech-group segment identity.</param>
+    /// <param name="declaredRecipients">
+    /// Canonical character FullIds the speaker explicitly declared as addressees, or null/empty when
+    /// unspecified. Recipients never restrict hearing reach: every listener still receives the speech.
+    /// </param>
+    void ReceiveVoice(
+        string speech,
+        IVoice source,
+        SpeechSegmentMetadata? metadata,
+        IReadOnlyList<string>? declaredRecipients)
+        => ReceiveVoice(speech, source, metadata);
 }

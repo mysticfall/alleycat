@@ -37,6 +37,16 @@ public sealed class AIDiagnosticsOptions
         get;
         init;
     }
+    /// <summary>
+    /// Enables per-evaluation JSON decision-payload dumps under <c>user://logs/mind/decision-payloads/</c>: the
+    /// verbatim evidence and question instructions the decision gate dispatched, plus the evaluation's outcome.
+    /// Disabled by default and independent of <see cref="EnableRequestResponseLogging" />.
+    /// </summary>
+    public bool EnableDecisionPayloadLogging
+    {
+        get;
+        init;
+    }
 }
 
 /// <summary>
@@ -45,12 +55,14 @@ public sealed class AIDiagnosticsOptions
 internal sealed record AIDiagnosticsSettings(
     bool EnableRequestResponseLogging,
     bool EnableReasoningLogging = true,
-    bool EnableSessionTranscriptLogging = false)
+    bool EnableSessionTranscriptLogging = false,
+    bool EnableDecisionPayloadLogging = false)
 {
     private const string ConfigSection = "Diagnostics:AI";
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
 
     private static volatile bool _sessionTranscriptsDisabledForTesting;
+    private static volatile bool _decisionPayloadDumpsDisabledForTesting;
 
     /// <summary>
     /// Loads AI diagnostics settings from the default AlleyCat configuration.
@@ -85,13 +97,22 @@ internal sealed record AIDiagnosticsSettings(
             settings = new AIDiagnosticsSettings(
                 EnableRequestResponseLogging: false,
                 EnableReasoningLogging: true,
-                EnableSessionTranscriptLogging: false);
+                EnableSessionTranscriptLogging: false,
+                EnableDecisionPayloadLogging: false);
         }
 
-        return _sessionTranscriptsDisabledForTesting && settings.EnableSessionTranscriptLogging
-            ? settings with
+        if (_sessionTranscriptsDisabledForTesting && settings.EnableSessionTranscriptLogging)
+        {
+            settings = settings with
             {
                 EnableSessionTranscriptLogging = false
+            };
+        }
+
+        return _decisionPayloadDumpsDisabledForTesting && settings.EnableDecisionPayloadLogging
+            ? settings with
+            {
+                EnableDecisionPayloadLogging = false
             }
             : settings;
     }
@@ -103,6 +124,14 @@ internal sealed record AIDiagnosticsSettings(
     /// never invoked by production. Not public API and not game configuration.
     /// </summary>
     internal static void DisableSessionTranscriptsForTesting() => _sessionTranscriptsDisabledForTesting = true;
+
+    /// <summary>
+    /// Internal test-framework seam mirroring the transcript clamp: disables decision-payload dump logging
+    /// process-wide for the integration-test runtime, so no developer's user-configuration override writes real
+    /// user-data dumps during unrelated test runs. Installed once at the test-session bootstrap and never invoked
+    /// by production. Not public API and not game configuration.
+    /// </summary>
+    internal static void DisableDecisionPayloadDumpsForTesting() => _decisionPayloadDumpsDisabledForTesting = true;
 
     /// <summary>
     /// Loads AI diagnostics settings from an <see cref="IConfiguration" /> section.
@@ -124,7 +153,8 @@ internal sealed record AIDiagnosticsSettings(
         return new AIDiagnosticsSettings(
             options.EnableRequestResponseLogging,
             options.EnableReasoningLogging,
-            options.EnableSessionTranscriptLogging);
+            options.EnableSessionTranscriptLogging,
+            options.EnableDecisionPayloadLogging);
     }
 
     private static IConfiguration ResolveDefaultConfiguration()

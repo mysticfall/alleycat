@@ -124,7 +124,18 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     public override ValueTask SpeakCancellableAsync(
         string speech,
         CancellationToken cancellationToken = default)
-        => SpeakCancellableAsync(speech, cancellationToken, admission: null);
+        => SpeakCancellableAsync(speech, cancellationToken, admission: null, declaredRecipients: null);
+
+    /// <inheritdoc />
+    public override ValueTask SpeakCancellableAsync(
+        string speech,
+        IReadOnlyList<string>? recipients,
+        CancellationToken cancellationToken)
+        // Unspecified recipients keep the historic cancellable path — including any most-derived override of the
+        // two-argument entry point — so only an explicit recipient declaration rides the queue.
+        => recipients is null
+            ? SpeakCancellableAsync(speech, cancellationToken)
+            : SpeakCancellableAsync(speech, cancellationToken, admission: null, declaredRecipients: recipients);
 
     /// <summary>
     /// Submits speech as an explicitly cancellable submission whose queue admission is arbitrated against attended
@@ -132,6 +143,8 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// capability discovered through <see cref="IAdmissionCapableVoice" /> — never a concrete-voice cast.
     /// </summary>
     /// <param name="speech">Speech text to submit.</param>
+    /// <param name="recipients">Canonical character FullIds the speaker explicitly declared as addressees, or
+    /// null/empty when unspecified; they ride the item to its hearing-side publication.</param>
     /// <param name="cancellationToken">Caller-supplied cancellation observed through generation, conversion, and
     /// preparation until playback hand-off.</param>
     /// <param name="admission">Runner-owned admission transaction committing queue admission and protected state
@@ -141,13 +154,14 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// event, or self-observation — and the caller reports its not-delivered outcome.</returns>
     async ValueTask<bool> IAdmissionCapableVoice.SpeakCancellableAdmittedAsync(
         string speech,
+        IReadOnlyList<string>? recipients,
         CancellationToken cancellationToken,
         SpeechAdmissionTransaction admission)
     {
         ArgumentNullException.ThrowIfNull(admission);
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
-        AdmittedSpeech? item = AdmitSpeech(acceptedSpeech, cancellable: true, cancellationToken, admission);
+        AdmittedSpeech? item = AdmitSpeech(acceptedSpeech, cancellable: true, cancellationToken, admission, recipients);
         if (item is null)
         {
             // The attended cue won the arbitration (SPCH-005 TR-37): no queue item exists, so nothing further can
@@ -256,11 +270,17 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     private ValueTask SpeakCancellableAsync(
         string speech,
         CancellationToken cancellationToken,
-        SpeechAdmissionTransaction? admission)
+        SpeechAdmissionTransaction? admission,
+        IReadOnlyList<string>? declaredRecipients)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
-        AdmittedSpeech? item = AdmitSpeech(acceptedSpeech, cancellable: true, cancellationToken, admission);
+        AdmittedSpeech? item = AdmitSpeech(
+            acceptedSpeech,
+            cancellable: true,
+            cancellationToken,
+            admission,
+            declaredRecipients);
         Debug.Assert(item is not null, "Ordinary submissions are never refused admission.");
         RegisterTurnCancellationCallback(item!, cancellationToken);
         return new ValueTask(item!.HandOffCompletion!.Task);
@@ -298,12 +318,15 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// admission-only submissions. A gated submission commits its queue item inside the transaction — under this
     /// submission lock first and then the agent-runner state lock — and returns null, committing nothing, when a
     /// matching attended cue hold linearised first.</param>
+    /// <param name="declaredRecipients">Canonical character FullIds the speaker explicitly declared as addressees,
+    /// or null/empty when unspecified; they ride the item to its hearing-side publication.</param>
     /// <returns>The admitted queue item, or null when the admission transaction refused a gated submission.</returns>
     private AdmittedSpeech? AdmitSpeech(
         string speech,
         bool cancellable,
         CancellationToken callerToken,
-        SpeechAdmissionTransaction? admission = null)
+        SpeechAdmissionTransaction? admission = null,
+        IReadOnlyList<string>? declaredRecipients = null)
     {
         bool startPump = false;
         AdmittedSpeech? item;
@@ -325,7 +348,8 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
                 speech,
                 _queueGeneration,
                 cancellable ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : null,
-                callerToken);
+                callerToken,
+                declaredRecipients);
             item = admitted;
             if (admission is { } gate)
             {
@@ -824,7 +848,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             CloseSpeakingWindow();
         }
 
-        OnSpeechGenerated(item.Text);
+        OnSpeechGenerated(item.Text, item.Recipients);
         item.DisposeCancellationRegistration();
         _ = item.HandOffCompletion?.TrySetResult();
     }
@@ -1077,7 +1101,8 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
         string text,
         int generation,
         TaskCompletionSource? handOffCompletion,
-        CancellationToken callerToken)
+        CancellationToken callerToken,
+        IReadOnlyList<string>? declaredRecipients = null)
     {
         private CancellationTokenRegistration _cancellationRegistration;
 
@@ -1085,6 +1110,12 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
         /// Validated speech text submitted for this item.
         /// </summary>
         public string Text { get; } = text;
+
+        /// <summary>
+        /// Canonical character FullIds the speaker explicitly declared as addressees — or null/empty when
+        /// unspecified — riding the item to its hearing-side publication.
+        /// </summary>
+        public IReadOnlyList<string>? Recipients { get; } = declaredRecipients;
 
         /// <summary>
         /// Queue generation this item was admitted into; a flush invalidates it (SPCH-005 TR-32), so a mismatch

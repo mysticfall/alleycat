@@ -266,6 +266,166 @@ public sealed partial class SessionToolsIntegrationTests
     }
 
     /// <summary>
+    /// Valid declared recipients ride the ordinary cancellable submission and the committed self observation: the
+    /// voice receives exactly the declared canonical set and the owner-stamped observation records the same
+    /// addressees in declaration order.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithDeclaredRecipients_SubmitsAndSelfObservesTheCanonicalSet()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+
+        Task<object?> speakTask = fixture
+            .InvokeSpeakAsync("Addressed words.", ["char:speaker", "char:twin_first"], CancellationToken.None)
+            .AsTask();
+        await fixture.OwnerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        fixture.OwnerVoice.CompleteHandOff();
+        object? result = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("Spoken through the configured voice.", result);
+        Assert.Equal(
+            [["char:speaker", "char:twin_first"]],
+            fixture.OwnerVoice.SubmissionRecipientSets.Select(static set => (string[])[.. set!]));
+        ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
+        Assert.Equal(fixture.Owner.FullId, committed.ActorId);
+        Assert.Equal("Addressed words.", committed.Content);
+        Assert.Equal(["char:speaker", "char:twin_first"], committed.Addressees);
+    }
+
+    /// <summary>
+    /// An admission-capable voice receives the declared recipients through the capability's admitted submission,
+    /// keeping the recipient declaration on the arbitrated commit path.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithAdmissionCapableVoice_CarriesDeclaredRecipientsThroughAdmission()
+    {
+        ToolAdmissionBroker admission = CreateUnstartedAdmissionBroker();
+        AdmissionCapableVoice ownerVoice = new("capable-voice");
+        await using ToolFixture fixture = new(speechTool: new SpeechTool(admission), ownerVoiceOverride: ownerVoice);
+        await fixture.ReadyAsync();
+
+        Task<object?> speakTask = fixture
+            .InvokeSpeakAsync("Capable addressed words.", ["char:twin_second"], CancellationToken.None)
+            .AsTask();
+        await ownerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        ownerVoice.CompleteHandOff();
+        object? result = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("Spoken through the configured voice.", result);
+        Assert.Equal(
+            [["char:twin_second"]],
+            ownerVoice.AdmittedRecipientSets.Select(static set => (string[])[.. set!]));
+        ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
+        Assert.Equal(["char:twin_second"], committed.Addressees);
+    }
+
+    /// <summary>
+    /// An omitted recipients argument means unspecified: the submission carries no recipient set and the committed
+    /// self observation stays undecided with an empty addressee set.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithoutRecipients_SubmitsUnspecifiedAndSelfObservesUndecided()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+
+        Task<object?> speakTask = fixture.InvokeSpeakAsync("Unspecified words.", CancellationToken.None).AsTask();
+        await fixture.OwnerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        fixture.OwnerVoice.CompleteHandOff();
+        object? result = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("Spoken through the configured voice.", result);
+        Assert.Equal([null], fixture.OwnerVoice.SubmissionRecipientSets);
+        ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
+        Assert.Empty(committed.Addressees);
+    }
+
+    /// <summary>
+    /// A recipient unknown to the live scene roster is refused with a model-correctable error naming the problem
+    /// ID: nothing is submitted and no observation is ingested.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithUnknownRecipient_ReturnsCorrectableErrorWithoutSubmitting()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+
+        object? result = await fixture
+            .InvokeSpeakAsync("Refused words.", ["char:missing"], CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        string message = Assert.IsType<string>(result);
+        Assert.Contains("'char:missing' is not a character in the current scene", message, StringComparison.Ordinal);
+        Assert.Empty(fixture.OwnerVoice.Submissions);
+        Assert.Empty(fixture.Mind.GetTimelineForTest());
+    }
+
+    /// <summary>
+    /// Addressing the speaker's own identity is refused with a model-correctable error: a speaker cannot declare
+    /// themselves as their own addressee.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithSelfRecipient_ReturnsCorrectableErrorWithoutSubmitting()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+
+        object? result = await fixture
+            .InvokeSpeakAsync("Self-addressed words.", ["char:owner"], CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        string message = Assert.IsType<string>(result);
+        Assert.Contains("'char:owner' is you", message, StringComparison.Ordinal);
+        Assert.Empty(fixture.OwnerVoice.Submissions);
+        Assert.Empty(fixture.Mind.GetTimelineForTest());
+    }
+
+    /// <summary>
+    /// A blank recipient entry is refused with a model-correctable error rather than an exception across the tool
+    /// boundary.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithBlankRecipientEntry_ReturnsCorrectableErrorWithoutSubmitting()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+
+        object? result = await fixture
+            .InvokeSpeakAsync("Blank entry words.", [" "], CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        string message = Assert.IsType<string>(result);
+        Assert.Contains("blank entry", message, StringComparison.Ordinal);
+        Assert.Empty(fixture.OwnerVoice.Submissions);
+        Assert.Empty(fixture.Mind.GetTimelineForTest());
+    }
+
+    /// <summary>
+    /// Duplicate recipients collapse into one distinct set preserving first-declaration order, so a repeated ID
+    /// neither fails the call nor duplicates the observation's addressee set.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithDuplicateRecipients_ResolvesOneDistinctOrderedSet()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+
+        Task<object?> speakTask = fixture
+            .InvokeSpeakAsync("Deduplicated words.", ["char:twin_first", "char:speaker", "char:twin_first"], CancellationToken.None)
+            .AsTask();
+        await fixture.OwnerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        fixture.OwnerVoice.CompleteHandOff();
+        _ = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
+        Assert.Equal(["char:twin_first", "char:speaker"], committed.Addressees);
+    }
+
+    /// <summary>
     /// The wait tool requires a session game clock and fails clearly without one.
     /// </summary>
     [Fact]
@@ -394,8 +554,8 @@ public sealed partial class SessionToolsIntegrationTests
             SpeakerVoice = new WindowedVoice("speaker-voice");
             TwinVoice = new WindowedVoice("twin-voice");
             Speaker = new VoiceCharacter("speaker", SpeakerVoice);
-            TwinA = new VoiceCharacter("twin-a", TwinVoice);
-            TwinB = new VoiceCharacter("twin-b", TwinVoice);
+            TwinA = new VoiceCharacter("twin_first", TwinVoice);
+            TwinB = new VoiceCharacter("twin_second", TwinVoice);
             HandOffVoice = addAiVoice ? new HandOffAIVoice() : null;
             Owner = new VoiceCharacter(
                 "owner",
@@ -481,6 +641,27 @@ public sealed partial class SessionToolsIntegrationTests
         public ValueTask<object?> InvokeSpeakAsync(string speech, CancellationToken cancellationToken)
             => InvokeAsync(_speakFunction!, new Dictionary<string, object?> { ["speech"] = speech }, cancellationToken);
 
+        /// <summary>
+        /// Invokes the speak tool with an explicit recipients argument: null omits the argument entirely — the
+        /// model-left-unspecified case — while an empty array passes an explicit empty recipients value.
+        /// </summary>
+        public ValueTask<object?> InvokeSpeakAsync(
+            string speech,
+            IReadOnlyList<string>? recipients,
+            CancellationToken cancellationToken)
+        {
+            Dictionary<string, object?> arguments = new()
+            {
+                ["speech"] = speech
+            };
+            if (recipients is not null)
+            {
+                arguments["recipients"] = recipients;
+            }
+
+            return InvokeAsync(_speakFunction!, arguments, cancellationToken);
+        }
+
         public ValueTask<object?> InvokeWaitAsync(float? seconds, CancellationToken cancellationToken)
         {
             Dictionary<string, object?> arguments = [];
@@ -559,6 +740,8 @@ public sealed partial class SessionToolsIntegrationTests
 
         public List<string> Submissions { get; } = [];
 
+        public List<IReadOnlyList<string>?> SubmissionRecipientSets { get; } = [];
+
         public TaskCompletionSource SubmissionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool CancellationObserved
@@ -602,6 +785,15 @@ public sealed partial class SessionToolsIntegrationTests
                 SpeechEnded?.Invoke(this);
                 throw;
             }
+        }
+
+        public ValueTask SpeakCancellableAsync(
+            string speech,
+            IReadOnlyList<string>? recipients,
+            CancellationToken cancellationToken)
+        {
+            SubmissionRecipientSets.Add(recipients is { Count: > 0 } ? [.. recipients] : null);
+            return SpeakCancellableAsync(speech, cancellationToken);
         }
 
         public void CompleteHandOff() => _ = _handOff.TrySetResult();
@@ -675,6 +867,8 @@ public sealed partial class SessionToolsIntegrationTests
 
         public List<string> AdmittedSubmissions { get; } = [];
 
+        public List<IReadOnlyList<string>?> AdmittedRecipientSets { get; } = [];
+
         public List<SpeechAdmissionTransaction> ReceivedTransactions { get; } = [];
 
         public List<string> OrdinarySubmissions { get; } = [];
@@ -716,10 +910,12 @@ public sealed partial class SessionToolsIntegrationTests
 
         async ValueTask<bool> IAdmissionCapableVoice.SpeakCancellableAdmittedAsync(
             string speech,
+            IReadOnlyList<string>? recipients,
             CancellationToken cancellationToken,
             SpeechAdmissionTransaction admission)
         {
             AdmittedSubmissions.Add(speech);
+            AdmittedRecipientSets.Add(recipients is { Count: > 0 } ? [.. recipients] : null);
             ReceivedTransactions.Add(admission);
             if (AttemptTransaction)
             {
@@ -793,7 +989,14 @@ public sealed partial class SessionToolsIntegrationTests
         }
 
         public override ValueTask SpeakCancellableAsync(string speech, CancellationToken cancellationToken = default)
+            => SpeakCancellableAsync(speech, null, cancellationToken);
+
+        public override ValueTask SpeakCancellableAsync(
+            string speech,
+            IReadOnlyList<string>? recipients,
+            CancellationToken cancellationToken)
         {
+            // Every cancellable entry point funnels through this one test-controlled hand-off boundary.
             OpenSpeakingWindow();
             _ = HandOffStarted.TrySetResult();
             return new ValueTask(_handOffCompletion.Task);

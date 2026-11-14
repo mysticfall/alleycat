@@ -61,12 +61,30 @@ AI:
 #    ApiKey: "<your-api-key>"
 #    Timeout: 30
 
+# Independent typed decisions. Zero-configuration default: the local Docker kev-decision-api service
+# (SystemOne at http://localhost:8081/v1/systemone) — no key or model needed, nothing sent until a caller asks.
+# Host includes the API base prefix; do not append /decisions or /systemone here.
+# Decision:
+#     APIKind: OpenRouter
+#     Host: "https://openrouter.ai/api/alpha"
+#     Model: "typesafe/jev-1.14-20261014"
+#     ApiKey: "<set only in user://AlleyCat.yaml>"
+#     Timeout: 30
+# OpenAI alternative: APIKind: OpenAI, Host: "https://api.openai.com/v1", Model: "gpt-6-luna".
+# SystemOne overrides (all optional): APIKind: SystemOne, Host: "http://localhost:8081/v1", Timeout: 30.
+
 # Diagnostics toggles for AI request and response logging.
 Diagnostics:
     AI:
         EnableRequestResponseLogging: true
         # Human-readable per-cycle Markdown transcripts under user://logs/mind/ (AI-011); disabled by default.
         EnableSessionTranscriptLogging: false
+        # Per-evaluation JSON decision-payload dumps under user://logs/mind/decision-payloads/
+        # (decision-gate experiment): the verbatim evidence and question instructions the decision gate
+        # dispatched, plus verdict, probability, threshold, staleness and latency — one file per evaluation,
+        # named {timestamp}_{character}_{trigger}_{verdict}.json. Disabled by default; enabling it costs one
+        # small file write per gate evaluation.
+        #EnableDecisionPayloadLogging: false
 
 # Logging levels per category.
 Logging:
@@ -81,14 +99,3 @@ Logging:
         System.ClientModel.Primitives.MessageLoggingPolicy: Warning
         System.ClientModel.Primitives.PipelineTransport: Warning
 
-# Independent typed decisions. Zero-configuration default: the local Docker kev-decision-api service
-# (SystemOne at http://localhost:8081/v1/systemone) — no key or model needed, nothing sent until a caller asks.
-# Host includes the API base prefix; do not append /decisions or /systemone here.
-# Decision:
-#     APIKind: OpenRouter
-#     Host: "https://openrouter.ai/api/alpha"
-#     Model: "typesafe/jev-1.14-20261014"
-#     ApiKey: "<set only in user://AlleyCat.yaml>"
-#     Timeout: 30
-# OpenAI alternative: APIKind: OpenAI, Host: "https://api.openai.com/v1", Model: "gpt-6-luna".
-# SystemOne overrides (all optional): APIKind: SystemOne, Host: "http://localhost:8081/v1", Timeout: 30.

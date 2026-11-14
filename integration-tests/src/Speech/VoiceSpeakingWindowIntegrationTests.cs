@@ -1741,9 +1741,9 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             private set;
         }
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
     }
@@ -1799,9 +1799,9 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             }
         }
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
 
@@ -1820,9 +1820,9 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
 
         public List<string> FailureErrors { get; } = [];
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
 

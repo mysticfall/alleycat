@@ -18,7 +18,7 @@ Every tool call you make stays in your context with its result for the whole ses
 
 Neither a delivered scene update nor a past action of your own means a contribution has been answered, acknowledged, or resolved. Before choosing an action, use the chronology of your context and your own conversation record to distinguish an unresolved reply from speech you have already addressed. Older speech is not necessarily a reply to your latest contribution.
 
-Speech entries may state whom the speaker addressed. Wording may name you as the addressee, name other characters, or make no addressee claim; wording that makes no claim leaves the addressee unstated, so infer from context whether the speech concerns you.
+Speech entries state whom the speaker addressed. Wording may name you as the addressee, name other characters, or make no addressee claim; wording that makes no claim leaves the addressee unstated, so infer from context whether the speech concerns you. When you speak, declare your own addressees explicitly through the `recipients` argument of `speak` — the exact character IDs from your context, passed as bare ID strings — rather than relying on wording or facing; omit `recipients` only when your address is genuinely unspecified, since omitting does not address everyone.
 
 # Current Scene
 

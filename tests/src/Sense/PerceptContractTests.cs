@@ -76,6 +76,23 @@ public sealed class PerceptContractTests
         Assert.False(percept.Continued);
     }
 
+    /// <summary>
+    /// Declared recipients ride the percept as an immutable ordered copy, defaulting to the empty unspecified set.
+    /// </summary>
+    [Fact]
+    public void SpeechPercept_SnapshotsDeclaredRecipientsInOrderWithEmptyDefault()
+    {
+        Assert.Empty(new SpeechPercept("unspecified", "voice:source").DeclaredRecipients);
+        Assert.Empty(new SpeechPercept("null recipients", "voice:source", null, null).DeclaredRecipients);
+        Assert.Empty(new SpeechPercept("empty recipients", "voice:source", null, []).DeclaredRecipients);
+
+        string[] source = ["char:second", "char:first"];
+        var percept = new SpeechPercept("declared", "voice:source", null, source);
+        source[0] = "char:mutated";
+
+        Assert.Equal(["char:second", "char:first"], percept.DeclaredRecipients);
+    }
+
     /// <summary>Visual transport owns an ordered read-only identity copy.</summary>
     [Fact]
     public void VisualSurveyPercept_OwnsImmutableOrderedIdentitySnapshot()

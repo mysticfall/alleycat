@@ -265,12 +265,12 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             source.EmitSpeechSettlement(new SpeechSegmentMetadata("other", 1), SpeechSegmentSettlementKind.Blank);
             source.EmitSpeechSettlement(new SpeechSegmentMetadata("continued", 2), SpeechSegmentSettlementKind.Failed);
             source.EmitSpeechSettlement(new SpeechSegmentMetadata("continued", 1), SpeechSegmentSettlementKind.Published);
-            source.PublishCompletedSpeech("late prefix", new SpeechSegmentMetadata("continued", 0));
+            source.PublishCompletedSpeech("late prefix", new SpeechSegmentMetadata("continued", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await TestUtils.WaitForFramesAsync(sceneTree, 3);
             _ = Assert.Single(clientProvider.Requests);
 
-            source.PublishCompletedSpeech("continued text", new SpeechSegmentMetadata("continued", 1));
+            source.PublishCompletedSpeech("continued text", new SpeechSegmentMetadata("continued", 1), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -346,7 +346,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 3);
             _ = Assert.Single(clientProvider.Requests);
 
-            source.PublishCompletedSpeech("onset text", new SpeechSegmentMetadata("onset-group", 0));
+            source.PublishCompletedSpeech("onset text", new SpeechSegmentMetadata("onset-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -463,7 +463,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(mind.GetTimelineForTest());
 
             // Manual completed speech publishes ungrouped: no segment metadata reaches hearing or the timeline.
-            source.PublishCompletedSpeech("manual speech");
+            source.PublishCompletedSpeech("manual speech", declaredRecipients: [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -523,7 +523,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // Completed grouped speech commits while the first generation is held: the fresh delivery cancels the
             // held request, the replacement request consumes the deliverable window, and the record settles into
             // the timeline — all before any cue exists (the reverse of production's cue-first ordering).
-            source.PublishCompletedSpeech("late text", new SpeechSegmentMetadata("late-group", 0));
+            source.PublishCompletedSpeech("late text", new SpeechSegmentMetadata("late-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
             await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest().Count == 1);
@@ -627,7 +627,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             // The unattended speaker's completed speech is ordinary all-hearer freshness: it invalidates the
             // following held request and delivers one joined replacement turn.
-            source.PublishCompletedSpeech("unattended words", new SpeechSegmentMetadata("unattended-group", 1));
+            source.PublishCompletedSpeech("unattended words", new SpeechSegmentMetadata("unattended-group", 1), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 3);
 
@@ -768,7 +768,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             // Completed speech is attention-independent all-hearer freshness: every Mind — attended or not —
             // receives the same speech and turns it into one fresh replacement observation.
-            source.PublishCompletedSpeech("shared room words", new SpeechSegmentMetadata("shared-group", 0));
+            source.PublishCompletedSpeech("shared room words", new SpeechSegmentMetadata("shared-group", 0), [ownerA.FullId, ownerB.FullId, ownerC.FullId]);
             await attendedMindA.DrainPerceptionsForTestAsync();
             await attendedMindB.DrainPerceptionsForTestAsync();
             await unattendedMindC.DrainPerceptionsForTestAsync();
@@ -881,7 +881,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(mind.GetTimelineForTest());
             _ = Assert.Single(clientProvider.Requests);
 
-            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0));
+            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -990,7 +990,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 6);
             _ = Assert.Single(clientProvider.Requests);
 
-            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0));
+            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -1085,7 +1085,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             // The unrelated speaker's completed speech is ordinary all-hearer freshness: with no speech key of the
             // protected turn, it withdraws the unhand-offed submission silently.
-            unrelated.PublishCompletedSpeech("unrelated chatter");
+            unrelated.PublishCompletedSpeech("unrelated chatter", declaredRecipients: [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest().Any(
                 observation => observation is ObservedSpeech speech && speech.Content == "unrelated chatter"));
@@ -1098,7 +1098,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             // The surviving cue hold still gates the replacement until the cueing speaker completes.
             _ = Assert.Single(clientProvider.Requests);
-            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0));
+            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -1179,7 +1179,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 observation => observation is ObservedSpeech speech && speech.ActorId == owner.FullId);
             _ = Assert.Single(clientProvider.Requests);
 
-            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0));
+            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -1257,7 +1257,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.True(ownerVoice.IsSpeaking, "Committed ordinary speech must never be cut by the later cue.");
 
             source.EmitSpeechStarted(new SpeechSegmentMetadata("onset-group", 0));
-            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0));
+            source.PublishCompletedSpeech("player words", new SpeechSegmentMetadata("onset-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(
                 sceneTree,
@@ -1544,7 +1544,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await secondRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            source.PublishCompletedSpeech("accepted prefix", new SpeechSegmentMetadata("causal", 0));
+            source.PublishCompletedSpeech("accepted prefix", new SpeechSegmentMetadata("causal", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 4);
             await fourthRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -1560,7 +1560,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             source.EmitSpeechResumed(new SpeechSegmentMetadata("causal", 1));
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
-            source.PublishCompletedSpeech("later continuation", new SpeechSegmentMetadata("causal", 1));
+            source.PublishCompletedSpeech("later continuation", new SpeechSegmentMetadata("causal", 1), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 5);
 
@@ -1639,8 +1639,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 3);
             _ = Assert.Single(clientProvider.Requests);
 
-            source.PublishCompletedSpeech("wait prefix", new SpeechSegmentMetadata("wait-group", 0));
-            source.PublishCompletedSpeech("wait continuation", new SpeechSegmentMetadata("wait-group", 1));
+            source.PublishCompletedSpeech("wait prefix", new SpeechSegmentMetadata("wait-group", 0), [owner.FullId]);
+            source.PublishCompletedSpeech("wait continuation", new SpeechSegmentMetadata("wait-group", 1), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
@@ -1661,11 +1661,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // projected utterance must arrive through a new scene-update delivery, never as a wait-result
             // rewrite.
             await WaitUntilAsync(sceneTree, () => mind.HasActiveObservationWait);
-            source.PublishCompletedSpeech("accepted wait prefix", new SpeechSegmentMetadata("accepted-wait", 0));
+            source.PublishCompletedSpeech("accepted wait prefix", new SpeechSegmentMetadata("accepted-wait", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 3);
             source.EmitSpeechResumed(new SpeechSegmentMetadata("accepted-wait", 1));
-            source.PublishCompletedSpeech("accepted wait continuation", new SpeechSegmentMetadata("accepted-wait", 1));
+            source.PublishCompletedSpeech("accepted wait continuation", new SpeechSegmentMetadata("accepted-wait", 1), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 4);
 
@@ -1740,7 +1740,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest()
                 .OfType<ObservedSpeech>()
                 .Count(speech => speech.ActorId == owner.FullId) == 3);
-            source.PublishCompletedSpeech("outer words", new SpeechSegmentMetadata("outer-group", 0));
+            source.PublishCompletedSpeech("outer words", new SpeechSegmentMetadata("outer-group", 0), [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 5);
 
@@ -1811,7 +1811,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            source.PublishCompletedSpeech("ordinary external speech");
+            source.PublishCompletedSpeech("ordinary external speech", declaredRecipients: [owner.FullId]);
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
@@ -2710,8 +2710,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
         public void EndSpeechWindow() => CloseSpeakingWindow();
 
-        public void PublishCompletedSpeech(string speech, SpeechSegmentMetadata? metadata = null)
-            => PublishSpeech(speech, metadata);
+        public void PublishCompletedSpeech(
+            string speech,
+            SpeechSegmentMetadata? metadata = null,
+            IReadOnlyList<string>? declaredRecipients = null)
+            => PublishSpeech(speech, metadata, declaredRecipients);
 
         public void EmitSpeechStarted(SpeechSegmentMetadata metadata) => RaiseSpeechSegmentStarted(metadata);
 

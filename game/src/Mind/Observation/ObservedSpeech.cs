@@ -6,8 +6,8 @@ namespace AlleyCat.Mind.Observation;
 
 /// <summary>
 /// Speech observed from the owning character, a recognised other character, or an unknown speaker, together with
-/// the observer-relative set of characters the observing character inferred the speaker addressed (AI-001
-/// TR-13..15).
+/// the set of characters the speaker's speech addressed: explicitly declared recipients for the speaker's own and
+/// recognised others' speech, empty — undecided — when the speaker declared none (AI-001 TR-13..15).
 /// </summary>
 public sealed record ObservedSpeech : ObservedAction
 {
@@ -41,7 +41,7 @@ public sealed record ObservedSpeech : ObservedAction
     /// <summary>Overheard speech keeps a base attention contribution on the speaker.</summary>
     private const float OverheardSpeakerContribution = 0.5f;
 
-    /// <summary>Overheard speech applies one smaller attention contribution to each inferred addressee.</summary>
+    /// <summary>Overheard speech applies one smaller attention contribution to each declared addressee.</summary>
     private const float OverheardAddresseeContribution = 0.25f;
 
     /// <summary>The unified stable semantic key shared by every observed-speech perspective (AI-001 TR-13).</summary>
@@ -51,9 +51,9 @@ public sealed record ObservedSpeech : ObservedAction
     /// <param name="actorId">Exact recognised actor FullId, or <see langword="null"/> when the speaker is unknown.</param>
     /// <param name="content">Observed speech content.</param>
     /// <param name="addressees">
-    /// Canonical FullIds of every character the observer inferred the speaker addressed, or <see langword="null"/>
+    /// Canonical FullIds of every character the speaker's speech addressed, or <see langword="null"/>
     /// or empty when the addressee is undecided. Ignored for an unknown speaker, which is always undecided because
-    /// facing cannot be resolved without a character node (AI-001 TR-15, AI-006 TR-4).
+    /// recipients cannot be attributed without a recognised speaker (AI-001 TR-15, AI-006 TR-4).
     /// </param>
     public ObservedSpeech(string? actorId, string content, IReadOnlyList<string>? addressees = null)
         : base(actorId)
@@ -69,12 +69,23 @@ public sealed record ObservedSpeech : ObservedAction
     }
 
     /// <summary>
-    /// Gets the immutable, ordered set of canonical character FullIds the observer inferred the speaker addressed.
-    /// Empty means undecided (AI-001 TR-13).
+    /// Gets the immutable, ordered set of canonical character FullIds the speaker's speech addressed. Empty means
+    /// undecided (AI-001 TR-13).
     /// </summary>
     public IReadOnlyList<string> Addressees
     {
         get;
+    }
+
+    /// <summary>
+    /// Gets trusted ingestion-side provenance marking this speech as authored by the scene's player character:
+    /// resolved from scene membership by speech perception, never model-supplied, excluded from every
+    /// model-visible rendering, and preserved by record cloning.
+    /// </summary>
+    internal bool IsPlayerAuthored
+    {
+        get;
+        init;
     }
 
     /// <inheritdoc />
@@ -116,7 +127,11 @@ public sealed record ObservedSpeech : ObservedAction
         ArgumentNullException.ThrowIfNull(character);
         return GetAddresseeState(new ObservationContext(character)) switch
         {
-            SpeechAddresseeState.Self => $"I said: {Content}",
+            // Self speech names its declared recipients so the speaker's own record states whom it addressed;
+            // unspecified self speech keeps the plain historic wording.
+            SpeechAddresseeState.Self => Addressees.Count == 0
+                ? $"I said: {Content}"
+                : $"I said to {RenderAddresseeList()}: {Content}",
             SpeechAddresseeState.Undecided => ActorId is { } actorId
                 ? $"Heard `{actorId}` say: {Content}"
                 : $"Heard an unknown speaker say: {Content}",
@@ -152,12 +167,25 @@ public sealed record ObservedSpeech : ObservedAction
 
     /// <summary>
     /// Only addressed-to-me speech requires a fresh turn: it bypasses thresholds and invalidates stale reasoning.
-    /// Self, overheard, and undecided speech never claim the observer's turn (AI-001 TR-14).
+    /// Self, overheard, and undecided speech never claim the observer's turn — except undecided or overheard
+    /// speech authored by the player, which always does (AI-001 TR-14).
     /// </summary>
+    /// <remarks>
+    /// Temporary experimental rule: the player declares no recipients, so blank recipients cannot distinguish an
+    /// address to this character, and every hearing NPC treats accepted non-self player speech as claiming its
+    /// turn until provenance-based player addressing replaces this rule. The provenance flag is trusted
+    /// ingestion-side scene membership — private to the observation, never a model-visible payload.
+    /// </remarks>
     public override bool RequiresFreshTurn(ObservationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return GetAddresseeState(context) == SpeechAddresseeState.AddressedToMe;
+        return GetAddresseeState(context) switch
+        {
+            SpeechAddresseeState.AddressedToMe => true,
+            SpeechAddresseeState.Undecided or SpeechAddresseeState.AddressedToAnother => IsPlayerAuthored,
+            SpeechAddresseeState.Self => false,
+            _ => throw new InvalidOperationException($"Unhandled addressee state for '{TypeKeyValue}'."),
+        };
     }
 
     /// <inheritdoc />
@@ -180,7 +208,7 @@ public sealed record ObservedSpeech : ObservedAction
 
     /// <summary>
     /// Builds overheard-speech attention: one base contribution on the speaker followed by one smaller
-    /// contribution on each inferred addressee, in addressee-set order (AI-001 TR-14).
+    /// contribution on each declared addressee, in addressee-set order (AI-001 TR-14).
     /// </summary>
     private IReadOnlyList<AttentionEffect> BuildOverheardEffects()
     {

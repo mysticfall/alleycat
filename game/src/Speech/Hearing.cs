@@ -31,6 +31,14 @@ public partial class Hearing : Node, IHearing
 
     /// <inheritdoc />
     public void ReceiveVoice(string speech, IVoice source, SpeechSegmentMetadata? metadata)
+        => ReceiveVoice(speech, source, metadata, null);
+
+    /// <inheritdoc />
+    public void ReceiveVoice(
+        string speech,
+        IVoice source,
+        SpeechSegmentMetadata? metadata,
+        IReadOnlyList<string>? declaredRecipients)
     {
         ArgumentNullException.ThrowIfNull(source);
         if (string.IsNullOrWhiteSpace(speech))
@@ -38,6 +46,6 @@ public partial class Hearing : Node, IHearing
             return;
         }
 
-        Perceived?.Invoke(new SpeechPercept(speech, source.Id, metadata));
+        Perceived?.Invoke(new SpeechPercept(speech, source.Id, metadata, declaredRecipients));
     }
 }

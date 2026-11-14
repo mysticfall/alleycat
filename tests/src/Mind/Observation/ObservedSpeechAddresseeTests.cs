@@ -94,6 +94,37 @@ public sealed class ObservedSpeechAddresseeTests
         Assert.False(new ObservedSpeech("char:speaker", "Hi", ["char:bystander"]).RequiresFreshTurn(context));
     }
 
+    /// <summary>
+    /// Temporary experimental rule: player-authored provenance claims a fresh turn for undecided and overheard
+    /// speech, while self speech — and every non-player observation — keeps its ordinary mapping.
+    /// </summary>
+    [Fact]
+    public void RequiresFreshTurn_PlayerAuthoredSpeechAlwaysClaimsTheTurnExceptSelf()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        ObservationContext context = new(owner);
+
+        Assert.True(new ObservedSpeech("char:player", "Hi") { IsPlayerAuthored = true }.RequiresFreshTurn(context));
+        Assert.True(
+            new ObservedSpeech("char:player", "Hi", ["char:bystander"]) { IsPlayerAuthored = true }
+                .RequiresFreshTurn(context));
+        // Self speech never claims the speaker's own turn, and NPC speech ignores the rule entirely.
+        Assert.False(
+            new ObservedSpeech("char:owner", "Hi") { IsPlayerAuthored = true }.RequiresFreshTurn(context));
+        Assert.False(new ObservedSpeech("char:speaker", "Hi", ["char:bystander"]).RequiresFreshTurn(context));
+
+        // Record cloning preserves the trusted provenance for ingestion-side re-stamping.
+        Assert.True(
+            (new ObservedSpeech("char:player", "Hi") { IsPlayerAuthored = true } with
+            {
+                ActorId = "char:player"
+            })
+            .RequiresFreshTurn(context));
+    }
+
     /// <summary>Attention effects map per state: raised speaker for to-me, flat speaker for undecided, base speaker plus smaller per-addressee for overheard, none for self and unknown.</summary>
     [Fact]
     public void GetAttentionEffects_MapsPerState()
@@ -141,6 +172,12 @@ public sealed class ObservedSpeechAddresseeTests
         };
 
         Assert.Equal("I said: Hi", new ObservedSpeech("char:owner", "Hi").Render(owner));
+        Assert.Equal(
+            "I said to `char:bystander`: Hi",
+            new ObservedSpeech("char:owner", "Hi", ["char:bystander"]).Render(owner));
+        Assert.Equal(
+            "I said to `char:first` and `char:second`: Hi",
+            new ObservedSpeech("char:owner", "Hi", ["char:first", "char:second"]).Render(owner));
         Assert.Equal(
             "Heard an unknown speaker say: Hi",
             new ObservedSpeech(null, "Hi").Render(owner));

@@ -1233,6 +1233,63 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// A cancellable submission carrying declared recipients rides them through generation, playback hand-off,
+    /// and the hearing publication into every listener's percept — recipients never restrict which listeners
+    /// receive the speech.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakCancellableAsync_WithDeclaredRecipients_PublishesRecipientsToEveryListener()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            NextResult = CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16),
+        };
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+        RecordingVoiceListener firstListener = new();
+        RecordingVoiceListener secondListener = new();
+
+        sceneTree.Root.AddChild(speechGenerator);
+        sceneTree.Root.AddChild(lipSyncPlayer);
+        sceneTree.Root.AddChild(voice);
+        sceneTree.Root.AddChild(firstListener);
+        sceneTree.Root.AddChild(secondListener);
+        await WaitForFramesAsync(sceneTree, 2);
+        firstListener.AddToGroup(new StringName(IHearing.GroupName));
+        secondListener.AddToGroup(new StringName(IHearing.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            await voice.SpeakCancellableAsync(
+                "Addressed words.",
+                ["char:rin", "char:sam"],
+                CancellationToken.None);
+            await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 1, 30);
+            lipSyncPlayer.CompletePlaybackForTesting();
+
+            // Both listeners heard the same publication — unfiltered — carrying the declared recipient set.
+            foreach (RecordingVoiceListener listener in new[] { firstListener, secondListener })
+            {
+                Assert.Equal(["Addressed words."], listener.Events.Select(static entry => entry.Speech));
+                SpeechPercept percept = Assert.Single(listener.Percepts);
+                Assert.Equal("Addressed words.", percept.Content);
+                Assert.Equal(["char:rin", "char:sam"], percept.DeclaredRecipients);
+            }
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer, firstListener, secondListener);
+        }
+    }
+
+    /// <summary>
     /// Voice playback must keep the generator's original sample rate instead of normalising it away.
     /// </summary>
     [Fact]
@@ -1634,9 +1691,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         public override void Speak(string speech)
             => _ = TryNotifySpeechGeneratedWhenEnabled(speech);
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
     }
@@ -1705,9 +1762,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             base.PlayGeneratedSpeech(preparedPlayback);
         }
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
 
@@ -1808,9 +1865,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             base.PlayGeneratedSpeech(preparedPlayback);
         }
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
     }
@@ -1921,9 +1978,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             }
         }
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
 
@@ -1949,11 +2006,12 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             Probe.PlaybackCount++;
         }
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
             _ = speech;
+            _ = declaredRecipients;
             Probe.ListenerNotificationCount++;
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
         }
 
         protected override void EmitSpeechFailedSignal(string error)
@@ -1970,9 +2028,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         public void HandleTestTranscriptionCompleted(string text) => OnTranscriptionCompleted(text);
 
-        protected override void OnSpeechGenerated(string speech)
+        protected override void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
         {
-            base.OnSpeechGenerated(speech);
+            base.OnSpeechGenerated(speech, declaredRecipients);
             SpeechGeneratedCallCount++;
         }
     }
@@ -1980,6 +2038,8 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     private sealed partial class RecordingVoiceListener : Node, IHearing
     {
         public List<VoiceListenerEvent> Events { get; } = [];
+
+        public List<SpeechPercept> Percepts { get; } = [];
 
         public IReadOnlyList<Type> PerceptTypes { get; } = [typeof(SpeechPercept)];
 
@@ -1989,6 +2049,18 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         {
             Events.Add(new VoiceListenerEvent(speech, source));
             Perceived?.Invoke(new SpeechPercept(speech, source.Id));
+        }
+
+        public void ReceiveVoice(
+            string speech,
+            IVoice source,
+            SpeechSegmentMetadata? metadata,
+            IReadOnlyList<string>? declaredRecipients)
+        {
+            Events.Add(new VoiceListenerEvent(speech, source));
+            SpeechPercept percept = new(speech, source.Id, metadata, declaredRecipients);
+            Percepts.Add(percept);
+            Perceived?.Invoke(percept);
         }
     }
 

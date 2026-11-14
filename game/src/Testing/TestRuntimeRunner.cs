@@ -231,6 +231,7 @@ public partial class TestRuntimeRunner : Node
         // explicit enabling loader through its own protected recorder scope. This is the single session-process
         // entry every test command executes under, so the default is in place before any test runs.
         AIDiagnosticsSettings.DisableSessionTranscriptsForTesting();
+        AIDiagnosticsSettings.DisableDecisionPayloadDumpsForTesting();
 
         SessionBaseline baseline = await CaptureSessionBaselineAsync();
 

@@ -353,10 +353,16 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
         Assert.False(counterReset!.IsPublic, "The counter-reset seam must not be public API.");
         Assert.True(counterReset.IsAssembly, "The counter-reset seam must be internal.");
 
-        // The game-configuration surface exposes only the three diagnostics toggles — no switch redirects the
-        // recorder root or resets counters.
+        // The game-configuration surface exposes exactly the four diagnostics toggles — no switch redirects the
+        // recorder root, resets counters, or otherwise reaches test seams. Decision-payload logging is public,
+        // yaml-documented, and intentional.
         Assert.Equal(
-            ["EnableReasoningLogging", "EnableRequestResponseLogging", "EnableSessionTranscriptLogging"],
+            [
+                "EnableDecisionPayloadLogging",
+                "EnableReasoningLogging",
+                "EnableRequestResponseLogging",
+                "EnableSessionTranscriptLogging",
+            ],
             typeof(AIDiagnosticsOptions).GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Select(static property => property.Name)
                 .Order());

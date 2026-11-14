@@ -25,6 +25,10 @@ internal interface IAdmissionCapableVoice
     /// attended start/resume suppression holds (SPCH-005 TR-37; AI-002 TR-14).
     /// </summary>
     /// <param name="speech">Speech text to submit.</param>
+    /// <param name="recipients">
+    /// Canonical character FullIds the speaker explicitly declared as addressees, or null/empty when unspecified.
+    /// The declared recipients ride the speech publication to every listener without restricting hearing reach.
+    /// </param>
     /// <param name="cancellationToken">Caller-supplied cancellation observed through generation, conversion, and
     /// preparation until playback hand-off.</param>
     /// <param name="admission">Runner-owned admission transaction committing queue admission and protected state
@@ -34,6 +38,7 @@ internal interface IAdmissionCapableVoice
     /// event, or self-observation — and the caller reports its not-delivered outcome.</returns>
     ValueTask<bool> SpeakCancellableAdmittedAsync(
         string speech,
+        IReadOnlyList<string>? recipients,
         CancellationToken cancellationToken,
         SpeechAdmissionTransaction admission);
 }

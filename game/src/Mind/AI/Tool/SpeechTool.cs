@@ -33,7 +33,11 @@ public partial class SpeechTool : AgentTool
             + "being spoken sooner and this allows later parts to be prepared while earlier speech plays. "
             + "These calls deliver a single contribution: once it is finished, normally yield and give the other "
             + "person room to reply as the situation warrants. This call remains in your context as the record of "
-            + "what you said. Speaking is optional and repeatable.";
+            + "what you said. Speaking is optional and repeatable. Pass `recipients` as the array of characters "
+            + "you are addressing — the exact backticked character IDs appearing in your context, passed as bare "
+            + "ID strings without backticks, such as \"char:rin\" — whenever your speech is addressed to specific "
+            + "people; multiple recipients are allowed. Omit `recipients` or pass an empty array when the address "
+            + "is unspecified; omitting does not mean everyone.";
     }
 
     /// <summary>
@@ -63,7 +67,12 @@ public partial class SpeechTool : AgentTool
     private async ValueTask<AgentToolResult> Speak(
         [Description("Exact words to say aloud.")] string speech,
         ScenarioContext context,
-        CancellationToken cancellationToken)
+        [Description(
+            "Characters you are addressing: the backticked character IDs appearing in your context, passed as "
+            + "bare ID strings without backticks, such as \"char:rin\". Multiple recipients are allowed. "
+            + "Omit or pass an empty array when the address is unspecified; omitting does not mean everyone.")]
+        IReadOnlyList<string>? recipients = null,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -75,6 +84,12 @@ public partial class SpeechTool : AgentTool
         string acceptedSpeech = speech.Trim();
         MindBase mind = Session!.Mind;
         IVoice voice = context.Character.RequireVoice();
+        if (!TryResolveDeclaredRecipients(recipients, context, mind, out IReadOnlyList<string>? resolvedRecipients, out string? recipientError))
+        {
+            // Model-correctable validation failure: nothing was submitted or observed, and the message names the
+            // problem so the next call can fix it.
+            return new AgentToolResult(recipientError);
+        }
 
         // Marks the reasoning-to-speech boundary before the turn-taking wait so the inferred reasoning gap is
         // not polluted by time spent waiting for another speaker.
@@ -110,14 +125,14 @@ public partial class SpeechTool : AgentTool
             if (voice is IAdmissionCapableVoice capableVoice
                 && Admission?.TryCreateTransaction() is { } admission)
             {
-                if (!await capableVoice.SpeakCancellableAdmittedAsync(acceptedSpeech, cancellationToken, admission))
+                if (!await capableVoice.SpeakCancellableAdmittedAsync(acceptedSpeech, resolvedRecipients, cancellationToken, admission))
                 {
                     return new AgentToolResult(CutShortBeforeSpokenMessage);
                 }
             }
             else
             {
-                await voice.SpeakCancellableAsync(acceptedSpeech, cancellationToken);
+                await voice.SpeakCancellableAsync(acceptedSpeech, resolvedRecipients, cancellationToken);
             }
         }
         catch (OperationCanceledException) when (!mind.HasNodeLifetimeEnded)
@@ -126,8 +141,71 @@ public partial class SpeechTool : AgentTool
             return new AgentToolResult(CutShortBeforeSpokenMessage);
         }
 
+        // The self observation is pre-stamped with the owning character's canonical identity; Mind's ingest-side
+        // owner stamping re-applies the same value idempotently. Declared recipients ride the observation so the
+        // speaker's own record states whom it addressed.
         return new AgentToolResult(
             "Spoken through the configured voice.",
-            [new ObservedSpeech(null, acceptedSpeech)]);
+            [new ObservedSpeech(context.Character.FullId, acceptedSpeech, resolvedRecipients)]);
+    }
+
+    /// <summary>
+    /// Validates the model-supplied recipient declarations against the live scene roster — the same roster source
+    /// speech perception resolves speakers against — returning the canonical recipient set in declaration order
+    /// with duplicates collapsed, or null when the address is unspecified.
+    /// </summary>
+    /// <param name="recipients">Model-supplied recipient declarations; null or empty means unspecified.</param>
+    /// <param name="context">Trusted session binding owning the speaking character.</param>
+    /// <param name="mind">Mind boundary whose scene roster validates the declarations.</param>
+    /// <param name="resolvedRecipients">Canonical distinct recipients in declaration order, or null when unspecified.</param>
+    /// <param name="error">Model-correctable validation failure naming the problem, or null when valid.</param>
+    private static bool TryResolveDeclaredRecipients(
+        IReadOnlyList<string>? recipients,
+        ScenarioContext context,
+        MindBase mind,
+        out IReadOnlyList<string>? resolvedRecipients,
+        out string? error)
+    {
+        resolvedRecipients = null;
+        error = null;
+        if (recipients is not { Count: > 0 })
+        {
+            return true;
+        }
+
+        List<string> resolved = [];
+        foreach (string recipient in recipients)
+        {
+            if (string.IsNullOrWhiteSpace(recipient))
+            {
+                error = "Cannot speak: the recipients array contains a blank entry. Pass each recipient as the "
+                    + "exact backticked character ID from your context, as a bare ID string without backticks.";
+                return false;
+            }
+
+            string candidate = recipient.Trim();
+            if (string.Equals(candidate, context.Character.FullId, StringComparison.Ordinal))
+            {
+                error = $"Cannot speak: '{candidate}' is you, and a speaker cannot address themselves. Pass the "
+                    + "character IDs of the people you are speaking to, or omit recipients when unspecified.";
+                return false;
+            }
+
+            if (mind.GetCurrentSceneContext().Find(candidate) is null)
+            {
+                error = $"Cannot speak: '{candidate}' is not a character in the current scene. Pass each "
+                    + "recipient as the exact backticked character ID appearing in your context, or omit "
+                    + "recipients when unspecified.";
+                return false;
+            }
+
+            if (!resolved.Contains(candidate))
+            {
+                resolved.Add(candidate);
+            }
+        }
+
+        resolvedRecipients = resolved;
+        return true;
     }
 }

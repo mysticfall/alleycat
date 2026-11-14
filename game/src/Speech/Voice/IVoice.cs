@@ -110,4 +110,25 @@ public interface IVoice : IComponent, IIdentifiable
     ValueTask SpeakCancellableAsync(
         string speech,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Submits speech as an explicitly cancellable submission carrying the speaker's explicitly declared
+    /// addressees, completing at playback hand-off.
+    /// </summary>
+    /// <param name="speech">Speech text to submit.</param>
+    /// <param name="recipients">
+    /// Canonical character FullIds the speaker explicitly declared as addressees, or null/empty when unspecified.
+    /// The declared recipients ride the speech publication to every listener without restricting hearing reach.
+    /// </param>
+    /// <param name="cancellationToken">Caller-supplied cancellation observed through generation, conversion, and
+    /// preparation until playback hand-off.</param>
+    /// <remarks>
+    /// The default implementation drops the declared recipients and falls back to the unspecified-recipients
+    /// submission; voices that carry explicit recipients override it.
+    /// </remarks>
+    ValueTask SpeakCancellableAsync(
+        string speech,
+        IReadOnlyList<string>? recipients,
+        CancellationToken cancellationToken)
+        => SpeakCancellableAsync(speech, cancellationToken);
 }

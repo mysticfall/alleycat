@@ -116,6 +116,54 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
+    /// Decision-payload dump logging defaults to disabled in options and stays disabled when the diagnostics
+    /// section is absent, independently of every other diagnostics toggle.
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_Load_WhenSectionMissing_DisablesDecisionPayloadLogging()
+    {
+        IConfiguration configuration = new ConfigurationBuilder().Build();
+
+        var settings = AIDiagnosticsSettings.Load(configuration);
+
+        Assert.False(new AIDiagnosticsOptions().EnableDecisionPayloadLogging);
+        Assert.False(settings.EnableDecisionPayloadLogging);
+    }
+
+    /// <summary>
+    /// Enabling decision-payload logging binds from <c>Diagnostics:AI</c> without enabling session transcripts.
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_Load_WhenDecisionPayloadLoggingEnabled_LeavesSessionTranscriptsDisabled()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Diagnostics:AI:EnableDecisionPayloadLogging"] = "true",
+                ["Diagnostics:AI:EnableSessionTranscriptLogging"] = "false",
+            })
+            .Build();
+
+        var settings = AIDiagnosticsSettings.Load(configuration);
+
+        Assert.True(settings.EnableDecisionPayloadLogging);
+        Assert.False(settings.EnableSessionTranscriptLogging);
+    }
+
+    /// <summary>
+    /// Without game configuration — for example in isolated tests — <c>LoadOrDefault</c> fails closed: decision
+    /// payload logging stays disabled alongside session transcripts.
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_LoadOrDefault_WithoutGameConfiguration_FailsClosedToDisabledDecisionPayloads()
+    {
+        var settings = AIDiagnosticsSettings.LoadOrDefault();
+
+        Assert.False(settings.EnableDecisionPayloadLogging);
+        Assert.False(settings.EnableSessionTranscriptLogging);
+    }
+
+    /// <summary>
     /// Enabling session transcript logging binds from <c>Diagnostics:AI</c> without enabling request/response
     /// payload logging.
     /// </summary>

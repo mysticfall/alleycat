@@ -25,9 +25,10 @@ event-eligible observations.
    evidence window.
 4. Sensing and semantic interpretation do not select gaze or alter eye presentation.
 5. Invalid sensory or faculty configuration fails before sensory processing begins.
-6. In scenes with multiple characters, each hearing NPC determines for itself whether completed speech was addressed
-   to it, to other characters, or left undecided, using only whom the speaker faces; no emitter- or tool-declared
-   recipient participates.
+6. In scenes with multiple characters, each hearing NPC interprets completed speech through the speaker's explicitly
+   declared recipients: addressed to it when it is a declared recipient, addressed to other characters when the
+   declaration names others, and undecided when the speaker declared none. Player speech declares no recipients and
+   stays undecided, and every hearing NPC still perceives speech regardless of whom it addresses.
 
 ## Technical Requirements
 
@@ -42,11 +43,10 @@ event-eligible observations.
    entry,
    event-timeline record, scheduling pressure, or model-facing event text.
 4. Non-self completed speech produces `ObservedSpeech`; self filtering, speaker attribution, and speech lifecycle
-   remain as specified by the speech contracts. Speech interpretation also performs observer-side addressee inference
-   at perception time: the observing NPC infers which other current-scene characters the speaker addressed — never an
-   emitter- or tool-declared recipient — and records the result as the semantic, observer-relative addressee set on
-   `ObservedSpeech` (AI-001 TR-13). Unrecognised-speaker speech is always undecided because facing cannot be resolved
-   without a character node. Its initial AI-001 policy is `NeverExpire` and event-eligible.
+   remain as specified by the speech contracts. Speech interpretation carries the speaker's explicitly declared
+   recipients from the percept into the semantic addressee set on `ObservedSpeech` (AI-001 TR-13, TR-16), defensively
+   deduplicated in declaration order. Unrecognised-speaker speech is always undecided because declared recipients
+   cannot be attributed without a recognised character. Its initial AI-001 policy is `NeverExpire` and event-eligible.
 5. A valid focused visual description produces `ObservedVisualDescription`. Its AI-001 policy suppresses equal values
    and
    supersedes changed values; it is normally current-scene input and event-ineligible.
@@ -65,20 +65,21 @@ event-eligible observations.
    Attention does not itself create event history.
 10. Sensing, faculties, and attention mutation must not call look-target assignment APIs. AI-007 remains the separately
     composed gaze consumer.
-11. Addressee inference uses the speaker's facing as its only v1 cue: every other current-scene character within the
-    speaker's facing cone — bounded by a tunable angle threshold — is an addressee, and an empty cone result is
-    undecided. The cone may contain multiple characters, yielding a multi-addressee set. Inference reads orientation
-    only: it must not assign look targets or alter eye presentation (TR-10), and it must not perform vocative
-    (name-mention) matching or make any model request on the perception path.
-12. The orientation source prefers the speaker's head or gaze direction — AI-007/AI-009 machinery where available, and
-    the player's head or camera for player speakers — falling back to body forward. The chosen source, fallback order,
-    and facing-cone angle threshold are documented and remain tunable.
+11. Declared recipients are declarations, never a hearing filter: every listener in hearing reach receives the speech
+    and its recipient metadata regardless of whom it addresses ([SPCH-006](../../speech/006-hearing/index.md) bounds
+    reach). Perception performs no addressee inference of its own — no orientation, facing, vocative (name-mention),
+    or model-based attribution exists on the perception path — and it must not assign look targets or alter eye
+    presentation (TR-10) or make any model request.
+12. Perception stamps recognised player-origin speech with trusted internal player provenance, resolved from scene
+    membership — the scene context's player group — never from model-supplied data. Player speech never carries
+    declared recipients: its addressee set stays blank (undecided), while the private provenance drives AI-001 TR-14's
+    temporary fresh-turn rule. The flag never appears in a public payload or any model-visible rendering.
 
 ## In Scope
 
 - Immutable percept publication, direct-child faculty discovery, ordered interpretation, and contained failure handling.
 - Attention-only visual presence, focused descriptions, and focus-limited relative-position evidence.
-- Observer-side speech-addressee inference from speaker facing at perception time.
+- Declared-recipient speech interpretation at perception time, with trusted player provenance from scene membership.
 - Policy-directed suppression, supersession, finite evidence, and event eligibility through AI-001.
 - Attention snapshots used by [AI-003](../003-prompt-api/index.md) attended-character current-scene status.
 
@@ -86,10 +87,11 @@ event-eligible observations.
 
 - Expressions, planner agent behaviour, compaction, and broader perception changes.
 - Gaze selection, direct look-target assignment, and final perception or hysteresis tuning values.
-- Addressee-inference extensions beyond speaker facing: vocative (name-mention) matching, dyadic-recency cues,
-  decision-model (LLM) inference, and distance gating of the facing cone.
-- Emitter- or tool-declared addressees (a speak-tool addressee parameter); hearing reach stays bounded by
-  [SPCH-006](../../speech/006-hearing/index.md).
+- Addressee inference beyond explicit declarations: vocative (name-mention) matching, dyadic-recency cues,
+  orientation- or gaze-based inference, and decision-model (LLM) inference; addressing follows declared recipients
+  only.
+- Hearing-reach filtering by declared recipients; hearing reach stays bounded by
+  [SPCH-006](../../speech/006-hearing/index.md) alone.
 
 ## Acceptance Criteria
 
@@ -101,8 +103,9 @@ event-eligible observations.
    attended-character current-scene status.
 3. Acceptance shows position evidence is unavailable after expiry or loss of focus and does not become an expiry event.
 4. Acceptance shows sensing leaves gaze and eye presentation unchanged.
-6. Acceptance shows a hearing NPC's addressee conclusion is its own, derived from the speaker's facing at perception
-   time rather than any declared recipient, and that unrecognised speech is undecided.
+6. Acceptance shows a hearing NPC's addressee conclusion follows the speaker's declared recipients — addressed to it
+   when included, addressed to others when named, undecided when none were declared — that unrecognised speech is
+   undecided, and that bystanders outside the declaration still perceive the speech.
 
 ### Technical Requirements
 
@@ -116,14 +119,15 @@ event-eligible observations.
    relevant position or distance evidence and its timestamp.
 4. Tests verify relative-position evidence is focus-limited and that configuration validation rejects non-finite values.
 5. Tests verify attention snapshots are immutable and no sensing or attention path assigns a look target.
-6. Tests verify facing-cone addressee resolution — single addressee, multiple addressees, empty-cone undecided,
-   unrecognised-speaker undecided, and speaker self-exclusion — the head/gaze-first orientation fallback to body
-   forward, and that the inference path assigns no look target and makes no model request.
+6. Tests verify declared-recipient interpretation — single and multiple declared recipients resolving to the correct
+   observer-relative states, omitted recipients staying undecided, unrecognised-speaker declarations ignored, and
+   bystanders outside the declaration still perceiving the speech — that player speech keeps blank recipients with
+   trusted private provenance, and that the perception path assigns no look target and makes no model request
+   (AI-001 TR-13–TR-17).
 
 ## References
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
-- [AI-009: Attention-Driven Head Orientation](../009-attention-head-orientation/index.md)
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)

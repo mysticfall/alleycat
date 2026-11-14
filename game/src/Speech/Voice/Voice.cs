@@ -113,6 +113,13 @@ public abstract partial class Voice : Node3D, IVoice
         => SpeakAsync(speech, cancellationToken);
 
     /// <inheritdoc />
+    public virtual ValueTask SpeakCancellableAsync(
+        string speech,
+        IReadOnlyList<string>? recipients,
+        CancellationToken cancellationToken)
+        => SpeakCancellableAsync(speech, cancellationToken);
+
+    /// <inheritdoc />
     public override void _ExitTree()
     {
         if (Interlocked.Exchange(ref _nodeLifetimeEnded, 1) != 0)
@@ -160,7 +167,7 @@ public abstract partial class Voice : Node3D, IVoice
         }
 
         CloseSpeakingWindow();
-        OnSpeechGenerated(speech);
+        OnSpeechGenerated(speech, null);
         return true;
     }
 
@@ -236,11 +243,17 @@ public abstract partial class Voice : Node3D, IVoice
     /// <summary>
     /// Called after a speech request has completed its generation or playback handoff boundary.
     /// </summary>
-    protected virtual void OnSpeechGenerated(string speech)
-        => PublishSpeech(speech, null);
+    protected virtual void OnSpeechGenerated(string speech, IReadOnlyList<string>? declaredRecipients)
+        => PublishSpeech(speech, null, declaredRecipients);
 
-    /// <summary>Publishes completed speech without changing the speaking window.</summary>
-    protected void PublishSpeech(string speech, SpeechSegmentMetadata? metadata)
+    /// <summary>
+    /// Publishes completed speech without changing the speaking window. The speaker's explicitly declared
+    /// recipients ride the publication to every listener without restricting hearing reach.
+    /// </summary>
+    protected void PublishSpeech(
+        string speech,
+        SpeechSegmentMetadata? metadata,
+        IReadOnlyList<string>? declaredRecipients = null)
     {
         if (!IsInsideTree())
         {
@@ -257,7 +270,7 @@ public abstract partial class Voice : Node3D, IVoice
         {
             if (node is IHearing listener)
             {
-                listener.ReceiveVoice(speech, this, metadata);
+                listener.ReceiveVoice(speech, this, metadata, declaredRecipients);
             }
         }
     }
