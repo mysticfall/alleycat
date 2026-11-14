@@ -74,10 +74,17 @@ internal static class VisualContextAutoExchange
     /// adjacent user message carrier per image placed after the exchange. <paramref name="nextCallId" /> is drawn
     /// exactly once per capture, in capture order.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="gazeOrientationLines" /> carries the observed-character look-direction descriptor lines
+    /// composed from the same derivation the tool delivered-results use; they are appended to every fabricated
+    /// result's instructional text through the shared append helper, so the delivery mode can never drift the
+    /// presented content. Absent lines leave the normative instructional texts verbatim.
+    /// </remarks>
     internal static IReadOnlyList<ChatMessage> Compose(
         IReadOnlyList<VisualContextImage> images,
         OpenAIChatClientKind chatClientKind,
-        Func<string> nextCallId)
+        Func<string> nextCallId,
+        IReadOnlyList<string>? gazeOrientationLines = null)
     {
         ArgumentNullException.ThrowIfNull(images);
         ArgumentNullException.ThrowIfNull(nextCallId);
@@ -86,6 +93,7 @@ internal static class VisualContextAutoExchange
             throw new ArgumentException("At least one successful capture is required.", nameof(images));
         }
 
+        IReadOnlyList<string> orientationLines = gazeOrientationLines ?? VisualContextGaze.NoLines;
         List<FunctionCallContent> calls = [];
         List<FunctionResultContent> results = [];
         List<ChatMessage>? carriers = null;
@@ -93,7 +101,9 @@ internal static class VisualContextAutoExchange
         {
             string callId = nextCallId();
             calls.Add(new FunctionCallContent(callId, DescribeToolName(image.Kind), _emptyArguments));
-            string instruction = DescribeInstruction(image.Kind);
+            string instruction = VisualContextGaze.AppendOrientationLines(
+                DescribeInstruction(image.Kind),
+                orientationLines);
             if (chatClientKind == OpenAIChatClientKind.Responses)
             {
                 // The image rides inside the fabricated function-call output: result content of the instructional

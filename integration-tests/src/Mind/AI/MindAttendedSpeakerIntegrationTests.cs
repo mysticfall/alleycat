@@ -167,6 +167,95 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
     }
 
     /// <summary>
+    /// The own-speech-end cue fires exactly for the owning character's voice, regardless of attention, and never
+    /// fires for another character's voice.
+    /// </summary>
+    [Fact]
+    public async Task OwnSpeechEndedNotified_FiresOnlyForTheOwningCharacterVoice()
+    {
+        SpeechScene scene = new();
+        TestMind mind = scene.CreateMind();
+        mind.AttendForTest(scene.Speaker.FullId);
+        await mind.WaitForReadyAsync();
+        try
+        {
+            List<string> ownEnds = [];
+            mind.OwnSpeechEndedNotified += () => ownEnds.Add("own");
+
+            scene.SpeakerVoice.BeginSpeech();
+            scene.SpeakerVoice.EndSpeech();
+            Assert.Empty(ownEnds);
+
+            scene.OwnVoice.BeginSpeech();
+            scene.OwnVoice.EndSpeech();
+            Assert.Equal(["own"], ownEnds);
+        }
+        finally
+        {
+            await mind.FreeAsync();
+        }
+    }
+
+    /// <summary>
+    /// The attended-speaker-end cue fires only for an attended speaker, carrying the speaker's canonical full ID.
+    /// </summary>
+    [Fact]
+    public async Task AttendedSpeakerEndedNotified_FiresWithTheAttendedSpeakerFullId()
+    {
+        SpeechScene scene = new();
+        TestMind mind = scene.CreateMind();
+        mind.AttendForTest(scene.Speaker.FullId);
+        await mind.WaitForReadyAsync();
+        try
+        {
+            List<string> heard = [];
+            mind.AttendedSpeakerEndedNotified += heard.Add;
+
+            scene.OwnVoice.BeginSpeech();
+            scene.OwnVoice.EndSpeech();
+            scene.BystanderVoice.BeginSpeech();
+            scene.BystanderVoice.EndSpeech();
+            scene.TwinVoice.BeginSpeech();
+            scene.TwinVoice.EndSpeech();
+            Assert.Empty(heard);
+
+            scene.SpeakerVoice.BeginSpeech();
+            scene.SpeakerVoice.EndSpeech();
+            Assert.Equal([scene.Speaker.FullId], heard);
+        }
+        finally
+        {
+            await mind.FreeAsync();
+        }
+    }
+
+    /// <summary>
+    /// The pre-admission speak-intention cue carries the declared recipients verbatim and ignores empty declarations.
+    /// </summary>
+    [Fact]
+    public async Task NotifySpeakIntention_CarriesDeclaredRecipientsAndIgnoresEmptyDeclarations()
+    {
+        SpeechScene scene = new();
+        TestMind mind = scene.CreateMind();
+        await mind.WaitForReadyAsync();
+        try
+        {
+            List<IReadOnlyList<string>> intentions = [];
+            mind.SpeakIntentionNotified += intentions.Add;
+
+            mind.NotifySpeakIntention(["char:tola", "char:tola", "char:rin"]);
+            mind.NotifySpeakIntention([]);
+
+            IReadOnlyList<string> intention = Assert.Single(intentions);
+            Assert.Equal(["char:tola", "char:tola", "char:rin"], intention);
+        }
+        finally
+        {
+            await mind.FreeAsync();
+        }
+    }
+
+    /// <summary>
     /// Builds the voiced scene fixture shared by the attended-speaker tests.
     /// </summary>
     private sealed class SpeechScene

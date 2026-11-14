@@ -91,6 +91,13 @@ public partial class SpeechTool : AgentTool
             return new AgentToolResult(recipientError);
         }
 
+        if (resolvedRecipients is not null)
+        {
+            // Pre-admission intention signal: the declared address is valid before any turn-taking wait or admission
+            // arbitration, so attention-driven systems may react to whom this speech will address.
+            mind.NotifySpeakIntention(resolvedRecipients);
+        }
+
         // Marks the reasoning-to-speech boundary before the turn-taking wait so the inferred reasoning gap is
         // not polluted by time spent waiting for another speaker.
         PipelineDebugLog.Marker("Speak tool invoked", $"{acceptedSpeech.Length} chars");

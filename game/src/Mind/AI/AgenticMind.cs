@@ -773,10 +773,40 @@ public partial class AgenticMind : MindBase
                 LogCaptureOmission(logger, VisualContextImageKind.View, view.Failure);
             }
 
+            // The observed-character look-direction descriptor lines (playtest R1) compose on the Godot thread
+            // from the same derivation the tool delivered-results use, so the auto-mode fabricated exchange
+            // presents exactly the content a model-initiated tool call would.
+            IReadOnlyList<string> gazeOrientationLines = VisualContextGaze.NoLines;
+            if (images.Count != 0)
+            {
+                await dispatcher.InvokeAsync(
+                    token =>
+                    {
+                        token.ThrowIfCancellationRequested();
+                        try
+                        {
+                            gazeOrientationLines = VisualContextGaze.ComposeOrientationLines(
+                                subject,
+                                session.Context.SceneContext);
+                        }
+                        catch (Exception exception)
+                        {
+                            LogGazeOrientationOmission(logger, exception);
+                        }
+
+                        return ValueTask.CompletedTask;
+                    },
+                    cancellationToken);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             IReadOnlyList<ChatMessage>? exchange = images.Count == 0
                 ? null
-                : VisualContextAutoExchange.Compose(images, session.ChatClientKind, NextFabricatedVisualCallId);
+                : VisualContextAutoExchange.Compose(
+                    images,
+                    session.ChatClientKind,
+                    NextFabricatedVisualCallId,
+                    gazeOrientationLines);
             _visualContextExchange = exchange;
             Volatile.Write(ref _visualContextExchangeGeneration, generation);
             return exchange;
@@ -789,6 +819,13 @@ public partial class AgenticMind : MindBase
                 VisualContextImage.DescribeKind(kind),
                 session.Context.Character.Id,
                 failure ?? "the capture failed");
+
+        private void LogGazeOrientationOmission(ILogger logger, Exception exception)
+            => logger.LogWarning(
+                exception,
+                "Composing the look-direction descriptor for character '{CharacterId}' failed; the fabricated "
+                    + "visual-context exchange proceeds without it.",
+                session.Context.Character.Id);
 
         /// <summary>
         /// Ends the pending logical request's fabricated visual-context exchange (AI-013 TR-8): called on a

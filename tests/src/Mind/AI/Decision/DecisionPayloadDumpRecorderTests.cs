@@ -43,14 +43,8 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
         DecisionPayloadDump dump = new(
             Timestamp: new DateTimeOffset(2026, 11, 12, 15, 30, 45, 123, DateTimeOffset.Now.Offset),
             CharacterId: "char:rin",
-            TriggerKind: "Event",
-            TriggerSequenceID: 7,
-            Applied: true,
-            Stale: false,
-            Threshold: 0.5,
-            Verdict: "act",
-            Act: true,
-            Probability: 0.82,
+            TriggerKind: "GazeCadence",
+            Verdict: "char:tola",
             Confidence: 0.9,
             CompositionMs: 3,
             DecisionMs: 214,
@@ -60,27 +54,29 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             Evidence: evidence,
             Questions:
             [
-                new DecisionPayloadQuestion("act_now", "Should this character act now?"),
+                new DecisionPayloadQuestion(
+                    "gaze_target",
+                    "Where should `char:rin` look?",
+                    [
+                        new DecisionPayloadQuestionOption("char:tola", "`char:tola`'s face/appearance; attention 0.9."),
+                        new DecisionPayloadQuestionOption("none", "nothing in particular — no one deserves attention right now."),
+                    ]),
             ]);
 
         recorder.Record(dump);
 
         string file = Assert.Single(Directory.GetFiles(_root));
         Assert.Equal(
-            "2026-11-12-15-30-45-123_char-rin_Event_act.json",
+            "2026-11-12-15-30-45-123_char-rin_GazeCadence_char-tola.json",
             Path.GetFileName(file));
 
         using var document = JsonDocument.Parse(File.ReadAllText(file));
         JsonElement root = document.RootElement;
         Assert.Equal("char:rin", root.GetProperty("characterId").GetString());
-        Assert.Equal("Event", root.GetProperty("triggerKind").GetString());
-        Assert.Equal(7, root.GetProperty("triggerSequenceID").GetInt64());
-        Assert.True(root.GetProperty("applied").GetBoolean());
-        Assert.False(root.GetProperty("stale").GetBoolean());
-        Assert.Equal(0.5, root.GetProperty("threshold").GetDouble());
-        Assert.Equal("act", root.GetProperty("verdict").GetString());
-        Assert.Equal(0.82, root.GetProperty("probability").GetDouble());
+        Assert.Equal("GazeCadence", root.GetProperty("triggerKind").GetString());
+        Assert.Equal("char:tola", root.GetProperty("verdict").GetString());
         Assert.Equal(0.9, root.GetProperty("confidence").GetDouble());
+        Assert.Equal(3, root.GetProperty("compositionMs").GetInt64());
         Assert.Equal(214, root.GetProperty("decisionMs").GetInt64());
         Assert.Equal(440, root.GetProperty("evidenceChars").GetInt32());
         Assert.Equal(2, root.GetProperty("coalescedTriggers").GetInt32());
@@ -93,8 +89,21 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             root.GetProperty("evidence").GetProperty("recent_events")[0].GetString());
 
         JsonElement question = Assert.Single(root.GetProperty("questions").EnumerateArray());
-        Assert.Equal("act_now", question.GetProperty("name").GetString());
-        Assert.Equal("Should this character act now?", question.GetProperty("instructions").GetString());
+        Assert.Equal("gaze_target", question.GetProperty("name").GetString());
+        Assert.Equal("Where should `char:rin` look?", question.GetProperty("instructions").GetString());
+
+        // Every offered option's value and criteria serialise verbatim, so the dump shows the full candidate
+        // list the decision model chose from.
+        JsonElement options = question.GetProperty("options");
+        Assert.Equal(2, options.GetArrayLength());
+        Assert.Equal("char:tola", options[0].GetProperty("value").GetString());
+        Assert.Equal(
+            "`char:tola`'s face/appearance; attention 0.9.",
+            options[0].GetProperty("criteria").GetString());
+        Assert.Equal("none", options[1].GetProperty("value").GetString());
+        Assert.Equal(
+            "nothing in particular — no one deserves attention right now.",
+            options[1].GetProperty("criteria").GetString());
     }
 
     /// <inheritdoc/>
@@ -109,14 +118,8 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
         var dump = new DecisionPayloadDump(
             Timestamp: DateTimeOffset.Now,
             CharacterId: "char:rin",
-            TriggerKind: "Event",
-            TriggerSequenceID: 1,
-            Applied: false,
-            Stale: false,
-            Threshold: 0.5,
-            Verdict: "idle",
-            Act: false,
-            Probability: 0.31,
+            TriggerKind: "GazeSpeakInvoked",
+            Verdict: "none",
             Confidence: null,
             CompositionMs: 1,
             DecisionMs: 9,
@@ -124,7 +127,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             CoalescedTriggers: 0,
             Failure: null,
             Evidence: evidence,
-            Questions: [new DecisionPayloadQuestion("act_now", "Should this character act?")]);
+            Questions: [new DecisionPayloadQuestion("gaze_target", "Where should `char:rin` look?")]);
 
         recorder.Record(dump);
 
@@ -141,14 +144,8 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
         DecisionPayloadDump dump = new(
             Timestamp: DateTimeOffset.Now,
             CharacterId: "char:rin",
-            TriggerKind: "Interruption",
-            TriggerSequenceID: 0,
-            Applied: false,
-            Stale: false,
-            Threshold: 0.5,
+            TriggerKind: "GazeAttendedSpeakerEnded",
             Verdict: "failed",
-            Act: false,
-            Probability: null,
             Confidence: null,
             CompositionMs: 1,
             DecisionMs: 40,
@@ -156,17 +153,17 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             CoalescedTriggers: 0,
             Failure: "decision failure Timeout",
             Evidence: null,
-            Questions: [new DecisionPayloadQuestion("interrupt_in_flight", "Interrupt?")]);
+            Questions: [new DecisionPayloadQuestion("gaze_target", "Where should `char:rin` look?")]);
 
         recorder.Record(dump);
 
         string failedFile = Assert.Single(Directory.GetFiles(_root));
-        Assert.EndsWith("_char-rin_Interruption_failed.json", Path.GetFileName(failedFile));
+        Assert.EndsWith("_char-rin_GazeAttendedSpeakerEnded_failed.json", Path.GetFileName(failedFile));
         using var document = JsonDocument.Parse(File.ReadAllText(failedFile));
         Assert.Equal("failed", document.RootElement.GetProperty("verdict").GetString());
         Assert.Equal("decision failure Timeout", document.RootElement.GetProperty("failure").GetString());
         Assert.Equal(
-            "Interrupt?",
+            "Where should `char:rin` look?",
             Assert.Single(document.RootElement.GetProperty("questions").EnumerateArray())
                 .GetProperty("instructions")
                 .GetString());
@@ -196,14 +193,8 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
     private static DecisionPayloadDump CreateMinimalDump() => new(
             DateTimeOffset.Now,
             "char:rin",
-            "Idle",
-            0,
-            Applied: false,
-            Stale: false,
-            Threshold: 0.5,
-            "idle",
-            Act: false,
-            Probability: 0.2,
+            "GazeCadence",
+            "none",
             Confidence: null,
             CompositionMs: 0,
             DecisionMs: 5,
@@ -211,5 +202,5 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             CoalescedTriggers: 0,
             Failure: null,
             Evidence: JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["identity"] = "test" }),
-            Questions: [new DecisionPayloadQuestion("act_now", "Act?")]);
+            Questions: [new DecisionPayloadQuestion("gaze_target", "Where should `char:rin` look?")]);
 }

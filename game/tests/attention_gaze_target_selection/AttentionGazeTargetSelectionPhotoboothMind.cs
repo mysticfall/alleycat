@@ -1,6 +1,7 @@
 using AlleyCat.Character;
 using AlleyCat.Common;
 using AlleyCat.Core;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
@@ -22,11 +23,8 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothMind : MindBas
     {
         AttentionGazeTargetSelector selector = this.RequireNode<AttentionGazeTargetSelector>("AttentionGazeTargetSelector");
         selector.EvaluationIntervalSeconds = 0.01f;
-        selector.PrimaryDwellSeconds = 10f;
-        selector.SecondaryDwellSeconds = 0.5f;
-        selector.SecondaryGlanceProbability = 0f;
         selector.SetSceneContextLoaderForTesting(CreateSceneContext);
-        selector.SetRandomForTesting(FixedRandom.Instance);
+        selector.SetDecisionClientForTesting(DominantSubjectDecisionClient.Instance);
     }
 
     /// <inheritdoc />
@@ -98,13 +96,36 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothMind : MindBas
         public Transform3D GlobalTransform => subject.GlobalTransform;
     }
 
-    private sealed class FixedRandom : IAttentionGazeRandom
+    /// <summary>
+    /// Deterministic stand-in for the decision model: chooses the first (highest-attention) real candidate option,
+    /// or <c>none</c> when only that option exists.
+    /// </summary>
+    private sealed class DominantSubjectDecisionClient : IDecisionClient
     {
-        public static FixedRandom Instance
+        public static DominantSubjectDecisionClient Instance
         {
             get;
         } = new();
 
-        public double NextUnitInterval() => 0d;
+        public Task<DecisionResult> EvaluateAsync(
+            DecisionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ChoiceQuestion question = request.Questions.OfType<ChoiceQuestion>().Single();
+            string value = question.Options
+                .Select(option => option.Value)
+                .FirstOrDefault(candidate => candidate != DecisionGazePolicy.NoneOptionValue)
+                ?? DecisionGazePolicy.NoneOptionValue;
+            ChoiceAnswer answer = new(question, value, null, null);
+            return Task.FromResult(new DecisionResult(
+                "photobooth-scripted",
+                ID: null,
+                Provider: null,
+                Usage: null,
+                Cost: null,
+                [answer],
+                new Dictionary<string, DecisionAnswer> { [question.Name] = answer }));
+        }
     }
 }

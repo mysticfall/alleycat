@@ -59,8 +59,32 @@ public sealed partial class CaptureViewTool : AgentTool
             Session?.Clock,
             cancellationToken);
         return outcome.Image is { } image
-            ? new AgentToolResult($"View delivered: {image.DescribeCapture()}.", image: image)
+            ? new AgentToolResult(
+                ComposeDeliveredMessage("View delivered", image, context),
+                image: image)
             : ComposeFailedResult(outcome.Failure);
+    }
+
+    /// <summary>
+    /// Composes the delivered-capture message: the factual capture record plus the observed-character
+    /// look-direction descriptor lines, whose derivation is fully contained — a descriptor failure never
+    /// degrades the delivered image result.
+    /// </summary>
+    private string ComposeDeliveredMessage(string prefix, VisualContextImage image, ScenarioContext context)
+    {
+        string message = $"{prefix}: {image.DescribeCapture()}.";
+        try
+        {
+            return VisualContextGaze.AppendOrientationLines(message, context.Character, context.SceneContext);
+        }
+        catch (Exception exception)
+        {
+            _logger?.LogWarning(
+                exception,
+                "Composing the look-direction descriptor for subject '{SubjectId}' failed; the delivered capture result is unaffected.",
+                context.Character.FullId);
+            return message;
+        }
     }
 
     private AgentToolResult ComposeFailedResult(string? failure)

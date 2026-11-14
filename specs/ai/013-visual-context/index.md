@@ -49,6 +49,10 @@ plumbing that SCN-002's Out Of Scope deferred.
 7. With AI-011 transcript logging enabled, a developer finds every generated image as a file beside the relevant turn
    page — minimap PNG, view-capture JPEG — relatively linked and listed per cycle; with logging disabled, no image
    files are written anywhere.
+8. In both `tools` and `auto` modes, delivered visual context carries the same accompanying look-direction
+   orientation lines — brief statements of where other characters in the scene are currently looking, honestly
+   omitted when nobody holds a look target — so what an NPC's visual context tells it never depends on which mode
+   delivered it.
 
 ## Technical Requirements
 
@@ -117,8 +121,11 @@ plumbing that SCN-002's Out Of Scope deferred.
    subject's own rig — and the runtime fabricates from the successful captures exactly one synthetic visual-context
    exchange per logical request: an assistant message carrying one `minimap` and/or `capture_view` function call —
    the real tool names of TR-2 with zero-argument arguments — followed by the corresponding tool-result messages,
-   placed immediately before that request's fresh current-scene message. Fabricated call IDs draw from the synthetic
-   call-ID namespace (AI-002 TR-18) and never collide with a real tool call ID or a `scene_update` ID. The
+   placed immediately before that request's fresh current-scene message. Each fabricated result's delivered text
+   composes the TR-11 base instructional text for its kind plus the TR-14 look-direction descriptor lines — the
+   same delivered-text composition as the tools-mode results of TR-3 and TR-4 — so automatic delivery changes
+   when visual context arrives, never how its delivered text is composed. Fabricated call IDs draw from the
+   synthetic call-ID namespace (AI-002 TR-18) and never collide with a real tool call ID or a `scene_update` ID. The
    fabricated exchange is a per-request suffix presentation only: it is never appended to the retained accepted
    transcript; exact transport retries and that cycle's recovery rematerialisations reuse it — generation-tagged,
    with the captures of the materialising cycle — and the next materialisation rebuilds it from fresh captures, so
@@ -154,27 +161,30 @@ plumbing that SCN-002's Out Of Scope deferred.
       message — factual capture-record text plus the image parts — placed after the tool exchange, identically on
       both endpoint kinds.
     - Fabricated auto-mode exchange on Responses-capable endpoints (the provider default): each fabricated tool
-      result of TR-8 carries its image in-result — result content of the TR-11 instructional text for its kind plus
-      the image part — so the image rides inside the function-call output; no adjacent user message exists on this
-      path.
+      result of TR-8 carries its image in-result — result content of the delivered instructional text (the TR-11
+      base text for its kind plus its TR-14 descriptor lines) and the image part — so the image rides inside the
+      function-call output; no adjacent user message exists on this path.
     - Fabricated auto-mode exchange on Chat Completions and compatible backends: each fabricated tool result of
-      TR-8 is text-only — the TR-11 instructional text for its kind — and each image rides an adjacent user message
-      — that image's instructional text plus the image parts — placed after the fabricated exchange and before the
-      current-scene message.
+      TR-8 is text-only — the delivered instructional text (the TR-11 base text for its kind plus its TR-14
+      descriptor lines) — and each image rides an adjacent user message — that image's delivered instructional
+      text plus the image parts — placed after the fabricated exchange and before the current-scene message.
     Tests assert the semantic on both endpoint paths, not one fixed wire shape.
 
 ### Auto-Mode Instructional Texts
 
-11. The text accompanying a live auto-mode image — inside a fabricated tool result on the Responses path, or as the
-    label of its adjacent fallback user message — is a brief instruction, not a capture record: it explains what the
-    image represents and tells the agent to treat it as a visual cue for the current scene. It must not carry
-    `DescribeCapture()`-style capture facts — no coordinates, radii, or game-time prose. The normative texts, one
-    per kind, are exactly:
+11. The base text accompanying a live auto-mode image — inside a fabricated tool result on the Responses path, or
+    as the label of its adjacent fallback user message — is a brief instruction, not a capture record: it explains
+    what the image represents and tells the agent to treat it as a visual cue for the current scene. It must not
+    carry `DescribeCapture()`-style capture facts — no coordinates, radii, or game-time prose. The normative base
+    texts, one per kind, are exactly:
     - Minimap: "A top-down minimap of your current surroundings, centred on your own position with your marker
       highlighted. Consider it a visual cue for where things stand around you in the current scene."
     - View: "This is what you currently see through your own eyes at this moment. Consider it a visual cue for the
       current scene."
-    The tools-mode disposal placeholder of TR-9 keeps its factual capture record, unchanged.
+    The delivered text is the base text for its kind plus the look-direction descriptor lines of TR-14, composed
+    additively on top: the base texts above stay exactly pinned and independently testable, a delivered text with
+    no applicable descriptor lines is exactly its base text, and the descriptor lines carry the same content in
+    both delivery modes. The tools-mode disposal placeholder of TR-9 keeps its factual capture record, unchanged.
 
 ### Transcript Images
 
@@ -191,6 +201,29 @@ plumbing that SCN-002's Out Of Scope deferred.
     no captures or renders are requested, no fabricated visual-context exchange exists, and no image files are
     written. SCN-002 and VISION-001 remain available to every other caller unchanged.
 
+### Look-Direction Descriptor Lines
+
+14. Every delivered visual-context text composes the same look-direction descriptor lines on top of its base text:
+    a successful tools-mode `minimap` or `capture_view` result (TR-3, TR-4) and each auto-mode fabricated result or
+    carrier text (TR-8, TR-10, TR-11) carry them identically, so an NPC's delivered visual context never depends on
+    which mode delivered it. The lines exist because a character can turn her head while her body — and therefore
+    her minimap marker — keeps facing forward: without them, body-facing imagery contradicts where the observed
+    character is looking. For every scene character other than the subject — in canonical full-ID ordinal order, at
+    most a fixed documented bound of four lines — whose vision rig currently holds a valid look target, exactly one
+    line states where that character is looking, naming characters by backticked canonical full ID (AI-004
+    requirement 51):
+    - A character-owned look target: `` `X` is looking toward `Y`. ``
+    - Any other look target: its ground-plane bearing relative to that character's body facing, classified by fixed
+      documented angle thresholds — `` `X` is looking straight ahead. ``, `` `X` is looking to their own left. `` /
+      `` `X` is looking to their own right. ``, or `` `X` is looking back over their own shoulder. ``; the phrasing
+      anchors the side to the character's own body and claims gaze direction only, never head motion.
+    Characters without a valid look target, and a cue with no readable ground-plane separation from its character,
+    produce no line — honest omission, never an invented direction — and the subject itself is never described. The
+    lines append to the base text in ordinal order, and a text with no applicable lines is delivered unchanged.
+    Derivation reads only live look-target state at composition time and creates no observation record. Descriptor
+    derivation is fully contained: a failure logs a warning and delivers the base text unchanged, never degrading
+    the delivered result or exchange.
+
 ## In Scope
 
 - The `AI:VisualContextMode` configuration key: binding, validation, shipped documentation, and the session-fixed
@@ -199,6 +232,8 @@ plumbing that SCN-002's Out Of Scope deferred.
   fixed 0.25-metre minimap margin and 512×1024 portrait minimap dimensions, and contained error results.
 - Auto mode: the fabricated per-request visual-context exchange — capture, composition, placement, per-cycle reuse,
   rebuild, failure omission, and instructional label texts — with both tools remaining model-visible.
+- The shared look-direction descriptor composition of delivered visual-context texts in both modes — semantics,
+  bounded line count, honest omission, and contained derivation (TR-14).
 - The ephemeral image lifetime: placeholder disposal for retained images as a scoped exception to AI-002 TR-17
   (amended), and per-request non-retention for fabricated exchanges.
 - Endpoint-aware image transport: in-result images on Responses-capable endpoints and the documented adjacent
@@ -236,8 +271,9 @@ plumbing that SCN-002's Out Of Scope deferred.
    error results while the session continues normally (UR-2, UR-5).
 3. Auto-mode acceptance shows both tools model-visible and callable with model-initiated calls behaving exactly as
    in `tools` mode, every logical request carrying exactly one fabricated visual-context exchange with the fresh
-   images presented immediately before the current-scene message, and a failed capture omitted with a warning while
-   the turn proceeds (UR-3, UR-5).
+   images presented immediately before the current-scene message, the delivered exchange text composing the same
+   look-direction descriptor lines as the tools-mode results (UR-3, UR-5, UR-8), and a failed capture omitted with
+   a warning while the turn proceeds.
 4. Off-mode acceptance shows no visual tools, no captures, no fabricated visual-context exchange, and no image files
    (UR-4).
 5. Lifetime acceptance shows images present through their creating action chain — continuations, retries, and
@@ -282,9 +318,10 @@ plumbing that SCN-002's Out Of Scope deferred.
    user-message presentation on both paths; the transport path follows the effective kind resolved under
    `AI:ChatClientKind` — a configured override and the resource-property fallback each selecting their path — and
    the image is model-visible at its position within the TR-9 lifetime on every path (TR-10; AI-002 TR-35–TR-36).
-10. Text tests verify the TR-11 instructional texts accompany every live auto-mode image — fabricated results on the
-    Responses path and fallback carriers alike — with no capture-fact content, and that the tools-mode disposal
-    placeholder keeps its factual capture record (TR-11).
+10. Text tests verify the TR-11 base instructional texts accompany every live auto-mode image — fabricated results on
+    the Responses path and fallback carriers alike — with no capture-fact content in the base text and the TR-14
+    descriptor lines composed additively on top, a text with no applicable lines being exactly its base text, and
+    the tools-mode disposal placeholder keeping its factual capture record (TR-11, TR-14).
 11. Transcript tests verify sibling PNG and JPEG files, relative links at the carrying position, per-cycle listing,
     exactly-once writes, placeholder-only cycles writing no file, and no image files on the disabled path (TR-12;
     AI-011 TR-26–TR-28 as amended).
@@ -292,6 +329,11 @@ plumbing that SCN-002's Out Of Scope deferred.
     are updated against the amended AI-002 TR-13 rather than weakened.
 13. Formatting verification, the warning-as-error solution build, unit tests, and affected Godot integration suites
     pass under repository skills; an independent review checks code–spec consistency in both directions.
+14. Descriptor tests verify the same look-direction lines compose every delivered visual-context text in both modes —
+    tools-mode results and auto-mode fabricated results and carriers (TR-14): with another character holding a valid
+    character look target the line names both IDs, a non-character target yields the directional phrasings bounded
+    and ordinal-ordered, a scene with no look targets delivers every text unchanged, and a descriptor derivation
+    failure delivers the undegraded base text with a logged warning.
 
 ## References
 
@@ -319,6 +361,8 @@ Implementation surfaces:
 
 - `game/src/Mind/AI/AgenticMind.cs` — composition point for session tools, mode binding, and the auto-mode
   fabricated-exchange composition.
+- `game/src/Mind/AI/VisualContextGaze.cs` — the look-direction descriptor composition shared by the tools' delivered
+  results and the auto-mode fabricated exchange (TR-14).
 - `game/src/Mind/AI/Provider/AIOptions.cs` and `game/AlleyCat.yaml` — the configuration key and its documented
   default, following the `AI:ReasoningEffort` pattern.
 - `game/src/Mind/AI/Tool/AgentToolResult.cs`, `game/src/Mind/AI/AgentSessionRunner.cs`, and

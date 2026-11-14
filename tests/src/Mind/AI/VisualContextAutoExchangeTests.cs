@@ -163,6 +163,85 @@ public sealed class VisualContextAutoExchangeTests
             callId => Assert.DoesNotContain(SyntheticSceneUpdateExchange.DeliveryToolName, callId, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The observed-character look-direction descriptor lines append to every fabricated result's instructional
+    /// text on both endpoint kinds (playtest R1): the normative instruction still leads verbatim, followed by the
+    /// shared line append, in the in-result text, the Chat-Completions tool-result string, and the adjacent
+    /// carrier alike.
+    /// </summary>
+    [Fact]
+    public void Compose_AppendsTheGazeOrientationLinesToEveryFabricatedInstruction()
+    {
+        string[] lines =
+        [
+            "`char:gazer` is looking toward `char:fixture_player`.",
+            "`char:onlooker` is looking to their own left.",
+        ];
+
+        IReadOnlyList<ChatMessage> responses = VisualContextAutoExchange.Compose(
+            [Minimap(), View()],
+            OpenAIChatClientKind.Responses,
+            () => VisualContextAutoExchange.FormatCallId(1),
+            lines);
+        VisualContextImageKind[] kinds = [VisualContextImageKind.Minimap, VisualContextImageKind.View];
+        FunctionResultContent[] responsesResults =
+            [.. responses[1].Contents.OfType<FunctionResultContent>()];
+        for (int index = 0; index < responsesResults.Length; index++)
+        {
+            AIContent[] parts = Assert.IsType<AIContent[]>(responsesResults[index].Result);
+            string text = Assert.IsType<TextContent>(parts[0]).Text;
+            Assert.StartsWith(
+                VisualContextAutoExchange.DescribeInstruction(kinds[index]),
+                text,
+                StringComparison.Ordinal);
+            Assert.EndsWith(string.Join(" ", lines), text, StringComparison.Ordinal);
+        }
+
+        IReadOnlyList<ChatMessage> chatCompletions = VisualContextAutoExchange.Compose(
+            [Minimap(), View()],
+            OpenAIChatClientKind.ChatCompletions,
+            () => VisualContextAutoExchange.FormatCallId(1),
+            lines);
+        foreach (FunctionResultContent result in chatCompletions[1].Contents.OfType<FunctionResultContent>())
+        {
+            string text = Assert.IsType<string>(result.Result);
+            Assert.EndsWith(string.Join(" ", lines), text, StringComparison.Ordinal);
+        }
+
+        foreach (ChatMessage carrier in chatCompletions.Skip(2))
+        {
+            string text = Assert.IsType<TextContent>(Assert.Single(carrier.Contents.OfType<TextContent>())).Text;
+            Assert.EndsWith(string.Join(" ", lines), text, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Absent descriptor lines leave the fabricated instructional texts verbatim: the exchange composition is
+    /// byte-identical to the pre-descriptor shape when no observed character holds a look target.
+    /// </summary>
+    [Fact]
+    public void Compose_WithoutOrientationLines_LeavesTheInstructionalTextsVerbatim()
+    {
+        IReadOnlyList<ChatMessage> withDefault = VisualContextAutoExchange.Compose(
+            [Minimap()],
+            OpenAIChatClientKind.Responses,
+            () => VisualContextAutoExchange.FormatCallId(1));
+        IReadOnlyList<ChatMessage> withEmpty = VisualContextAutoExchange.Compose(
+            [Minimap()],
+            OpenAIChatClientKind.Responses,
+            () => VisualContextAutoExchange.FormatCallId(1),
+            []);
+        IReadOnlyList<ChatMessage>[] exchanges = [withDefault, withEmpty];
+        foreach (IReadOnlyList<ChatMessage> exchange in exchanges)
+        {
+            FunctionResultContent result = Assert.Single(exchange[1].Contents.OfType<FunctionResultContent>());
+            AIContent[] parts = Assert.IsType<AIContent[]>(result.Result);
+            Assert.Equal(
+                VisualContextAutoExchange.MinimapInstruction,
+                Assert.IsType<TextContent>(parts[0]).Text);
+        }
+    }
+
     private static VisualContextImage Minimap()
         => VisualContextImage.Minimap(_minimapBytes, centreX: 1.5, centreY: 2.5, radiusMetres: 10, gameTimeSeconds: 42.5);
 

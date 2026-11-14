@@ -379,6 +379,72 @@ public sealed class VisualContextIntegrationTests
     }
 
     /// <summary>
+    /// When an observed character holds a look target, the auto-mode fabricated exchange appends the
+    /// look-direction descriptor line to every fabricated result's instructional text (playtest R1): the normative
+    /// instruction still leads verbatim and the appended line matches the tool delivered-results' composition
+    /// exactly — the delivery mode cannot change the presented content.
+    /// </summary>
+    [Fact]
+    public async Task AutoMode_WhenAnObservedCharacterHoldsALookTarget_AppendsTheDescriptorToTheFabricatedExchange()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CountingVision gazerVision = new();
+        ComponentCharacter gazer = new("gazer", new Vector3(2f, 0f, 1f), gazerVision);
+        SessionFixture fixture = new(
+            VisualContextMode.Auto,
+            visionOverride: new CountingVision(),
+            additionalSceneCharacter: gazer);
+        try
+        {
+            DescriptorCue playerFaceCue = new()
+            {
+                Name = "PlayerFaceCue",
+                ID = "face",
+                Prominence = 1f,
+            };
+            fixture.Player.AddChild(playerFaceCue);
+            gazerVision.LookTarget = playerFaceCue;
+
+            fixture.Provider.EnqueueCall(DummyToolName);
+            fixture.EnqueueHoldForever();
+            await fixture.StartAsync(sceneTree);
+            await WaitUntilAsync(sceneTree, () => fixture.Provider.Captures.Count >= 1);
+
+            IReadOnlyList<ChatMessage> messages = fixture.Provider.Captures[0].Messages;
+            FunctionCallContent[] fabricatedCalls =
+            [
+                .. messages
+                    .SelectMany(static message => message.Contents)
+                    .OfType<FunctionCallContent>()
+                    .Where(call => call.CallId!.StartsWith(
+                        VisualContextAutoExchange.SyntheticCallIDPrefix,
+                        StringComparison.Ordinal)),
+            ];
+            Assert.Equal(2, fabricatedCalls.Length);
+            foreach (FunctionCallContent call in fabricatedCalls)
+            {
+                FunctionResultContent result = Assert.Single(
+                    messages.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                    candidate => candidate.CallId == call.CallId);
+                AIContent[] parts = Assert.IsType<AIContent[]>(result.Result);
+                string text = Assert.IsType<TextContent>(parts[0]).Text;
+                string instruction = call.Name == MinimapTool.ProductionToolName
+                    ? VisualContextAutoExchange.MinimapInstruction
+                    : VisualContextAutoExchange.ViewInstruction;
+                Assert.StartsWith(instruction, text, StringComparison.Ordinal);
+                Assert.EndsWith(
+                    "`char:gazer` is looking toward `char:fixture_player`.",
+                    text,
+                    StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            await fixture.CleanupAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// On a Chat-Completions-kind endpoint — pinned through the provider's effective kind, the binding the
     /// <c>AI:ChatClientKind</c> configuration drives (AI-002 TR-35–TR-36) — each fabricated result stays
     /// text-only with its TR-11 instructional text, and each image rides exactly one adjacent user message
@@ -758,6 +824,9 @@ public sealed class VisualContextIntegrationTests
             Assert.Equal(
                 VisualContextAutoExchange.DescribeInstruction(kind),
                 Assert.IsType<TextContent>(parts[0]).Text);
+            // With no observed character holding a look target, the fabricated exchange text stays unchanged:
+            // no descriptor line is ever invented (playtest R1).
+            Assert.DoesNotContain("is looking", Assert.IsType<TextContent>(parts[0]).Text, StringComparison.Ordinal);
             VisualContextImage image = Assert.IsType<VisualContextImage>(
                 Assert.Single(parts.OfType<VisualContextImage>()));
             Assert.Equal(kind, image.Kind);
@@ -826,12 +895,12 @@ public sealed class VisualContextIntegrationTests
     private sealed class SessionFixture
     {
         private readonly Node _fixtureRoot;
-        private readonly FixturePlayerCharacter _player;
         private readonly ICharacter _owner;
         private readonly CharacterHub? _referenceHost;
         private readonly AgenticMind? _embeddedMind;
         private readonly DummyTool _dummyTool = new();
         private readonly bool _rendererAvailable;
+        private readonly ICharacter? _additionalSceneCharacter;
         private AgenticMind? _mind;
 
         public SessionFixture(
@@ -840,12 +909,14 @@ public sealed class VisualContextIntegrationTests
             bool useReferenceNpcRig = false,
             IVision? visionOverride = null,
             bool enableTranscriptLogging = false,
-            OpenAIChatClientKind chatClientKind = OpenAIChatClientKind.Responses)
+            OpenAIChatClientKind chatClientKind = OpenAIChatClientKind.Responses,
+            ICharacter? additionalSceneCharacter = null)
         {
             _rendererAvailable = rendererAvailable;
+            _additionalSceneCharacter = additionalSceneCharacter;
             _fixtureRoot = new Node3D { Name = $"VisualContext-{mode}-{Guid.NewGuid():N}" };
-            _player = new FixturePlayerCharacter();
-            _fixtureRoot.AddChild(_player);
+            Player = new FixturePlayerCharacter();
+            _fixtureRoot.AddChild(Player);
             if (useReferenceNpcRig)
             {
                 // The rig renders into a real environment so the captured view carries inspectable content
@@ -919,6 +990,12 @@ public sealed class VisualContextIntegrationTests
             get;
         }
 
+        /// <summary>The fixture's player character, so tests can attach gaze-target cues beneath it.</summary>
+        public FixturePlayerCharacter Player
+        {
+            get;
+        }
+
         public string TranscriptRoot
         {
             get;
@@ -963,7 +1040,10 @@ public sealed class VisualContextIntegrationTests
                 mind.SetMiniMapRendererLoaderForTesting(() => null);
             }
 
-            mind.SetSceneContextLoaderForTesting(() => new SceneContext([_owner, _player]));
+            mind.SetSceneContextLoaderForTesting(
+                () => _additionalSceneCharacter is { } additional
+                    ? new SceneContext([_owner, Player, additional])
+                    : new SceneContext([_owner, Player]));
 
             // The fixture world — the subject host with its marker and the player — enters first and settles;
             // the mind then joins the already-entered tree (the reference rig's own mind rejoins its character),
@@ -1165,6 +1245,13 @@ public sealed class VisualContextIntegrationTests
     private sealed partial class TestAgenticMind(ICharacter owner) : AgenticMind
     {
         protected override ICharacter ResolveOwningCharacter() => owner;
+    }
+
+    /// <summary>Minimal authored cue for look-target ownership in the descriptor fixtures.</summary>
+    private sealed partial class DescriptorCue : VisualCue
+    {
+        public override ValueTask<string> Describe(ISceneContext scene, IHasVision observer)
+            => ValueTask.FromResult(string.Empty);
     }
 
     /// <summary>One captured model-facing tool with the fields the inventory contract asserts.</summary>

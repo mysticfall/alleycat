@@ -20,13 +20,13 @@ namespace AlleyCat.IntegrationTests.Mind.Attention;
 /// </summary>
 public sealed class OrientingControllerIntegrationTests
 {
-    /// <summary>AC11: defaults and both installed NPC configurations retain secondary-glance timing headroom.</summary>
+    /// <summary>AC11: defaults and both installed NPC configurations retain decision-cadence timing headroom.</summary>
     [Headless]
     [Fact]
-    public void DefaultCentringDelay_ExceedsConfiguredSecondaryDwell()
+    public void DefaultCentringDelay_ExceedsConfiguredEvaluationInterval()
     {
         using AttentionGazeTargetSelector selector = new();
-        Assert.True(OrientingSettings.Default.CentringDelaySeconds > selector.SecondaryDwellSeconds);
+        Assert.True(OrientingSettings.Default.CentringDelaySeconds > selector.EvaluationIntervalSeconds);
         foreach (string path in new[] { FemaleNpcTemplatePath, MaleNpcTemplatePath })
         {
             Node npc = LoadPackedScene(path).Instantiate();
@@ -34,7 +34,7 @@ public sealed class OrientingControllerIntegrationTests
             {
                 OrientingController controller = npc.GetNode<OrientingController>("Mind/OrientingController");
                 AttentionGazeTargetSelector configured = npc.GetNode<AttentionGazeTargetSelector>("Mind/AttentionGazeTargetSelector");
-                Assert.True(controller.CentringDelaySeconds > configured.SecondaryDwellSeconds);
+                Assert.True(controller.CentringDelaySeconds > configured.EvaluationIntervalSeconds);
             }
             finally
             {

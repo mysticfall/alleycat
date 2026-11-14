@@ -61,8 +61,8 @@ internal sealed class DecisionPayloadDumpRecorder
             string rootPath = Volatile.Read(ref _rootPathOverride) ?? _rootPathResolver();
             string fileName = $"{dump.Timestamp.LocalDateTime:yyyy-MM-dd-HH-mm-ss-fff}"
                 + $"_{SanitisePathComponent(_characterId)}"
-                + $"_{dump.TriggerKind}"
-                + $"_{dump.Verdict}"
+                + $"_{SanitisePathComponent(dump.TriggerKind)}"
+                + $"_{SanitisePathComponent(dump.Verdict)}"
                 + FileExtension;
             _ = Directory.CreateDirectory(rootPath);
             File.WriteAllText(
@@ -80,6 +80,8 @@ internal sealed class DecisionPayloadDumpRecorder
     }
 
     /// <summary>Replaces every path separator and invalid filename character with a safe dash.</summary>
+    /// <remarks>Applied to the character ID, trigger kind, and verdict filename components alike: free-form
+    /// verdicts such as canonical full IDs carry colons that are invalid in filenames on some platforms.</remarks>
     private static string SanitisePathComponent(string value)
         => string.Join(
             "-",

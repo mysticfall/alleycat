@@ -163,6 +163,22 @@ public abstract partial class Mind : Node
     internal event Action<SpeechSegmentLifecycleNotification>? SpeechSegmentLifecycleNotified;
 
     /// <summary>
+    /// Occurs when the owning character's speak tool resolves valid declared recipients, before admission: the
+    /// pre-admission intention signal carrying the canonical recipient IDs in declaration order.
+    /// </summary>
+    internal event Action<IReadOnlyList<string>>? SpeakIntentionNotified;
+
+    /// <summary>
+    /// Occurs when the owning character's own speaking window closes, regardless of attention state.
+    /// </summary>
+    internal event Action? OwnSpeechEndedNotified;
+
+    /// <summary>
+    /// Occurs when an attended speaker's speaking window closes, carrying the speaker's canonical full ID.
+    /// </summary>
+    internal event Action<string>? AttendedSpeakerEndedNotified;
+
+    /// <summary>
     /// Enables stimulus intake, timeline ingestion, and notable-observation delivery.
     /// </summary>
     [ExportGroup("Settings")]
@@ -767,8 +783,12 @@ public abstract partial class Mind : Node
         return _attention.GetSnapshot(settings);
     }
 
-    /// <summary>Gets every currently retained identity meeting the separate context threshold.</summary>
-    protected IReadOnlyList<string> GetContextEligibleAttentionIDs()
+    /// <summary>
+    /// Gets every currently retained identity meeting the separate context threshold. Internal so same-assembly
+    /// consumers that build the core render context beside the agent session — the gaze selector's one-shot
+    /// scenario premise resolution above all — read exactly the session's context-eligible set.
+    /// </summary>
+    internal IReadOnlyList<string> GetContextEligibleAttentionIDs()
     {
         AttentionSettings settings = CreateAttentionSettings();
         return _attention.GetContextEligibleIDs(settings);
@@ -1019,7 +1039,19 @@ public abstract partial class Mind : Node
 
     private void OnVoiceSpeechEnded(IVoice voice)
     {
-        if (IsNodeLifetimeEnded || !Enabled || !TryResolveAttendedSpeaker(voice))
+        if (IsNodeLifetimeEnded || !Enabled)
+        {
+            return;
+        }
+
+        if (IsSelfSpeechVoice(voice))
+        {
+            // The owner's own window closing is its own cue: attention membership never applies to self speech.
+            OwnSpeechEndedNotified?.Invoke();
+            return;
+        }
+
+        if (!TryResolveAttendedSpeaker(voice, out ICharacter speaker))
         {
             return;
         }
@@ -1032,6 +1064,7 @@ public abstract partial class Mind : Node
         }
 
         PulseAttendedSpeakerFinished();
+        AttendedSpeakerEndedNotified?.Invoke(speaker.FullId);
     }
 
     private void PulseAttendedSpeakerFinished()
@@ -1051,8 +1084,12 @@ public abstract partial class Mind : Node
     /// Blank voice IDs never attend, mirroring the <c>SpeechPerception</c> attribution precedent; unattributable and
     /// ambiguous voices never cue or block (AI-002 TR-7).
     /// </remarks>
-    private bool TryResolveAttendedSpeaker(IVoice voice)
+    private bool TryResolveAttendedSpeaker(IVoice voice) => TryResolveAttendedSpeaker(voice, out _);
+
+    /// <inheritdoc cref="TryResolveAttendedSpeaker(IVoice)"/>
+    private bool TryResolveAttendedSpeaker(IVoice voice, out ICharacter speaker)
     {
+        speaker = null!;
         if (string.IsNullOrWhiteSpace(voice.Id))
         {
             return false;
@@ -1068,9 +1105,15 @@ public abstract partial class Mind : Node
             }
         }
 
-        return owner is not null
-            && !ReferenceEquals(owner, ownCharacter)
-            && GetAttentionSnapshot().Values.ContainsKey(owner.FullId);
+        if (owner is null
+            || ReferenceEquals(owner, ownCharacter)
+            || !GetAttentionSnapshot().Values.ContainsKey(owner.FullId))
+        {
+            return false;
+        }
+
+        speaker = owner;
+        return true;
     }
 
     /// <summary>
@@ -1083,7 +1126,18 @@ public abstract partial class Mind : Node
     /// unattributable voices never block (SPCH-005 TR-37). Safe from continuations: it reads only subscription state
     /// refreshed on the Godot thread, the lock-guarded attention snapshot, and the volatile speaking flag.
     /// </remarks>
-    internal bool IsAttendedSpeakerSpeaking()
+    internal bool IsAttendedSpeakerSpeaking() => TryGetAttendedSpeaker(out _);
+
+    /// <summary>
+    /// Resolves one attended speaker who is currently speaking, if any.
+    /// </summary>
+    /// <remarks>
+    /// Attendance follows <see cref="IsAttendedSpeakerSpeaking"/> exactly; when several attended speakers talk at
+    /// once, the subscription-order-first match wins. Safe from continuations for the same reasons.
+    /// </remarks>
+    /// <param name="speakerFullId">The attended speaker's canonical full ID when one is found.</param>
+    /// <returns>Whether an attended speaker is currently speaking.</returns>
+    internal bool TryGetAttendedSpeaker([NotNullWhen(true)] out string? speakerFullId)
     {
         ICharacter ownCharacter = ResolveOwningCharacterForCues();
         AttentionSnapshot attention = GetAttentionSnapshot();
@@ -1100,11 +1154,28 @@ public abstract partial class Mind : Node
                     continue;
                 }
 
+                speakerFullId = candidate.FullId;
                 return true;
             }
         }
 
+        speakerFullId = null;
         return false;
+    }
+
+    /// <summary>
+    /// Raises <see cref="SpeakIntentionNotified"/> for the speak tool's resolved recipient declarations.
+    /// </summary>
+    /// <param name="recipients">Canonical distinct recipients in declaration order; never empty.</param>
+    internal void NotifySpeakIntention(IReadOnlyList<string> recipients)
+    {
+        ArgumentNullException.ThrowIfNull(recipients);
+        if (IsNodeLifetimeEnded || recipients.Count == 0)
+        {
+            return;
+        }
+
+        SpeakIntentionNotified?.Invoke(recipients);
     }
 
     /// <summary>
