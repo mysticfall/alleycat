@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://cktwyl5p5gfwx" path="res://assets/characters/templates/reference_male/reference_male_npc.tscn" id="1_role"]
+[ext_resource type="Script" uid="uid://b73n17xs7spsf" path="res://src/Mind/AI/FixedScenarioManager.cs" id="2_scenario"]
+
+[sub_resource type="Resource" id="Resource_vadim_scenario"]
+script = ExtResource("2_scenario")
+DescriptionPath = "res://lore/wiki/scenarios/interrogation.md"
+metadata/_custom_type_script = "uid://b73n17xs7spsf"
+
+[node name="Male" unique_id=504240789 instance=ExtResource("1_role")]
+
+[node name="BodyVisualCue" parent="Male/GeneralSkeleton/Head" index="2" unique_id=1094214123]
+Description = "Vadim is a sturdily built European man in his late twenties, standing around 180 centimetres tall. Light blond hair and pale skin frame an austere face, while his icy blue eyes lend him a distinctly stern appearance."
+
+[node name="SpeechGenerator" parent="Male/GeneralSkeleton/Head/Voice" index="0" unique_id=1402629371]
+VoiceOverride = "Ian.wav"
+
+[node name="Mind" parent="." index="8" unique_id=2028818158]
+ScenarioManager = SubResource("Resource_vadim_scenario")

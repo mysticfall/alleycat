@@ -203,6 +203,9 @@ internal sealed partial class VadimInterrogationScenario
         };
 
         Node vadimNode = TestUtils.LoadPackedScene(VadimInterrogationBaseline.VadimNPCScenePath).Instantiate();
+        // The vadim scene is born blend-only: its Mind arrives from the local template's installation, so install
+        // the runtime before reading template-owned nodes.
+        TestUtils.EnsureCharacterRuntimeInstalled(vadimNode);
         CharacterHub vadim = Assert.IsType<CharacterHub>(vadimNode, exactMatch: false);
         AgenticMind mind = Assert.IsType<AgenticMind>(vadimNode.GetNode("Mind"), exactMatch: false);
 
@@ -232,6 +235,11 @@ internal sealed partial class VadimInterrogationScenario
         mind.SetSceneContextLoaderForTesting(
             () => new SceneContext([vadim, player], ContentContext.Default));
         mind.SetGameClockLoaderForTesting(() => scenarioClock);
+        // Pin the session's visual-context mode to the documented default: this deterministic smoke runs headless,
+        // and the installed vadim vision rig's Auto-mode view capture awaits renderer frame signals a headless
+        // session never emits. Without the pin, an ambient user configuration selecting Auto would hang the
+        // opening request forever; the scenario's evidence never involves visual-context images.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
 
         MindSessionTranscriptRecorder.ResetTurnCountersForTesting();
         MindSessionTranscriptRecorder.SetRootPathOverrideForTesting(_transcriptRoot);

@@ -45,6 +45,9 @@ public sealed class RigInstallerIntegrationTests
     private const string PlayerScenePath =
         "res://assets/characters/reference/ally_player.tscn";
 
+    private const string AllyPlayerTemplatePath =
+        "res://assets/characters/reference/ally_player_template.tscn";
+
     private const string MirrorRoomScenePath =
         "res://assets/testing/mirror_room/mirror_room.tscn";
 
@@ -521,22 +524,21 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
-    /// The player scene inherits common character capabilities from the shared female base and delegates only
-    /// player-specific runtime setup to templates.
+    /// The player scene roots in the shared female blend, installs through its local per-character template, and
+    /// delegates player-specific runtime setup to that template chain (CHAR-002 TR 48-51).
     /// </summary>
     [Headless]
     [Fact]
-    public void PlayerSceneAsset_InheritsSharedFemaleBaseAndDoesNotSerialiseBakedPlayerIKSetup()
+    public void PlayerSceneAsset_RootsInFemaleBlendThroughLocalTemplateAndDoesNotSerialiseBakedPlayerIKSetup()
     {
         string playerSceneText = ReadProjectFile(PlayerScenePath);
 
         Assert.Contains("[node name=\"Player\"", playerSceneText, StringComparison.Ordinal);
-        Assert.Contains(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain(ReferenceFemaleModelScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleModelScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
         Assert.Contains("player_installer.tscn", playerSceneText, StringComparison.Ordinal);
-        Assert.Contains("groups=[\"Player\"]", playerSceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("groups=[\"Actors\"", playerSceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("groups=[\"VisualSubjects\"", playerSceneText, StringComparison.Ordinal);
+        Assert.Contains(AllyPlayerTemplatePath, playerSceneText, StringComparison.Ordinal);
+        Assert.Contains("groups=[\"Actors\", \"VisualSubjects\", \"Player\"]", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(ReferenceFemalePlayerTemplatePath, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("PlayerController", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenAITranscriber", playerSceneText, StringComparison.Ordinal);

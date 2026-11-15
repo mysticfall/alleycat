@@ -16,6 +16,8 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
     private const string BrokenVisualSceneFileName = "reference_female" + "_visual.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string ReferenceFemaleModelScenePath = "res://assets/characters/reference/female/reference_female.blend";
+    private const string AllyPlayerTemplateScenePath = "res://assets/characters/reference/ally_player_template.tscn";
     private const string PlayerInstallerScenePath = "res://assets/characters/templates/installers/player_installer.tscn";
     private const string CharacterLocomotionScriptPath = "res://src/Control/Locomotion/CharacterLocomotion.cs";
 
@@ -27,7 +29,9 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         Assert.Contains("[node name=\"Player\"", playerSceneText);
         Assert.Contains(PlayerInstallerScenePath, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("RigRoleTemplateSceneInstaller.cs", playerSceneText, StringComparison.Ordinal);
-        Assert.Contains(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleModelScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.Contains(AllyPlayerTemplateScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(BrokenCharacterSceneFileName, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(BrokenVisualSceneFileName, playerSceneText, StringComparison.Ordinal);
 

@@ -1,4 +1,6 @@
+using AlleyCat.Core.Installer;
 using AlleyCat.Core.Logging;
+using AlleyCat.Rigging.Installation;
 using Godot;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +23,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 {
     private const string ActorNodeName = "NavigationTestNpc";
     private const string ReferenceMaleNPCScenePath = "res://assets/characters/reference/vadim_npc.tscn";
+    private const string NPCInstallerNodeName = "NPCCharacterInstaller";
     private const string RayHitPositionKey = "position";
     private const float MinPitchRadians = 0.15f;
     private const float MaxPitchRadians = 1.35f;
@@ -209,11 +212,27 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         authoredActor.Free();
         maleActor.Name = ActorNodeName;
         AddChild(maleActor);
+        InstallSelectedMaleRuntime(maleActor);
 
         Actor = maleActor;
         NavigationPath = new NodePath($"{ActorNodeName}/Navigation");
         Navigation = maleActor.GetNodeOrNull<NavigationBase>("Navigation")
             ?? throw new InvalidOperationException("Selected reference-male playtest actor does not expose NPC Navigation.");
+    }
+
+    /// <summary>
+    /// Installs the blend-born male actor's runtime subtree eagerly via its character installer, so navigation is
+    /// resolvable as soon as the variant is applied; tree-entry auto-install would otherwise defer the subtree.
+    /// </summary>
+    private static void InstallSelectedMaleRuntime(Node3D maleActor)
+    {
+        RigRoleTemplateSceneInstaller installer = maleActor.GetNode<RigRoleTemplateSceneInstaller>(NPCInstallerNodeName);
+        SceneInstallationResult installation = installer.Install(new SceneInstallationContext(maleActor));
+        if (!installation.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Selected reference-male playtest actor failed its character runtime installation: {string.Join('\n', installation.Errors)}");
+        }
     }
 
     private void BindStartupGateActor(Node3D actor)

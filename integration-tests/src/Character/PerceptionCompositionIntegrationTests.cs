@@ -131,6 +131,11 @@ public sealed class PerceptionCompositionIntegrationTests
             Assert.DoesNotContain(maleNpc.Components, component => ReferenceEquals(maleSelector, component));
 
             CharacterHub vadim = Assert.IsType<CharacterHub>(vadimNode, exactMatch: false);
+            // The vadim character scene is born blend-only (CHAR-002 TR 48): its capability references and the
+            // character-owned voice identity arrive from installation, which assigns the voice local Id from
+            // the final root Id (CHAR-002 TR 30/53).
+            Assert.Equal("vadim", vadim.Id);
+            EnsureCharacterRuntimeInstalled(vadimNode);
             Assert.Equal("vadim", vadim.Voice!.Id);
             Assert.Equal("voice", vadim.Voice.Type);
             Assert.Equal("voice:vadim", vadim.Voice.FullId);

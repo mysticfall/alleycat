@@ -24,9 +24,14 @@ public sealed class VisualCueIntegrationTests
 {
     private const string ReferenceFemaleBaseScenePath =
         "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string ReferenceFemaleNpcScenePath =
+        "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
     private const string ReferenceMaleBaseScenePath =
         "res://assets/characters/templates/reference_male/reference_male_base.tscn";
+    private const string ReferenceFemaleBlendScenePath =
+        "res://assets/characters/reference/female/reference_female.blend";
     private const string AllyNPCScenePath = "res://assets/characters/reference/ally_npc.tscn";
+    private const string AllyNPCSceneTemplatePath = "res://assets/characters/reference/ally_npc_template.tscn";
     private const string AllyPlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string VadimNPCScenePath = "res://assets/characters/reference/vadim_npc.tscn";
     private const string AllyDescription =
@@ -45,16 +50,18 @@ public sealed class VisualCueIntegrationTests
     }
 
     /// <summary>
-    /// Ally NPC inherits shared character membership and cue ownership from the female base while retaining its
-    /// identity and appearance override above the NPC role installer.
+    /// Ally NPC roots in the shared female blend with identity and role groups valid before installation, and
+    /// installs through its local per-character template (CHAR-002 TR 48-51).
     /// </summary>
     [Fact]
-    public void AllyNpcScene_InheritsFemaleBaseAndRetainsOverriddenBodyCue()
+    public void AllyNpcScene_RootsInFemaleBlendWithPreInstallIdentityAndLocalTemplate()
     {
         string sceneText = Godot.FileAccess.GetFileAsString(AllyNPCScenePath);
-        Assert.Contains(ReferenceFemaleBaseScenePath, sceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("reference_female.blend", sceneText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleBlendScenePath, sceneText, StringComparison.Ordinal);
+        Assert.Contains(AllyNPCSceneTemplatePath, sceneText, StringComparison.Ordinal);
         Assert.Contains("npc_installer.tscn", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleBaseScenePath, sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleNpcScenePath, sceneText, StringComparison.Ordinal);
 
         CharacterHub character = Assert.IsType<CharacterHub>(LoadPackedScene(AllyNPCScenePath).Instantiate(), exactMatch: false);
         try
@@ -62,15 +69,9 @@ public sealed class VisualCueIntegrationTests
             Assert.Equal("ally", character.Id);
             Assert.True(character.IsInGroup("Actors"));
             Assert.True(character.IsInGroup("VisualSubjects"));
-            _ = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
             _ = Assert.IsType<AnimationPlayer>(character.GetNode("AnimationPlayer"), exactMatch: false);
+            Assert.NotNull(character.GetNodeOrNull("Female/GeneralSkeleton"));
             Assert.NotNull(character.GetNodeOrNull("NPCCharacterInstaller"));
-
-            StaticVisualCue cue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
-            Assert.Equal("body", cue.ID);
-            Assert.Equal(AllyDescription, cue.Description);
-            _ = Assert.IsType<SphereVisualBounds>(cue.Bounds, exactMatch: false);
-            Assert.Same(cue, Assert.Single(FindDescendants<StaticVisualCue>(character)));
         }
         finally
         {

@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://jlhxmgxicdex" path="res://assets/characters/templates/reference_female/reference_female_player.tscn" id="1_role"]
+
+[node name="Player" unique_id=1792987446 instance=ExtResource("1_role")]
+
+[node name="BodyVisualCue" parent="Female/GeneralSkeleton/Head" index="2" unique_id=1755026393]
+Description = "Ally is a slender Asian woman in her early twenties, standing about 160 centimetres tall. Her unassuming features and meek expression give her a quiet, gentle appearance."
