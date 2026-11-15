@@ -48,9 +48,9 @@ public sealed class ProductionContactActivationIntegrationTests
         try
         {
             // The production templates host their wiring: one hub-attributed monitor on each role root.
-            ContactMonitor monitor = fixture.NpcRoot.GetNode<ContactMonitor>("ContactMonitor");
+            ContactMonitor monitor = fixture.NpcRoot.GetNode<ContactMonitor>("Contact/ContactMonitor");
             Assert.Equal(NpcId, monitor.OwnerName);
-            ContactMonitor playerMonitor = fixture.PlayerRoot.GetNode<ContactMonitor>("ContactMonitor");
+            ContactMonitor playerMonitor = fixture.PlayerRoot.GetNode<ContactMonitor>("Contact/ContactMonitor");
             Assert.Equal(PlayerId, playerMonitor.OwnerName);
 
             ContactSource playerRightHand = fixture.PlayerRightHandSweeper;
@@ -203,8 +203,8 @@ public sealed class ProductionContactActivationIntegrationTests
     /// one sweeper per wired hand target with profile-backed query shapes, hub-resolved owner attribution,
     /// and its own limb's RIG-001 exception topology — the side-correct hand, lower-arm, and same-side
     /// finger proxies and nothing from the other side — and each role template hosts its own production
-    /// <see cref="ContactMonitor" /> root child resolving receiver attribution from its character hub
-    /// (INTR-005 TR12, TR13).
+    /// <see cref="ContactMonitor" /> under the base scene's shared contact group resolving receiver
+    /// attribution from its character hub (INTR-005 TR12, TR13).
     /// </summary>
     [Headless]
     [Fact]
@@ -394,11 +394,12 @@ public sealed class ProductionContactActivationIntegrationTests
     {
         Assert.Equal(2, controller.HandSweepers.Count);
 
-        // Each role template hosts its own production monitor as a root child with blank authored
-        // OwnerName, so receiver attribution resolves from the character hub's identity.
+        // Each role template hosts its own production monitor under the base scene's shared Contact group
+        // with blank authored OwnerName, so receiver attribution resolves from the character hub's identity.
         ContactMonitor monitor = Assert.IsType<ContactMonitor>(
             Assert.Single(root.FindChildren("*", "ContactMonitor", true, false)));
-        Assert.Equal(root, monitor.GetParent());
+        Assert.Equal("Contact", monitor.GetParent().Name);
+        Assert.Equal(root, monitor.GetParent().GetParent());
         Assert.Equal(ownerId, monitor.OwnerName);
 
         (ContactSource Sweeper, string Side, string HandBone, string LowerArmBone)[] hosted =
@@ -512,8 +513,8 @@ public sealed class ProductionContactActivationIntegrationTests
             for (int frame = 0; frame < HostedSweeperWaitFrames; frame += 1)
             {
                 await WaitForPhysicsFramesAsync(sceneTree, 1);
-                npcController ??= npcRoot.GetNodeOrNull<HandContactSweeperController>("ContactSweepers");
-                playerController ??= playerRoot.GetNodeOrNull<HandContactSweeperController>("ContactSweepers");
+                npcController ??= npcRoot.GetNodeOrNull<HandContactSweeperController>("Contact/ContactSweepers");
+                playerController ??= playerRoot.GetNodeOrNull<HandContactSweeperController>("Contact/ContactSweepers");
                 if (IsSweeping(npcController) && IsSweeping(playerController))
                 {
                     break;
@@ -534,11 +535,11 @@ public sealed class ProductionContactActivationIntegrationTests
             Assert.True(npcRig.GeneratedProxyCount > 0, "The production NPC rig should generate receiver proxies.");
             Assert.True(playerRig.GeneratedProxyCount > 0, "The production player rig should generate receiver proxies.");
 
-            ContactMonitor monitor = npcRoot.GetNode<ContactMonitor>("ContactMonitor");
+            ContactMonitor monitor = npcRoot.GetNode<ContactMonitor>("Contact/ContactMonitor");
             List<ContactEvent> npcEvents = [];
             monitor.ContactEventEmitted += npcEvents.Add;
 
-            ContactMonitor playerMonitor = playerRoot.GetNode<ContactMonitor>("ContactMonitor");
+            ContactMonitor playerMonitor = playerRoot.GetNode<ContactMonitor>("Contact/ContactMonitor");
             List<ContactEvent> playerEvents = [];
             playerMonitor.ContactEventEmitted += playerEvents.Add;
 

@@ -1,6 +1,7 @@
 using AlleyCat.Contact;
 using AlleyCat.Interaction.Physical;
 using Godot;
+using CharacterHub = AlleyCat.Character.Character;
 
 namespace AlleyCat.Rigging.Physics;
 
@@ -21,6 +22,10 @@ public partial class DynamicPhysicalRig : Node
     private bool _regenerationQueued;
     private readonly Dictionary<StringName, List<PhysicsBody3D>> _generatedBodiesByBoneName = [];
     private readonly Dictionary<FingerSide, List<PhysicsBody3D>> _generatedFingerBodiesBySide = [];
+
+    private ContactMonitor? _contactHub;
+
+    private string _contactHubOwnerName = string.Empty;
 
     /// <summary>
     /// Emitted when a generated body-part proxy receives a physical interaction.
@@ -270,6 +275,10 @@ public partial class DynamicPhysicalRig : Node
         {
             IReadOnlyList<BodyColliderShapeDescriptor> sourceShapeDescriptors = colliderProfile.QueryShapeDescriptors();
 
+            // Generated parts are the raw-event origin (INTR-005 TR5, TR10, TR11): the hub they forward to
+            // and the owner identity they carry are resolved once here, at generation time.
+            (_contactHub, _contactHubOwnerName) = ResolveContactHub();
+
             Dictionary<int, List<PhysicsBody3D>> generatedBodiesByBone = [];
             Dictionary<int, List<PhysicsBody3D>> nonFingerGeneratedBodiesByBone = [];
             Node? persistedOwner = ResolveGeneratedOwner();
@@ -482,6 +491,8 @@ public partial class DynamicPhysicalRig : Node
             AuthoredTags = [boneName],
             SourceShapeId = sourceShapeId,
             OwningRig = this,
+            ContactHub = _contactHub,
+            ContactOwnerName = _contactHubOwnerName,
         };
 
         // Generated character body parts are contact receivers through this proxy type (INTR-005 TR10); the
@@ -489,6 +500,68 @@ public partial class DynamicPhysicalRig : Node
         proxyBody.AddToGroup(ContactReceiverGroup.Name);
 
         return proxyBody;
+    }
+
+    /// <summary>
+    /// Resolves the contact hub for generated parts once per build (INTR-005 TR5, TR10, TR11): the
+    /// <see cref="ContactMonitor" /> hosted anywhere in the subtree of the nearest ancestor that roots this
+    /// rig's character — any placement under the character root must work, so the search is a subtree scan,
+    /// not an immediate-children check. The walk stops at the character-hub boundary, so a rig inside a
+    /// character never resolves another character's monitor; hosts without a character root — synthetic and
+    /// world rigs — resolve the nearest ancestor subtree that hosts a monitor. The owner name is the
+    /// character hub's identity, carried by every generated part so receiver owner attribution rides the
+    /// raw-event path instead of the hub's own runtime resolution.
+    /// </summary>
+    /// <returns>The hub monitor and its owner name; the monitor is <see langword="null" /> when no ancestor
+    /// subtree hosts one, and the owner name is empty when the host carries no character identity.</returns>
+    private (ContactMonitor? Hub, string OwnerName) ResolveContactHub()
+    {
+        for (Node? ancestor = GetParent(); ancestor is not null; ancestor = ancestor.GetParent())
+        {
+            if (FindSubtreeContactMonitor(ancestor) is { } monitor)
+            {
+                return (monitor, ResolveHubOwnerName(ancestor));
+            }
+
+            if (ancestor is CharacterHub)
+            {
+                break;
+            }
+        }
+
+        return (null, string.Empty);
+    }
+
+    /// <summary>Scans one ancestor's subtree for the <see cref="ContactMonitor" /> hosting its receivers.</summary>
+    private static ContactMonitor? FindSubtreeContactMonitor(Node ancestor)
+    {
+        foreach (Node child in ancestor.FindChildren("*", nameof(ContactMonitor), recursive: true, owned: false))
+        {
+            if (child is ContactMonitor monitor)
+            {
+                return monitor;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves the owner identity of a monitor-hosting subtree: the nearest <see cref="CharacterHub" /> at
+    /// or above the hosting ancestor — the character whose subtree contains the hub and this rig alike —
+    /// mirroring the hub's own host-name resolution semantics.
+    /// </summary>
+    private static string ResolveHubOwnerName(Node subtreeRoot)
+    {
+        for (Node? node = subtreeRoot; node is not null; node = node.GetParent())
+        {
+            if (node is CharacterHub character && !string.IsNullOrWhiteSpace(character.Id))
+            {
+                return character.Id;
+            }
+        }
+
+        return string.Empty;
     }
 
     private void ConnectGeneratedBodyPartPhysicalInteractionSignal(PhysicalBodyPart3D proxyBody)

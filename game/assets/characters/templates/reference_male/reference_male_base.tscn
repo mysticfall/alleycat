@@ -21,6 +21,10 @@
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bs4kur56aknxq" path="res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres" id="19_4r77l"]
 [ext_resource type="PackedScene" uid="uid://dmt0tevnp51it" path="res://assets/markers/minimap/actor.tscn" id="20_8w862"]
 [ext_resource type="Script" uid="uid://wvo7oit10cmg" path="res://src/Markings/SurfaceMarkings.cs" id="20_surfacemarkings"]
+[ext_resource type="Script" uid="uid://b2y1uxugmiljh" path="res://src/Contact/ContactRegion.cs" id="21_contact_region"]
+[ext_resource type="Script" uid="uid://basssmqph1u36" path="res://src/Contact/HandContactSweeperController.cs" id="22_contact_sweepers"]
+[ext_resource type="Script" uid="uid://4ecsil8doyft" path="res://src/Contact/ContactMonitor.cs" id="23_contact_monitor"]
+[ext_resource type="Resource" path="res://assets/characters/reference/male/contact_region_profile.tres" id="24_region_profile"]
 
 [sub_resource type="Resource" id="Resource_c6lj4"]
 script = ExtResource("14_c6lj4")
@@ -88,6 +92,22 @@ Description = "A character."
 ID = "body"
 Bounds = SubResource("Resource_c6lj4")
 metadata/_custom_type_script = "uid://tb33120b0yo"
+
+[node name="RightCheek" type="Node3D" parent="Male/GeneralSkeleton/Head" index="3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, 0, -0.09)
+script = ExtResource("21_contact_region")
+RegionName = "Right Cheek"
+Tags = PackedStringArray("face", "cheek")
+Priority = 10
+HalfExtents = Vector3(0.05, 0.09, 0.02)
+
+[node name="LeftCheek" type="Node3D" parent="Male/GeneralSkeleton/Head" index="4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.05, 0, -0.09)
+script = ExtResource("21_contact_region")
+RegionName = "Left Cheek"
+Tags = PackedStringArray("face", "cheek")
+Priority = 10
+HalfExtents = Vector3(0.05, 0.09, 0.02)
 
 [node name="RightHand" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="9" unique_id=1844281610]
 transform = Transform3D(0, -1, 0, 0, 0, -1, 1, 0, 0, -0.7032306, 1.3991615, 0.021352904)
@@ -506,3 +526,17 @@ metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
 [node name="SurfaceMarkings" type="Node" parent="." index="7"]
 script = ExtResource("20_surfacemarkings")
 metadata/_custom_type_script = "uid://wvo7oit10cmg"
+
+[node name="Contact" type="Node" parent="." index="8"]
+
+[node name="ContactSweepers" type="Node" parent="Contact" node_paths=PackedStringArray("PhysicalRig", "RightHandIKTarget", "LeftHandIKTarget")]
+script = ExtResource("22_contact_sweepers")
+PhysicalRig = NodePath("../../Male/GeneralSkeleton/DynamicPhysicalRig")
+RightHandIKTarget = NodePath("../../IKTargets/RightHand")
+LeftHandIKTarget = NodePath("../../IKTargets/LeftHand")
+metadata/_custom_type_script = "uid://basssmqph1u36"
+
+[node name="ContactMonitor" type="Node" parent="Contact"]
+script = ExtResource("23_contact_monitor")
+RegionProfile = ExtResource("24_region_profile")
+metadata/_custom_type_script = "uid://4ecsil8doyft"

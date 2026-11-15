@@ -13,9 +13,11 @@ namespace AlleyCat.Contact;
 /// contacting counterpart, such as a player XR hand or an NPC hand (INTR-005 TR2, TR13). Each physics tick
 /// the sweeper moves its query shapes — the tracked body's collision shapes plus any explicit
 /// <see cref="QueryShapes" /> — through the physics space, coalesces every hit against one receiver into a
-/// single observation (TR18b), and delivers it to the receiver's <see cref="ContactMonitor" />. The sweeper
-/// owns no delivery or payload semantics: it measures contact geometry and the counterpart's velocity only;
-/// receiver-side velocity sampling belongs to the monitor (TR18f).
+/// single observation (TR18b), and delivers it to the receiver itself: generated character body parts
+/// receive the observation directly and forward it to their character's classifier hub, and world
+/// receivers feed the monitor they host on their own body (TR11). The sweeper owns no delivery or payload
+/// semantics: it measures contact geometry and the counterpart's velocity only; receiver-side velocity
+/// sampling belongs to the monitor (TR18f).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -131,8 +133,6 @@ public partial class ContactSource : Node3D, IImpactPhysicalInteractionSource
     private readonly Dictionary<ulong, ReceiverHits> _receiverHits = [];
 
     private readonly List<ReceiverHits> _activeReceivers = [];
-
-    private readonly Dictionary<ulong, ContactMonitor> _monitorCache = [];
 
     private readonly List<PhysicsBody3D> _excludedBodiesScratch = [];
 
@@ -337,17 +337,48 @@ public partial class ContactSource : Node3D, IImpactPhysicalInteractionSource
 
         foreach (ReceiverHits receiver in _activeReceivers)
         {
-            ContactMonitor? monitor = ResolveContactMonitor(receiver.Body);
-            if (monitor is null)
+            if (receiver.Body is IContactObservationReceiver part)
             {
-                // Receiver-eligible bodies without a host monitor — for example the player's own proxies before
-                // the player hosts receiver capability — are not contact-delivered this tick.
+                // Character body parts are the raw-event origin (INTR-005 TR10, TR11): the observation goes
+                // to the receiver part itself, which forwards it to its character's classifier hub — the
+                // sweeper never searches for a monitor.
+                ContactSweepObservation observation = BuildObservation(sweepBody, receiver, counterpartVelocity);
+                part.ObserveContact(sourceParty, in observation);
                 continue;
             }
 
-            ContactSweepObservation observation = BuildObservation(sweepBody, receiver, counterpartVelocity);
-            monitor.ObserveContact(sourceParty, receiver.Body, in observation);
+            // World receivers host their own monitor on the opted-in body (TR10, TR11): the body is its own
+            // raw-event origin feeding the monitor it hosts. Receiver-eligible bodies that neither forward
+            // through the part seam nor host a monitor — for example the migrated mirror-room props — are
+            // not contact-delivered this tick.
+            ContactMonitor? monitor = FindSelfHostedMonitor(receiver.Body);
+            if (monitor is null)
+            {
+                continue;
+            }
+
+            ContactSweepObservation worldObservation = BuildObservation(sweepBody, receiver, counterpartVelocity);
+            monitor.ObserveContact(sourceParty, receiver.Body, null, in worldObservation);
         }
+    }
+
+    /// <summary>
+    /// Finds the monitor a world receiver hosts on its own body: a direct <see cref="ContactMonitor" />
+    /// child of the opted-in receiver body (INTR-005 TR10, TR11). Character body parts never reach this
+    /// path — they forward through <see cref="IContactObservationReceiver" />.
+    /// </summary>
+    private static ContactMonitor? FindSelfHostedMonitor(PhysicsBody3D receiverBody)
+    {
+        int childCount = receiverBody.GetChildCount();
+        for (int childIndex = 0; childIndex < childCount; childIndex += 1)
+        {
+            if (receiverBody.GetChild(childIndex) is ContactMonitor monitor)
+            {
+                return monitor;
+            }
+        }
+
+        return null;
     }
 
     private ContactSweepObservation BuildObservation(
@@ -522,40 +553,6 @@ public partial class ContactSource : Node3D, IImpactPhysicalInteractionSource
         }
 
         return tags;
-    }
-
-    private ContactMonitor? ResolveContactMonitor(Node receiverBody)
-    {
-        ulong receiverId = receiverBody.GetInstanceId();
-        if (_monitorCache.TryGetValue(receiverId, out ContactMonitor? cached) && IsInstanceValid(cached))
-        {
-            return cached;
-        }
-
-        _ = _monitorCache.Remove(receiverId);
-
-        // The hosting monitor is the nearest one attached at or under an ancestor of the receiver — the node
-        // rooting the receiver host's subtree — so a monitor child of a character root owns every generated
-        // proxy beneath that root, and world receivers resolve their monitor the same way.
-        for (Node? node = receiverBody; node is not null; node = node.GetParent())
-        {
-            if (node is ContactMonitor selfMonitor)
-            {
-                _monitorCache[receiverId] = selfMonitor;
-                return selfMonitor;
-            }
-
-            foreach (Node child in node.GetChildren())
-            {
-                if (child is ContactMonitor childMonitor)
-                {
-                    _monitorCache[receiverId] = childMonitor;
-                    return childMonitor;
-                }
-            }
-        }
-
-        return null;
     }
 
     private ReceiverHits GetOrCreateReceiverHits(PhysicsBody3D receiver)
@@ -777,9 +774,9 @@ public partial class ContactSource : Node3D, IImpactPhysicalInteractionSource
     }
 
     /// <summary>
-    /// Releases per-receiver caches once no receiver was discovered this sweep: hit buffers and monitor
-    /// lookups are only meaningful within a contact's lifetime, and clearing between contacts bounds memory
-    /// on receivers that come and go — mirroring <see cref="ContactMonitor" />'s idle pruning.
+    /// Releases per-receiver caches once no receiver was discovered this sweep: hit buffers are only
+    /// meaningful within a contact's lifetime, and clearing between contacts bounds memory on receivers
+    /// that come and go — mirroring <see cref="ContactMonitor" />'s idle pruning.
     /// </summary>
     private void PruneReceiverCachesWhenIdle()
     {
@@ -791,11 +788,6 @@ public partial class ContactSource : Node3D, IImpactPhysicalInteractionSource
         if (_receiverHits.Count > 0)
         {
             _receiverHits.Clear();
-        }
-
-        if (_monitorCache.Count > 0)
-        {
-            _monitorCache.Clear();
         }
     }
 

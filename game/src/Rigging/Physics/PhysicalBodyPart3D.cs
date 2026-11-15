@@ -8,7 +8,7 @@ namespace AlleyCat.Rigging.Physics;
 /// Generated body-part proxy that can receive physical interactions without applying reactions.
 /// </summary>
 [GlobalClass]
-public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteractionReceiver, IBoneAnchoredContactReceiver
+public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteractionReceiver, IBoneAnchoredContactReceiver, IContactObservationReceiver
 {
     private readonly SortedSet<string> _tags = new(StringComparer.Ordinal);
 
@@ -77,12 +77,53 @@ public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteraction
     public Skeleton3D? ContactSkeleton
         => OwningRig is not null && IsInstanceValid(OwningRig) ? OwningRig.TargetSkeleton : null;
 
+    /// <summary>
+    /// Gets or sets the character's <see cref="ContactMonitor" /> classifier hub this part forwards raw
+    /// contact observations to. Wired once by the owning rig when this part is generated — any placement
+    /// of the hub under the character root resolves — so raw delivery never searches for a hub at contact
+    /// time (INTR-005 TR5, TR10, TR11).
+    /// </summary>
+    public ContactMonitor? ContactHub
+    {
+        get;
+        internal set;
+    }
+
+    /// <summary>
+    /// Gets or sets the owning character's name carried on every raw contact event this part forwards, so
+    /// receiver owner attribution rides the raw-event path (INTR-005 TR11); empty when the owning rig
+    /// resolved no character identity, in which case the hub falls back to its own host attribution.
+    /// </summary>
+    public string ContactOwnerName
+    {
+        get;
+        internal set;
+    } = string.Empty;
+
     /// <inheritdoc />
     public int ContactBoneIndex => BoneIndex;
 
     /// <inheritdoc />
     public string ContactDisplayName
         => !string.IsNullOrWhiteSpace(BoneName) ? BoneName.ToString() : Name;
+
+    /// <summary>
+    /// Receives one sweeper's coalesced raw observation of this body part and forwards it — with this
+    /// part's owner identity — to the character hub wired at generation; observations on a part whose hub
+    /// is not wired or has been freed are dropped.
+    /// </summary>
+    /// <param name="source">The contacting counterpart party.</param>
+    /// <param name="observation">The sweeper's coalesced observation for this tick.</param>
+    public void ObserveContact(ContactParty source, in ContactSweepObservation observation)
+    {
+        ContactMonitor? hub = ContactHub;
+        if (hub is null || !IsInstanceValid(hub))
+        {
+            return;
+        }
+
+        hub.ObserveContact(source, this, ContactOwnerName, in observation);
+    }
 
     /// <summary>
     /// Interprets a physical interaction source and generates interaction data when applicable.

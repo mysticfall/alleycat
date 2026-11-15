@@ -66,9 +66,10 @@ Contact detection types shall live under `game/src/Contact/` and use the `AlleyC
 4. Validation instrumentation shall expose raw stream state — recorded snapshots or debug events — sufficient to
    verify contact identity stability, lifecycle ordering, and every carried measurement. The raw stream itself is
    monitor-internal rather than publicly subscribable (Technical Requirement 18a).
-5. `ContactMonitor` shall aggregate raw contacts for its receiver host, transform contact points into bone-local
-   space, host the classification engine — one state machine per active contact — and emit classified events. Monitor
-   composition shall follow the project's component and scene-installer conventions.
+5. `ContactMonitor` shall aggregate raw contacts forwarded by receiver parts (character rigs) and by self-hosting
+   world receivers, transform contact points into bone-local space, host the classification engine — one state
+   machine per active contact — and emit classified events. Monitor composition shall follow the project's component
+   and scene-installer conventions.
 6. The classification stage sits above the seam and is tunable. It shall emit exactly five classes — Impact/Hit,
    Touch, Press, Caress/Stroke, and Rest/Lean — and shall emit classified events on classification transitions only,
    never per physics tick; steady contact must produce no event stream. Indicative semantics: Impact/Hit is classified
@@ -94,9 +95,13 @@ Contact detection types shall live under `game/src/Contact/` and use the `AlleyC
     approved plan's "group/layer" wording deliberately resolves to the group as the normative contract, and any
     dedicated collision-layer arrangement behind sweep queries is an implementation detail and shall not rename the
     group contract.
-11. Character receivers and world receivers shall share one delivery path. Owner attribution rides in the event
-    payload, never in the delivery mechanism; footsteps are ground-receiver events carrying foot attribution, not a
-    special case.
+11. Character receivers and world receivers shall share one delivery path: sweeper → receiver body → monitor hub. A
+    `ContactSource` hands each raw observation directly to the receiver body it touches. Character body parts are the
+    raw-event origin — wired once at rig generation to their character's `ContactMonitor`, hosted anywhere under the
+    character root — and forward observations to that hub carrying their owner identity; no per-contact hub discovery
+    exists. World receivers host receiver capability on their own body and feed the monitor it hosts. Classified
+    events carry owner attribution in their payload; footsteps are ground-receiver events carrying foot attribution,
+    not a special case.
 12. Player and NPC receivers shall use the same contracts and components, with parity asserted by running the same
     scenarios against both roles. Self-contact is in scope through the same path, bounded by RIG-001 self-collision
     exception topology, which determines which self pairs can physically co-exist in contact.
@@ -138,8 +143,11 @@ Contact detection types shall live under `game/src/Contact/` and use the `AlleyC
        single contact per (source, receiver) pair; contact breadth is the maximum pairwise distance between the
        contributing contact points — their extent diameter.
     c. Region resource contract — final choice: a sibling `ContactRegionProfile` resource authored alongside
-       `BodyColliderProfile`, carrying its own `SourceScene` export and sharing the same bone-resolution workflow
-       rather than extending the collider profile itself.
+       `BodyColliderProfile`, carrying its own source-scene exports and sharing the same bone-resolution workflow
+       rather than extending the collider profile itself. Authored profile resources shall reference the source
+       scene by path (`SourceScenePath`), not as a direct resource dependency, so the profile and the scene
+       hosting its monitor never form a cyclic resource dependency (a cycle fails resource parsing in a fresh
+       engine process). The direct `PackedScene` form remains for programmatic construction.
     d. Region overlap and multi-region reporting — final choice: matching regions are ordered by authored priority
        descending, then volume ascending, then region name ordinal; the first match is the primary region, all
        matching regions are reported with the primary marked, and a contact matching no region stays at body-part

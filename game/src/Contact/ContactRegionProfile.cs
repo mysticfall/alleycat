@@ -40,13 +40,22 @@ public partial class ContactRegionProfile : Resource
     }
 
     /// <summary>
+    /// Path form of <see cref="SourceScene" />. Authored <c>.tres</c> profiles use this form so the profile
+    /// never forms a cyclic resource dependency with the scene hosting its monitor.
+    /// </summary>
+    [Export]
+    public string? SourceScenePath
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
     /// Instantiates the source scene and returns pure descriptors for every authored contact region.
     /// </summary>
     public IReadOnlyList<ContactRegionDefinition> QueryRegionDefinitions()
     {
-        PackedScene sourceScene = SourceScene
-                                   ?? throw new InvalidOperationException(
-                                       $"{nameof(ContactRegionProfile)} '{ResourcePath}' requires a configured source scene.");
+        PackedScene sourceScene = ResolveSourceScene();
 
         Node sourceRoot = sourceScene.Instantiate();
         try
@@ -60,6 +69,27 @@ public partial class ContactRegionProfile : Resource
             sourceRoot.Free();
         }
     }
+
+    /// <summary>
+    /// Resolves the configured source scene, preferring the direct <see cref="SourceScene" /> reference and
+    /// falling back to loading <see cref="SourceScenePath" />.
+    /// </summary>
+    private PackedScene ResolveSourceScene()
+        => SourceScene
+           ?? LoadSourceSceneFromPath()
+           ?? throw new InvalidOperationException(
+               $"{nameof(ContactRegionProfile)} '{ResourcePath}' requires a configured source scene.");
+
+    /// <summary>
+    /// Loads the scene referenced by <see cref="SourceScenePath" />, failing when the authored path cannot be
+    /// loaded; a blank path returns <c>null</c> so the caller reports the missing configuration instead.
+    /// </summary>
+    private PackedScene? LoadSourceSceneFromPath()
+        => string.IsNullOrWhiteSpace(SourceScenePath)
+            ? null
+            : ResourceLoader.Load<PackedScene>(SourceScenePath)
+              ?? throw new InvalidOperationException(
+                  $"{nameof(ContactRegionProfile)} '{ResourcePath}' could not load its configured source scene '{SourceScenePath}'.");
 
     private static void CollectRegionDefinitions(Node node, List<ContactRegionDefinition> definitions)
     {

@@ -8,13 +8,14 @@ namespace AlleyCat.Contact;
 
 /// <summary>
 /// The receiver-side aggregation and emission component (INTR-005 TR5): a monitor hosts the raw contact
-/// lifecycle stream for its receiver host — the character or surface whose receiver bodies live in its subtree —
+/// lifecycle stream for its receiver host — the character or surface whose receiver bodies feed it —
 /// contributes the receiver-side velocity sample for every observation (TR18f), transforms contact points into
 /// the bone-local space of the contacted body part to refine them against authored
 /// <see cref="ContactRegionProfile" /> regions (TR16), hosts the classification engine with one state machine
 /// per active contact, and emits classified <see cref="ContactEvent" />s on classification transitions only.
-/// Sweepers discover the monitor as the nearest ancestor <see cref="ContactMonitor" /> of a receiver body, so
-/// one delivery path serves character and world receivers alike (TR11).
+/// Raw observations arrive through the receiver itself: generated character body parts forward what their
+/// sweeper delivered through <see cref="IContactObservationReceiver" />, and world receivers feed the monitor
+/// they host on their own body, so one delivery path serves character and world receivers alike (TR11).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -43,12 +44,15 @@ public partial class ContactMonitor : Node
     private const double TimestampEpsilonSeconds = 1e-6;
 
     /// <summary>
-    /// Owning character's or surface's name for receiver attribution; when left blank it resolves from the
-    /// nearest ancestor <see cref="CharacterHub" /> hub's <see cref="CharacterHub.Id" />, so a monitor hosted
-    /// by a character template attributes receivers to the installed instance's identity. World-surface
-    /// hosts author the name explicitly. The blank-name resolution runs once at <c>_Ready</c>, so a
-    /// character <see cref="CharacterHub.Id" /> override applied after tree entry is not picked up — the
-    /// installers override the identity before adding the character to the tree.
+    /// Host surface's name for receiver attribution — the fallback owner identity for receivers that carry
+    /// no owner on the raw-event path, such as world surfaces, which author the name explicitly. When left
+    /// blank it resolves from the nearest ancestor <see cref="CharacterHub" /> hub's
+    /// <see cref="CharacterHub.Id" />: character hubs host the monitor with blank authored name, and
+    /// generated body parts independently carry the same identity wired by their rig, so classified
+    /// receiver attribution rides the raw-event path for character parts rather than depending on this
+    /// resolution. The blank-name resolution runs once at <c>_Ready</c>, so a character
+    /// <see cref="CharacterHub.Id" /> override applied after tree entry is not picked up — the installers
+    /// override the identity before adding the character to the tree.
     /// </summary>
     [ExportGroup("Identity")]
     [Export]
@@ -229,11 +233,12 @@ public partial class ContactMonitor : Node
             ContactEvent contactEvent = BuildContactEvent(raw, transition);
             ContactEventEmitted?.Invoke(contactEvent);
             _logger?.LogDebug(
-                "Contact {ContactId} transitioned {PreviousClass} → {Class} on receiver {Receiver}.",
+                "Contact {ContactId} transitioned {PreviousClass} → {Class} on receiver {Receiver}.{Regions}",
                 contactEvent.Contact.Value,
                 transition.PreviousClass?.ToString() ?? "begin",
                 contactEvent.Class,
-                contactEvent.Receiver.Descriptor);
+                contactEvent.Receiver.Descriptor,
+                DescribeRegions(contactEvent));
         }
 
         // Raw events are consumed after processing so sweeper deliveries that arrive later in the same physics
@@ -244,18 +249,41 @@ public partial class ContactMonitor : Node
     }
 
     /// <summary>
-    /// Receives one sweeper's coalesced observation of a receiver body for the current physics tick: the monitor
-    /// contributes the receiver-side velocity sample (TR18f), builds the raw frame, and feeds the raw stream.
+    /// Renders the event's region matches as a log-friendly suffix, primary region first; empty when the contact
+    /// resolved to no authored region.
+    /// </summary>
+    private static string DescribeRegions(ContactEvent contactEvent)
+    {
+        return contactEvent.Regions.Count == 0
+            ? string.Empty
+            : " [" + string.Join(", ", contactEvent.Regions.Select(region => region.Name)) + "]";
+    }
+
+    /// <summary>
+    /// Receives one raw observation of a receiver body for the current physics tick — the hub's external
+    /// raw-event submission surface: generated body parts forward the sweeper's observation through
+    /// <see cref="IContactObservationReceiver" /> (INTR-005 TR5, TR10, TR11), and a world receiver's sweeper
+    /// submits directly to the monitor the receiver body hosts. The monitor contributes the receiver-side
+    /// velocity sample (TR18f), builds the raw frame, and feeds the raw stream.
     /// </summary>
     /// <param name="source">The contacting counterpart party.</param>
     /// <param name="receiverBody">The receiver-eligible body the sweeper contacted.</param>
+    /// <param name="receiverOwnerName">
+    /// Owner identity carried on the raw-event path: the character a generated part belongs to. Blank or
+    /// <see langword="null" /> falls back to the monitor's host <see cref="OwnerName" /> — the authored world
+    /// host's attribution.
+    /// </param>
     /// <param name="observation">The sweeper's coalesced observation for this tick.</param>
-    internal void ObserveContact(ContactParty source, PhysicsBody3D receiverBody, in ContactSweepObservation observation)
+    internal void ObserveContact(
+        ContactParty source,
+        PhysicsBody3D receiverBody,
+        string? receiverOwnerName,
+        in ContactSweepObservation observation)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(receiverBody);
 
-        ContactParty receiverParty = GetOrCreateReceiverParty(receiverBody);
+        ContactParty receiverParty = GetOrCreateReceiverParty(receiverBody, receiverOwnerName);
         NumericsVector3 receiverVelocity = SampleReceiverVelocity(receiverBody);
 
         RawContactFrame frame = new(
@@ -373,7 +401,13 @@ public partial class ContactMonitor : Node
         return body.GlobalTransform;
     }
 
-    private ContactParty GetOrCreateReceiverParty(PhysicsBody3D body)
+    /// <summary>
+    /// Resolves the receiver party for one receiver body: the display name comes from the body part
+    /// (INTR-005 TR8) and the owner identity rides the raw-event path — the character the part reported —
+    /// falling back to the monitor's host <see cref="OwnerName" /> for receivers that carry no owner, such
+    /// as world surfaces (TR11).
+    /// </summary>
+    private ContactParty GetOrCreateReceiverParty(PhysicsBody3D body, string? ownerName)
     {
         ulong bodyId = body.GetInstanceId();
         if (_receiverParties.TryGetValue(bodyId, out ContactParty? party))
@@ -386,10 +420,14 @@ public partial class ContactMonitor : Node
                 ? anchored.ContactDisplayName
                 : body.Name.ToString();
 
+        string? resolvedOwnerName = !string.IsNullOrWhiteSpace(ownerName)
+            ? ownerName
+            : string.IsNullOrWhiteSpace(OwnerName) ? null : OwnerName;
+
         party = new ContactParty(
             $"{_receiverKeyPrefix}#{bodyId}",
             displayName,
-            string.IsNullOrWhiteSpace(OwnerName) ? null : OwnerName);
+            resolvedOwnerName);
 
         _receiverParties[bodyId] = party;
         _receiverBodiesByPartyKey[party.Key] = body;

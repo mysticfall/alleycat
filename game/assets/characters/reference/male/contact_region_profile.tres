@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="ContactRegionProfile" format=3]
+
+[ext_resource type="Script" uid="uid://bd5bgvd7nwh6g" path="res://src/Contact/ContactRegionProfile.cs" id="2_profile"]
+
+[resource]
+script = ExtResource("2_profile")
+SourceScenePath = "res://assets/characters/templates/reference_male/reference_male_base.tscn"
