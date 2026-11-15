@@ -12,6 +12,8 @@
 [ext_resource type="Script" uid="uid://dyffnsg0122vb" path="res://src/Speech/Voice/PlayerVoice.cs" id="8_player_voice"]
 [ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
 [ext_resource type="Script" path="res://src/Control/HandGrabInputCoordinator.cs" id="12_grabcoord"]
+[ext_resource type="Script" uid="uid://basssmqph1u36" path="res://src/Contact/HandContactSweeperController.cs" id="13_contact_sweepers"]
+[ext_resource type="Script" uid="uid://4ecsil8doyft" path="res://src/Contact/ContactMonitor.cs" id="14_contact_monitor"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/templates/animation/animation_tree_root_player.tres" id="11_pose_tree"]
 
 [node name="Player" unique_id=1792987446 node_paths=PackedStringArray("Voice", "Locomotion", "Navigation") groups=["Player"] instance=ExtResource("1_edvvb")]
@@ -129,3 +131,14 @@ GrabTargetProvider = NodePath("../../VRIK/RightHandGrabProvider")
 
 [node name="LeftHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="1" unique_id=1448579806 node_paths=PackedStringArray("GrabTargetProvider")]
 GrabTargetProvider = NodePath("../../VRIK/LeftHandGrabProvider")
+
+[node name="ContactSweepers" type="Node" parent="." index="11" node_paths=PackedStringArray("PhysicalRig", "RightHandIKTarget", "LeftHandIKTarget")]
+script = ExtResource("13_contact_sweepers")
+PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
+RightHandIKTarget = NodePath("../IKTargets/RightHand")
+LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
+metadata/_custom_type_script = "uid://basssmqph1u36"
+
+[node name="ContactMonitor" type="Node" parent="." index="12"]
+script = ExtResource("14_contact_monitor")
+metadata/_custom_type_script = "uid://4ecsil8doyft"

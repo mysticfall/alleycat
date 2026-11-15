@@ -19,7 +19,7 @@ height = 0.5
 height = 0.5
 radius = 0.01
 
-[node name="Stick" type="RigidBody3D" unique_id=362015970 groups=["grabbable", "hand_dynamic_interaction_body"]]
+[node name="Stick" type="RigidBody3D" unique_id=362015970 groups=["grabbable", "contact_receiver"]]
 collision_layer = 2
 collision_mask = 11
 script = ExtResource("1_px86d")

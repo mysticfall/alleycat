@@ -24,7 +24,7 @@ Id = "reference_player"
 [node name="Items" type="Node3D" parent="." unique_id=110533895]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7552289, -0.6124832)
 
-[node name="Ball" type="RigidBody3D" parent="Items" unique_id=440488605 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("4_6nfom")]
+[node name="Ball" type="RigidBody3D" parent="Items" unique_id=440488605 groups=["grabbable", "contact_receiver"] instance=ExtResource("4_6nfom")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6710081, 0.30162144, 0.47307545)
 collision_layer = 2
 collision_mask = 11

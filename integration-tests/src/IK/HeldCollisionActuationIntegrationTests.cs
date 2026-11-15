@@ -1,3 +1,4 @@
+using AlleyCat.Contact;
 using AlleyCat.IK;
 using AlleyCat.TestFramework;
 using Godot;
@@ -90,7 +91,7 @@ public sealed class HeldCollisionActuationIntegrationTests
             Mass = 1.0f,
         };
         prop.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = 0.06f } });
-        prop.AddToGroup(HandDynamicBodyInteractionController.DynamicInteractionGroupName);
+        prop.AddToGroup(ContactReceiverGroup.Name);
         root.AddChild(handBody);
         root.AddChild(prop);
         _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
@@ -103,7 +104,7 @@ public sealed class HeldCollisionActuationIntegrationTests
                 handBody,
                 new BoxShape3D { Size = new Vector3(0.36f, 0.04f, 0.04f) },
                 new Transform3D(Basis.Identity, new Vector3(0.22f, 0.0f, 0.0f)));
-            HandDynamicBodyInteractionController.NotifyRuntimeShapeOwnersChanged(handBody);
+            HandPhysicalInteractionChannel.NotifyRuntimeShapeOwnersChanged(handBody);
             await WaitForPhysicsFramesAsync(sceneTree, 2);
 
             _ = actuator.Actuate(CreateRequest(handBody.GlobalTransform), PhysicsStepSeconds);
@@ -120,7 +121,7 @@ public sealed class HeldCollisionActuationIntegrationTests
             Assert.InRange(prop.GlobalPosition.X - (root.GlobalPosition.X + 0.55f), 0.001f, 0.05f);
 
             handBody.RemoveShapeOwner(ownerId);
-            HandDynamicBodyInteractionController.NotifyRuntimeShapeOwnersChanged(handBody);
+            HandPhysicalInteractionChannel.NotifyRuntimeShapeOwnersChanged(handBody);
             _ = actuator.Actuate(CreateRequest(requested), PhysicsStepSeconds);
         }
         finally
@@ -243,7 +244,6 @@ public sealed class HeldCollisionActuationIntegrationTests
             PositionResponsiveness = 100.0f,
             MaximumAcceleration = 1000.0f,
             SnapDistance = 0.001f,
-            DynamicBodyInteractionCollisionMask = 2,
         };
 
     private static uint AddRuntimeShapeOwner(CollisionObject3D target, Shape3D shape, Transform3D transform)

@@ -1,3 +1,4 @@
+using AlleyCat.Contact;
 using AlleyCat.Interaction.Physical;
 using Godot;
 
@@ -7,7 +8,7 @@ namespace AlleyCat.Rigging.Physics;
 /// Generated body-part proxy that can receive physical interactions without applying reactions.
 /// </summary>
 [GlobalClass]
-public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteractionReceiver
+public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteractionReceiver, IBoneAnchoredContactReceiver
 {
     private readonly SortedSet<string> _tags = new(StringComparer.Ordinal);
 
@@ -71,6 +72,17 @@ public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteraction
     {
         get; set;
     }
+
+    /// <inheritdoc />
+    public Skeleton3D? ContactSkeleton
+        => OwningRig is not null && IsInstanceValid(OwningRig) ? OwningRig.TargetSkeleton : null;
+
+    /// <inheritdoc />
+    public int ContactBoneIndex => BoneIndex;
+
+    /// <inheritdoc />
+    public string ContactDisplayName
+        => !string.IsNullOrWhiteSpace(BoneName) ? BoneName.ToString() : Name;
 
     /// <summary>
     /// Interprets a physical interaction source and generates interaction data when applicable.

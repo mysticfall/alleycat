@@ -1,14 +1,20 @@
+using AlleyCat.Contact;
 using AlleyCat.Interaction.Physical;
 using Godot;
 
 namespace AlleyCat.IK;
 
 /// <summary>
-/// Applies explicit capped hand interaction forces to overlapping dynamic rigid bodies.
+/// Applies explicit capped hand interaction forces to overlapping dynamic rigid bodies, and delivers
+/// INTR-004 impact receipts to their receivers, from the hand actuation path. This is the actor-end
+/// initiation successor of the superseded hand-specific dynamic-interaction controller (INTR-005 TR15):
+/// receiver eligibility is the generic <see cref="ContactReceiverGroup" /> contract instead of the legacy
+/// collision-layer-plus-group arrangement, and receiver-end sensing belongs to the INTR-005
+/// <see cref="ContactSource" /> sweepers, which may expose the same source capability (INTR-005 TR14).
 /// </summary>
-public sealed class HandDynamicBodyInteractionController(
+public sealed class HandPhysicalInteractionChannel(
     AnimatableBody3D handBody,
-    IReadOnlyList<HandDynamicInteractionShape>? profileQueryShapes = null)
+    IReadOnlyList<HandProfileShape>? profileQueryShapes = null)
     : IImpactPhysicalInteractionSource
 {
     private const float Epsilon = 1e-5f;
@@ -48,11 +54,6 @@ public sealed class HandDynamicBodyInteractionController(
     public const float DefaultSustainedForceCap = 4.5f;
 
     /// <summary>
-    /// Scene-tree group used by dynamic rigid bodies that should receive explicit hand interaction.
-    /// </summary>
-    public const string DynamicInteractionGroupName = "hand_dynamic_interaction_body";
-
-    /// <summary>
     /// Scene-tree group marking dynamic rigid bodies that are the pending grab candidate of an approaching
     /// hand. While protected, the explicit interaction channel must not push them: the authorised approach
     /// itself may not displace the item it is trying to acquire (INTR-002 pending approach protection).
@@ -79,12 +80,13 @@ public sealed class HandDynamicBodyInteractionController(
     public IReadOnlySet<string> Tags { get; } = BuildSourceTags(handBody);
 
     /// <summary>
-    /// Collision mask queried for explicit hand-to-dynamic-body interaction.
+    /// Collision mask narrowing the interaction query; receiver eligibility itself rides the
+    /// <see cref="ContactReceiverGroup" /> group (INTR-005 TR10, TR15).
     /// </summary>
     public uint CollisionMask
     {
         get; set;
-    } = 2;
+    } = uint.MaxValue;
 
     /// <summary>
     /// Minimum approach speed before the impact channel may fire.
@@ -137,6 +139,9 @@ public sealed class HandDynamicBodyInteractionController(
     /// <inheritdoc />
     public Vector3 Velocity => _velocity;
 
+    /// <summary>Number of query shapes the channel currently sweeps — a testing and diagnostics surface.</summary>
+    public int QueryShapeCountForTesting => _queryShapeSources.Length;
+
     /// <summary>
     /// Updates dynamic-body interactions for the current hand pose.
     /// </summary>
@@ -169,7 +174,7 @@ public sealed class HandDynamicBodyInteractionController(
     }
 
     /// <summary>
-    /// Marks runtime shape-owner changes so dynamic interaction query shapes are rebuilt once at the ownership boundary.
+    /// Marks runtime shape-owner changes so interaction query shapes are rebuilt once at the ownership boundary.
     /// </summary>
     internal static void NotifyRuntimeShapeOwnersChanged(CollisionObject3D body)
     {
@@ -287,7 +292,7 @@ public sealed class HandDynamicBodyInteractionController(
         int collisionCount = Mathf.Min(shapeCast.GetCollisionCount(), MaximumContactsPerShape);
         for (int contactIndex = 0; contactIndex < collisionCount; contactIndex += 1)
         {
-            if (TryBuildQueryContact(shapeCast, contactIndex, CollisionMask, out QueryContact contact))
+            if (TryBuildQueryContact(shapeCast, contactIndex, out QueryContact contact))
             {
                 yield return contact;
             }
@@ -360,17 +365,17 @@ public sealed class HandDynamicBodyInteractionController(
     private static bool TryBuildQueryContact(
         ShapeCast3D shapeCast,
         int contactIndex,
-        uint collisionMask,
         out QueryContact contact)
     {
         contact = default;
 
+        // Receiver eligibility is the generic contact-receiver group (INTR-005 TR10, TR15); the collision
+        // mask only narrows which layers the query sweeps and carries no eligibility meaning of its own.
         if (shapeCast.GetCollider(contactIndex) is not RigidBody3D rigidBody
             || !GodotObject.IsInstanceValid(rigidBody)
             || rigidBody.Freeze
             || rigidBody.IsInGroup(ApproachProtectedBodyGroupName)
-            || !rigidBody.IsInGroup(DynamicInteractionGroupName)
-            || (rigidBody.CollisionLayer & collisionMask) == 0)
+            || !rigidBody.IsInGroup(ContactReceiverGroup.Name))
         {
             return false;
         }
@@ -441,7 +446,7 @@ public sealed class HandDynamicBodyInteractionController(
 
     private static QueryShapeSource[] CollectQueryShapeSources(
         AnimatableBody3D handBody,
-        IReadOnlyList<HandDynamicInteractionShape>? profileQueryShapes)
+        IReadOnlyList<HandProfileShape>? profileQueryShapes)
     {
         List<QueryShapeSource> queryShapeSources = [];
 
@@ -471,7 +476,7 @@ public sealed class HandDynamicBodyInteractionController(
 
         if (profileQueryShapes is not null)
         {
-            foreach (HandDynamicInteractionShape queryShape in profileQueryShapes)
+            foreach (HandProfileShape queryShape in profileQueryShapes)
             {
                 queryShapeSources.Add(new QueryShapeSource(queryShape));
             }
@@ -488,7 +493,7 @@ public sealed class HandDynamicBodyInteractionController(
         {
             ShapeCast3D shapeCast = new()
             {
-                Name = $"DynamicInteractionShapeCast_{shapeIndex}",
+                Name = $"PhysicalInteractionShapeCast_{shapeIndex}",
                 Enabled = false,
                 ExcludeParent = true,
                 CollideWithAreas = false,
@@ -511,7 +516,7 @@ public sealed class HandDynamicBodyInteractionController(
         private readonly CollisionObject3D? _shapeOwnerBody;
         private readonly uint _shapeOwnerId;
         private readonly int _shapeIndex;
-        private readonly HandDynamicInteractionShape _queryShape;
+        private readonly HandProfileShape _queryShape;
 
         public QueryShapeSource(CollisionShape3D collisionShape)
         {
@@ -522,7 +527,7 @@ public sealed class HandDynamicBodyInteractionController(
             _queryShape = default;
         }
 
-        public QueryShapeSource(HandDynamicInteractionShape queryShape)
+        public QueryShapeSource(HandProfileShape queryShape)
         {
             _collisionShape = null;
             _shapeOwnerBody = null;

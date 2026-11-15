@@ -1,4 +1,5 @@
 using AlleyCat.IK;
+using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.IK;
@@ -6,7 +7,7 @@ namespace AlleyCat.Tests.IK;
 /// <summary>
 /// Unit coverage for explicit hand-driven dynamic rigid-body interaction caps.
 /// </summary>
-public sealed class HandDynamicBodyInteractionControllerTests
+public sealed class HandPhysicalInteractionChannelTests
 {
     /// <summary>
     /// Verifies the default hand-strength tuning remains biased towards heavier dynamic-body feel.
@@ -14,12 +15,12 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void DefaultStrengthParameters_MatchHeavierInteractionTuning()
     {
-        Assert.Equal(0.9f, HandDynamicBodyInteractionController.DefaultImpactApproachSpeedThreshold, precision: 4);
-        Assert.Equal(0.08f, HandDynamicBodyInteractionController.DefaultImpactImpulsePerSpeed, precision: 4);
-        Assert.Equal(0.30f, HandDynamicBodyInteractionController.DefaultImpactImpulseCap, precision: 4);
-        Assert.Equal(0.08f, HandDynamicBodyInteractionController.DefaultSustainedPushSpeedThreshold, precision: 4);
-        Assert.Equal(8.0f, HandDynamicBodyInteractionController.DefaultSustainedForcePerSpeed, precision: 4);
-        Assert.Equal(4.5f, HandDynamicBodyInteractionController.DefaultSustainedForceCap, precision: 4);
+        Assert.Equal(0.9f, HandPhysicalInteractionChannel.DefaultImpactApproachSpeedThreshold, precision: 4);
+        Assert.Equal(0.08f, HandPhysicalInteractionChannel.DefaultImpactImpulsePerSpeed, precision: 4);
+        Assert.Equal(0.30f, HandPhysicalInteractionChannel.DefaultImpactImpulseCap, precision: 4);
+        Assert.Equal(0.08f, HandPhysicalInteractionChannel.DefaultSustainedPushSpeedThreshold, precision: 4);
+        Assert.Equal(8.0f, HandPhysicalInteractionChannel.DefaultSustainedForcePerSpeed, precision: 4);
+        Assert.Equal(4.5f, HandPhysicalInteractionChannel.DefaultSustainedForceCap, precision: 4);
     }
 
     /// <summary>
@@ -28,7 +29,7 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void ComputeImpactImpulseMagnitude_NewFastContact_ClampsToCap()
     {
-        float impulse = HandDynamicBodyInteractionController.ComputeImpactImpulseMagnitude(
+        float impulse = HandPhysicalInteractionChannel.ComputeImpactImpulseMagnitude(
             approachSpeed: 3.0f,
             hadContact: false,
             impactApproachSpeedThreshold: 0.5f,
@@ -44,7 +45,7 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void ComputeImpactImpulseMagnitude_ExistingContact_ReturnsZero()
     {
-        float impulse = HandDynamicBodyInteractionController.ComputeImpactImpulseMagnitude(
+        float impulse = HandPhysicalInteractionChannel.ComputeImpactImpulseMagnitude(
             approachSpeed: 3.0f,
             hadContact: true,
             impactApproachSpeedThreshold: 0.5f,
@@ -60,13 +61,13 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void ComputeSustainedForceMagnitude_PressingContact_ClampsToCap()
     {
-        float belowThreshold = HandDynamicBodyInteractionController.ComputeSustainedForceMagnitude(
+        float belowThreshold = HandPhysicalInteractionChannel.ComputeSustainedForceMagnitude(
             approachSpeed: 0.02f,
             sustainedPushSpeedThreshold: 0.05f,
             sustainedForcePerSpeed: 10.0f,
             sustainedForceCap: 2.0f);
 
-        float aboveThreshold = HandDynamicBodyInteractionController.ComputeSustainedForceMagnitude(
+        float aboveThreshold = HandPhysicalInteractionChannel.ComputeSustainedForceMagnitude(
             approachSpeed: 0.50f,
             sustainedPushSpeedThreshold: 0.05f,
             sustainedForcePerSpeed: 10.0f,
@@ -82,13 +83,13 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void ComputePressSpeed_TangentialOrRetreatingMotion_ReturnsZero()
     {
-        float tangentialPressSpeed = HandDynamicBodyInteractionController.ComputePressSpeed(
-            targetVelocity: new Godot.Vector3(0.0f, 1.0f, 0.0f),
-            contactNormal: new Godot.Vector3(-1.0f, 0.0f, 0.0f));
+        float tangentialPressSpeed = HandPhysicalInteractionChannel.ComputePressSpeed(
+            targetVelocity: new Vector3(0.0f, 1.0f, 0.0f),
+            contactNormal: new Vector3(-1.0f, 0.0f, 0.0f));
 
-        float retreatingPressSpeed = HandDynamicBodyInteractionController.ComputePressSpeed(
-            targetVelocity: new Godot.Vector3(-1.0f, 0.0f, 0.0f),
-            contactNormal: new Godot.Vector3(-1.0f, 0.0f, 0.0f));
+        float retreatingPressSpeed = HandPhysicalInteractionChannel.ComputePressSpeed(
+            targetVelocity: new Vector3(-1.0f, 0.0f, 0.0f),
+            contactNormal: new Vector3(-1.0f, 0.0f, 0.0f));
 
         Assert.Equal(0.0f, tangentialPressSpeed, precision: 4);
         Assert.Equal(0.0f, retreatingPressSpeed, precision: 4);
@@ -100,9 +101,9 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void ComputePressSpeed_IntoContactNormal_ReturnsPositiveProjectedSpeed()
     {
-        float pressSpeed = HandDynamicBodyInteractionController.ComputePressSpeed(
-            targetVelocity: new Godot.Vector3(2.0f, 1.0f, 0.0f),
-            contactNormal: new Godot.Vector3(-1.0f, 0.0f, 0.0f));
+        float pressSpeed = HandPhysicalInteractionChannel.ComputePressSpeed(
+            targetVelocity: new Vector3(2.0f, 1.0f, 0.0f),
+            contactNormal: new Vector3(-1.0f, 0.0f, 0.0f));
 
         Assert.Equal(2.0f, pressSpeed, precision: 4);
     }
@@ -113,18 +114,18 @@ public sealed class HandDynamicBodyInteractionControllerTests
     [Fact]
     public void ComputeTransferMagnitudes_NoPressingMotion_ReturnZero()
     {
-        float pressSpeed = HandDynamicBodyInteractionController.ComputePressSpeed(
-            targetVelocity: Godot.Vector3.Zero,
-            contactNormal: new Godot.Vector3(-1.0f, 0.0f, 0.0f));
+        float pressSpeed = HandPhysicalInteractionChannel.ComputePressSpeed(
+            targetVelocity: Vector3.Zero,
+            contactNormal: new Vector3(-1.0f, 0.0f, 0.0f));
 
-        float impact = HandDynamicBodyInteractionController.ComputeImpactImpulseMagnitude(
+        float impact = HandPhysicalInteractionChannel.ComputeImpactImpulseMagnitude(
             approachSpeed: pressSpeed,
             hadContact: false,
             impactApproachSpeedThreshold: 0.5f,
             impactImpulsePerSpeed: 0.5f,
             impactImpulseCap: 0.8f);
 
-        float sustained = HandDynamicBodyInteractionController.ComputeSustainedForceMagnitude(
+        float sustained = HandPhysicalInteractionChannel.ComputeSustainedForceMagnitude(
             approachSpeed: pressSpeed,
             sustainedPushSpeedThreshold: 0.05f,
             sustainedForcePerSpeed: 10.0f,

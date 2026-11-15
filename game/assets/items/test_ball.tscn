@@ -20,7 +20,7 @@ height = 0.08
 [sub_resource type="SphereShape3D" id="SphereShape3D_34qun"]
 radius = 0.04
 
-[node name="Ball" type="RigidBody3D" unique_id=440488605 groups=["grabbable", "hand_dynamic_interaction_body"]]
+[node name="Ball" type="RigidBody3D" unique_id=440488605 groups=["grabbable", "contact_receiver"]]
 collision_layer = 2
 collision_mask = 11
 physics_material_override = SubResource("PhysicsMaterial_tnaik")

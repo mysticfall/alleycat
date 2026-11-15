@@ -113,6 +113,7 @@
 - [INTR-002: Hand Grab Execution](interaction/002-hand-grab-execution/index.md)
 - [INTR-003: Hands](interaction/003-hands/index.md)
 - [INTR-004: Character Physical Interaction API](interaction/004-physical-interaction/index.md)
+- [INTR-005: Contact Detection](interaction/005-contact-detection/index.md)
 
 ## Speech
 

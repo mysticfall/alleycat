@@ -531,10 +531,10 @@ public sealed class PhysicsChainIntegrationTests
 
     private static void AssertBodyCanCollideWithPlayerHands(PhysicsBody3D body)
     {
-        const uint dynamicInteractionLayer = 2;
+        const uint playerHandCollisionLayer = 2;
         const uint environmentLayer = 1;
 
-        Assert.True((body.CollisionLayer & dynamicInteractionLayer) != 0, $"{body.Name} should use the dedicated dynamic interaction layer.");
+        Assert.True((body.CollisionLayer & playerHandCollisionLayer) != 0, $"{body.Name} should stay on the layer player hand targets collide with physically.");
         Assert.True((body.CollisionMask & environmentLayer) != 0, $"{body.Name} collision mask should retain world collision.");
     }
 

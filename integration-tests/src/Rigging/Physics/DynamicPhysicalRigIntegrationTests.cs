@@ -1,4 +1,5 @@
 using System.Reflection;
+using AlleyCat.Contact;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;
@@ -554,7 +555,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private static Node AssertDynamicPropContract(Node prop, string sceneName)
     {
         RigidBody3D propBody = Assert.IsType<RigidBody3D>(prop, exactMatch: false);
-        Assert.True(propBody.IsInGroup("hand_dynamic_interaction_body"));
+        Assert.True(
+            propBody.IsInGroup(ContactReceiverGroup.Name),
+            $"{sceneName} must opt into hand physical interaction through the contact_receiver group.");
+        // The layer arrangement stays authored so player hand targets still collide with the props
+        // physically; it no longer carries interaction-eligibility meaning (INTR-005 TR15).
         Assert.Equal(2U, propBody.CollisionLayer);
         Assert.Equal(11U, propBody.CollisionMask);
         Node receiver = prop.GetNodeOrNull("ImpactInteractionReceiver")
@@ -887,13 +892,13 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, rightHandActuator.MaximumAcceleration);
             Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, rightHandActuator.SnapDistance);
             Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, rightHandActuator.RotationResponsiveness);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, rightHandActuator.DynamicBodyInteractionCollisionMask);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, rightHandActuator.DynamicImpactApproachSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, rightHandActuator.DynamicImpactImpulsePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, rightHandActuator.DynamicImpactImpulseCap);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, rightHandActuator.DynamicSustainedPushSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, rightHandActuator.DynamicSustainedForcePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, rightHandActuator.DynamicSustainedForceCap);
+            Assert.Equal(fixture.PlayerVRIK.HandPhysicalInteractionCollisionMask, rightHandActuator.PhysicalInteractionCollisionMask);
+            Assert.Equal(fixture.PlayerVRIK.HandImpactApproachSpeedThreshold, rightHandActuator.ImpactApproachSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandImpactImpulsePerSpeed, rightHandActuator.ImpactImpulsePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandImpactImpulseCap, rightHandActuator.ImpactImpulseCap);
+            Assert.Equal(fixture.PlayerVRIK.HandSustainedPushSpeedThreshold, rightHandActuator.SustainedPushSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandSustainedForcePerSpeed, rightHandActuator.SustainedForcePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandSustainedForceCap, rightHandActuator.SustainedForceCap);
             Assert.True(
                 CountDynamicInteractionQueryShapes(rightHandActuator) > 0,
                 "Right-hand actuator should receive profile-backed dynamic-interaction query shapes.");
@@ -906,13 +911,13 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, leftHandActuator.MaximumAcceleration);
             Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, leftHandActuator.SnapDistance);
             Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, leftHandActuator.RotationResponsiveness);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, leftHandActuator.DynamicBodyInteractionCollisionMask);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, leftHandActuator.DynamicImpactApproachSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, leftHandActuator.DynamicImpactImpulsePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, leftHandActuator.DynamicImpactImpulseCap);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, leftHandActuator.DynamicSustainedPushSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, leftHandActuator.DynamicSustainedForcePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, leftHandActuator.DynamicSustainedForceCap);
+            Assert.Equal(fixture.PlayerVRIK.HandPhysicalInteractionCollisionMask, leftHandActuator.PhysicalInteractionCollisionMask);
+            Assert.Equal(fixture.PlayerVRIK.HandImpactApproachSpeedThreshold, leftHandActuator.ImpactApproachSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandImpactImpulsePerSpeed, leftHandActuator.ImpactImpulsePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandImpactImpulseCap, leftHandActuator.ImpactImpulseCap);
+            Assert.Equal(fixture.PlayerVRIK.HandSustainedPushSpeedThreshold, leftHandActuator.SustainedPushSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandSustainedForcePerSpeed, leftHandActuator.SustainedForcePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandSustainedForceCap, leftHandActuator.SustainedForceCap);
             Assert.True(
                 CountDynamicInteractionQueryShapes(leftHandActuator) > 0,
                 "Left-hand actuator should receive profile-backed dynamic-interaction query shapes.");
@@ -1378,14 +1383,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     private static int CountDynamicInteractionQueryShapes(IKTargetAnimatableActuator actuator)
-    {
-        HandDynamicBodyInteractionController controller = actuator.DynamicBodyInteractionControllerForTesting;
-        FieldInfo queryShapeSourcesField = GetNonPublicInstanceField(controller.GetType(), "_queryShapeSources")
-                                           ?? throw new InvalidOperationException(
-                                               "HandDynamicBodyInteractionController._queryShapeSources was not found.");
-        Array queryShapeSources = Assert.IsAssignableFrom<Array>(queryShapeSourcesField.GetValue(controller));
-        return queryShapeSources.Length;
-    }
+        => actuator.PhysicalInteractionChannelForTesting.QueryShapeCountForTesting;
 
     private static void AssertBodyHasCollisionException(PhysicsBody3D source, PhysicsBody3D expected)
     {

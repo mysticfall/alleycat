@@ -21,6 +21,8 @@
 [ext_resource type="Script" uid="uid://dv0jd4ag3mh0d" path="res://src/IK/FootPlantingTargetProvider.cs" id="31_foot_planting"]
 [ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
 [ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
+[ext_resource type="Script" uid="uid://basssmqph1u36" path="res://src/Contact/HandContactSweeperController.cs" id="20_contact_sweepers"]
+[ext_resource type="Script" uid="uid://4ecsil8doyft" path="res://src/Contact/ContactMonitor.cs" id="21_contact_monitor"]
 
 [sub_resource type="Resource" id="Resource_texme"]
 script = ExtResource("13_npxpr")
@@ -188,3 +190,14 @@ metadata/_custom_type_script = "uid://r0roprsf0efd"
 [node name="Hearing" type="Node" parent="." index="12" unique_id=1331716149]
 script = ExtResource("13_hearing")
 metadata/_custom_type_script = "uid://qs2mgtgqvri5"
+
+[node name="ContactSweepers" type="Node" parent="." index="13" node_paths=PackedStringArray("PhysicalRig", "RightHandIKTarget", "LeftHandIKTarget")]
+script = ExtResource("20_contact_sweepers")
+PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
+RightHandIKTarget = NodePath("../IKTargets/RightHand")
+LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
+metadata/_custom_type_script = "uid://basssmqph1u36"
+
+[node name="ContactMonitor" type="Node" parent="." index="14"]
+script = ExtResource("21_contact_monitor")
+metadata/_custom_type_script = "uid://4ecsil8doyft"

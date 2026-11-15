@@ -2959,13 +2959,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             MaximumAcceleration = fixture.VRIK.HandTargetMaximumAcceleration,
             SnapDistance = fixture.VRIK.HandTargetSettleDistance,
             RotationResponsiveness = fixture.VRIK.HandTargetRotationResponsiveness,
-            DynamicBodyInteractionCollisionMask = fixture.VRIK.HandDynamicInteractionCollisionMask,
-            DynamicImpactApproachSpeedThreshold = fixture.VRIK.HandDynamicImpactApproachSpeedThreshold,
-            DynamicImpactImpulsePerSpeed = fixture.VRIK.HandDynamicImpactImpulsePerSpeed,
-            DynamicImpactImpulseCap = fixture.VRIK.HandDynamicImpactImpulseCap,
-            DynamicSustainedPushSpeedThreshold = fixture.VRIK.HandDynamicSustainedPushSpeedThreshold,
-            DynamicSustainedForcePerSpeed = fixture.VRIK.HandDynamicSustainedForcePerSpeed,
-            DynamicSustainedForceCap = fixture.VRIK.HandDynamicSustainedForceCap,
+            PhysicalInteractionCollisionMask = fixture.VRIK.HandPhysicalInteractionCollisionMask,
+            ImpactApproachSpeedThreshold = fixture.VRIK.HandImpactApproachSpeedThreshold,
+            ImpactImpulsePerSpeed = fixture.VRIK.HandImpactImpulsePerSpeed,
+            ImpactImpulseCap = fixture.VRIK.HandImpactImpulseCap,
+            SustainedPushSpeedThreshold = fixture.VRIK.HandSustainedPushSpeedThreshold,
+            SustainedForcePerSpeed = fixture.VRIK.HandSustainedForcePerSpeed,
+            SustainedForceCap = fixture.VRIK.HandSustainedForceCap,
         };
 
         IKTargetFollowState expectedFollowState = new(sourceTarget, active: true);
@@ -3021,13 +3021,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             MaximumAcceleration = fixture.VRIK.HandTargetMaximumAcceleration,
             SnapDistance = fixture.VRIK.HandTargetSettleDistance,
             RotationResponsiveness = fixture.VRIK.HandTargetRotationResponsiveness,
-            DynamicBodyInteractionCollisionMask = fixture.VRIK.HandDynamicInteractionCollisionMask,
-            DynamicImpactApproachSpeedThreshold = fixture.VRIK.HandDynamicImpactApproachSpeedThreshold,
-            DynamicImpactImpulsePerSpeed = fixture.VRIK.HandDynamicImpactImpulsePerSpeed,
-            DynamicImpactImpulseCap = fixture.VRIK.HandDynamicImpactImpulseCap,
-            DynamicSustainedPushSpeedThreshold = fixture.VRIK.HandDynamicSustainedPushSpeedThreshold,
-            DynamicSustainedForcePerSpeed = fixture.VRIK.HandDynamicSustainedForcePerSpeed,
-            DynamicSustainedForceCap = fixture.VRIK.HandDynamicSustainedForceCap,
+            PhysicalInteractionCollisionMask = fixture.VRIK.HandPhysicalInteractionCollisionMask,
+            ImpactApproachSpeedThreshold = fixture.VRIK.HandImpactApproachSpeedThreshold,
+            ImpactImpulsePerSpeed = fixture.VRIK.HandImpactImpulsePerSpeed,
+            ImpactImpulseCap = fixture.VRIK.HandImpactImpulseCap,
+            SustainedPushSpeedThreshold = fixture.VRIK.HandSustainedPushSpeedThreshold,
+            SustainedForcePerSpeed = fixture.VRIK.HandSustainedForcePerSpeed,
+            SustainedForceCap = fixture.VRIK.HandSustainedForceCap,
         };
 
         IKTargetFollowState expectedFollowState = new(sourceTarget, active: true);

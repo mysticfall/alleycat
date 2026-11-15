@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using AlleyCat.Common;
+using AlleyCat.Contact;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;
 using AlleyCat.Rigging.Physics;
@@ -205,21 +206,39 @@ public sealed class PhysicalInteractionTests
     }
 
     /// <summary>
-    /// Verifies the pluggable impact source component exposes only source-owned data and metadata.
+    /// Verifies the hand physical-interaction channel exposes only source-owned data and metadata.
     /// </summary>
     [Fact]
-    public void HandDynamicBodyInteractionController_ImplementsImpactSourceContract()
+    public void HandPhysicalInteractionChannel_ImplementsImpactSourceContract()
     {
-        Type type = typeof(HandDynamicBodyInteractionController);
+        Type type = typeof(HandPhysicalInteractionChannel);
 
         Assert.True(typeof(IImpactPhysicalInteractionSource).IsAssignableFrom(type));
         Assert.True(typeof(IPhysicalInteractionSource).IsAssignableFrom(type));
         Assert.Null(typeof(IImpactPhysicalInteractionSource).GetProperty("ContactPoint"));
-        Assert.Equal(typeof(IReadOnlySet<string>), type.GetProperty(nameof(HandDynamicBodyInteractionController.Tags))?.PropertyType);
-        Assert.False(typeof(ISet<string>).IsAssignableFrom(type.GetProperty(nameof(HandDynamicBodyInteractionController.Tags))?.PropertyType));
-        Assert.Equal(typeof(Vector3), type.GetProperty(nameof(HandDynamicBodyInteractionController.Velocity))?.PropertyType);
+        Assert.Equal(typeof(IReadOnlySet<string>), type.GetProperty(nameof(HandPhysicalInteractionChannel.Tags))?.PropertyType);
+        Assert.False(typeof(ISet<string>).IsAssignableFrom(type.GetProperty(nameof(HandPhysicalInteractionChannel.Tags))?.PropertyType));
+        Assert.Equal(typeof(Vector3), type.GetProperty(nameof(HandPhysicalInteractionChannel.Velocity))?.PropertyType);
         Assert.Null(type.GetMethod("SetContactPoint", [typeof(Vector3)]));
         Assert.Null(type.GetMethod("SetImpact", [typeof(Vector3), typeof(Vector3)]));
+        Assert.Null(type.GetMethod("QueryCompatibleReceivers"));
+        Assert.Null(type.GetMethod("CreateInteractionFor"));
+    }
+
+    /// <summary>
+    /// Verifies a contact sweeper can expose INTR-004 source capability (INTR-005 TR14) without owning
+    /// receiver queries or event-specific contact data.
+    /// </summary>
+    [Fact]
+    public void ContactSource_CanExposeImpactSourceCapability()
+    {
+        Type type = typeof(ContactSource);
+
+        Assert.True(typeof(IImpactPhysicalInteractionSource).IsAssignableFrom(type));
+        Assert.True(typeof(IPhysicalInteractionSource).IsAssignableFrom(type));
+        Assert.Equal(typeof(IReadOnlySet<string>), type.GetProperty(nameof(ContactSource.Tags))?.PropertyType);
+        Assert.False(typeof(ISet<string>).IsAssignableFrom(type.GetProperty(nameof(ContactSource.Tags))?.PropertyType));
+        Assert.Equal(typeof(Vector3), type.GetProperty(nameof(ContactSource.Velocity))?.PropertyType);
         Assert.Null(type.GetMethod("QueryCompatibleReceivers"));
         Assert.Null(type.GetMethod("CreateInteractionFor"));
     }

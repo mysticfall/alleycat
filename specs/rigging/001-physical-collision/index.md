@@ -160,16 +160,20 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
     data, including `BodyColliderProfile` data and generated proxies, flows to IK through the
     public API; IK remains the consumer and `Rigging.Physics` remains the independent provider.
 19. Hand-to-dynamic-body interaction shall use explicit capped channels through
-    `HandDynamicBodyInteractionController`. When hand targets have no direct
-    primitive collision-shape children, the controller shall use query shapes
+    `HandPhysicalInteractionChannel`. When hand targets have no direct
+    primitive collision-shape children, the channel shall use query shapes
     derived from the shared collider profile hand descriptors:
      - Impact channel: capped impulse when contact begins during sufficiently
        fast approach.
      - Sustained channel: capped continuous force while contact persists and
        the user continues pressing.
-20. Dynamic bodies eligible for explicit hand interaction must have collision
-    layer 2 and belong to group `hand_dynamic_interaction_body`.
-21. The hand interaction controller shall be configurable with strength-style
+20. Dynamic bodies eligible for explicit hand interaction shall belong to the
+    generic `contact_receiver` receiver-eligibility group (INTR-005 Technical
+    Requirement 15). The legacy `hand_dynamic_interaction_body` group and its
+    collision-layer-2 eligibility are superseded and removed. Collision layer 2
+    remains in use only as a physical collision layer for hand-target and prop
+    collision; it carries no eligibility meaning.
+21. The hand interaction channel shall be configurable with strength-style
     parameters (thresholds, gains, and caps) rather than prop-specific rules.
 22. Automated test coverage shall verify rig generation, hand actuator setup,
     collision-layer contract, and explicit hand-to-dynamic-body force transfer.
@@ -302,8 +306,10 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
 24. Hand-to-dynamic-body interaction uses explicit capped impact and sustained
     push channels, with profile-backed query shapes when direct primitive hand
     target shapes are absent.
-25. Dynamic bodies receive explicit hand interaction only when they have
-    collision layer 2 and belong to group `hand_dynamic_interaction_body`.
+25. Dynamic bodies receive explicit hand interaction only when they belong to
+    the `contact_receiver` receiver-eligibility group (INTR-005 Technical
+    Requirement 15); the superseded collision-layer-plus-group eligibility is
+    gone.
 26. Impact and sustained channels are governed by configurable parameters.
 27. Head collision remains out of scope; no requirement mandates head collision
     response that could conflict with head target driving.
@@ -330,7 +336,7 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
      `PhysicalRig` path on their `CharacterIK` node without serialising a
      separate `Skeleton` path.
 35. Tests verify that `PlayerVRIK` uses the configured `PhysicalRig` reference for
-     finger mirroring, generated target proxy collision exceptions, and hand dynamic
+     finger mirroring, generated target proxy collision exceptions, and hand
      interaction shape resolution, with no per-frame skeleton child scanning.
 
 ## References
@@ -339,9 +345,9 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../ik/004-vrik-pose-state-machine/index.md)
 - [DynamicPhysicalRig Implementation](@game/src/Rigging/Physics/DynamicPhysicalRig.cs)
 - [BodyColliderProfile Implementation](@game/src/Rigging/Physics/BodyColliderProfile.cs)
-- [HandDynamicBodyInteractionController Implementation](@game/src/IK/HandDynamicBodyInteractionController.cs)
+- [HandPhysicalInteractionChannel Implementation](@game/src/IK/HandPhysicalInteractionChannel.cs)
 - [IKTargetAnimatableActuator Implementation](@game/src/IK/IKTargetAnimatableActuator.cs)
 - [PlayerVRIK Implementation](@game/src/IK/PlayerVRIK.cs)
 - [DynamicPhysicalRig Integration Tests](@integration-tests/src/Rigging/Physics/DynamicPhysicalRigIntegrationTests.cs)
-- [Hand Tests](@integration-tests/src/IK/HandDynamicBodyInteractionControllerIntegrationTests.cs)
+- [Hand Physical Interaction Channel Tests](@integration-tests/src/IK/HandPhysicalInteractionChannelIntegrationTests.cs)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)

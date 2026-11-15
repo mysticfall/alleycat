@@ -146,7 +146,7 @@ camera_attributes = SubResource("CameraAttributesPractical_ux8bu")
 
 [node name="Items" type="Node3D" parent="." unique_id=520201010]
 
-[node name="Ball" type="RigidBody3D" parent="Items" unique_id=520201011 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("8_ball")]
+[node name="Ball" type="RigidBody3D" parent="Items" unique_id=520201011 groups=["grabbable", "contact_receiver"] instance=ExtResource("8_ball")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.309, 1.163, -0.427)
 collision_layer = 2
 collision_mask = 11
@@ -155,7 +155,7 @@ freeze = true
 script = ExtResource("11_ar24t")
 metadata/_custom_type_script = "uid://d0aaosrbv6dgv"
 
-[node name="Stick" type="RigidBody3D" parent="Items" unique_id=520201012 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("9_stick")]
+[node name="Stick" type="RigidBody3D" parent="Items" unique_id=520201012 groups=["grabbable", "contact_receiver"] instance=ExtResource("9_stick")]
 transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.43, 1.16, -0.58)
 collision_layer = 2
 collision_mask = 11

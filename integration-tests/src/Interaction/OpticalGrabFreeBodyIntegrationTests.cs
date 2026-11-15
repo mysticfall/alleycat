@@ -224,12 +224,12 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             await fixture.StartOpticalAtRestAsync(sceneTree);
             await BeginClosureAndWaitForPendingAsync(sceneTree, fixture);
 
-            Assert.True(fixture.Ball.IsInGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName));
+            Assert.True(fixture.Ball.IsInGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName));
             AssertBallProtectedAgainstHand(fixture, fixture.Ball);
 
             // Abandonment reverts everything synchronously.
             Assert.True(fixture.RightHand.CancelPendingGrab());
-            Assert.False(fixture.Ball.IsInGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName));
+            Assert.False(fixture.Ball.IsInGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName));
             AssertBallUnprotectedAgainstHand(fixture, fixture.Ball);
 
             // Candidate switch across attempts: the moved-away ball loses candidacy; a newly rested ball
@@ -252,7 +252,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
                 "Expected the replacement ball to be the observed best candidate.");
             Assert.Same(replacementBall, observed?.Grabbable);
             Assert.True(
-                replacementBall.IsInGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName),
+                replacementBall.IsInGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName),
                 "The newly selected candidate must be approach-protected.");
             AssertBallProtectedAgainstHand(fixture, replacementBall);
             AssertBallUnprotectedAgainstHand(fixture, fixture.Ball);
@@ -291,13 +291,13 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             Assert.Equal(HandGrabLifecycleState.Held, fixture.RightHand.GrabLifecycle);
             Assert.True(fixture.Ball.Freeze, "The committed grabbable must freeze through the held contract.");
             // The approach-protection mark is gone; the held exception contract owns the pairs now.
-            Assert.False(fixture.Ball.IsInGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName));
+            Assert.False(fixture.Ball.IsInGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName));
             AssertBallProtectedAgainstHand(fixture, fixture.Ball);
 
             fixture.RightHand.Release();
             Assert.Equal(HandGrabLifecycleState.None, fixture.RightHand.GrabLifecycle);
             Assert.False(fixture.Ball.Freeze);
-            Assert.False(fixture.Ball.IsInGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName));
+            Assert.False(fixture.Ball.IsInGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName));
             AssertBallUnprotectedAgainstHand(fixture, fixture.Ball);
         }
         finally
@@ -397,7 +397,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             Assert.Null(fixture.RightHand.CurrentGrabbed);
             Assert.Equal(HandGrabAbandonmentReason.MovingCandidate, fixture.RightHand.LastPendingGrabAbandonmentReason);
             Assert.False(fixture.Ball.Freeze, "A never-committed candidate must stay unfrozen.");
-            Assert.False(fixture.Ball.IsInGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName));
+            Assert.False(fixture.Ball.IsInGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName));
 
             // The abandonment lands in a process frame; let the coordinator's next physics evaluation publish
             // the neutral trace before asserting it.

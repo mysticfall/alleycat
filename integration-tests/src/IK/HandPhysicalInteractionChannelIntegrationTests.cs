@@ -1,3 +1,4 @@
+using AlleyCat.Contact;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;
 using AlleyCat.Rigging.Physics;
@@ -9,9 +10,10 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
-/// Focused runtime coverage for explicit hand-to-dynamic-body force transfer.
+/// Focused runtime coverage for explicit hand-to-dynamic-body force transfer through the hand
+/// physical-interaction channel, whose receiver eligibility is the generic contact-receiver group.
 /// </summary>
-public sealed class HandDynamicBodyInteractionControllerIntegrationTests
+public sealed class HandPhysicalInteractionChannelIntegrationTests
 {
     private const float PhysicsStepSeconds = 1.0f / 60.0f;
     private static readonly Vector3 _fixtureOrigin = new(50.0f, 10.0f, 0.0f);
@@ -102,11 +104,11 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             sceneTree,
             actuator =>
             {
-                actuator.DynamicImpactApproachSpeedThreshold = 0.05f;
-                actuator.DynamicImpactImpulsePerSpeed = 10.0f;
-                actuator.DynamicImpactImpulseCap = 0.50f;
-                actuator.DynamicSustainedForcePerSpeed = 0.0f;
-                actuator.DynamicSustainedForceCap = 0.0f;
+                actuator.ImpactApproachSpeedThreshold = 0.05f;
+                actuator.ImpactImpulsePerSpeed = 10.0f;
+                actuator.ImpactImpulseCap = 0.50f;
+                actuator.SustainedForcePerSpeed = 0.0f;
+                actuator.SustainedForceCap = 0.0f;
             });
 
         try
@@ -137,11 +139,11 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             sceneTree,
             actuator =>
             {
-                actuator.DynamicImpactImpulsePerSpeed = 0.0f;
-                actuator.DynamicImpactImpulseCap = 0.0f;
-                actuator.DynamicSustainedPushSpeedThreshold = 0.01f;
-                actuator.DynamicSustainedForcePerSpeed = 1000.0f;
-                actuator.DynamicSustainedForceCap = 6.0f;
+                actuator.ImpactImpulsePerSpeed = 0.0f;
+                actuator.ImpactImpulseCap = 0.0f;
+                actuator.SustainedPushSpeedThreshold = 0.01f;
+                actuator.SustainedForcePerSpeed = 1000.0f;
+                actuator.SustainedForceCap = 6.0f;
             });
 
         try
@@ -171,16 +173,16 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
     public async Task Update_ProfileBackedShapeOnShapelessHand_AppliesForce()
     {
         SceneTree sceneTree = GetSceneTree();
-        IReadOnlyList<HandDynamicInteractionShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
+        IReadOnlyList<HandProfileShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
             sceneTree,
             actuator =>
             {
-                actuator.DynamicImpactApproachSpeedThreshold = 0.05f;
-                actuator.DynamicImpactImpulsePerSpeed = 10.0f;
-                actuator.DynamicImpactImpulseCap = 0.50f;
-                actuator.DynamicSustainedForcePerSpeed = 0.0f;
-                actuator.DynamicSustainedForceCap = 0.0f;
+                actuator.ImpactApproachSpeedThreshold = 0.05f;
+                actuator.ImpactImpulsePerSpeed = 10.0f;
+                actuator.ImpactImpulseCap = 0.50f;
+                actuator.SustainedForcePerSpeed = 0.0f;
+                actuator.SustainedForceCap = 0.0f;
             },
             addDirectHandShape: false,
             profileShapes);
@@ -204,7 +206,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the existing hand dynamic-body collision path delivers the pluggable impact source to receivers.
+    /// Verifies the hand physical-interaction channel delivers the pluggable impact source to receivers.
     /// </summary>
     [Headless]
     [Fact]
@@ -215,11 +217,11 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             sceneTree,
             actuator =>
             {
-                actuator.DynamicImpactApproachSpeedThreshold = 0.05f;
-                actuator.DynamicImpactImpulsePerSpeed = 10.0f;
-                actuator.DynamicImpactImpulseCap = 0.50f;
-                actuator.DynamicSustainedForcePerSpeed = 0.0f;
-                actuator.DynamicSustainedForceCap = 0.0f;
+                actuator.ImpactApproachSpeedThreshold = 0.05f;
+                actuator.ImpactImpulsePerSpeed = 10.0f;
+                actuator.ImpactImpulseCap = 0.50f;
+                actuator.SustainedForcePerSpeed = 0.0f;
+                actuator.SustainedForceCap = 0.0f;
             },
             addImpactInteractionWiring: true);
 
@@ -231,11 +233,43 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
             IImpactPhysicalInteraction interaction = Assert.IsAssignableFrom<IImpactPhysicalInteraction>(
                 fixture.ImpactReceiver?.LastImpactInteraction);
-            Assert.Same(fixture.DynamicBodyInteractionController, interaction.Source);
-            Assert.Equal(["HandBody", "ImpactSource"], [.. fixture.DynamicBodyInteractionController!.Tags]);
+            Assert.Same(fixture.PhysicalInteractionChannel, interaction.Source);
+            Assert.Equal(["HandBody", "ImpactSource"], [.. fixture.PhysicalInteractionChannel!.Tags]);
             Assert.Equal(["DynamicBody", "ImpactReceiver"], [.. fixture.ImpactReceiver!.Tags]);
             Assert.InRange(interaction.Velocity.X, 4.0f, 5.0f);
             Assert.InRange(Mathf.Abs(interaction.ContactPoint.X - fixture.DynamicBody.GlobalPosition.X), 0.0f, 0.08f);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a body outside the contact-receiver group receives no explicit force even while overlapping.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task Update_OverlappingBodyOutsideContactReceiverGroup_AppliesNoForce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
+            sceneTree,
+            actuator =>
+            {
+                actuator.ImpactApproachSpeedThreshold = 0.05f;
+                actuator.ImpactImpulsePerSpeed = 10.0f;
+                actuator.ImpactImpulseCap = 0.50f;
+            },
+            addReceiverGroupMembership: false);
+
+        try
+        {
+            await fixture.PrimeAsync(new Vector3(0.12f, 0.0f, 0.0f));
+
+            await fixture.UpdateAsync(new Vector3(0.20f, 0.0f, 0.0f));
+
+            AssertVectorNearZero(fixture.DynamicBody.LinearVelocity, 0.001f);
         }
         finally
         {
@@ -251,7 +285,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
     public async Task Actuate_ProfileBackedShapeOnShapelessHand_CollidesDuringMovement()
     {
         SceneTree sceneTree = GetSceneTree();
-        IReadOnlyList<HandDynamicInteractionShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
+        IReadOnlyList<HandProfileShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
             sceneTree,
             addDirectHandShape: false,
@@ -308,7 +342,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
         public TargetPoseSource TargetPoseSource { get; } = targetPoseSource;
 
-        public HandDynamicBodyInteractionController? DynamicBodyInteractionController => Actuator.DynamicBodyInteractionControllerForTesting;
+        public HandPhysicalInteractionChannel? PhysicalInteractionChannel => Actuator.PhysicalInteractionChannelForTesting;
 
         public RigidBodyImpactInteractionReceiver3D? ImpactReceiver { get; } = impactReceiver;
 
@@ -316,12 +350,13 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             SceneTree sceneTree,
             Action<IKTargetAnimatableActuator>? configureActuator = null,
             bool addDirectHandShape = true,
-            IReadOnlyList<HandDynamicInteractionShape>? profileShapes = null,
-            bool addImpactInteractionWiring = false)
+            IReadOnlyList<HandProfileShape>? profileShapes = null,
+            bool addImpactInteractionWiring = false,
+            bool addReceiverGroupMembership = true)
         {
             Node3D root = new()
             {
-                Name = "HandDynamicBodyInteractionControllerTestRoot",
+                Name = "HandPhysicalInteractionChannelTestRoot",
             };
 
             AnimatableBody3D handBody = new()
@@ -342,18 +377,25 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
                 });
             }
 
+            // The dynamic body deliberately sits on a collision layer with no hand-interaction meaning:
+            // eligibility for the channel is the generic contact-receiver group (INTR-005 TR15), not any
+            // dedicated collision-layer arrangement.
             RigidBody3D dynamicBody = new()
             {
                 Name = "DynamicBody",
                 TopLevel = true,
-                CollisionLayer = 2,
+                CollisionLayer = 8,
                 CollisionMask = 0,
                 GravityScale = 0.0f,
                 LinearDamp = 0.0f,
                 AngularDamp = 10.0f,
                 GlobalPosition = _dynamicBodyPosition,
             };
-            dynamicBody.AddToGroup(HandDynamicBodyInteractionController.DynamicInteractionGroupName);
+            if (addReceiverGroupMembership)
+            {
+                dynamicBody.AddToGroup(ContactReceiverGroup.Name);
+            }
+
             dynamicBody.AddChild(new CollisionShape3D
             {
                 Name = "CollisionShape3D",
@@ -389,13 +431,12 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
                 PositionResponsiveness = 100.0f,
                 RotationResponsiveness = 100.0f,
                 SnapDistance = 0.001f,
-                DynamicBodyInteractionCollisionMask = 2,
-                DynamicImpactApproachSpeedThreshold = 0.05f,
-                DynamicImpactImpulsePerSpeed = 10.0f,
-                DynamicImpactImpulseCap = 0.50f,
-                DynamicSustainedPushSpeedThreshold = 0.05f,
-                DynamicSustainedForcePerSpeed = 100.0f,
-                DynamicSustainedForceCap = 2.0f,
+                ImpactApproachSpeedThreshold = 0.05f,
+                ImpactImpulsePerSpeed = 10.0f,
+                ImpactImpulseCap = 0.50f,
+                SustainedPushSpeedThreshold = 0.05f,
+                SustainedForcePerSpeed = 100.0f,
+                SustainedForceCap = 2.0f,
             };
             configureActuator?.Invoke(actuator);
 
@@ -512,19 +553,19 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             => Transform;
     }
 
-    private static IReadOnlyList<HandDynamicInteractionShape> CreateProfileBackedHandShapes(StringName boneName)
+    private static IReadOnlyList<HandProfileShape> CreateProfileBackedHandShapes(StringName boneName)
     {
         BodyColliderProfile profile = new()
         {
             SourceScene = CreatePackedHandProfileSourceScene(boneName),
         };
         IReadOnlyList<BodyColliderShapeDescriptor> descriptors = profile.QueryShapeDescriptorsForBone(boneName);
-        var shapes = new HandDynamicInteractionShape[descriptors.Count];
+        var shapes = new HandProfileShape[descriptors.Count];
 
-        for (int index = 0; index < descriptors.Count; index += 1)
+        for (int descriptorIndex = 0; descriptorIndex < descriptors.Count; descriptorIndex += 1)
         {
-            BodyColliderShapeDescriptor descriptor = descriptors[index];
-            shapes[index] = new HandDynamicInteractionShape(descriptor.Shape, descriptor.LocalTransform, descriptor.Disabled);
+            BodyColliderShapeDescriptor descriptor = descriptors[descriptorIndex];
+            shapes[descriptorIndex] = new HandProfileShape(descriptor.Shape, descriptor.LocalTransform, descriptor.Disabled);
         }
 
         return shapes;

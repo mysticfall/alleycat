@@ -7,7 +7,7 @@ namespace AlleyCat.IK;
 /// </summary>
 public sealed class IKTargetAnimatableActuator(
     AnimatableBody3D body,
-    IReadOnlyList<HandDynamicInteractionShape>? dynamicInteractionShapes = null)
+    IReadOnlyList<HandProfileShape>? profileShapes = null)
     : IIKTargetActuator
 {
     private const float DeltaEpsilon = 1e-6f;
@@ -24,14 +24,14 @@ public sealed class IKTargetAnimatableActuator(
     /// <summary>
     /// Number of runtime movement-collision shapes generated from profile descriptors for this actuator.
     /// </summary>
-    public int GeneratedMovementCollisionShapeCount { get; } = EnsureProfileMovementCollisionShapes(body, dynamicInteractionShapes);
+    public int GeneratedMovementCollisionShapeCount { get; } = EnsureProfileMovementCollisionShapes(body, profileShapes);
 
-    private HandDynamicBodyInteractionController DynamicBodyInteraction { get; } = new(body, dynamicInteractionShapes);
+    private HandPhysicalInteractionChannel PhysicalInteraction { get; } = new(body, profileShapes);
 
     /// <summary>
-    /// Gets the dynamic-body interaction controller for integration tests.
+    /// Gets the hand physical-interaction channel for integration tests.
     /// </summary>
-    public HandDynamicBodyInteractionController DynamicBodyInteractionControllerForTesting => DynamicBodyInteraction;
+    public HandPhysicalInteractionChannel PhysicalInteractionChannelForTesting => PhysicalInteraction;
 
     /// <summary>
     /// Maximum translation speed in metres per second.
@@ -88,66 +88,67 @@ public sealed class IKTargetAnimatableActuator(
     } = 0.03f;
 
     /// <summary>
-    /// Collision mask queried for explicit dynamic rigid-body hand interaction.
+    /// Collision mask narrowing the hand physical-interaction query; eligibility itself rides the generic
+    /// contact-receiver group.
     /// </summary>
-    public uint DynamicBodyInteractionCollisionMask
+    public uint PhysicalInteractionCollisionMask
     {
-        get => DynamicBodyInteraction.CollisionMask;
-        set => DynamicBodyInteraction.CollisionMask = value;
+        get => PhysicalInteraction.CollisionMask;
+        set => PhysicalInteraction.CollisionMask = value;
     }
 
     /// <summary>
     /// Minimum approach speed before the impact channel may fire.
     /// </summary>
-    public float DynamicImpactApproachSpeedThreshold
+    public float ImpactApproachSpeedThreshold
     {
-        get => DynamicBodyInteraction.ImpactApproachSpeedThreshold;
-        set => DynamicBodyInteraction.ImpactApproachSpeedThreshold = value;
+        get => PhysicalInteraction.ImpactApproachSpeedThreshold;
+        set => PhysicalInteraction.ImpactApproachSpeedThreshold = value;
     }
 
     /// <summary>
     /// Impact impulse gain applied per metre-per-second of approach speed.
     /// </summary>
-    public float DynamicImpactImpulsePerSpeed
+    public float ImpactImpulsePerSpeed
     {
-        get => DynamicBodyInteraction.ImpactImpulsePerSpeed;
-        set => DynamicBodyInteraction.ImpactImpulsePerSpeed = value;
+        get => PhysicalInteraction.ImpactImpulsePerSpeed;
+        set => PhysicalInteraction.ImpactImpulsePerSpeed = value;
     }
 
     /// <summary>
     /// Maximum impact impulse magnitude.
     /// </summary>
-    public float DynamicImpactImpulseCap
+    public float ImpactImpulseCap
     {
-        get => DynamicBodyInteraction.ImpactImpulseCap;
-        set => DynamicBodyInteraction.ImpactImpulseCap = value;
+        get => PhysicalInteraction.ImpactImpulseCap;
+        set => PhysicalInteraction.ImpactImpulseCap = value;
     }
 
     /// <summary>
     /// Minimum pressing speed before the sustained push channel may fire.
     /// </summary>
-    public float DynamicSustainedPushSpeedThreshold
+    public float SustainedPushSpeedThreshold
     {
-        get => DynamicBodyInteraction.SustainedPushSpeedThreshold;
-        set => DynamicBodyInteraction.SustainedPushSpeedThreshold = value;
+        get => PhysicalInteraction.SustainedPushSpeedThreshold;
+        set => PhysicalInteraction.SustainedPushSpeedThreshold = value;
     }
 
     /// <summary>
     /// Sustained push-force gain applied per metre-per-second of pressing speed.
     /// </summary>
-    public float DynamicSustainedForcePerSpeed
+    public float SustainedForcePerSpeed
     {
-        get => DynamicBodyInteraction.SustainedForcePerSpeed;
-        set => DynamicBodyInteraction.SustainedForcePerSpeed = value;
+        get => PhysicalInteraction.SustainedForcePerSpeed;
+        set => PhysicalInteraction.SustainedForcePerSpeed = value;
     }
 
     /// <summary>
     /// Maximum sustained push-force magnitude.
     /// </summary>
-    public float DynamicSustainedForceCap
+    public float SustainedForceCap
     {
-        get => DynamicBodyInteraction.SustainedForceCap;
-        set => DynamicBodyInteraction.SustainedForceCap = value;
+        get => PhysicalInteraction.SustainedForceCap;
+        set => PhysicalInteraction.SustainedForceCap = value;
     }
 
     /// <inheritdoc />
@@ -216,7 +217,7 @@ public sealed class IKTargetAnimatableActuator(
                 RotationSnapAngleRadians);
         }
 
-        DynamicBodyInteraction.Update(targetTransform, delta);
+        PhysicalInteraction.Update(targetTransform, delta);
         Transform3D realisedTarget = body.GlobalTransform;
         _lastActuation = new IKTargetActuationResult(
             targetTransform,
@@ -241,7 +242,7 @@ public sealed class IKTargetAnimatableActuator(
 
     private static int EnsureProfileMovementCollisionShapes(
         AnimatableBody3D handBody,
-        IReadOnlyList<HandDynamicInteractionShape>? profileShapes)
+        IReadOnlyList<HandProfileShape>? profileShapes)
     {
         if (profileShapes is null || profileShapes.Count == 0 || HasEnabledCollisionShape(handBody))
         {
@@ -251,7 +252,7 @@ public sealed class IKTargetAnimatableActuator(
         int generatedShapeCount = 0;
         for (int index = 0; index < profileShapes.Count; index += 1)
         {
-            HandDynamicInteractionShape profileShape = profileShapes[index];
+            HandProfileShape profileShape = profileShapes[index];
             if (profileShape.Disabled)
             {
                 continue;

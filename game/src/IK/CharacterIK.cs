@@ -292,71 +292,72 @@ public partial class CharacterIK : Node3D
     public float HandTargetRotationResponsiveness { get; set; } = 24.0f;
 
     /// <summary>
-    /// Collision mask queried for explicit hand-only interaction with dynamic rigid bodies.
+    /// Collision mask narrowing the query for explicit hand physical interaction with dynamic rigid bodies;
+    /// receiver eligibility itself rides the generic contact-receiver group.
     /// </summary>
     [ExportGroup("Hand Collision")]
     [Export]
-    public uint HandDynamicInteractionCollisionMask { get; set; } = 2;
+    public uint HandPhysicalInteractionCollisionMask { get; set; } = uint.MaxValue;
 
     /// <summary>
     /// Minimum approach speed before a hand impact impulse may fire.
     /// </summary>
     [Export]
-    public float HandDynamicImpactApproachSpeedThreshold
+    public float HandImpactApproachSpeedThreshold
     {
         get; set;
     } =
-        HandDynamicBodyInteractionController.DefaultImpactApproachSpeedThreshold;
+        HandPhysicalInteractionChannel.DefaultImpactApproachSpeedThreshold;
 
     /// <summary>
     /// Impact impulse gain applied per metre-per-second of hand approach speed.
     /// </summary>
     [Export]
-    public float HandDynamicImpactImpulsePerSpeed
+    public float HandImpactImpulsePerSpeed
     {
         get; set;
     } =
-        HandDynamicBodyInteractionController.DefaultImpactImpulsePerSpeed;
+        HandPhysicalInteractionChannel.DefaultImpactImpulsePerSpeed;
 
     /// <summary>
     /// Maximum impact impulse magnitude applied by the hand interaction channel.
     /// </summary>
     [Export]
-    public float HandDynamicImpactImpulseCap
+    public float HandImpactImpulseCap
     {
         get; set;
     } =
-        HandDynamicBodyInteractionController.DefaultImpactImpulseCap;
+        HandPhysicalInteractionChannel.DefaultImpactImpulseCap;
 
     /// <summary>
     /// Minimum pressing speed before the sustained hand push channel may fire.
     /// </summary>
     [Export]
-    public float HandDynamicSustainedPushSpeedThreshold
+    public float HandSustainedPushSpeedThreshold
     {
         get; set;
     } =
-        HandDynamicBodyInteractionController.DefaultSustainedPushSpeedThreshold;
+        HandPhysicalInteractionChannel.DefaultSustainedPushSpeedThreshold;
 
     /// <summary>
     /// Sustained push-force gain applied per metre-per-second of hand pressing speed.
     /// </summary>
     [Export]
-    public float HandDynamicSustainedForcePerSpeed
+    public float HandSustainedForcePerSpeed
     {
         get; set;
     } =
-        HandDynamicBodyInteractionController.DefaultSustainedForcePerSpeed;
+        HandPhysicalInteractionChannel.DefaultSustainedForcePerSpeed;
 
     /// <summary>
     /// Maximum sustained push-force magnitude applied by the hand interaction channel.
     /// </summary>
     [Export]
-    public float HandDynamicSustainedForceCap
+    public float HandSustainedForceCap
     {
         get; set;
     } =
-        HandDynamicBodyInteractionController.DefaultSustainedForceCap;
+        HandPhysicalInteractionChannel.DefaultSustainedForceCap;
 
     /// <summary>
     /// When true, enables IK processing. When false, skips provider target updates.
@@ -1657,20 +1658,20 @@ public partial class CharacterIK : Node3D
 
         _rightHandActuator = new IKTargetAnimatableActuator(
             rightHandTarget,
-            ResolveRightHandDynamicInteractionShapes())
+            ResolveRightHandProfileShapes())
         {
             MaximumSpeed = HandTargetMaximumSpeed,
             PositionResponsiveness = HandTargetPositionResponsiveness,
             MaximumAcceleration = HandTargetMaximumAcceleration,
             SnapDistance = HandTargetSettleDistance,
             RotationResponsiveness = HandTargetRotationResponsiveness,
-            DynamicBodyInteractionCollisionMask = HandDynamicInteractionCollisionMask,
-            DynamicImpactApproachSpeedThreshold = HandDynamicImpactApproachSpeedThreshold,
-            DynamicImpactImpulsePerSpeed = HandDynamicImpactImpulsePerSpeed,
-            DynamicImpactImpulseCap = HandDynamicImpactImpulseCap,
-            DynamicSustainedPushSpeedThreshold = HandDynamicSustainedPushSpeedThreshold,
-            DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
-            DynamicSustainedForceCap = HandDynamicSustainedForceCap,
+            PhysicalInteractionCollisionMask = HandPhysicalInteractionCollisionMask,
+            ImpactApproachSpeedThreshold = HandImpactApproachSpeedThreshold,
+            ImpactImpulsePerSpeed = HandImpactImpulsePerSpeed,
+            ImpactImpulseCap = HandImpactImpulseCap,
+            SustainedPushSpeedThreshold = HandSustainedPushSpeedThreshold,
+            SustainedForcePerSpeed = HandSustainedForcePerSpeed,
+            SustainedForceCap = HandSustainedForceCap,
         };
 
         _rightHandTargetPipeline = new IKTargetPipeline(
@@ -1680,20 +1681,20 @@ public partial class CharacterIK : Node3D
 
         _leftHandActuator = new IKTargetAnimatableActuator(
             leftHandTarget,
-            ResolveLeftHandDynamicInteractionShapes())
+            ResolveLeftHandProfileShapes())
         {
             MaximumSpeed = HandTargetMaximumSpeed,
             PositionResponsiveness = HandTargetPositionResponsiveness,
             MaximumAcceleration = HandTargetMaximumAcceleration,
             SnapDistance = HandTargetSettleDistance,
             RotationResponsiveness = HandTargetRotationResponsiveness,
-            DynamicBodyInteractionCollisionMask = HandDynamicInteractionCollisionMask,
-            DynamicImpactApproachSpeedThreshold = HandDynamicImpactApproachSpeedThreshold,
-            DynamicImpactImpulsePerSpeed = HandDynamicImpactImpulsePerSpeed,
-            DynamicImpactImpulseCap = HandDynamicImpactImpulseCap,
-            DynamicSustainedPushSpeedThreshold = HandDynamicSustainedPushSpeedThreshold,
-            DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
-            DynamicSustainedForceCap = HandDynamicSustainedForceCap,
+            PhysicalInteractionCollisionMask = HandPhysicalInteractionCollisionMask,
+            ImpactApproachSpeedThreshold = HandImpactApproachSpeedThreshold,
+            ImpactImpulsePerSpeed = HandImpactImpulsePerSpeed,
+            ImpactImpulseCap = HandImpactImpulseCap,
+            SustainedPushSpeedThreshold = HandSustainedPushSpeedThreshold,
+            SustainedForcePerSpeed = HandSustainedForcePerSpeed,
+            SustainedForceCap = HandSustainedForceCap,
         };
 
         _leftHandTargetPipeline = new IKTargetPipeline(
@@ -1703,15 +1704,15 @@ public partial class CharacterIK : Node3D
     }
 
     /// <summary>
-    /// Returns profile-backed query shapes for right-hand dynamic body interaction.
+    /// Returns profile-backed query shapes for the right hand actuator.
     /// </summary>
-    protected virtual IReadOnlyList<HandDynamicInteractionShape> ResolveRightHandDynamicInteractionShapes()
+    protected virtual IReadOnlyList<HandProfileShape> ResolveRightHandProfileShapes()
         => [];
 
     /// <summary>
-    /// Returns profile-backed query shapes for left-hand dynamic body interaction.
+    /// Returns profile-backed query shapes for the left hand actuator.
     /// </summary>
-    protected virtual IReadOnlyList<HandDynamicInteractionShape> ResolveLeftHandDynamicInteractionShapes()
+    protected virtual IReadOnlyList<HandProfileShape> ResolveLeftHandProfileShapes()
         => [];
 
     private sealed partial class StageModifier : SkeletonModifier3D

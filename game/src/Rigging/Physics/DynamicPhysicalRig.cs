@@ -1,3 +1,4 @@
+using AlleyCat.Contact;
 using AlleyCat.Interaction.Physical;
 using Godot;
 
@@ -482,6 +483,10 @@ public partial class DynamicPhysicalRig : Node
             SourceShapeId = sourceShapeId,
             OwningRig = this,
         };
+
+        // Generated character body parts are contact receivers through this proxy type (INTR-005 TR10); the
+        // group is the normative receiver-eligibility contract behind every sweeper query.
+        proxyBody.AddToGroup(ContactReceiverGroup.Name);
 
         return proxyBody;
     }

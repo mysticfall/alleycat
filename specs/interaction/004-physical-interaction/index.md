@@ -88,15 +88,15 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
 16. Existing collision-processing components may implement interaction source capabilities directly when they own the
     initiation context. Additional source roles such as pressure can be added later without adding duplicate collision
     shapes or relay nodes. `PhysicalInteractionImpactSource3D` is intentionally not part of this slice; impact
-    initiation is implemented directly by `HandDynamicBodyInteractionController`.
-17. The mirror-room dynamic prop impact path shall reuse the existing right-hand IK target collision processing instead
+    initiation is implemented directly by `HandPhysicalInteractionChannel`.
+17. The mirror-room dynamic prop impact path shall reuse the existing hand IK target collision processing instead
     of adding a separate `Area3D` relay, extra hand collision shape, or child source node.
-    `HandDynamicBodyInteractionController` shall initiate impact interactions directly from the IK target dynamic-body
-    collision path and deliver itself to any `IPhysicalInteractionReceiver` found on the contacted body, its children,
-    or its parent. Mirror-room dynamic props, including `test_ball.tscn` and `test_stick.tscn`, shall carry
-    `RigidBodyImpactInteractionReceiver3D` and use the dynamic-interaction collision layer/group expected by the IK
-    target query so they can create `ImpactPhysicalInteraction`, emit receipt notification, and apply an impulse to the
-    referenced or parent `RigidBody3D`.
+    `HandPhysicalInteractionChannel` shall initiate impact interactions directly from the IK hand-actuator path and
+    deliver itself to any `IPhysicalInteractionReceiver` found on the contacted body, its children, or its parent.
+    Mirror-room dynamic props, including `test_ball.tscn` and `test_stick.tscn`, shall carry
+    `RigidBodyImpactInteractionReceiver3D` and belong to the generic `contact_receiver` receiver-eligibility group
+    (INTR-005 Technical Requirement 15) so they can create `ImpactPhysicalInteraction`, emit receipt notification, and
+    apply an impulse to the referenced or parent `RigidBody3D`.
 
 ## In Scope
 
@@ -109,7 +109,7 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
 - Unit and integration tests for the API, absence of source-owned receiver queries, receiver creation, unsupported
   sources, signal snapshots, rig forwarding, generated proxy count, sync preservation, read-only tags, and the minimal
   real dynamic-prop impact contracts.
-- Reusable right-hand IK target collision source initiation, plus mirror-room scenario validation through instancing and
+- Reusable hand IK target collision source initiation, plus mirror-room scenario validation through instancing and
   rigid-body impact receiver wiring on dynamic props including `test_ball.tscn` and `test_stick.tscn`.
 
 ## Out Of Scope
@@ -146,8 +146,9 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
    preserves sync behaviour, avoids unrelated systems, uses runtime receiver access, and the mirror-room dynamic prop
    impact path reuses the existing IK target collision processor without an `Area3D` relay or new hand collision shape.
 10. User Requirements 2-3 and Technical Requirement 17 validated: mirror-room `test_ball.tscn` and `test_stick.tscn`
-    instances are `RigidBody3D` dynamic props with the hand dynamic interaction group, collision layer and mask, plus a
-    `RigidBodyImpactInteractionReceiver3D` child for receiver-owned impact interpretation.
+    instances are `RigidBody3D` dynamic props in the `contact_receiver` receiver-eligibility group, keeping their
+    authored physical collision layer and mask, plus a `RigidBodyImpactInteractionReceiver3D` child for receiver-owned
+    impact interpretation.
 11. Generated proxy count preserved: integration tests verify the same number of proxy bodies are generated as before
     the refactor.
 12. Existing sync behaviour preserved: integration tests verify skeleton-to-proxy position/rotation sync continues to
@@ -162,5 +163,5 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
 - [PhysicalBodyPart3D Implementation](@game/src/Rigging/Physics/PhysicalBodyPart3D.cs)
 - [IPhysicalInteractionSource Implementation](@game/src/Interaction/Physical/IPhysicalInteractionSource.cs)
 - [IPhysicalInteractionReceiver Implementation](@game/src/Interaction/Physical/IPhysicalInteractionReceiver.cs)
-- [HandDynamicBodyInteractionController](@game/src/IK/HandDynamicBodyInteractionController.cs)
+- [HandPhysicalInteractionChannel](@game/src/IK/HandPhysicalInteractionChannel.cs)
 - [RigidBodyImpactInteractionReceiver3D](@game/src/Interaction/Physical/RigidBodyImpactInteractionReceiver3D.cs)

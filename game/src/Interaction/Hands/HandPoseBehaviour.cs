@@ -1315,7 +1315,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand, IHandGrabLifecycle
         if (proxyShapes.Count > 0)
         {
             _heldCollisionProxyState = new HeldCollisionProxyState(HeldCollisionTarget, proxyShapes);
-            HandDynamicBodyInteractionController.NotifyRuntimeShapeOwnersChanged(HeldCollisionTarget);
+            HandPhysicalInteractionChannel.NotifyRuntimeShapeOwnersChanged(HeldCollisionTarget);
         }
     }
 
@@ -1341,7 +1341,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand, IHandGrabLifecycle
 
         if (IsInstanceValid(state.Target))
         {
-            HandDynamicBodyInteractionController.NotifyRuntimeShapeOwnersChanged(state.Target);
+            HandPhysicalInteractionChannel.NotifyRuntimeShapeOwnersChanged(state.Target);
         }
         _heldCollisionProxyState = null;
     }
@@ -1521,7 +1521,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand, IHandGrabLifecycle
         body.SetMeta(ApproachProtectionReferenceMetaKey, references);
         if (references == 1)
         {
-            body.AddToGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName);
+            body.AddToGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName);
         }
     }
 
@@ -1535,7 +1535,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand, IHandGrabLifecycle
                 body.RemoveMeta(ApproachProtectionReferenceMetaKey);
             }
 
-            body.RemoveFromGroup(HandDynamicBodyInteractionController.ApproachProtectedBodyGroupName);
+            body.RemoveFromGroup(HandPhysicalInteractionChannel.ApproachProtectedBodyGroupName);
             return;
         }
 
