@@ -1,29 +1,26 @@
 using AlleyCat.Character;
-using AlleyCat.Scene;
 using AlleyCat.Vision;
 using Godot;
 
 namespace AlleyCat.Mind.AI;
 
 /// <summary>
-/// Composes the observed-character look-direction descriptor lines of the AI-013 visual-context presentation
-/// (playtest R1): for every scene character other than the observer whose vision rig currently holds a gaze look
-/// target, one naturally phrased orientation line stating where that character is looking — resolving the look
-/// target to its owning character when the cue is character-owned, and otherwise classifying the cue's bearing
-/// relative to the character's body facing.
+/// Composes the subject's own head-direction line of the AI-013 vision-capture presentation (playtest R5): when
+/// the subject character's active gaze turns their head away from their body facing, one second-person line
+/// states the direction of that turn, so an agent reading body-facing imagery alongside the captured view knows
+/// the frame comes from a turned head.
 /// </summary>
 /// <remarks>
-/// The lines exist because a character can turn her head while her body — and therefore her minimap marker —
-/// keeps facing forward: without the descriptor, an agent reading body-facing imagery receives contradictory
-/// information about where the observed character is looking. Derivation reads only live look-target state; it
-/// is deliberately never part of observation records, and phrasing claims only the precision the data supports.
+/// The line expresses direction only — never a gaze target — because its sole purpose is to reconcile the turned
+/// head with body-facing imagery such as the minimap. It derives from the subject's live look-target state
+/// (the cue's ground-plane bearing against the subject's body facing, using the relative-position perception's
+/// 45°/135° thresholds), is deliberately never part of observation records, and claims only the precision the
+/// data supports: when the head and body facing align — no look target, or one within the front cone — the
+/// imagery is already consistent and no line is composed.
 /// </remarks>
 internal static class VisualContextGaze
 {
-    /// <summary>The maximum number of orientation lines one presentation carries, in full-ID ordinal order.</summary>
-    internal const int MaximumDescriptorLines = 4;
-
-    /// <summary>The shared empty orientation-line set presented when no observed character holds a look target.</summary>
+    /// <summary>The shared empty descriptor-line set presented when the subject's head is not turned.</summary>
     internal static readonly IReadOnlyList<string> NoLines = [];
 
     private const float FrontAngleThresholdDegrees = 45f;
@@ -31,96 +28,54 @@ internal static class VisualContextGaze
     private const float ZeroGroundSeparationSquared = 1e-6f;
 
     /// <summary>
-    /// Composes the orientation lines for every observed character with a readable gaze look target, or an empty
-    /// list when none applies. The observer itself is never described.
+    /// Composes the subject's head-direction line, or an empty list when the subject's head is not turned away
+    /// from their body facing: no readable look target, or one within the front cone, composes nothing.
     /// </summary>
-    public static IReadOnlyList<string> ComposeOrientationLines(ICharacter observer, ISceneContext scene)
+    public static IReadOnlyList<string> ComposeSubjectHeadDirectionLines(ICharacter subject)
     {
-        ArgumentNullException.ThrowIfNull(observer);
-        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(subject);
 
-        List<string> lines = [];
-        foreach (ICharacter character in scene.Characters.OrderBy(
-                     static character => character.FullId,
-                     StringComparer.Ordinal))
-        {
-            if (ReferenceEquals(character, observer) || lines.Count >= MaximumDescriptorLines)
-            {
-                continue;
-            }
-
-            if (!character.TryGetVision(out IVision? vision) || vision is null)
-            {
-                continue;
-            }
-
-            VisualCue? target = vision.LookTarget;
-            if (target is null || !GodotObject.IsInstanceValid(target))
-            {
-                continue;
-            }
-
-            if (FindNearestSubject(target) is ICharacter targetCharacter)
-            {
-                lines.Add($"`{character.FullId}` is looking toward `{targetCharacter.FullId}`.");
-            }
-            else if (DescribeDirectionalGaze(character, target) is { } directional)
-            {
-                lines.Add(directional);
-            }
-        }
-
-        return lines;
+        return subject.TryGetVision(out IVision? vision)
+            && vision is not null
+            && vision.LookTarget is { } target
+            && GodotObject.IsInstanceValid(target)
+            && DescribeHeadTurn(subject, target) is { } line
+            ? [line]
+            : NoLines;
     }
 
     /// <summary>
-    /// Appends the orientation lines to one delivered-capture message, separated by single spaces; a message
-    /// with no lines is returned unchanged.
+    /// Appends the subject's head-direction line to one delivered-capture message; a message for an untilled
+    /// head is returned unchanged.
     /// </summary>
-    public static string AppendOrientationLines(string message, ICharacter observer, ISceneContext scene)
+    public static string AppendSubjectHeadDirection(string message, ICharacter subject)
     {
         ArgumentNullException.ThrowIfNull(message);
-        ArgumentNullException.ThrowIfNull(observer);
-        ArgumentNullException.ThrowIfNull(scene);
-        return AppendOrientationLines(message, ComposeOrientationLines(observer, scene));
+        ArgumentNullException.ThrowIfNull(subject);
+        return AppendDescriptorLines(message, ComposeSubjectHeadDirectionLines(subject));
     }
 
     /// <summary>
-    /// Appends pre-composed orientation lines to one presentation text, separated by single spaces; a text with
+    /// Appends pre-composed descriptor lines to one presentation text, separated by single spaces; a text with
     /// no lines is returned unchanged. The tool delivered-results and the auto-mode fabricated exchange both
     /// compose through this single append, so the delivery mode can never drift the presented content.
     /// </summary>
-    public static string AppendOrientationLines(string message, IReadOnlyList<string> lines)
+    public static string AppendDescriptorLines(string message, IReadOnlyList<string> lines)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(lines);
         return lines.Count == 0 ? message : $"{message} {string.Join(" ", lines)}";
     }
 
-    /// <summary>Resolves the cue's nearest visual-subject ancestor — the subject that owns the cue.</summary>
-    private static IVisualSubject? FindNearestSubject(VisualCue cue)
-    {
-        for (Node? ancestor = cue.GetParent(); ancestor is not null; ancestor = ancestor.GetParent())
-        {
-            if (ancestor is IVisualSubject subject)
-            {
-                return subject;
-            }
-        }
-
-        return null;
-    }
-
     /// <summary>
-    /// Describes a non-character look target by its ground-plane bearing relative to the character's body facing
-    /// — straight ahead, to one side, or back over the shoulder — mirroring the relative-position perception's
-    /// bearing classification thresholds. The phrasing anchors the side explicitly to the character ("their own
-    /// left") and claims only gaze direction, never head motion. A cue with no readable horizontal separation
-    /// from the character has no honest direction and returns null.
+    /// Describes the subject's head turn by its look target's ground-plane bearing relative to their own body
+    /// facing — to one side, or back over a shoulder — in second person, mirroring the relative-position
+    /// perception's bearing classification thresholds. A bearing within the front cone aligns head and body, and
+    /// a target with no readable horizontal separation has no honest direction; both return null.
     /// </summary>
-    private static string? DescribeDirectionalGaze(ICharacter character, VisualCue target)
+    private static string? DescribeHeadTurn(ICharacter subject, VisualCue target)
     {
-        Vector3 local = character.GlobalTransform.Inverse() * target.GlobalTransform.Origin;
+        Vector3 local = subject.GlobalTransform.Inverse() * target.GlobalTransform.Origin;
         Vector3 groundBearing = new(local.X, 0f, local.Z);
         if (groundBearing.LengthSquared() < ZeroGroundSeparationSquared)
         {
@@ -129,12 +84,18 @@ internal static class VisualContextGaze
 
         float signedAngle = Vector3.Forward.SignedAngleTo(groundBearing.Normalized(), Vector3.Up);
         float magnitude = Mathf.RadToDeg(Math.Abs(signedAngle));
-        return magnitude <= FrontAngleThresholdDegrees
-            ? $"`{character.FullId}` is looking straight ahead."
-            : magnitude >= BackAngleThresholdDegrees
-                ? $"`{character.FullId}` is looking back over their own shoulder."
-                : signedAngle >= 0f
-                    ? $"`{character.FullId}` is looking to their own left."
-                    : $"`{character.FullId}` is looking to their own right.";
+        if (magnitude <= FrontAngleThresholdDegrees)
+        {
+            return null;
+        }
+
+        bool toTheLeft = signedAngle >= 0f;
+        return magnitude >= BackAngleThresholdDegrees
+            ? toTheLeft
+                ? "Your head is turned back over your left shoulder."
+                : "Your head is turned back over your right shoulder."
+            : toTheLeft
+                ? "Your head is turned to your left."
+                : "Your head is turned to your right.";
     }
 }

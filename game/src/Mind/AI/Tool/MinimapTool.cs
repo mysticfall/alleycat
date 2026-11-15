@@ -76,30 +76,8 @@ public sealed partial class MinimapTool : AgentTool
             Session?.Clock);
         return ValueTask.FromResult(
             outcome.Image is { } image
-                ? new AgentToolResult(ComposeDeliveredMessage(image, context), image: image)
+                ? new AgentToolResult($"Minimap delivered: {image.DescribeCapture()}.", image: image)
                 : ComposeFailedResult(outcome.Failure));
-    }
-
-    /// <summary>
-    /// Composes the delivered-render message: the factual capture record plus the observed-character
-    /// look-direction descriptor lines, whose derivation is fully contained — a descriptor failure never
-    /// degrades the delivered minimap result.
-    /// </summary>
-    private string ComposeDeliveredMessage(VisualContextImage image, ScenarioContext context)
-    {
-        string message = $"Minimap delivered: {image.DescribeCapture()}.";
-        try
-        {
-            return VisualContextGaze.AppendOrientationLines(message, context.Character, context.SceneContext);
-        }
-        catch (Exception exception)
-        {
-            _logger?.LogWarning(
-                exception,
-                "Composing the look-direction descriptor for subject '{SubjectId}' failed; the delivered minimap result is unaffected.",
-                context.Character.FullId);
-            return message;
-        }
     }
 
     private AgentToolResult ComposeFailedResult(string? failure)

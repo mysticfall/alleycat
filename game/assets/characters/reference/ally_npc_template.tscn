@@ -4,5 +4,5 @@
 
 [node name="Female" unique_id=1792987446 instance=ExtResource("1_role")]
 
-[node name="BodyVisualCue" parent="Female/GeneralSkeleton/Head" index="2" unique_id=1755026393]
+[node name="FaceVisualCue" parent="Female/GeneralSkeleton/Head" index="2" unique_id=1755026393]
 Description = "Ally is a slender Asian woman in her early twenties, standing about 160 centimetres tall. Her unassuming features and meek expression give her a quiet, gentle appearance."

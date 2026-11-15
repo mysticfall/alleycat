@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Decision;
+using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
@@ -31,6 +32,7 @@ namespace AlleyCat.Mind.Attention;
 public partial class AttentionGazeTargetSelector : Node
 {
     private const int RecentEventCount = 6;
+    private const int MaximumSceneCharacters = 8;
     private const int RecentEventCharacterBudget = 2000;
     private const double SpeakIntentionExpirySeconds = 30d;
 
@@ -41,6 +43,7 @@ public partial class AttentionGazeTargetSelector : Node
         => Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
     private Func<IDecisionClient> _decisionClientLoader = static ()
         => Game.Instance.GetRequiredService<IDecisionClient>();
+    private Func<ILoreQueryService?> _loreQueryServiceLoader = static () => Game.Instance.GetRequiredService<ILoreQueryService>();
     private Mind? _mind;
     private ICharacter? _character;
     private IComponentProjectionNotifier? _componentProjectionNotifier;
@@ -57,6 +60,7 @@ public partial class AttentionGazeTargetSelector : Node
     private volatile string? _scenePremise;
     private int _scenePremiseResolutionStarted;
     private string? _appliedSubjectFullId;
+    private string? _appliedCueValue;
     private VisualCue? _appliedCue;
     private double _appliedAtSeconds;
     private double _secondsSinceLastEvaluation;
@@ -198,6 +202,7 @@ public partial class AttentionGazeTargetSelector : Node
         _failureBackoffSeconds = 0d;
         _coalescedNudges = 0;
         _appliedSubjectFullId = null;
+        _appliedCueValue = null;
         _appliedCue = null;
     }
 
@@ -224,6 +229,13 @@ public partial class AttentionGazeTargetSelector : Node
         ArgumentNullException.ThrowIfNull(decisionClient);
         ThrowIfActivatedForTesting(nameof(SetDecisionClientForTesting));
         _decisionClientLoader = () => decisionClient;
+    }
+
+    /// <summary>Replaces lore-query-service resolution before activation for focused runtime coverage.</summary>
+    internal void SetLoreQueryServiceForTesting(ILoreQueryService? loreQueryService)
+    {
+        ThrowIfActivatedForTesting(nameof(SetLoreQueryServiceForTesting));
+        _loreQueryServiceLoader = () => loreQueryService;
     }
 
     internal void RequestEvaluation(GazeEvaluationTrigger trigger)
@@ -328,6 +340,7 @@ public partial class AttentionGazeTargetSelector : Node
         _evaluationRequested = false;
         _secondsSinceLastEvaluation = 0d;
         _appliedSubjectFullId = null;
+        _appliedCueValue = null;
         _appliedCue = null;
         _appliedAtSeconds = 0d;
         LogVisionBound(vision);
@@ -429,9 +442,9 @@ public partial class AttentionGazeTargetSelector : Node
         AttentionSnapshot snapshot = mind.GetAttentionSnapshot();
         RecordEvaluatedMembership(snapshot);
         List<AttentionGazeTargetCandidate<VisualCue>> cueCandidates = ResolveCandidates(snapshot, scene);
-        IReadOnlyList<GazeSubjectCandidate> subjects = GazeSubjectCandidates.Compose(cueCandidates);
+        IReadOnlyList<GazeCueCandidate> composedCues = GazeCueCandidates.Compose(cueCandidates);
 
-        if (subjects.Count == 0 && _appliedSubjectFullId is null)
+        if (composedCues.Count == 0 && _appliedSubjectFullId is null)
         {
             // No candidate exists to look at and nothing is currently assigned: the decision-model answer is
             // deterministic, so no call is dispatched and the clear presentation fallback stays in effect.
@@ -440,7 +453,7 @@ public partial class AttentionGazeTargetSelector : Node
             return true;
         }
 
-        GazeEvaluationInput input = ComposeInput(trigger, subjects, mind);
+        GazeEvaluationInput input = ComposeInput(trigger, composedCues, mind, scene);
         _evaluationCancellation?.Dispose();
         _evaluationCancellation = new CancellationTokenSource();
         _evaluationInFlight = true;
@@ -517,21 +530,110 @@ public partial class AttentionGazeTargetSelector : Node
 
     private GazeEvaluationInput ComposeInput(
         GazeEvaluationTrigger trigger,
-        IReadOnlyList<GazeSubjectCandidate> subjects,
-        Mind mind)
+        IReadOnlyList<GazeCueCandidate> composedCues,
+        Mind mind,
+        ISceneContext scene)
     {
         ICharacter character = _character
             ?? throw new InvalidOperationException("Attention gaze selector has no owning character at input composition.");
         double elapsedSeconds = _clock.Elapsed.TotalSeconds;
         return new GazeEvaluationInput(
             character.FullId,
-            subjects,
+            [.. composedCues.Select(candidate => candidate with
+            {
+                CueDescription = DescribeCueSynchronously(candidate, scene, character),
+            })],
             ComposeOwnAction(mind, elapsedSeconds),
-            _appliedSubjectFullId,
-            _appliedSubjectFullId is null ? 0d : Math.Max(0d, elapsedSeconds - _appliedAtSeconds),
+            _appliedCueValue,
+            _appliedCueValue is null ? 0d : Math.Max(0d, elapsedSeconds - _appliedAtSeconds),
             trigger,
             RenderRecentEvents(mind, character),
-            ScenePremise: _scenePremise);
+            ScenePremise: _scenePremise,
+            SceneCharacters: ComposeSceneCharacters(character, scene));
+    }
+
+    /// <summary>
+    /// Renders one cue's authored description on the Godot thread: the cue's own <see cref="VisualCue.Describe" />
+    /// template completes synchronously (the established canonical-rendering precedent), and any failure or
+    /// incomplete render leaves the description absent so the option criteria fall back to the cue kind word.
+    /// </summary>
+    private static string? DescribeCueSynchronously(
+        GazeCueCandidate candidate,
+        ISceneContext scene,
+        ICharacter observer)
+    {
+        if (scene.Find(candidate.SubjectFullId) is not IVisualSubject subject)
+        {
+            return null;
+        }
+
+        foreach (VisualCue? cue in subject.VisualCues)
+        {
+            if (cue is null
+                || !IsInstanceValid(cue)
+                || !string.Equals(cue.ID, candidate.CueKey, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                ValueTask<string> description = cue.Describe(scene, observer);
+                return description.IsCompletedSuccessfully ? description.Result : null;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Composes the bounded scene-character roster for the evidence summaries: every scene character other than
+    /// the owner, ordered by full ID, each summarised by their authored lore description through the shared cached
+    /// resolver — absent or asynchronous resolutions carry the bare identity honestly.
+    /// </summary>
+    private IReadOnlyList<GazeSceneCharacter> ComposeSceneCharacters(ICharacter character, ISceneContext scene)
+    {
+        ILoreQueryService? queryService = ResolveLoreQueryService();
+        List<GazeSceneCharacter> roster = [];
+        foreach (ICharacter other in scene.Characters
+                     .Where(static candidate => candidate is not null)
+                     .OrderBy(static candidate => candidate.FullId, StringComparer.Ordinal))
+        {
+            if (ReferenceEquals(other, character) || roster.Count >= MaximumSceneCharacters)
+            {
+                continue;
+            }
+
+            string? description = queryService is null
+                ? null
+                : CharacterLoreDescriptions.ResolveSynchronously(
+                    queryService,
+                    character.FullId,
+                    scene.Content,
+                    other.FullId,
+                    TryGetLogger());
+            roster.Add(new GazeSceneCharacter(other.FullId, description));
+        }
+
+        return roster;
+    }
+
+    /// <summary>Resolves the shared lore query service when game services are available; null keeps summaries bare.</summary>
+    private ILoreQueryService? ResolveLoreQueryService()
+    {
+        try
+        {
+            return _loreQueryServiceLoader();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogLoreServiceUnavailable(exception);
+            return null;
+        }
     }
 
     private GazeOwnAction ComposeOwnAction(Mind mind, double elapsedSeconds)
@@ -662,16 +764,17 @@ public partial class AttentionGazeTargetSelector : Node
                 {
                     ApplyDecision(vision, AttentionGazeTargetDecision<VisualCue>.Clear());
                     _appliedSubjectFullId = null;
+                    _appliedCueValue = null;
                     _appliedCue = null;
                 }
 
                 return;
-            case GazeDecisionKind.ChooseSubject:
+            case GazeDecisionKind.ChooseCue:
                 _failureBackoffSeconds = 0d;
-                string subjectFullId = result.Decision.SubjectFullId
-                    ?? throw new InvalidOperationException("Attention gaze decision chose a subject without a subject.");
-                RecordDump(completion, subjectFullId, null);
-                ApplySubjectDecision(vision, subjectFullId);
+                string cueValue = result.Decision.CueValue
+                    ?? throw new InvalidOperationException("Attention gaze decision chose a cue without a value.");
+                RecordDump(completion, cueValue, null);
+                ApplyCueDecision(vision, cueValue);
                 return;
             default:
                 throw new InvalidOperationException($"Unknown gaze decision kind '{result.Decision.Kind}'.");
@@ -679,15 +782,22 @@ public partial class AttentionGazeTargetSelector : Node
     }
 
     /// <summary>
-    /// Applies a chosen subject by resolving its current best cue with re-validation; a vanished or cue-less
-    /// subject keeps the current target as a no-op for the next cadence to re-evaluate.
+    /// Applies a chosen subject-and-cue option value: parse it, resolve the subject's cue by its authored ID with
+    /// full re-validation, and assign it. A vanished subject, a missing cue, or an unparseable value keeps the
+    /// current target as a no-op for the next cadence to re-evaluate.
     /// </summary>
-    private void ApplySubjectDecision(IVision vision, string subjectFullId)
+    private void ApplyCueDecision(IVision vision, string cueValue)
     {
-        VisualCue? cue = ResolveBestCue(subjectFullId);
+        if (!GazePromptText.TryParseCueValue(cueValue, out string subjectFullId, out string cueKey))
+        {
+            LogSubjectVanished(cueValue);
+            return;
+        }
+
+        VisualCue? cue = ResolveCue(subjectFullId, cueKey);
         if (cue is null)
         {
-            LogSubjectVanished(subjectFullId);
+            LogSubjectVanished(cueValue);
             return;
         }
 
@@ -698,6 +808,7 @@ public partial class AttentionGazeTargetSelector : Node
 
         ApplyDecision(vision, AttentionGazeTargetDecision<VisualCue>.Set(cue));
         _appliedSubjectFullId = subjectFullId;
+        _appliedCueValue = cueValue;
         _appliedCue = cue;
         _appliedAtSeconds = _clock.Elapsed.TotalSeconds;
     }
@@ -737,40 +848,30 @@ public partial class AttentionGazeTargetSelector : Node
         return candidates;
     }
 
-    private VisualCue? ResolveBestCue(string subjectFullId)
+    /// <summary>
+    /// Resolves one subject's cue by its authored ID with live re-validation: the subject must exist in the scene
+    /// and the cue must be instantiated with a finite, positive prominence.
+    /// </summary>
+    private VisualCue? ResolveCue(string subjectFullId, string cueKey)
     {
         if (_sceneContextLoader().Find(subjectFullId) is not IVisualSubject subject)
         {
             return null;
         }
 
-        AttentionGazeTargetCandidate<VisualCue>? best = null;
-        IReadOnlyList<VisualCue> cues = subject.VisualCues;
-        for (int cueOrder = 0; cueOrder < cues.Count; cueOrder++)
+        foreach (VisualCue? cue in subject.VisualCues)
         {
-            VisualCue? cue = cues[cueOrder];
-            if (cue is null || !IsInstanceValid(cue) || !float.IsFinite(cue.Prominence) || cue.Prominence <= 0f)
+            if (cue is not null
+                && IsInstanceValid(cue)
+                && float.IsFinite(cue.Prominence)
+                && cue.Prominence > 0f
+                && string.Equals(cue.ID, cueKey, StringComparison.Ordinal))
             {
-                continue;
-            }
-
-            AttentionGazeTargetCandidate<VisualCue> candidate = new(
-                subjectFullId,
-                cue.ID,
-                cueOrder,
-                cue,
-                0d,
-                cue.Prominence,
-                IsValid: true);
-            if (best is null
-                || candidate.Prominence > best.Prominence
-                || (candidate.Prominence == best.Prominence && candidate.CueOrder < best.CueOrder))
-            {
-                best = candidate;
+                return cue;
             }
         }
 
-        return best?.Target;
+        return null;
     }
 
     private void ApplyDecision(IVision vision, AttentionGazeTargetDecision<VisualCue> decision)
@@ -926,6 +1027,15 @@ public partial class AttentionGazeTargetSelector : Node
         logger?.LogWarning(
             exception,
             "Resolving the scenario premise for attention gaze failed; questions compose without one.");
+    }
+
+    private void LogLoreServiceUnavailable(Exception exception)
+    {
+        ILogger<AttentionGazeTargetSelector>? logger = TryGetLogger();
+        logger?.LogWarning(
+            exception,
+            "Resolving the lore query service for attention gaze failed; evidence candidate summaries compose "
+            + "without lore descriptions.");
     }
 
     private void LogSetDecision(VisualCue target)

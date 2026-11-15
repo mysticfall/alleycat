@@ -6,6 +6,7 @@ using AlleyCat.Core.Content;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Decision;
+using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Scene;
 using AlleyCat.Sense;
@@ -57,7 +58,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             Assert.DoesNotContain(character.Components, component => ReferenceEquals(selector, component));
 
             TestVision secondVision = new();
-            client.AnswerValue = subject.FullId;
+            client.AnswerValue = $"{subject.FullId}#body";
             character.RefreshComponents(secondVision);
             selector._Process(0d);
 
@@ -83,7 +84,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void Evaluate_ResolvesVisualCuesFromSnapshotAndRebindsOnProjectionRefresh()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:target");
+        ScriptedDecisionClient client = new(answerValue: "char:target#face");
         TestVision firstVision = new();
         TestVision secondVision = new();
         TestCharacter character = new(hasComponentProjection: true, firstVision);
@@ -133,7 +134,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void Cadence_DispatchesOnlyAtIntervalBoundaries()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         TestVision vision = new();
         TestCharacter character = new(hasComponentProjection: true, vision);
         TestMind mind = new(character);
@@ -164,7 +165,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             Assert.Equal([alphaCue], vision.SetTargets);
             _ = Assert.Single(client.Requests);
 
-            client.AnswerValue = "char:bravo";
+            client.AnswerValue = "char:bravo#body";
             selector._Process(0.9d);
             _ = Assert.Single(client.Requests);
             Assert.Equal([alphaCue], vision.SetTargets);
@@ -227,7 +228,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
             scene.Add(validSubject);
             mind.ReinforceAttention(validSubject.FullId, 1f);
-            client.AnswerValue = validSubject.FullId;
+            client.AnswerValue = $"{validSubject.FullId}#valid";
             selector.RequestEvaluation();
             selector._Process(0d);
             Assert.Equal([validCue], vision.SetTargets);
@@ -259,7 +260,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void Failure_KeepsCurrentTargetBacksOffAndRecovers()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         TestVision vision = new();
         TestCharacter character = new(hasComponentProjection: true, vision);
         TestMind mind = new(character);
@@ -311,7 +312,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             Assert.Equal([alphaCue], vision.SetTargets);
 
             // …so the next boundary evaluates at the base interval again.
-            client.AnswerValue = "char:bravo";
+            client.AnswerValue = "char:bravo#body";
             selector._Process(1d);
             Assert.Equal(5, client.Requests.Count);
             Assert.Equal([alphaCue, bravoCue], vision.SetTargets);
@@ -330,7 +331,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void RefusalAndUnknownChoice_KeepTheCurrentTarget()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         TestVision vision = new();
         TestCharacter character = new(hasComponentProjection: true, vision);
         TestMind mind = new(character);
@@ -357,7 +358,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             Assert.Equal(0, vision.ClearCount);
 
             client.Refuse = false;
-            client.AnswerValue = "char:hallucinated";
+            client.AnswerValue = "char:hallucinated#face";
             selector.RequestEvaluation();
             selector._Process(0d);
             Assert.Equal([alphaCue], vision.SetTargets);
@@ -376,7 +377,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void VanishedChosenSubject_KeepsTheCurrentTarget()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         TestVision vision = new();
         TestCharacter character = new(hasComponentProjection: true, vision);
         TestMind mind = new(character);
@@ -398,7 +399,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
             // The subject leaves the scene between the decision and its application.
             scene.Remove(alpha.FullId);
-            client.AnswerValue = "char:alpha";
+            client.AnswerValue = "char:alpha#body";
             selector.RequestEvaluation();
             selector._Process(0d);
 
@@ -458,7 +459,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             selector.RequestEvaluation();
             _ = Assert.Single(client.Requests);
 
-            client.CompleteInFlight("char:alpha");
+            client.CompleteInFlight("char:alpha#body");
             await PumpUntilAppliedAsync(selector, vision, expectedCount: 1);
             Assert.Equal([alphaCue], vision.SetTargets);
 
@@ -466,7 +467,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             selector._Process(0d);
             Assert.Equal(2, client.Requests.Count);
 
-            client.CompleteInFlight("char:bravo");
+            client.CompleteInFlight("char:bravo#body");
             await PumpUntilAppliedAsync(selector, vision, expectedCount: 2);
             Assert.Equal([alphaCue, bravoCue], vision.SetTargets);
             Assert.Equal(0, vision.ClearCount);
@@ -820,7 +821,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void MembershipChange_AMidBackoffSubjectGainNudgesEvaluationAndResetsBackoff()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         TestVision vision = new();
         TestCharacter character = new(hasComponentProjection: true, vision);
         TestMind mind = new(character);
@@ -856,7 +857,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             // A brand-new subject enters attention mid-backoff; before a full interval elapses nothing fires…
             mind.ReinforceAttention(bravo.FullId, 1f);
             client.DecisionFailure = null;
-            client.AnswerValue = "char:bravo";
+            client.AnswerValue = "char:bravo#body";
             selector._Process(0.5d);
             Assert.Equal(2, client.Requests.Count);
 
@@ -888,7 +889,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     [Fact]
     public void MembershipChange_LosingTheCurrentGazeSubjectMidBackoffNudgesAndClears()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         TestVision vision = new();
         TestCharacter character = new(hasComponentProjection: true, vision);
         TestMind mind = new(character)
@@ -1013,6 +1014,164 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
         {
             _gate.SetResult(description);
             _gate = new TaskCompletionSource<string>();
+        }
+    }
+
+    /// <summary>
+    /// Lore query service double answering character queries with fixed descriptions; every other query shape is
+    /// unused by the gaze path.
+    /// </summary>
+    private sealed class ScriptedLoreQueryService(IReadOnlyDictionary<string, string> descriptions)
+        : ILoreQueryService
+    {
+        public Task<IReadOnlyList<LoreEntry>> QueryAsync(
+            ContentContext content,
+            LoreQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            List<LoreEntry> entries = [];
+            foreach (LoreSubjectRequest subject in query.Subjects)
+            {
+                if (subject.SubjectID is { } subjectId
+                    && descriptions.TryGetValue(subjectId, out string? description))
+                {
+                    entries.Add(new LoreEntry(subjectId, subjectId, string.Empty, Description: description));
+                }
+            }
+
+            return Task.FromResult<IReadOnlyList<LoreEntry>>(entries);
+        }
+
+        public Task<IReadOnlyList<LoreEntry>> QueryCatalogueAsync(
+            ContentContext content,
+            LoreCatalogueQuery query,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException("The gaze path never queries the catalogue.");
+
+        public Task<IReadOnlyList<LoreEntryLookup>> QueryEntriesAsync(
+            ContentContext content,
+            LoreEntryIDQuery query,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException("The gaze path never queries exact entries.");
+    }
+
+    /// <summary>
+    /// The model picks the cue, not just the character: a chosen lower-prominence cue applies directly while the
+    /// subject's more prominent cue stays unassigned (multi-cue playtest work).
+    /// </summary>
+    [Fact]
+    public void Evaluate_AppliesTheChosenCueNotTheMostProminentOne()
+    {
+        ScriptedDecisionClient client = new(answerValue: "char:target#body");
+        TestVision vision = new();
+        TestCharacter character = new(hasComponentProjection: true, vision);
+        TestMind mind = new(character);
+        MutableSceneContext scene = new();
+        TestVisualCue faceCue = new()
+        {
+            ID = "face",
+            Prominence = 3f
+        };
+        TestVisualCue bodyCue = new()
+        {
+            ID = "body",
+            Prominence = 1f
+        };
+        TestVisualSubject subject = new("target", [faceCue, bodyCue]);
+        scene.Add(subject);
+        AttentionGazeTargetSelector selector = CreateSelector(mind, scene, client);
+        try
+        {
+            mind.ReinforceAttention(subject.FullId, 1f);
+            selector._Ready();
+            selector._Process(0d);
+
+            Assert.Equal([bodyCue], vision.SetTargets);
+
+            DecisionRequest request = Assert.Single(client.Requests);
+            ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
+            Assert.Equal(
+                ["char:target#face", "char:target#body", "none"],
+                question.Options.Select(option => option.Value));
+            Assert.Equal(
+                "`char:target#face` — face: face (attention 1, prominence 3.00)",
+                question.Options[0].Criteria);
+        }
+        finally
+        {
+            selector._ExitTree();
+            selector.Free();
+            mind.Free();
+            faceCue.Free();
+            bodyCue.Free();
+        }
+    }
+
+    /// <summary>
+    /// Evidence carries the scene-character roster: lore descriptions through the shared cached resolver, honest
+    /// bare identities when absent, no candidate duplication of the options, and a cue-level current gaze.
+    /// </summary>
+    [Fact]
+    public void Evaluate_EvidenceCarriesTheSceneCharacterRosterAndOmitsLoreHonestly()
+    {
+        // The resolver caches per (observer, subject) process-wide; earlier selector facts in the same session
+        // resolve these subjects through the real service, so clear the cache for scripted isolation.
+        CharacterLoreDescriptions.ClearCacheForTesting();
+        ScriptedDecisionClient client = new(answerValue: DecisionGazePolicy.NoneOptionValue);
+        TestVision vision = new();
+        TestCharacter character = new(hasComponentProjection: true, vision);
+        TestCharacter describedFriend = new(hasComponentProjection: false)
+        {
+            Id = "described"
+        };
+        TestCharacter bareFriend = new(hasComponentProjection: false)
+        {
+            Id = "bare"
+        };
+        TestMind mind = new(character);
+        MutableSceneContext scene = new();
+        TestVisualCue alphaCue = new()
+        {
+            ID = "body",
+            Prominence = 1f
+        };
+        TestVisualSubject alpha = new("alpha", [alphaCue]);
+        scene.Add(alpha);
+        scene.Add(describedFriend);
+        scene.Add(bareFriend);
+        AttentionGazeTargetSelector selector = CreateSelector(mind, scene, client);
+        selector.SetLoreQueryServiceForTesting(new ScriptedLoreQueryService(
+            descriptions: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["char:described"] = "A sturdily built man in his late twenties.",
+            }));
+        try
+        {
+            mind.ReinforceAttention(alpha.FullId, 0.9f);
+            selector._Ready();
+            selector._Process(0d);
+
+            JsonElement evidence = Assert.IsType<JsonElement>(Assert.Single(client.Requests).Evidence);
+            _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("candidates"));
+
+            JsonElement characters = evidence.GetProperty("characters");
+            Assert.Equal(2, characters.GetArrayLength());
+            // Roster order is full-ID ordinal: bare precedes described.
+            Assert.Equal("char:bare", characters[0].GetProperty("id").GetString());
+            _ = Assert.Throws<KeyNotFoundException>(() => characters[0].GetProperty("description"));
+            Assert.Equal(
+                "A sturdily built man in his late twenties.",
+                characters[1].GetProperty("description").GetString());
+            Assert.Equal(
+                DecisionGazePolicy.NoneOptionValue,
+                evidence.GetProperty("current_gaze").GetProperty("cue").GetString());
+        }
+        finally
+        {
+            selector._ExitTree();
+            selector.Free();
+            mind.Free();
+            alphaCue.Free();
         }
     }
 
@@ -1159,7 +1318,8 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
         private readonly Dictionary<string, IIdentifiable> _entries = new(StringComparer.Ordinal);
 
-        public IReadOnlyCollection<ICharacter> Characters => [];
+        public IReadOnlyCollection<ICharacter> Characters
+            => [.. _entries.Values.OfType<ICharacter>()];
 
         public ContentContext Content => ContentContext.Default;
 

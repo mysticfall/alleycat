@@ -9,7 +9,7 @@ namespace AlleyCat.Vision;
 /// Godot node facade exposing VISION-001 Eyes look and blink control to scene consumers.
 /// </summary>
 [GlobalClass]
-public partial class EyesBehaviour : Node, IVision
+public partial class EyesBehaviour : Node, IVision, IVisibleCueSurveySource
 {
     private const float DefaultSaccadeIntervalSeconds = 1f;
     private const float DefaultSaccadeSpeedMetresPerSecond = 0.6f;
@@ -691,6 +691,7 @@ public partial class EyesBehaviour : Node, IVision
 
         _secondsUntilVisualSurvey = VisualSurveyIntervalSeconds;
         IReadOnlyList<VisualScanResult> results = AcquireVisualScan();
+        Volatile.Write(ref _lastVisibleCueSurvey, results);
         string[] subjectFullIDs = new string[results.Count];
         for (int index = 0; index < results.Count; index++)
         {
@@ -699,6 +700,12 @@ public partial class EyesBehaviour : Node, IVision
 
         Perceived?.Invoke(new VisualSurveyPercept(subjectFullIDs));
     }
+
+    /// <summary>The most recent survey's per-cue visibility snapshot, published for read-only consumers.</summary>
+    private IReadOnlyList<VisualScanResult>? _lastVisibleCueSurvey;
+
+    /// <inheritdoc cref="IVisibleCueSurveySource.LastVisibleCueSurvey" />
+    IReadOnlyList<VisualScanResult>? IVisibleCueSurveySource.LastVisibleCueSurvey => Volatile.Read(ref _lastVisibleCueSurvey);
 
     private static void ValidateVisualSurveyInterval(double value)
     {

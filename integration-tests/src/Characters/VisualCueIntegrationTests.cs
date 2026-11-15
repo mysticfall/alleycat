@@ -43,10 +43,14 @@ public sealed class VisualCueIntegrationTests
     /// Shared female and male templates author exactly one referenced whole-character cue under Head.
     /// </summary>
     [Fact]
-    public void ReferenceBaseTemplates_AuthorSingleReferencedBodyCueUnderHead()
+    public void ReferenceBaseTemplates_AuthorSingleReferencedFaceCueUnderHead()
     {
-        AssertBaseTemplateCue(ReferenceFemaleBaseScenePath);
-        AssertBaseTemplateCue(ReferenceMaleBaseScenePath);
+        AssertBaseTemplateCue(
+            ReferenceFemaleBaseScenePath,
+            "She looks to be a plain-looking woman in her early 20s.");
+        AssertBaseTemplateCue(
+            ReferenceMaleBaseScenePath,
+            "He looks to be a stern-looking man in her mid 30s.");
     }
 
     /// <summary>
@@ -275,13 +279,14 @@ public sealed class VisualCueIntegrationTests
         }
     }
 
-    private static void AssertBaseTemplateCue(string scenePath)
+    private static void AssertBaseTemplateCue(string scenePath, string expectedDescription)
     {
         CharacterHub character = Assert.IsType<CharacterHub>(LoadPackedScene(scenePath).Instantiate(), exactMatch: false);
         try
         {
             StaticVisualCue cue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
-            Assert.Equal("body", cue.ID);
+            Assert.Equal("face", cue.ID);
+            Assert.Equal(expectedDescription, cue.Description);
             Assert.Equal(1.0f, cue.Prominence);
             Assert.True(character.IsInGroup("VisualSubjects"));
             Assert.Equal("Head", cue.GetParent().Name.ToString());
@@ -306,7 +311,8 @@ public sealed class VisualCueIntegrationTests
             StaticVisualCue descendantCue = Assert.Single(FindDescendants<StaticVisualCue>(character));
             Assert.Same(authoredCue, exposedCue);
             Assert.Same(authoredCue, descendantCue);
-            Assert.Equal("body", authoredCue.ID);
+            Assert.Equal("face", authoredCue.ID);
+            _ = Assert.IsType<SphereVisualBounds>(authoredCue.Bounds, exactMatch: false);
             Assert.Equal(1.0f, authoredCue.Prominence);
             Assert.Equal("Head", authoredCue.GetParent().Name.ToString());
 

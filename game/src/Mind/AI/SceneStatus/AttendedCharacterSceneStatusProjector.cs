@@ -38,9 +38,7 @@ public sealed partial class AttendedCharacterSceneStatusProjector : SceneStatusP
             }
 
             AttendedRelativePositionSceneStatus? relativePosition = null;
-            string? visualDescription = null;
             double? relativePositionObservedAt = null;
-            double? visualDescriptionObservedAt = null;
             foreach (AcceptedObservationEntry entry in context.RetainedLog)
             {
                 if (!entry.IsRetained)
@@ -48,33 +46,29 @@ public sealed partial class AttendedCharacterSceneStatusProjector : SceneStatusP
                     continue;
                 }
 
-                switch (entry.Payload)
+                if (entry.Payload is ObservedRelativePosition position
+                    && string.Equals(position.SubjectId, fullID, StringComparison.Ordinal))
                 {
-                    case ObservedRelativePosition position when string.Equals(position.SubjectId, fullID, StringComparison.Ordinal):
-                        relativePosition = new AttendedRelativePositionSceneStatus(
-                            position.Distance,
-                            position.SubjectDirection,
-                            position.ObserverDirection);
-                        relativePositionObservedAt = entry.ObservedAt;
-                        break;
-                    case ObservedVisualDescription description when string.Equals(description.SubjectId, fullID, StringComparison.Ordinal):
-                        visualDescription = description.Description;
-                        visualDescriptionObservedAt = entry.ObservedAt;
-                        break;
-                    default:
-                        break;
+                    relativePosition = new AttendedRelativePositionSceneStatus(
+                        position.Distance,
+                        position.SubjectDirection,
+                        position.ObserverDirection);
+                    relativePositionObservedAt = entry.ObservedAt;
                 }
             }
+
+            // The character summary comes from authored lore (playtest R1), never the observed visual-cue
+            // description: cue-level detail lives in the gaze cue options, and a missing lore entry renders the
+            // bare identity honestly.
+            _ = context.LoreDescriptions.TryGetValue(fullID, out string? description);
 
             attendedCharacters.Add(
                 new AttendedCharacterSceneStatus(
                     character.FullId,
                     relativePosition,
-                    visualDescription,
+                    description,
                     relativePositionObservedAt,
-                    visualDescriptionObservedAt,
-                    GetAgeSeconds(context.Timestamp, relativePositionObservedAt),
-                    GetAgeSeconds(context.Timestamp, visualDescriptionObservedAt)));
+                    GetAgeSeconds(context.Timestamp, relativePositionObservedAt)));
         }
 
         return new AttendedCharactersSceneStatus(attendedCharacters, context.Timestamp);
@@ -116,20 +110,16 @@ public sealed record AttendedCharacterSceneStatus
     public AttendedCharacterSceneStatus(
         string fullId,
         AttendedRelativePositionSceneStatus? relativePosition,
-        string? visualDescription,
+        string? description,
         double? relativePositionObservedAt,
-        double? visualDescriptionObservedAt,
-        double? relativePositionAgeSeconds,
-        double? visualDescriptionAgeSeconds)
+        double? relativePositionAgeSeconds)
     {
         IdentityValidator.ValidateFullId(fullId, nameof(fullId));
         FullId = fullId;
         RelativePosition = relativePosition;
-        VisualDescription = visualDescription;
+        Description = description;
         RelativePositionObservedAt = relativePositionObservedAt;
-        VisualDescriptionObservedAt = visualDescriptionObservedAt;
         RelativePositionAgeSeconds = relativePositionAgeSeconds;
-        VisualDescriptionAgeSeconds = visualDescriptionAgeSeconds;
     }
 
     /// <summary>Stable exact FullId of the currently attended character.</summary>
@@ -144,8 +134,11 @@ public sealed record AttendedCharacterSceneStatus
         get;
     }
 
-    /// <summary>Current retained visual description, when available.</summary>
-    public string? VisualDescription
+    /// <summary>
+    /// The character's authored lore description, or null when none is available: the summary line then renders
+    /// the bare backticked identity, never fabricated text.
+    /// </summary>
+    public string? Description
     {
         get;
     }
@@ -156,20 +149,8 @@ public sealed record AttendedCharacterSceneStatus
         get;
     }
 
-    /// <summary>Game-time timestamp of <see cref="VisualDescription" /> evidence.</summary>
-    public double? VisualDescriptionObservedAt
-    {
-        get;
-    }
-
     /// <summary>Age at the status snapshot of <see cref="RelativePosition" /> evidence.</summary>
     public double? RelativePositionAgeSeconds
-    {
-        get;
-    }
-
-    /// <summary>Age at the status snapshot of <see cref="VisualDescription" /> evidence.</summary>
-    public double? VisualDescriptionAgeSeconds
     {
         get;
     }

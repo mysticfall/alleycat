@@ -47,7 +47,7 @@ angle = 0.55850536
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
-AuthoredVisualCues = [NodePath("Male/GeneralSkeleton/Head/BodyVisualCue")]
+AuthoredVisualCues = [NodePath("Male/GeneralSkeleton/Head/FaceVisualCue")]
 
 [node name="Male" parent="." index="0" unique_id=1093654452]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
@@ -85,11 +85,11 @@ surface_material_override/0 = ExtResource("3_y0aai")
 transform = Transform3D(0.99813473, 0, 0.06104855, 0, 1, 0, -0.061048537, 0, 0.9981349, 0.029862586, 0.03287351, 0.069146395)
 surface_material_override/0 = ExtResource("3_y0aai")
 
-[node name="BodyVisualCue" type="Node3D" parent="Male/GeneralSkeleton/Head" index="2" unique_id=1094214123]
+[node name="FaceVisualCue" type="Node3D" parent="Male/GeneralSkeleton/Head" index="2" unique_id=1094214123]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
 script = ExtResource("13_e6bn2")
-Description = "A character."
-ID = "body"
+Description = "He looks to be a stern-looking man in her mid 30s."
+ID = "face"
 Bounds = SubResource("Resource_c6lj4")
 metadata/_custom_type_script = "uid://tb33120b0yo"
 

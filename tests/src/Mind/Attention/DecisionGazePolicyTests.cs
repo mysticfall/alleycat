@@ -15,16 +15,20 @@ public sealed class DecisionGazePolicyTests
 {
     private const string Owner = "char:observer";
 
-    /// <summary>One option per subject (never per cue), attention-descending, plus the fixed none option last.</summary>
+    /// <summary>
+    /// One option per cue, character-anchored: subjects attention-descending then cues prominence-descending, each
+    /// criteria documenting its exact return value, with the fixed none option last.
+    /// </summary>
     [Fact]
-    public async Task Evaluate_ComposesSubjectAnchoredOptionsWithAFixedNoneOption()
+    public async Task Evaluate_ComposesCueLevelOptionsWithAFixedNoneOption()
     {
         ScriptedDecisionClient client = new();
         DecisionGazePolicy policy = new(client);
-        List<GazeSubjectCandidate> candidates =
+        List<GazeCueCandidate> candidates =
         [
-            Candidate("char:alpha", attention: 0.42d, cueKind: "face"),
-            Candidate("char:bravo", attention: 0.9d, cueKind: "body"),
+            Candidate("char:alpha", cueKey: "face", attention: 0.42d, prominence: 1d, description: "A kind face."),
+            Candidate("char:bravo", cueKey: "body", attention: 0.9d, prominence: 2d),
+            Candidate("char:bravo", cueKey: "hands", attention: 0.9d, prominence: 3d),
         ];
         _ = await policy.EvaluateAsync(CreateInput(candidates));
 
@@ -32,12 +36,16 @@ public sealed class DecisionGazePolicyTests
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
         Assert.Equal(DecisionGazePolicy.QuestionName, question.Name);
 
-        // Subjects only (never cue IDs), ordered attention descending, with the fixed none option last.
-        Assert.Equal(["char:bravo", "char:alpha", "none"], question.Options.Select(option => option.Value));
+        Assert.Equal(
+            ["char:bravo#hands", "char:bravo#body", "char:alpha#face", "none"],
+            question.Options.Select(option => option.Value));
         Assert.All(question.Options, option => Assert.False(string.IsNullOrWhiteSpace(option.Criteria)));
         Assert.Equal(
-            "`char:bravo`'s face/appearance; attention 0.9; most salient cue: body.",
+            "`char:bravo#hands` — hands: hands (attention 0.9, prominence 3.00)",
             question.Options[0].Criteria);
+        Assert.Equal(
+            "`char:alpha#face` — face: A kind face. (attention 0.42, prominence 1.00)",
+            question.Options[2].Criteria);
     }
 
     /// <summary>Instructions carry the identity and framing sentences; evidence carries own action, current gaze dwell, and recent events.</summary>
@@ -49,7 +57,7 @@ public sealed class DecisionGazePolicyTests
         GazeEvaluationInput input = CreateInput(
             [],
             ownAction: new GazeOwnAction(GazeOwnActionKind.SpeakingTo, ["char:tola"]),
-            currentGazeSubjectFullId: "char:tola",
+            currentGazeCueValue: "char:tola#face",
             currentGazeDwellSeconds: 3.24d,
             recentEvents: ["`char:tola` said: hello"]);
         _ = await policy.EvaluateAsync(input);
@@ -59,15 +67,49 @@ public sealed class DecisionGazePolicyTests
 
         Assert.StartsWith("You are deciding where `char:observer` should look. ", question.Instructions);
         Assert.Contains("You are currently speaking to `char:tola`. ", question.Instructions);
+        Assert.Contains("most likely place `char:observer` would put their eyes right now", question.Instructions);
+        Assert.Contains("Gazes naturally wander", question.Instructions);
+        Assert.Contains("weak situational hints, never a ranking", question.Instructions);
         Assert.Contains("or `none`", question.Instructions);
         Assert.Contains("valid, common choice; do not stare.", question.Instructions);
 
         JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
         Assert.Equal(Owner, evidence.GetProperty("owner").GetString());
         Assert.Equal("speaking_to: `char:tola`", evidence.GetProperty("own_action").GetString());
-        Assert.Equal("char:tola", evidence.GetProperty("current_gaze").GetProperty("subject").GetString());
+        Assert.Equal("char:tola#face", evidence.GetProperty("current_gaze").GetProperty("cue").GetString());
         Assert.Equal(3.2d, evidence.GetProperty("current_gaze").GetProperty("dwell_seconds").GetDouble());
         Assert.Equal("`char:tola` said: hello", evidence.GetProperty("recent_events")[0].GetString());
+        _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("candidates"));
+    }
+
+    /// <summary>
+    /// The evidence roster carries the scene's characters with their lore descriptions — bare identities when
+    /// absent — and a clear current gaze reports the none token with the cue-level form otherwise.
+    /// </summary>
+    [Fact]
+    public async Task Evaluate_ComposesTheSceneCharacterRosterAndCueLevelCurrentGaze()
+    {
+        ScriptedDecisionClient client = new();
+        DecisionGazePolicy policy = new(client);
+        GazeEvaluationInput input = CreateInput(
+            [],
+            sceneCharacters:
+            [
+                new GazeSceneCharacter("char:bravo", "A sturdily built man."),
+                new GazeSceneCharacter("char:delta"),
+            ]);
+        _ = await policy.EvaluateAsync(input);
+
+        JsonElement evidence = Assert.IsType<JsonElement>(Assert.Single(client.Requests).Evidence);
+        JsonElement characters = evidence.GetProperty("characters");
+        Assert.Equal(2, characters.GetArrayLength());
+        Assert.Equal("char:bravo", characters[0].GetProperty("id").GetString());
+        Assert.Equal("A sturdily built man.", characters[0].GetProperty("description").GetString());
+        Assert.Equal("char:delta", characters[1].GetProperty("id").GetString());
+        _ = Assert.Throws<KeyNotFoundException>(() => characters[1].GetProperty("description"));
+        Assert.Equal(
+            DecisionGazePolicy.NoneOptionValue,
+            evidence.GetProperty("current_gaze").GetProperty("cue").GetString());
     }
 
     /// <summary>A trigger-specific context sentence precedes the standing own-action sentence.</summary>
@@ -88,17 +130,17 @@ public sealed class DecisionGazePolicyTests
         Assert.Contains("You are about to speak to `char:tola`. ", question.Instructions);
     }
 
-    /// <summary>A valid chosen subject resolves to a subject decision carrying the provider confidence.</summary>
+    /// <summary>A valid chosen cue value resolves to a cue decision carrying the provider confidence.</summary>
     [Fact]
-    public async Task Evaluate_ValidChosenSubjectResolvesToChooseSubject()
+    public async Task Evaluate_ValidChosenCueValueResolvesToChooseCue()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:alpha");
+        ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
         DecisionGazePolicy policy = new(client);
         GazeEvaluationResult result = await policy.EvaluateAsync(
-            CreateInput([Candidate("char:alpha", attention: 0.5d, cueKind: "body")]));
+            CreateInput([Candidate("char:alpha", cueKey: "body", attention: 0.5d, prominence: 1d)]));
 
-        Assert.Equal(GazeDecisionKind.ChooseSubject, result.Decision.Kind);
-        Assert.Equal("char:alpha", result.Decision.SubjectFullId);
+        Assert.Equal(GazeDecisionKind.ChooseCue, result.Decision.Kind);
+        Assert.Equal("char:alpha#body", result.Decision.CueValue);
         Assert.Null(result.Decision.Failure);
         Assert.Equal(0.9d, result.Confidence);
     }
@@ -110,7 +152,7 @@ public sealed class DecisionGazePolicyTests
         ScriptedDecisionClient client = new(answerValue: DecisionGazePolicy.NoneOptionValue);
         DecisionGazePolicy policy = new(client);
         GazeEvaluationResult result = await policy.EvaluateAsync(
-            CreateInput([Candidate("char:alpha", attention: 0.5d, cueKind: "body")]));
+            CreateInput([Candidate("char:alpha", cueKey: "body", attention: 0.5d, prominence: 1d)]));
 
         Assert.Equal(GazeDecisionKind.None, result.Decision.Kind);
     }
@@ -144,10 +186,10 @@ public sealed class DecisionGazePolicyTests
     [Fact]
     public async Task Evaluate_UnknownChoiceValueIsContainedAsAFailure()
     {
-        ScriptedDecisionClient client = new(answerValue: "char:hallucinated");
+        ScriptedDecisionClient client = new(answerValue: "char:hallucinated#face");
         DecisionGazePolicy policy = new(client);
         GazeEvaluationResult result = await policy.EvaluateAsync(
-            CreateInput([Candidate("char:alpha", attention: 0.5d, cueKind: "body")]));
+            CreateInput([Candidate("char:alpha", cueKey: "body", attention: 0.5d, prominence: 1d)]));
 
         Assert.Equal(GazeDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal("unknown choice value", result.Decision.Failure);
@@ -199,9 +241,12 @@ public sealed class DecisionGazePolicyTests
             () => policy.EvaluateAsync(CreateInput([]), cancellation.Token));
     }
 
-    /// <summary>Composition anchors one candidate per subject and picks the best cue by prominence then cue order.</summary>
+    /// <summary>
+    /// Composition offers every subject's cues — prominence descending, cue order ascending — with subjects
+    /// attention descending then full ID ordinal.
+    /// </summary>
     [Fact]
-    public void Compose_AnchorsPerSubjectAndPicksTheBestCueDeterministically()
+    public void Compose_OffersPerSubjectCuesInDeterministicOrder()
     {
         List<AttentionGazeTargetCandidate<string>> cueCandidates =
         [
@@ -212,36 +257,32 @@ public sealed class DecisionGazePolicyTests
             Cue("char:bravo", cueKey: "body", cueOrder: 0, attention: 0.9d, prominence: 2d),
         ];
 
-        IReadOnlyList<GazeSubjectCandidate> subjects = GazeSubjectCandidates.Compose(cueCandidates);
+        IReadOnlyList<GazeCueCandidate> composed = GazeCueCandidates.Compose(cueCandidates);
 
-        // One option per subject; best cue is prominence descending then cue order ascending; subjects are
-        // attention descending then full ID ordinal.
-        Assert.Equal(["char:bravo", "char:alpha"], subjects.Select(subject => subject.FullId));
-        // Bravo's equal-prominence cues resolve by cue order: body (order 0) beats face (order 1).
-        Assert.Equal("body", subjects[0].BestCueKind);
-        Assert.Equal(2d, subjects[0].BestCueProminence);
-        // Alpha's most prominent cues tie at 3; the lower cue order (face) wins over hands.
-        Assert.Equal("face", subjects[1].BestCueKind);
+        Assert.Equal(
+            ["char:bravo#body", "char:bravo#face", "char:alpha#face", "char:alpha#hands", "char:alpha#body"],
+            composed.Select(candidate => candidate.Value));
     }
 
-    /// <summary>Ineligible cue candidates are skipped and subject entries are deduplicated.</summary>
+    /// <summary>Ineligible cue candidates are skipped, and separator-bearing cue keys are never offered.</summary>
     [Fact]
-    public void Compose_SkipsIneligibleCandidatesAndDeduplicatesSubjects()
+    public void Compose_SkipsIneligibleCandidatesAndSeparatorBearingCueKeys()
     {
         List<AttentionGazeTargetCandidate<string>> cueCandidates =
         [
             Cue("char:alpha", cueKey: "body", cueOrder: 0, attention: 0.4d, prominence: 1d),
             Cue("char:alpha", cueKey: "disabled", cueOrder: 1, attention: 0.4d, prominence: 0d),
+            Cue("char:alpha", cueKey: "am#biguous", cueOrder: 2, attention: 0.4d, prominence: 5d),
             Cue("char:bravo", cueKey: "nan", cueOrder: 0, attention: double.NaN, prominence: 1d),
             Cue("char:bravo", cueKey: "inf", cueOrder: 1, attention: 0.5d, prominence: double.PositiveInfinity),
             Cue("char:invalid", cueKey: "any", cueOrder: 0, attention: 0.5d, prominence: 1d, isValid: false),
         ];
 
-        IReadOnlyList<GazeSubjectCandidate> subjects = GazeSubjectCandidates.Compose(cueCandidates);
+        IReadOnlyList<GazeCueCandidate> composed = GazeCueCandidates.Compose(cueCandidates);
 
-        GazeSubjectCandidate subject = Assert.Single(subjects);
-        Assert.Equal("char:alpha", subject.FullId);
-        Assert.Equal("body", subject.BestCueKind);
+        GazeCueCandidate candidate = Assert.Single(composed);
+        Assert.Equal("char:alpha", candidate.SubjectFullId);
+        Assert.Equal("body", candidate.CueKey);
     }
 
     /// <summary>Attention ties order subjects by full ID ordinal for determinism.</summary>
@@ -254,10 +295,63 @@ public sealed class DecisionGazePolicyTests
             Cue("char:alfa", cueKey: "body", cueOrder: 0, attention: 0.5d, prominence: 1d),
         ];
 
-        IReadOnlyList<GazeSubjectCandidate> subjects = GazeSubjectCandidates.Compose(cueCandidates);
+        IReadOnlyList<GazeCueCandidate> composed = GazeCueCandidates.Compose(cueCandidates);
 
-        Assert.Equal(["char:alfa", "char:zulu"], subjects.Select(subject => subject.FullId));
+        Assert.Equal(["char:alfa", "char:zulu"], composed.Select(candidate => candidate.SubjectFullId));
     }
+
+    /// <summary>Cues per subject cap at three by prominence then cue order, and the total caps at twelve.</summary>
+    [Fact]
+    public void Compose_CapsCuesPerSubjectAndTheTotalCandidateCount()
+    {
+        List<AttentionGazeTargetCandidate<string>> manyCues = [];
+        for (int cueIndex = 0; cueIndex < 6; cueIndex++)
+        {
+            manyCues.Add(Cue("char:solo", cueKey: $"cue{cueIndex}", cueOrder: cueIndex, attention: 1d, prominence: 6d - cueIndex));
+        }
+
+        IReadOnlyList<GazeCueCandidate> cappedPerSubject = GazeCueCandidates.Compose(manyCues);
+        Assert.Equal(["char:solo#cue0", "char:solo#cue1", "char:solo#cue2"], cappedPerSubject.Select(c => c.Value));
+
+        List<AttentionGazeTargetCandidate<string>> manySubjects = [];
+        for (int subjectIndex = 0; subjectIndex < 6; subjectIndex++)
+        {
+            for (int cueIndex = 0; cueIndex < 3; cueIndex++)
+            {
+                manySubjects.Add(Cue(
+                    $"char:s{subjectIndex}",
+                    cueKey: $"cue{cueIndex}",
+                    cueOrder: cueIndex,
+                    attention: 1d - (subjectIndex * 0.01d),
+                    prominence: 3d - cueIndex));
+            }
+        }
+
+        IReadOnlyList<GazeCueCandidate> cappedTotal = GazeCueCandidates.Compose(manySubjects);
+        Assert.Equal(GazeCueCandidates.MaximumCueCandidates, cappedTotal.Count);
+        Assert.Equal("char:s3#cue2", cappedTotal[^1].Value);
+    }
+
+    /// <summary>Cue option values encode subject and cue unambiguously and parse back exactly.</summary>
+    [Theory]
+    [InlineData("char:x#face", "char:x", "face")]
+    [InlineData("char:player#left hand", "char:player", "left hand")]
+    public void CueValueEncoding_RoundTripsUnambiguously(string value, string subject, string cue)
+    {
+        Assert.Equal(value, GazePromptText.EncodeCueValue(subject, cue));
+        Assert.True(GazePromptText.TryParseCueValue(value, out string parsedSubject, out string parsedCue));
+        Assert.Equal(subject, parsedSubject);
+        Assert.Equal(cue, parsedCue);
+    }
+
+    /// <summary>Malformed cue values never parse: no separator, or an empty side.</summary>
+    [Theory]
+    [InlineData("char:x")]
+    [InlineData("#face")]
+    [InlineData("char:x#")]
+    [InlineData("")]
+    public void CueValueEncoding_RejectsMalformedValues(string value)
+        => Assert.False(GazePromptText.TryParseCueValue(value, out _, out _));
 
     /// <summary>The first failure doubles the base interval; consecutive failures double up to the cap.</summary>
     [Fact]
@@ -354,7 +448,7 @@ public sealed class DecisionGazePolicyTests
         Assert.EndsWith("premise", truncated, StringComparison.Ordinal);
     }
 
-    /// <summary>The dispatch dump material carries every offered option's value and criteria.</summary>
+    /// <summary>The dispatch dump material carries every offered cue option's value and criteria.</summary>
     [Fact]
     public async Task Evaluate_CarriesTheOfferedOptionsInTheDispatchMaterial()
     {
@@ -362,43 +456,47 @@ public sealed class DecisionGazePolicyTests
         DecisionGazePolicy policy = new(client);
         GazeEvaluationResult result = await policy.EvaluateAsync(CreateInput(
         [
-            Candidate("char:bravo", attention: 0.9d, cueKind: "body"),
-            Candidate("char:alpha", attention: 0.42d, cueKind: "face"),
+            Candidate("char:bravo", cueKey: "body", attention: 0.9d, prominence: 2d),
+            Candidate("char:alpha", cueKey: "face", attention: 0.42d, prominence: 1d),
         ]));
 
         DecisionPayloadQuestion question = Assert.Single(result.Questions);
         Assert.Equal(
-            ["char:bravo", "char:alpha", "none"],
+            ["char:bravo#body", "char:alpha#face", "none"],
             question.Options!.Select(option => option.Value));
         Assert.Equal(
-            "`char:bravo`'s face/appearance; attention 0.9; most salient cue: body.",
+            "`char:bravo#body` — body: body (attention 0.9, prominence 2.00)",
             question.Options![0].Criteria);
         Assert.All(question.Options!, option => Assert.False(string.IsNullOrWhiteSpace(option.Criteria)));
     }
 
     private static GazeEvaluationInput CreateInput(
-        IReadOnlyList<GazeSubjectCandidate> candidates,
+        IReadOnlyList<GazeCueCandidate> candidates,
         GazeOwnAction? ownAction = null,
-        string? currentGazeSubjectFullId = null,
+        string? currentGazeCueValue = null,
         double currentGazeDwellSeconds = 0d,
         GazeEvaluationTrigger? trigger = null,
         IReadOnlyList<string>? recentEvents = null,
-        string? scenePremise = null)
+        string? scenePremise = null,
+        IReadOnlyList<GazeSceneCharacter>? sceneCharacters = null)
         => new(
             Owner,
             candidates,
             ownAction ?? GazeOwnAction.IdleAction,
-            currentGazeSubjectFullId,
+            currentGazeCueValue,
             currentGazeDwellSeconds,
             trigger ?? GazeEvaluationTrigger.Cadence,
             recentEvents ?? [],
-            scenePremise);
+            scenePremise,
+            sceneCharacters);
 
-    private static GazeSubjectCandidate Candidate(
-        string fullId,
+    private static GazeCueCandidate Candidate(
+        string subjectFullId,
+        string cueKey,
         double attention,
-        string cueKind)
-        => new(fullId, attention, cueKind, BestCueProminence: 2d);
+        double prominence,
+        string? description = null)
+        => new(subjectFullId, cueKey, attention, prominence, description);
 
     private static AttentionGazeTargetCandidate<string> Cue(
         string subjectFullId,

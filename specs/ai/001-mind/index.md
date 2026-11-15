@@ -48,9 +48,9 @@ per-request scene context.
    event-timeline entry, scheduling pressure, attention change, or model message.
 5. Initial policy outcomes are:
    - `ObservedSpeech`: `NeverExpire`, event-eligible.
-   - `ObservedVisualDescription`: equal values suppress; changed values supersede; normally event-ineligible and
-     supplied
-     as current-scene input.
+   - `ObservedVisualDescription`: equal values suppress; changed values supersede; normally event-ineligible; a
+     retained observation record that is not currently rendered into any model-visible surface — attended-character
+     status describes characters through their lore descriptions (AI-006 TR-9).
    - `ObservedRelativePosition`: equal values suppress; changed values retain a finite evidence window adequate for
      hysteresis; normally event-ineligible and supplied as current-scene input.
    - visual presence: attention-only; it creates no retained observation initially.

@@ -629,13 +629,65 @@ public partial class AgenticMind : MindBase
     /// Renders the session-start compiled current-scene-status stack with a fresh typed snapshot. This deliberately
     /// leaves request attachment to the subsequent AgentSessionRunner integration task.
     /// </summary>
-    internal Task<string> RenderCurrentSceneStatusAsync(
+    internal async Task<string> RenderCurrentSceneStatusAsync(
         AgentSession session,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        return session.CurrentSceneStatus.RenderAsync(CreateCurrentSceneStatusBuildContext(), cancellationToken);
+        SceneStatusBuildContext context = CreateCurrentSceneStatusBuildContext();
+        context = await WithAttendedLoreDescriptionsAsync(context, cancellationToken);
+        return await session.CurrentSceneStatus.RenderAsync(context, cancellationToken);
     }
+
+    /// <summary>
+    /// Enriches one scene-status snapshot with the attended characters' authored lore descriptions (playtest R1):
+    /// each resolved asynchronously through the shared cached resolver, with failures leaving that character's
+    /// summary bare — the render never blocks or fails on lore.
+    /// </summary>
+    private static async Task<SceneStatusBuildContext> WithAttendedLoreDescriptionsAsync(
+        SceneStatusBuildContext context,
+        CancellationToken cancellationToken)
+    {
+        if (context.Attention.Values.Count == 0)
+        {
+            return context;
+        }
+
+        ILoreQueryService? queryService;
+        try
+        {
+            queryService = Game.Instance.GetRequiredService<ILoreQueryService>();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogLoreDescriptionResolutionFailure(exception);
+            return context;
+        }
+
+        Dictionary<string, string> descriptions = new(StringComparer.Ordinal);
+        foreach (string fullId in context.Attention.Values.Keys)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string? description = await CharacterLoreDescriptions.ResolveAsync(
+                queryService,
+                context.Character.FullId,
+                context.Scene.Content,
+                fullId,
+                cancellationToken);
+            if (description is not null)
+            {
+                descriptions[fullId] = description;
+            }
+        }
+
+        return descriptions.Count == 0 ? context : context.WithLoreDescriptions(descriptions);
+    }
+
+    private static void LogLoreDescriptionResolutionFailure(Exception exception)
+        => GameLoggerResolver.ResolveRequired<AgenticMind>().LogWarning(
+            exception,
+            "Resolving the lore query service for the attended-character scene status failed; attended-character "
+            + "summaries render without lore descriptions.");
 
     /// <summary>
     /// Composes Mind's synthetic scene-update delivery and fresh scene status into the generic runner
@@ -773,28 +825,30 @@ public partial class AgenticMind : MindBase
                 LogCaptureOmission(logger, VisualContextImageKind.View, view.Failure);
             }
 
-            // The observed-character look-direction descriptor lines (playtest R1) compose on the Godot thread
-            // from the same derivation the tool delivered-results use, so the auto-mode fabricated exchange
-            // presents exactly the content a model-initiated tool call would.
-            IReadOnlyList<string> gazeOrientationLines = VisualContextGaze.NoLines;
+            // The subject's own head-direction line (playtest R5) composes on the Godot thread from the same
+            // derivation the tool delivered-results use, so the auto-mode fabricated exchange presents exactly
+            // the content a model-initiated tool call would. The captured view additionally carries its visible
+            // cues' own descriptions from the vision layer's latest survey snapshot.
+            IReadOnlyList<string> subjectHeadDirectionLines = VisualContextGaze.NoLines;
+            IReadOnlyList<string> visibleCueDescriptionLines = VisualContextGaze.NoLines;
             if (images.Count != 0)
             {
                 await dispatcher.InvokeAsync(
-                    token =>
+                    async token =>
                     {
                         token.ThrowIfCancellationRequested();
                         try
                         {
-                            gazeOrientationLines = VisualContextGaze.ComposeOrientationLines(
+                            subjectHeadDirectionLines = VisualContextGaze.ComposeSubjectHeadDirectionLines(subject);
+                            visibleCueDescriptionLines = await VisibleCueDescriptions.ComposeLinesAsync(
                                 subject,
-                                session.Context.SceneContext);
+                                session.Context.SceneContext,
+                                token);
                         }
                         catch (Exception exception)
                         {
                             LogGazeOrientationOmission(logger, exception);
                         }
-
-                        return ValueTask.CompletedTask;
                     },
                     cancellationToken);
             }
@@ -806,7 +860,8 @@ public partial class AgenticMind : MindBase
                     images,
                     session.ChatClientKind,
                     NextFabricatedVisualCallId,
-                    gazeOrientationLines);
+                    subjectHeadDirectionLines,
+                    visibleCueDescriptionLines);
             _visualContextExchange = exchange;
             Volatile.Write(ref _visualContextExchangeGeneration, generation);
             return exchange;
@@ -823,8 +878,8 @@ public partial class AgenticMind : MindBase
         private void LogGazeOrientationOmission(ILogger logger, Exception exception)
             => logger.LogWarning(
                 exception,
-                "Composing the look-direction descriptor for character '{CharacterId}' failed; the fabricated "
-                    + "visual-context exchange proceeds without it.",
+                "Composing the view descriptors for character '{CharacterId}' failed; the fabricated "
+                    + "visual-context exchange proceeds without them.",
                 session.Context.Character.Id);
 
         /// <summary>

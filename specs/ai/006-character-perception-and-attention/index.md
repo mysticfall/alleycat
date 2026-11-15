@@ -18,9 +18,10 @@ event-eligible observations.
 ## User Requirements
 
 1. NPCs notice eligible speech and visual subjects without routine visual presence becoming memory or event history.
-2. A focused subject's description is available as current scene state. The attended-character projection may retain and
-   render relevant non-expired relative-position evidence, including relative position or distance and its timestamp.
-   Unchanged information does not repeatedly flood the NPC.
+2. Attended-character current-scene status describes each attended character through their lore entry's description —
+   resolving honestly to the bare identity when no description is available — and may render relevant non-expired
+   relative-position evidence, including relative position or distance and its timestamp. Unchanged perceived
+   information does not repeatedly flood the NPC.
 3. Material relative-position changes can support stable focus and hysteresis while stale evidence disappears after its
    evidence window.
 4. Sensing and semantic interpretation do not select gaze or alter eye presentation.
@@ -47,9 +48,10 @@ event-eligible observations.
    recipients from the percept into the semantic addressee set on `ObservedSpeech` (AI-001 TR-13, TR-16), defensively
    deduplicated in declaration order. Unrecognised-speaker speech is always undecided because declared recipients
    cannot be attributed without a recognised character. Its initial AI-001 policy is `NeverExpire` and event-eligible.
-5. A valid focused visual description produces `ObservedVisualDescription`. Its AI-001 policy suppresses equal values
-   and
-   supersedes changed values; it is normally current-scene input and event-ineligible.
+5. A valid focused visual description produces `ObservedVisualDescription`. Its AI-001 policy suppresses equal
+   values and supersedes changed values; it is normally event-ineligible. The observation remains a retained record
+   under its lifetime policy and is not currently rendered into any model-visible surface: attended-character
+   status describes characters through their lore descriptions (TR-9).
 6. `RelativePositionPerception` emits focus-limited `ObservedRelativePosition` evidence only while its subject is active
    and the evidence is non-expired. Its policy suppresses equal values, supersedes changed values, and retains changed
    evidence for a finite window adequate for hysteresis. The [AI-003](../003-prompt-api/index.md) attended-character
@@ -61,8 +63,11 @@ event-eligible observations.
 8. Each accepted observation applies attention and Mind acceptance atomically. AI-001 owns retention, timestamps,
    scheduler metadata, event eligibility, expiry, and persistent timeline append.
 9. Attention remains an immutable snapshot keyed by canonical character ID. It is the source for attended-character
-   scene status, which may retain and render relevant non-expired position or distance evidence and its timestamp.
-   Attention does not itself create event history.
+   scene status, which describes each attended character through their authored lore entry description — the first
+   non-blank `Description` resolved observer-perspectively under AI-004, with an absent description or contained
+   resolution failure rendering the bare backticked identity, never fabricated text — and may retain and render
+   relevant non-expired position or distance evidence and its timestamp. Attention does not itself create event
+   history.
 10. Sensing, faculties, and attention mutation must not call look-target assignment APIs. AI-007 remains the separately
     composed gaze consumer.
 11. Declared recipients are declarations, never a hearing filter: every listener in hearing reach receives the speech
@@ -98,9 +103,10 @@ event-eligible observations.
 ### User Requirements
 
 1. Acceptance shows visual surveys update attention without creating memory or event history.
-2. Acceptance shows a focused subject's unchanged description and position do not repeatedly reach the NPC, while
-   changed description state and relevant retained position or distance evidence with its timestamp may appear in
-   attended-character current-scene status.
+2. Acceptance shows attended-character current-scene status describing each attended character through their lore
+   entry description — with the bare identity when none resolves — alongside relevant retained position or distance
+   evidence with its timestamp, while unchanged perceived descriptions and positions do not repeatedly reach the
+   NPC.
 3. Acceptance shows position evidence is unavailable after expiry or loss of focus and does not become an expiry event.
 4. Acceptance shows sensing leaves gaze and eye presentation unchanged.
 6. Acceptance shows a hearing NPC's addressee conclusion follows the speaker's declared recipients — addressed to it
@@ -114,9 +120,11 @@ event-eligible observations.
 2. Tests verify visual presence is attention-only and has none of the retained-log, timeline, scheduler, or
    rendered-event
    effects.
-3. Tests verify the initial description and relative-position policy outcomes: equal suppression, changed supersession,
-   finite non-expired position evidence, ordinary event ineligibility, attended-character current-scene availability of
-   relevant position or distance evidence and its timestamp.
+3. Tests verify the initial description and relative-position policy outcomes: equal suppression, changed
+   supersession, finite non-expired position evidence, and ordinary event ineligibility, with the observed
+   description not rendered into any model-visible surface; attended-character current-scene status describes
+   characters through their lore entry descriptions with the honest bare-identity fallback and carries relevant
+   position or distance evidence and its timestamp.
 4. Tests verify relative-position evidence is focus-limited and that configuration validation rejects non-finite values.
 5. Tests verify attention snapshots are immutable and no sensing or attention path assigns a look target.
 6. Tests verify declared-recipient interpretation — single and multiple declared recipients resolving to the correct

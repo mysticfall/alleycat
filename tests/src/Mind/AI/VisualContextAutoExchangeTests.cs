@@ -79,12 +79,14 @@ public sealed class VisualContextAutoExchangeTests
     }
 
     /// <summary>
-    /// On a Chat-Completions-kind endpoint each fabricated result is text-only and each image rides exactly one
-    /// adjacent user message carrier — that image's instructional text plus the image part — placed after the
-    /// fabricated exchange (TR-10).
+    /// On a Chat-Completions-kind endpoint each fabricated result stays text-only with its full composed text
+    /// plus the forward-looking delivery notice — inline for the minimap, parenthesised after a blank line for
+    /// the captured view (playtest R7) — and each image rides exactly one adjacent user message carrier after the
+    /// fabricated exchange and before the scene-status message (AI-013 TR-10). The carrier is image-only
+    /// transport — no text part at all (playtest R6): the result is the pointer, the carrier is the delivery.
     /// </summary>
     [Fact]
-    public void Compose_OnAChatCompletionsEndpoint_CarriesEachImageInAnAdjacentUserMessage()
+    public void Compose_OnAChatCompletionsEndpoint_CarriesEachImageInAnImageOnlyUserCarrier()
     {
         VisualContextImage minimap = Minimap();
         VisualContextImage view = View();
@@ -100,10 +102,10 @@ public sealed class VisualContextAutoExchangeTests
         FunctionResultContent[] results = [.. exchange[1].Contents.OfType<FunctionResultContent>()];
         Assert.All(results, static result => Assert.IsType<string>(result.Result));
         Assert.Equal(
-            VisualContextAutoExchange.MinimapInstruction,
+            $"{VisualContextAutoExchange.MinimapInstruction} {VisualContextAutoExchange.ImageDeliveryNotice}",
             Assert.IsType<string>(results[0].Result));
         Assert.Equal(
-            VisualContextAutoExchange.ViewInstruction,
+            $"{VisualContextAutoExchange.ViewInstruction}\n\n({VisualContextAutoExchange.ImageDeliveryNotice})",
             Assert.IsType<string>(results[1].Result));
 
         VisualContextImage[] images = [minimap, view];
@@ -111,9 +113,7 @@ public sealed class VisualContextAutoExchangeTests
         {
             ChatMessage carrier = exchange[2 + index];
             Assert.Equal(ChatRole.User, carrier.Role);
-            Assert.Equal(
-                VisualContextAutoExchange.DescribeInstruction(images[index].Kind),
-                Assert.IsType<TextContent>(Assert.Single(carrier.Contents.OfType<TextContent>())).Text);
+            Assert.Empty(carrier.Contents.OfType<TextContent>());
             Assert.Same(images[index], Assert.Single(carrier.Contents.OfType<VisualContextImage>()));
         }
     }
@@ -164,18 +164,16 @@ public sealed class VisualContextAutoExchangeTests
     }
 
     /// <summary>
-    /// The observed-character look-direction descriptor lines append to every fabricated result's instructional
-    /// text on both endpoint kinds (playtest R1): the normative instruction still leads verbatim, followed by the
-    /// shared line append, in the in-result text, the Chat-Completions tool-result string, and the adjacent
-    /// carrier alike.
+    /// The subject's own head-direction line (playtest R5) appends to the captured view's instructional text
+    /// alone as a trailing inline sentence, in the in-result text and the Chat-Completions tool-result string
+    /// alike; the Chat-Completions carriers are image-only and the minimap's normative text stays verbatim.
     /// </summary>
     [Fact]
-    public void Compose_AppendsTheGazeOrientationLinesToEveryFabricatedInstruction()
+    public void Compose_AppendsTheSubjectHeadDirectionLineToTheViewInstructionOnly()
     {
         string[] lines =
         [
-            "`char:gazer` is looking toward `char:fixture_player`.",
-            "`char:onlooker` is looking to their own left.",
+            "Your head is turned to your right.",
         ];
 
         IReadOnlyList<ChatMessage> responses = VisualContextAutoExchange.Compose(
@@ -183,36 +181,71 @@ public sealed class VisualContextAutoExchangeTests
             OpenAIChatClientKind.Responses,
             () => VisualContextAutoExchange.FormatCallId(1),
             lines);
-        VisualContextImageKind[] kinds = [VisualContextImageKind.Minimap, VisualContextImageKind.View];
         FunctionResultContent[] responsesResults =
             [.. responses[1].Contents.OfType<FunctionResultContent>()];
-        for (int index = 0; index < responsesResults.Length; index++)
-        {
-            AIContent[] parts = Assert.IsType<AIContent[]>(responsesResults[index].Result);
-            string text = Assert.IsType<TextContent>(parts[0]).Text;
-            Assert.StartsWith(
-                VisualContextAutoExchange.DescribeInstruction(kinds[index]),
-                text,
-                StringComparison.Ordinal);
-            Assert.EndsWith(string.Join(" ", lines), text, StringComparison.Ordinal);
-        }
+        AIContent[] minimapParts = Assert.IsType<AIContent[]>(responsesResults[0].Result);
+        Assert.Equal(
+            VisualContextAutoExchange.MinimapInstruction,
+            Assert.IsType<TextContent>(minimapParts[0]).Text);
+        AIContent[] viewParts = Assert.IsType<AIContent[]>(responsesResults[1].Result);
+        string viewText = Assert.IsType<TextContent>(viewParts[0]).Text;
+        Assert.StartsWith(VisualContextAutoExchange.ViewInstruction, viewText, StringComparison.Ordinal);
+        Assert.EndsWith(string.Join(" ", lines), viewText, StringComparison.Ordinal);
 
         IReadOnlyList<ChatMessage> chatCompletions = VisualContextAutoExchange.Compose(
             [Minimap(), View()],
             OpenAIChatClientKind.ChatCompletions,
             () => VisualContextAutoExchange.FormatCallId(1),
             lines);
-        foreach (FunctionResultContent result in chatCompletions[1].Contents.OfType<FunctionResultContent>())
-        {
-            string text = Assert.IsType<string>(result.Result);
-            Assert.EndsWith(string.Join(" ", lines), text, StringComparison.Ordinal);
-        }
+        FunctionResultContent[] chatResults =
+            [.. chatCompletions[1].Contents.OfType<FunctionResultContent>()];
+        Assert.Equal(
+            $"{VisualContextAutoExchange.MinimapInstruction} {VisualContextAutoExchange.ImageDeliveryNotice}",
+            Assert.IsType<string>(chatResults[0].Result));
+        Assert.EndsWith(
+            $"{string.Join(" ", lines)}\n\n({VisualContextAutoExchange.ImageDeliveryNotice})",
+            Assert.IsType<string>(chatResults[1].Result),
+            StringComparison.Ordinal);
+        // The carriers are image-only transport with no text part at all (playtest R6).
+        Assert.All(
+            chatCompletions.Skip(2),
+            carrier =>
+            {
+                Assert.Empty(carrier.Contents.OfType<TextContent>());
+                _ = Assert.Single(carrier.Contents.OfType<VisualContextImage>());
+            });
+    }
 
-        foreach (ChatMessage carrier in chatCompletions.Skip(2))
-        {
-            string text = Assert.IsType<TextContent>(Assert.Single(carrier.Contents.OfType<TextContent>())).Text;
-            Assert.EndsWith(string.Join(" ", lines), text, StringComparison.Ordinal);
-        }
+    /// <summary>
+    /// The visible-cue description lines append to the captured view's instructional text as one labelled list
+    /// block through the shared formatting path; the minimap's normative text stays verbatim.
+    /// </summary>
+    [Fact]
+    public void Compose_AppendsTheVisibleCueListBlockToTheViewInstructionOnly()
+    {
+        string[] lines =
+        [
+            "`char:subject`'s face: She looks to be a plain-looking woman in her early 20s.",
+            "`char:subject`'s hands: Paint-stained fingers.",
+        ];
+
+        IReadOnlyList<ChatMessage> responses = VisualContextAutoExchange.Compose(
+            [Minimap(), View()],
+            OpenAIChatClientKind.Responses,
+            () => VisualContextAutoExchange.FormatCallId(1),
+            subjectHeadDirectionLines: null,
+            visibleCueDescriptionLines: lines);
+        FunctionResultContent[] responsesResults =
+            [.. responses[1].Contents.OfType<FunctionResultContent>()];
+        AIContent[] minimapParts = Assert.IsType<AIContent[]>(responsesResults[0].Result);
+        Assert.Equal(
+            VisualContextAutoExchange.MinimapInstruction,
+            Assert.IsType<TextContent>(minimapParts[0]).Text);
+        AIContent[] viewParts = Assert.IsType<AIContent[]>(responsesResults[1].Result);
+        string viewText = Assert.IsType<TextContent>(viewParts[0]).Text;
+        Assert.StartsWith(VisualContextAutoExchange.ViewInstruction, viewText, StringComparison.Ordinal);
+        Assert.EndsWith(VisibleCueDescriptions.FormatListBlock(lines), viewText, StringComparison.Ordinal);
+        Assert.Contains("\n- ", viewText, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -379,31 +379,31 @@ public sealed class VisualContextIntegrationTests
     }
 
     /// <summary>
-    /// When an observed character holds a look target, the auto-mode fabricated exchange appends the
-    /// look-direction descriptor line to every fabricated result's instructional text (playtest R1): the normative
-    /// instruction still leads verbatim and the appended line matches the tool delivered-results' composition
-    /// exactly — the delivery mode cannot change the presented content.
+    /// When the subject's own head is turned by active gaze, the auto-mode fabricated exchange appends the
+    /// second-person head-direction line to the captured view's instructional text alone (playtest R5): the
+    /// normative view instruction still leads verbatim, the line matches the tool delivered-result's composition
+    /// exactly, and the minimap text stays verbatim.
     /// </summary>
     [Fact]
-    public async Task AutoMode_WhenAnObservedCharacterHoldsALookTarget_AppendsTheDescriptorToTheFabricatedExchange()
+    public async Task AutoMode_WhenTheSubjectsHeadIsTurned_AppendsTheSubjectLineToTheViewTextOnly()
     {
         SceneTree sceneTree = GetSceneTree();
-        CountingVision gazerVision = new();
-        ComponentCharacter gazer = new("gazer", new Vector3(2f, 0f, 1f), gazerVision);
+        CountingVision subjectVision = new();
         SessionFixture fixture = new(
             VisualContextMode.Auto,
-            visionOverride: new CountingVision(),
-            additionalSceneCharacter: gazer);
+            visionOverride: subjectVision);
         try
         {
-            DescriptorCue playerFaceCue = new()
+            DescriptorCue headTurnCue = new()
             {
-                Name = "PlayerFaceCue",
-                ID = "face",
+                Name = "HeadTurnCue",
+                ID = "window",
                 Prominence = 1f,
             };
-            fixture.Player.AddChild(playerFaceCue);
-            gazerVision.LookTarget = playerFaceCue;
+            fixture.Player.AddChild(headTurnCue);
+            // The subject stands at (10, 0, -5) facing -Z: a cue at (+2, 0, -5) lies to their right.
+            headTurnCue.Position = new Vector3(12f, 1.5f, -5f);
+            subjectVision.LookTarget = headTurnCue;
 
             fixture.Provider.EnqueueCall(DummyToolName);
             fixture.EnqueueHoldForever();
@@ -428,14 +428,18 @@ public sealed class VisualContextIntegrationTests
                     candidate => candidate.CallId == call.CallId);
                 AIContent[] parts = Assert.IsType<AIContent[]>(result.Result);
                 string text = Assert.IsType<TextContent>(parts[0]).Text;
-                string instruction = call.Name == MinimapTool.ProductionToolName
-                    ? VisualContextAutoExchange.MinimapInstruction
-                    : VisualContextAutoExchange.ViewInstruction;
-                Assert.StartsWith(instruction, text, StringComparison.Ordinal);
+                if (call.Name == MinimapTool.ProductionToolName)
+                {
+                    Assert.Equal(VisualContextAutoExchange.MinimapInstruction, text);
+                    continue;
+                }
+
+                Assert.StartsWith(VisualContextAutoExchange.ViewInstruction, text, StringComparison.Ordinal);
                 Assert.EndsWith(
-                    "`char:gazer` is looking toward `char:fixture_player`.",
+                    "Your head is turned to your right.",
                     text,
                     StringComparison.Ordinal);
+                Assert.DoesNotContain("looking toward", text, StringComparison.Ordinal);
             }
         }
         finally
@@ -447,8 +451,10 @@ public sealed class VisualContextIntegrationTests
     /// <summary>
     /// On a Chat-Completions-kind endpoint — pinned through the provider's effective kind, the binding the
     /// <c>AI:ChatClientKind</c> configuration drives (AI-002 TR-35–TR-36) — each fabricated result stays
-    /// text-only with its TR-11 instructional text, and each image rides exactly one adjacent user message
-    /// carrier after the fabricated exchange and before the scene-status message (AI-013 TR-10).
+    /// text-only with its composed text, and each image rides exactly one adjacent user message carrier after
+    /// the fabricated exchange and before the scene-status message (AI-013 TR-10). The carrier is transport
+    /// plumbing: its text is the short delivery notice, never a second copy of the result's composed content
+    /// (playtest R5).
     /// </summary>
     [Fact]
     public async Task AutoMode_OnAChatCompletionsEndpoint_RidesEachImageInAnAdjacentUserCarrier()
@@ -491,23 +497,25 @@ public sealed class VisualContextIntegrationTests
                     [.. fabricatedResults.Contents.OfType<FunctionResultContent>()];
                 Assert.Equal(calls.Select(static call => call.CallId), results.Select(static result => result.CallId));
                 Assert.All(results, static result => Assert.IsType<string>(result.Result));
-                Assert.Equal(VisualContextAutoExchange.MinimapInstruction, Assert.IsType<string>(results[0].Result));
-                Assert.Equal(VisualContextAutoExchange.ViewInstruction, Assert.IsType<string>(results[1].Result));
+                Assert.Equal(
+                    $"{VisualContextAutoExchange.MinimapInstruction} {VisualContextAutoExchange.ImageDeliveryNotice}",
+                    Assert.IsType<string>(results[0].Result));
+                Assert.Equal(
+                    $"{VisualContextAutoExchange.ViewInstruction}\n\n({VisualContextAutoExchange.ImageDeliveryNotice})",
+                    Assert.IsType<string>(results[1].Result));
 
-                // One adjacent user carrier per image: that image's instructional text plus the image part
-                // (TR-10/TR-11).
-                (string instruction, VisualContextImageKind kind)[] carriers =
-                    [(VisualContextAutoExchange.MinimapInstruction, VisualContextImageKind.Minimap), (VisualContextAutoExchange.ViewInstruction, VisualContextImageKind.View)];
-                for (int index = 0; index < carriers.Length; index++)
+                // One adjacent user carrier per image: image-only transport with no text part at all — the
+                // result's forward-looking notice is the pointer, the carrier is the delivery (TR-10, R6).
+                VisualContextImageKind[] carrierKinds =
+                    [VisualContextImageKind.Minimap, VisualContextImageKind.View];
+                for (int index = 0; index < carrierKinds.Length; index++)
                 {
                     ChatMessage carrier = messages[messages.Count - 3 + index];
                     Assert.Equal(ChatRole.User, carrier.Role);
-                    Assert.Equal(
-                        carriers[index].instruction,
-                        Assert.IsType<TextContent>(Assert.Single(carrier.Contents.OfType<TextContent>())).Text);
+                    Assert.Empty(carrier.Contents.OfType<TextContent>());
                     VisualContextImage carrierImage = Assert.IsType<VisualContextImage>(
                         Assert.Single(carrier.Contents.OfType<VisualContextImage>()));
-                    Assert.Equal(carriers[index].kind, carrierImage.Kind);
+                    Assert.Equal(carrierKinds[index], carrierImage.Kind);
                 }
 
                 // The images appear nowhere else (TR-8).
@@ -900,7 +908,6 @@ public sealed class VisualContextIntegrationTests
         private readonly AgenticMind? _embeddedMind;
         private readonly DummyTool _dummyTool = new();
         private readonly bool _rendererAvailable;
-        private readonly ICharacter? _additionalSceneCharacter;
         private AgenticMind? _mind;
 
         public SessionFixture(
@@ -909,11 +916,9 @@ public sealed class VisualContextIntegrationTests
             bool useReferenceNpcRig = false,
             IVision? visionOverride = null,
             bool enableTranscriptLogging = false,
-            OpenAIChatClientKind chatClientKind = OpenAIChatClientKind.Responses,
-            ICharacter? additionalSceneCharacter = null)
+            OpenAIChatClientKind chatClientKind = OpenAIChatClientKind.Responses)
         {
             _rendererAvailable = rendererAvailable;
-            _additionalSceneCharacter = additionalSceneCharacter;
             _fixtureRoot = new Node3D { Name = $"VisualContext-{mode}-{Guid.NewGuid():N}" };
             Player = new FixturePlayerCharacter();
             _fixtureRoot.AddChild(Player);
@@ -1040,10 +1045,7 @@ public sealed class VisualContextIntegrationTests
                 mind.SetMiniMapRendererLoaderForTesting(() => null);
             }
 
-            mind.SetSceneContextLoaderForTesting(
-                () => _additionalSceneCharacter is { } additional
-                    ? new SceneContext([_owner, Player, additional])
-                    : new SceneContext([_owner, Player]));
+            mind.SetSceneContextLoaderForTesting(() => new SceneContext([_owner, Player]));
 
             // The fixture world — the subject host with its marker and the player — enters first and settles;
             // the mind then joins the already-entered tree (the reference rig's own mind rejoins its character),

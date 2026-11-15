@@ -50,7 +50,7 @@ radius = 0.1
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
-AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/FaceVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=204349547]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
@@ -88,11 +88,11 @@ surface_material_override/0 = ExtResource("3_wibk3")
 transform = Transform3D(0.99813527, 1.3423778e-17, 0.06104853, 0, 1.0000002, 0, -0.06104857, -2.842171e-14, 0.9981346, 0.02754473, 0.033190966, 0.071679935)
 surface_material_override/0 = ExtResource("3_wibk3")
 
-[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head" index="2" unique_id=1755026393]
+[node name="FaceVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head" index="2" unique_id=1755026393]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
 script = ExtResource("3_oqvej")
-Description = "A character."
-ID = "body"
+Description = "She looks to be a plain-looking woman in her early 20s."
+ID = "face"
 Bounds = SubResource("Resource_42fxf")
 metadata/_custom_type_script = "uid://tb33120b0yo"
 

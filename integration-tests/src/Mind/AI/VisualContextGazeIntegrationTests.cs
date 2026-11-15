@@ -1,6 +1,5 @@
 using AlleyCat.Character;
 using AlleyCat.Core;
-using AlleyCat.Core.Content;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
 using AlleyCat.Scene;
@@ -13,139 +12,106 @@ using Xunit;
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
-/// Godot-runtime coverage for the observed-character look-direction descriptor of the AI-013 visual-context
-/// presentation (playtest R1): a character-owned look target composes a looking-toward line, a non-character
-/// target composes a directional line against the subject's body facing, no readable target composes nothing, and
-/// the observer itself is never described.
+/// Godot-runtime coverage for the subject's own head-direction line of the vision-capture presentation (playtest
+/// R5): the line states the direction of the subject's active-gaze head turn relative to their body facing, in
+/// second person, per bearing bucket; an untilled head — no look target, or one within the front cone — composes
+/// nothing, and no line ever names or describes another character.
 /// </summary>
 [Headless]
 public sealed class VisualContextGazeIntegrationTests
 {
-    /// <summary>A look target owned by a character composes the character-anchored line.</summary>
+    /// <summary>A look target to the subject's right turns the head right.</summary>
     [Fact]
-    public async Task CharacterOwnedTarget_ComposesTheLookingTowardLine()
+    public async Task HeadTurnToTheRight_ComposesTheSecondPersonRightLine()
     {
         await using GazeFixture fixture = new();
-        GazeSubjectCharacter observer = fixture.AddObserver("observer");
         GazeSubjectCharacter subject = fixture.AddSubject("x");
-        GazeSubjectCharacter player = fixture.AddSubject("player");
-        VisualCue cue = GazeFixture.AddCue(player, "face", new Vector3(0f, 0f, -2f));
+        VisualCue cue = fixture.AddStandaloneCue("window", new Vector3(2f, 1.5f, 0f));
         subject.Vision.LookTarget = cue;
 
-        IReadOnlyList<string> lines = VisualContextGaze.ComposeOrientationLines(observer, fixture.Scene);
-
-        Assert.Equal(["`char:x` is looking toward `char:player`."], lines);
         Assert.Equal(
-            "Minimap delivered: minimap image. `char:x` is looking toward `char:player`.",
-            VisualContextGaze.AppendOrientationLines("Minimap delivered: minimap image.", observer, fixture.Scene));
+            ["Your head is turned to your right."],
+            VisualContextGaze.ComposeSubjectHeadDirectionLines(subject));
+        Assert.Equal(
+            "View delivered: view capture. Your head is turned to your right.",
+            VisualContextGaze.AppendSubjectHeadDirection("View delivered: view capture.", subject));
     }
 
-    /// <summary>A look target owned by no character composes a directional line against the subject's body facing.</summary>
+    /// <summary>A look target to the subject's left turns the head left.</summary>
     [Fact]
-    public async Task NonCharacterTargetToTheLeft_ComposesTheDirectionalLine()
+    public async Task HeadTurnToTheLeft_ComposesTheSecondPersonLeftLine()
     {
         await using GazeFixture fixture = new();
-        GazeSubjectCharacter observer = fixture.AddObserver("observer");
         GazeSubjectCharacter subject = fixture.AddSubject("x");
-        // The subject faces -Z at the origin, so a cue at -X lies to the subject's left.
-        VisualCue cue = fixture.AddStandaloneCue("poster", new Vector3(-2f, 1.5f, 0f));
+        VisualCue cue = fixture.AddStandaloneCue("window", new Vector3(-2f, 1.5f, 0f));
         subject.Vision.LookTarget = cue;
 
-        IReadOnlyList<string> lines = VisualContextGaze.ComposeOrientationLines(observer, fixture.Scene);
-
-        Assert.Equal(["`char:x` is looking to their own left."], lines);
+        Assert.Equal(
+            ["Your head is turned to your left."],
+            VisualContextGaze.ComposeSubjectHeadDirectionLines(subject));
     }
 
-    /// <summary>A non-character target within the front cone composes the honest straight-ahead line.</summary>
+    /// <summary>A look target behind the subject composes the over-shoulder line, sided by the turn direction.</summary>
     [Fact]
-    public async Task NonCharacterTargetAhead_ComposesTheStraightAheadLine()
+    public async Task HeadTurnBehind_ComposesTheSidedOverShoulderLines()
     {
         await using GazeFixture fixture = new();
-        GazeSubjectCharacter observer = fixture.AddObserver("observer");
+        GazeSubjectCharacter rightShoulder = fixture.AddSubject("r");
+        VisualCue rightCue = fixture.AddStandaloneCue("door", new Vector3(1f, 1.5f, 1.2f));
+        rightShoulder.Vision.LookTarget = rightCue;
+
+        GazeSubjectCharacter leftShoulder = fixture.AddSubject("l");
+        VisualCue leftCue = fixture.AddStandaloneCue("poster", new Vector3(-1f, 1.5f, 1.2f));
+        leftShoulder.Vision.LookTarget = leftCue;
+
+        Assert.Equal(
+            ["Your head is turned back over your right shoulder."],
+            VisualContextGaze.ComposeSubjectHeadDirectionLines(rightShoulder));
+        Assert.Equal(
+            ["Your head is turned back over your left shoulder."],
+            VisualContextGaze.ComposeSubjectHeadDirectionLines(leftShoulder));
+    }
+
+    /// <summary>A look target within the front cone aligns head and body facing: no line, honestly.</summary>
+    [Fact]
+    public async Task HeadTurnWithinTheFrontCone_ComposesNothing()
+    {
+        await using GazeFixture fixture = new();
         GazeSubjectCharacter subject = fixture.AddSubject("x");
         VisualCue cue = fixture.AddStandaloneCue("poster", new Vector3(0.5f, 1.5f, -3f));
         subject.Vision.LookTarget = cue;
 
-        IReadOnlyList<string> lines = VisualContextGaze.ComposeOrientationLines(observer, fixture.Scene);
-
-        Assert.Equal(["`char:x` is looking straight ahead."], lines);
-    }
-
-    /// <summary>No look target composes nothing, and the delivered message is returned unchanged.</summary>
-    [Fact]
-    public async Task WithoutALookTarget_ComposesNoLinesAndReturnsTheMessageUnchanged()
-    {
-        await using GazeFixture fixture = new();
-        GazeSubjectCharacter observer = fixture.AddObserver("observer");
-        _ = fixture.AddSubject("x");
-
-        Assert.Empty(VisualContextGaze.ComposeOrientationLines(observer, fixture.Scene));
+        Assert.Empty(VisualContextGaze.ComposeSubjectHeadDirectionLines(subject));
         Assert.Equal(
             "View delivered: view capture.",
-            VisualContextGaze.AppendOrientationLines("View delivered: view capture.", observer, fixture.Scene));
+            VisualContextGaze.AppendSubjectHeadDirection("View delivered: view capture.", subject));
     }
 
-    /// <summary>The observer's own gaze is never described, even while it holds a look target.</summary>
+    /// <summary>No look target means no head turn: no line, and the delivered message is unchanged.</summary>
     [Fact]
-    public async Task ObserverOwnGaze_IsNeverDescribed()
+    public async Task WithoutALookTarget_ComposesNoLineAndReturnsTheMessageUnchanged()
     {
         await using GazeFixture fixture = new();
-        GazeSubjectCharacter observer = fixture.AddObserver("observer");
         GazeSubjectCharacter subject = fixture.AddSubject("x");
-        VisualCue cue = GazeFixture.AddCue(subject, "face", new Vector3(0f, 0f, 2f));
-        observer.Vision.LookTarget = cue;
 
-        IReadOnlyList<string> lines = VisualContextGaze.ComposeOrientationLines(observer, fixture.Scene);
-
-        Assert.Empty(lines);
-    }
-
-    /// <summary>Subjects without a readable look target are skipped while others still compose their line.</summary>
-    [Fact]
-    public async Task MixedSubjects_ComposeOnlyTheReadableOnesInFullIdOrder()
-    {
-        await using GazeFixture fixture = new();
-        GazeSubjectCharacter observer = fixture.AddObserver("observer");
-        GazeSubjectCharacter silent = fixture.AddSubject("a");
-        GazeSubjectCharacter bravo = fixture.AddSubject("b");
-        GazeSubjectCharacter alpha = fixture.AddSubject("c");
-        VisualCue bravoTarget = fixture.AddStandaloneCue("window", new Vector3(2f, 1.5f, 0f));
-        bravo.Vision.LookTarget = bravoTarget;
-        VisualCue alphaTarget = fixture.AddStandaloneCue("door", new Vector3(0f, 1.5f, 2f));
-        alpha.Vision.LookTarget = alphaTarget;
-        silent.Vision.LookTarget = null;
-
-        IReadOnlyList<string> lines = VisualContextGaze.ComposeOrientationLines(observer, fixture.Scene);
-
+        Assert.Empty(VisualContextGaze.ComposeSubjectHeadDirectionLines(subject));
         Assert.Equal(
-        [
-            "`char:b` is looking to their own right.",
-            "`char:c` is looking back over their own shoulder.",
-        ],
-        lines);
+            "View delivered: view capture.",
+            VisualContextGaze.AppendSubjectHeadDirection("View delivered: view capture.", subject));
     }
 
     /// <summary>
-    /// Minimal in-tree fixture: an observer and gaze-subject characters with controllable vision look targets,
-    /// plus authored cues that may or may not be owned by a character.
+    /// Minimal in-tree fixture: node-backed subject characters with controllable vision look targets and authored
+    /// standalone cues positioned in world space.
     /// </summary>
     private sealed class GazeFixture : IAsyncDisposable
     {
         private readonly Node3D _root = new() { Name = $"VisualContextGaze-{Guid.NewGuid():N}" };
-        private readonly List<ICharacter> _characters = [];
 
         public GazeFixture()
         {
             SceneTree sceneTree = TestUtils.GetSceneTree();
             (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(_root);
-        }
-
-        public GazeSceneContext Scene { get; private set; } = new([]);
-
-        public GazeSubjectCharacter AddObserver(string id)
-        {
-            GazeSubjectCharacter observer = AddSubject(id);
-            return observer;
         }
 
         public GazeSubjectCharacter AddSubject(string id)
@@ -156,23 +122,7 @@ public sealed class VisualContextGazeIntegrationTests
                 Name = $"Subject-{id}",
             };
             _root.AddChild(character);
-            _characters.Add(character);
-            Scene = new GazeSceneContext([.. _characters]);
             return character;
-        }
-
-        /// <summary>Adds a cue owned by a character subject, positioned relative to its owner.</summary>
-        public static VisualCue AddCue(GazeSubjectCharacter owner, string cueId, Vector3 position)
-        {
-            TestVisualCue cue = new()
-            {
-                Name = $"Cue-{cueId}",
-                ID = cueId,
-                Prominence = 1f,
-                Position = owner.Position + position,
-            };
-            owner.AddChild(cue);
-            return cue;
         }
 
         /// <summary>Adds a cue owned by no character — a plain prop — positioned in world space.</summary>
@@ -195,20 +145,6 @@ public sealed class VisualContextGazeIntegrationTests
             SceneTree sceneTree = TestUtils.GetSceneTree();
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
         }
-    }
-
-    private sealed record GazeSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
-    {
-        public ICharacter Player => throw new InvalidOperationException(
-            "Scene context contains no player character. Scene authoring guarantees the player is present.");
-
-        public ContentContext Content => ContentContext.Default;
-
-        public IIdentifiable? Find(string fullId)
-            => Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
-
-        public IIdentifiable Resolve(string fullId)
-            => Find(fullId) ?? throw new InvalidOperationException($"No test scene entry exists for '{fullId}'.");
     }
 
     /// <summary>Node-backed character exposing a controllable vision component so it can hold a look target.</summary>

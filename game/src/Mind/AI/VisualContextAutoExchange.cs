@@ -16,9 +16,12 @@ namespace AlleyCat.Mind.AI;
 /// The transport follows the session's effective chat client kind (AI-013 TR-10): on Responses-capable endpoints
 /// each fabricated tool result carries its image in-result — result content of the TR-11 instructional text for
 /// its kind plus the image part — so the image rides inside the function-call output; on Chat Completions and
-/// compatible backends each fabricated result is text-only and each image rides one adjacent user message carrier
-/// holding that image's instructional text plus the image parts, placed after the fabricated exchange and before
-/// the current-scene message.
+/// compatible backends each fabricated result is text-only and ends with the pinned forward notice
+/// (<see cref="ImageDeliveryNotice"/>), and each image rides one adjacent user-message carrier that is image-only
+/// — exactly one image part and no text part — placed after the fabricated exchange and before the
+/// current-scene message. The result is the pointer and the carrier is the delivery; the content composition of a
+/// delivered text is identical across modes and endpoint paths, with the one-sentence delivery notice as the only
+/// authorised per-endpoint difference.
 /// </para>
 /// <para>
 /// Fabricated call IDs use a distinct sub-namespace of the synthetic call-ID namespace (AI-002 TR-18), so they can
@@ -68,6 +71,27 @@ internal static class VisualContextAutoExchange
         };
 
     /// <summary>
+    /// The normative forward-looking delivery notice appended to every Chat-Completions fabricated tool result
+    /// (playtest R6): the tool result points forward to the adjacent image-only user message, which itself
+    /// carries no text — the result is the pointer, the carrier is the delivery. The sentence is byte-pinned once
+    /// here; the per-kind renderings derive from it — minimap joins it inline with a single space, the captured
+    /// view renders it parenthesised after a blank line (playtest R7).
+    /// </summary>
+    internal const string ImageDeliveryNotice =
+        "The captured image follows as a separate user message.";
+
+    /// <summary>Renders the delivery notice joined inline with a single space (minimap result).</summary>
+    private static string RenderInlineDeliveryNotice(string composition)
+        => $"{composition} {ImageDeliveryNotice}";
+
+    /// <summary>
+    /// Renders the delivery notice parenthesised after a blank line (captured-view result, playtest R7) —
+    /// separated from the composition's prose and its visible-details list alike.
+    /// </summary>
+    private static string RenderParenthesisedDeliveryNotice(string composition)
+        => $"{composition}\n\n({ImageDeliveryNotice})";
+
+    /// <summary>
     /// Composes the fabricated visual-context exchange from the materialisation's successful captures (AI-013
     /// TR-8/TR-10): one assistant message carrying a zero-argument function call per capture using its real tool
     /// name, one tool-result message carrying the corresponding results, and — on Chat Completions only — one
@@ -75,16 +99,24 @@ internal static class VisualContextAutoExchange
     /// exactly once per capture, in capture order.
     /// </summary>
     /// <remarks>
-    /// <paramref name="gazeOrientationLines" /> carries the observed-character look-direction descriptor lines
-    /// composed from the same derivation the tool delivered-results use; they are appended to every fabricated
-    /// result's instructional text through the shared append helper, so the delivery mode can never drift the
-    /// presented content. Absent lines leave the normative instructional texts verbatim.
+    /// <paramref name="subjectHeadDirectionLines" /> carries the subject's own head-direction line and
+    /// <paramref name="visibleCueDescriptionLines" /> the visible cues' own descriptions, both composed from the
+    /// same derivations the tool delivered-results use. Both append to the captured view's instructional text
+    /// alone (playtest R4: the minimap carries neither), through the shared formatting paths, so the delivery
+    /// mode can never drift the presented content. The Responses path carries each image in-result with its
+    /// composition and no notice; the Chat-Completions path carries the composition plus the
+    /// <see cref="ImageDeliveryNotice" /> in each text-only tool result — inline for the minimap, parenthesised
+    /// after a blank line for the captured view (playtest R7) — and each adjacent carrier is image-only transport
+    /// with no text part. One notice sentence in the Chat-Completions results versus the Responses results, and
+    /// the two kinds' differing notice renderings, are deliberate, user-authorised per-transport deviations,
+    /// pinned here so the spec can record them precisely.
     /// </remarks>
     internal static IReadOnlyList<ChatMessage> Compose(
         IReadOnlyList<VisualContextImage> images,
         OpenAIChatClientKind chatClientKind,
         Func<string> nextCallId,
-        IReadOnlyList<string>? gazeOrientationLines = null)
+        IReadOnlyList<string>? subjectHeadDirectionLines = null,
+        IReadOnlyList<string>? visibleCueDescriptionLines = null)
     {
         ArgumentNullException.ThrowIfNull(images);
         ArgumentNullException.ThrowIfNull(nextCallId);
@@ -93,7 +125,8 @@ internal static class VisualContextAutoExchange
             throw new ArgumentException("At least one successful capture is required.", nameof(images));
         }
 
-        IReadOnlyList<string> orientationLines = gazeOrientationLines ?? VisualContextGaze.NoLines;
+        IReadOnlyList<string> headDirectionLines = subjectHeadDirectionLines ?? VisualContextGaze.NoLines;
+        IReadOnlyList<string> cueDescriptionLines = visibleCueDescriptionLines ?? VisualContextGaze.NoLines;
         List<FunctionCallContent> calls = [];
         List<FunctionResultContent> results = [];
         List<ChatMessage>? carriers = null;
@@ -101,9 +134,13 @@ internal static class VisualContextAutoExchange
         {
             string callId = nextCallId();
             calls.Add(new FunctionCallContent(callId, DescribeToolName(image.Kind), _emptyArguments));
-            string instruction = VisualContextGaze.AppendOrientationLines(
-                DescribeInstruction(image.Kind),
-                orientationLines);
+            string instruction = DescribeInstruction(image.Kind);
+            if (image.Kind == VisualContextImageKind.View)
+            {
+                instruction = VisualContextGaze.AppendDescriptorLines(instruction, headDirectionLines)
+                    + VisibleCueDescriptions.FormatListBlock(cueDescriptionLines);
+            }
+
             if (chatClientKind == OpenAIChatClientKind.Responses)
             {
                 // The image rides inside the fabricated function-call output: result content of the instructional
@@ -112,12 +149,19 @@ internal static class VisualContextAutoExchange
             }
             else
             {
-                // The Chat Completions tool-result channel is text-only, so the result carries the instructional
-                // text and each image rides its own adjacent user message carrier after the exchange (AI-013
-                // TR-10).
-                results.Add(new FunctionResultContent(callId, instruction));
+                // The Chat Completions tool-result channel is text-only, so the result carries the full composed
+                // text plus the forward-looking delivery notice, and each image rides its own adjacent user
+                // message carrier after the exchange (AI-013 TR-10). The carrier is image-only transport — no
+                // text part — because the result is the pointer and the carrier is the delivery (playtest R6).
+                // The notice renders per kind (playtest R7): inline for the minimap, parenthesised after a blank
+                // line for the captured view.
+                results.Add(new FunctionResultContent(
+                    callId,
+                    image.Kind == VisualContextImageKind.View
+                        ? RenderParenthesisedDeliveryNotice(instruction)
+                        : RenderInlineDeliveryNotice(instruction)));
                 (carriers ??= [])
-                    .Add(new ChatMessage(ChatRole.User, [new TextContent(instruction), image]));
+                    .Add(new ChatMessage(ChatRole.User, [image]));
             }
         }
 

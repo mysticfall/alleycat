@@ -60,28 +60,42 @@ public sealed partial class CaptureViewTool : AgentTool
             cancellationToken);
         return outcome.Image is { } image
             ? new AgentToolResult(
-                ComposeDeliveredMessage("View delivered", image, context),
+                await ComposeDeliveredMessageAsync("View delivered", image, context, cancellationToken),
                 image: image)
             : ComposeFailedResult(outcome.Failure);
     }
 
     /// <summary>
     /// Composes the delivered-capture message: the factual capture record plus the observed-character
-    /// look-direction descriptor lines, whose derivation is fully contained — a descriptor failure never
+    /// look-direction descriptors inline and the visible cues' descriptions as one labelled list — the captured
+    /// frame resumes on the Godot thread, and every descriptor derivation is fully contained: a failure never
     /// degrades the delivered image result.
     /// </summary>
-    private string ComposeDeliveredMessage(string prefix, VisualContextImage image, ScenarioContext context)
+    private async Task<string> ComposeDeliveredMessageAsync(
+        string prefix,
+        VisualContextImage image,
+        ScenarioContext context,
+        CancellationToken cancellationToken)
     {
         string message = $"{prefix}: {image.DescribeCapture()}.";
         try
         {
-            return VisualContextGaze.AppendOrientationLines(message, context.Character, context.SceneContext);
+            message = VisualContextGaze.AppendSubjectHeadDirection(message, context.Character);
+            return await VisibleCueDescriptions.AppendToMessageAsync(
+                message,
+                context.Character,
+                context.SceneContext,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
             _logger?.LogWarning(
                 exception,
-                "Composing the look-direction descriptor for subject '{SubjectId}' failed; the delivered capture result is unaffected.",
+                "Composing the view descriptors for subject '{SubjectId}' failed; the delivered capture result is unaffected.",
                 context.Character.FullId);
             return message;
         }

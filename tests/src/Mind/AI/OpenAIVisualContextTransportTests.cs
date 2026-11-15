@@ -182,10 +182,11 @@ public sealed class OpenAIVisualContextTransportTests
 
     /// <summary>
     /// The fabricated auto-mode exchange on a Chat-Completions-kind endpoint — here the resource property itself
-    /// through an unset configuration key (AI-002 TR-36) — keeps every tool result text-only and rides each image
-    /// in its own adjacent user carrier (AI-013 TR-10): the request carries the fabricated assistant tool calls,
-    /// text-only tool messages carrying the TR-11 instructional texts, then one user message per image pairing
-    /// that image's instructional text with its image part, before the scene-status message.
+    /// through an unset configuration key (AI-002 TR-36) — keeps every tool result text-only, each carrying its
+    /// composed text plus the forward-looking image-delivery notice, and rides each image in its own adjacent
+    /// image-only user carrier (AI-013 TR-10; playtest R6): the request carries the fabricated assistant tool
+    /// calls, text-only tool messages, then one text-free user message per image carrying only its image part,
+    /// before the scene-status message.
     /// </summary>
     [Fact]
     public async Task SessionChatCompletions_FabricatedAutoExchange_CarriesItsImagesInAdjacentUserCarriers()
@@ -239,23 +240,27 @@ public sealed class OpenAIVisualContextTransportTests
         Assert.Equal(
             ["runtime-visual-context-3", "runtime-visual-context-4"],
             fabricatedCalls.Select(static call => call.GetProperty("id").GetString()));
-        // The fabricated tool results stay the textual channel: each carries only its TR-11 instructional text.
+        // The fabricated tool results stay the textual channel: the minimap carries its composed text plus the
+        // notice joined inline; the captured view carries its composition plus the notice parenthesised after a
+        // blank line (playtest R7).
         Assert.Equal("runtime-visual-context-3", messages[6].GetProperty("tool_call_id").GetString());
-        Assert.Equal(VisualContextAutoExchange.MinimapInstruction, messages[6].GetProperty("content").GetString());
+        Assert.Equal(
+            $"{VisualContextAutoExchange.MinimapInstruction} {VisualContextAutoExchange.ImageDeliveryNotice}",
+            messages[6].GetProperty("content").GetString());
         Assert.Equal("runtime-visual-context-4", messages[7].GetProperty("tool_call_id").GetString());
-        Assert.Equal(VisualContextAutoExchange.ViewInstruction, messages[7].GetProperty("content").GetString());
-        // Each image rides exactly one adjacent user carrier: its instructional text plus its image part, placed
-        // after the fabricated exchange and before the scene-status message (AI-013 TR-10).
+        Assert.Equal(
+            $"{VisualContextAutoExchange.ViewInstruction}\n\n({VisualContextAutoExchange.ImageDeliveryNotice})",
+            messages[7].GetProperty("content").GetString());
+        // Each image rides exactly one adjacent user carrier carrying only its image part — no text part at all —
+        // placed after the fabricated exchange and before the scene-status message (AI-013 TR-10; playtest R6).
         JsonElement[] minimapCarrierParts = [.. messages[8].GetProperty("content").EnumerateArray()];
-        Assert.Equal("text", minimapCarrierParts[0].GetProperty("type").GetString());
-        Assert.Equal(VisualContextAutoExchange.MinimapInstruction, minimapCarrierParts[0].GetProperty("text").GetString());
-        Assert.Equal("image_url", minimapCarrierParts[1].GetProperty("type").GetString());
-        AssertDataUri(minimapCarrierParts[1].GetProperty("image_url").GetProperty("url").GetString(), "image/png", _imageBytes);
+        _ = Assert.Single(minimapCarrierParts);
+        Assert.Equal("image_url", minimapCarrierParts[0].GetProperty("type").GetString());
+        AssertDataUri(minimapCarrierParts[0].GetProperty("image_url").GetProperty("url").GetString(), "image/png", _imageBytes);
         JsonElement[] viewCarrierParts = [.. messages[9].GetProperty("content").EnumerateArray()];
-        Assert.Equal("text", viewCarrierParts[0].GetProperty("type").GetString());
-        Assert.Equal(VisualContextAutoExchange.ViewInstruction, viewCarrierParts[0].GetProperty("text").GetString());
-        Assert.Equal("image_url", viewCarrierParts[1].GetProperty("type").GetString());
-        AssertDataUri(viewCarrierParts[1].GetProperty("image_url").GetProperty("url").GetString(), "image/jpeg", _viewBytes);
+        _ = Assert.Single(viewCarrierParts);
+        Assert.Equal("image_url", viewCarrierParts[0].GetProperty("type").GetString());
+        AssertDataUri(viewCarrierParts[0].GetProperty("image_url").GetProperty("url").GetString(), "image/jpeg", _viewBytes);
         Assert.Equal("scene:1", messages[10].GetProperty("content").GetString());
     }
 

@@ -159,8 +159,66 @@ public sealed class CurrentSceneStatusIntegrationTests
             Assert.Contains("Current game time: 50.0s", rendered, StringComparison.Ordinal);
             Assert.Contains("- `char:attended`", rendered, StringComparison.Ordinal);
             Assert.Contains("observed at 42", rendered, StringComparison.Ordinal);
-            Assert.Contains("described at 43", rendered, StringComparison.Ordinal);
-            Assert.Contains("A yellow coat.", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("A yellow coat.", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("described at", rendered, StringComparison.Ordinal);
+        }
+        finally
+        {
+            mind.Free();
+        }
+    }
+
+    /// <summary>
+    /// Attended characters summarise from their authored lore descriptions (playtest R1): a resolved description
+    /// renders after the identity, a missing one renders the bare identity, and observed visual-cue descriptions
+    /// never reach the section.
+    /// </summary>
+    [Fact]
+    public async Task CompiledCurrentSceneStatus_SummarisesAttendedCharactersFromLoreDescriptions()
+    {
+        FakeCharacter owner = new("owner");
+        FakeCharacter attended = new("attended");
+        FakeCharacter undescribed = new("undescribed");
+        TestAgenticMind mind = new(owner);
+        mind.AddChild(new AttendedCharacterSceneStatusProjector
+        {
+            ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
+        });
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())
+            .BuildServiceProvider();
+        PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(CurrentScenePromptPath), exactMatch: false);
+        FakeScene scene = new([owner, attended, undescribed]);
+        PromptSectionBuildContext promptContext = new(services, scene, owner);
+
+        try
+        {
+            var projectors = SceneStatusProjectorRegistry.Discover(mind);
+            CompiledSceneStatusPrompt compiled = await stack.CompileSceneStatusAsync(promptContext, projectors);
+            SceneStatusBuildContext statusContext = new(
+                owner,
+                scene,
+                new AttentionSnapshot(50d, new Dictionary<string, float>(StringComparer.Ordinal)
+                {
+                    [attended.FullId] = 0.5f,
+                    [undescribed.FullId] = 0.4f,
+                }),
+                [],
+                [],
+                timestamp: 50d,
+                loreDescriptions: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [attended.FullId] = "A sturdily built man in his late twenties.",
+                });
+
+            string rendered = await compiled.RenderAsync(statusContext);
+
+            Assert.Contains(
+                "- `char:attended`: A sturdily built man in his late twenties.",
+                rendered,
+                StringComparison.Ordinal);
+            Assert.Contains("- `char:undescribed`", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("char:undescribed`:", rendered, StringComparison.Ordinal);
         }
         finally
         {
@@ -237,7 +295,7 @@ public sealed class CurrentSceneStatusIntegrationTests
 
     /// <summary>Projects current fresh-scene attention and excludes evidence removed by retention expiry.</summary>
     [Fact]
-    public void AttendedCharacterProjector_UsesFreshSceneAttentionAndNonExpiredRetainedEvidenceOnly()
+    public void AttendedCharacterProjector_UsesFreshSceneAttentionAndLoreDescriptions()
     {
         FakeCharacter owner = new("owner");
         FakeCharacter attended = new("attended");
@@ -280,7 +338,11 @@ public sealed class CurrentSceneStatusIntegrationTests
             }),
             retainedLog,
             [],
-            timestamp: 50d);
+            timestamp: 50d,
+            loreDescriptions: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [attended.FullId] = "A sturdily built man in his late twenties.",
+            });
         AttendedCharacterSceneStatusProjector projector = new();
 
         try
@@ -289,9 +351,8 @@ public sealed class CurrentSceneStatusIntegrationTests
 
             Assert.Equal([attended.FullId, expired.FullId], projection.AttendedCharacters.Select(character => character.FullId));
             AttendedCharacterSceneStatus attendedStatus = projection.AttendedCharacters[0];
-            Assert.Equal("A yellow coat.", attendedStatus.VisualDescription);
-            Assert.Equal(43d, attendedStatus.VisualDescriptionObservedAt);
-            Assert.Equal(7d, attendedStatus.VisualDescriptionAgeSeconds);
+            // The summary is the lore description; the observed visual-cue description never reaches the status.
+            Assert.Equal("A sturdily built man in his late twenties.", attendedStatus.Description);
             AttendedRelativePositionSceneStatus position = Assert.IsType<AttendedRelativePositionSceneStatus>(attendedStatus.RelativePosition);
             Assert.Equal(1.5f, position.Distance);
             Assert.Equal(42d, attendedStatus.RelativePositionObservedAt);
@@ -300,7 +361,7 @@ public sealed class CurrentSceneStatusIntegrationTests
             AttendedCharacterSceneStatus expiredStatus = projection.AttendedCharacters[1];
             Assert.Null(expiredStatus.RelativePosition);
             Assert.Null(expiredStatus.RelativePositionObservedAt);
-            Assert.Null(expiredStatus.VisualDescription);
+            Assert.Null(expiredStatus.Description);
         }
         finally
         {

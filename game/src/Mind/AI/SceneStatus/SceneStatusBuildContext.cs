@@ -11,6 +11,8 @@ namespace AlleyCat.Mind.AI.SceneStatus;
 /// </summary>
 public sealed class SceneStatusBuildContext
 {
+    private static readonly IReadOnlyDictionary<string, string> _noLoreDescriptions = new Dictionary<string, string>();
+
     /// <summary>Creates a validated request-scoped scene-status snapshot.</summary>
     public SceneStatusBuildContext(
         ICharacter character,
@@ -18,7 +20,8 @@ public sealed class SceneStatusBuildContext
         AttentionSnapshot attention,
         IReadOnlyList<AcceptedObservationEntry> retainedLog,
         IReadOnlyList<AcceptedObservationEntry> eventTimeline,
-        double timestamp)
+        double timestamp,
+        IReadOnlyDictionary<string, string>? loreDescriptions = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
@@ -39,6 +42,7 @@ public sealed class SceneStatusBuildContext
         RetainedLog = new ReadOnlyCollection<AcceptedObservationEntry>([.. retainedLog]);
         EventTimeline = new ReadOnlyCollection<AcceptedObservationEntry>([.. eventTimeline]);
         Timestamp = timestamp;
+        LoreDescriptions = loreDescriptions ?? _noLoreDescriptions;
     }
 
     /// <summary>Character whose Mind owns this status.</summary>
@@ -71,9 +75,23 @@ public sealed class SceneStatusBuildContext
         get;
     }
 
+    /// <summary>
+    /// Authored lore descriptions keyed by canonical full ID, resolved asynchronously before projection for the
+    /// attended-character summaries (playtest R1): characters summarise from lore, not observed visual cues. Empty
+    /// when not resolved — projectors then fall back to the bare identity honestly.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LoreDescriptions
+    {
+        get;
+    }
+
     /// <summary>Stable game-time timestamp for every root projected from this context.</summary>
     public double Timestamp
     {
         get;
     }
+
+    /// <summary>Creates one derived snapshot carrying the resolved lore descriptions.</summary>
+    public SceneStatusBuildContext WithLoreDescriptions(IReadOnlyDictionary<string, string> loreDescriptions)
+        => new(Character, Scene, Attention, RetainedLog, EventTimeline, Timestamp, loreDescriptions);
 }
