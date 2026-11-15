@@ -9,6 +9,8 @@ title: Character Root
 
 Define `AlleyCat.Character.Character` as the common `CharacterBody3D` root implementation of the current humanoid
 `ICharacter` contract, with `AlleyCat.Character.PlayerCharacter` as the required derived root for the player role.
+Define the three-layer composition convention — character scene, optional local per-character template, role installer —
+that assembles every character asset onto that root.
 
 ## Goal
 
@@ -40,6 +42,16 @@ or component path exists.
 12. Character composition exposes configured senses through the ordinary component projection; NPC templates provide
     visual and hearing senses without a bespoke perception component.
 13. Downstream systems use the character's authored voice capability as the authoritative voice for that character.
+14. Character assets compose through three explicit layers — the character's own imported scene, an optional local
+    calibration template, and the role installer — so every authored decision has exactly one home and shared templates
+    stay character-agnostic.
+15. A character's identity, role grouping, and role root type are valid the instant its scene is instantiated, before
+    any installer runs.
+16. Per-character calibration — for example voice settings, appearance-cue descriptions, and genuinely calibrated
+    placements — reaches the assembled character from a character-owned layer without duplicating shared template
+    topology.
+17. Every character assembled from a gender blend faces the shared-base direction after installation, including
+    characters whose imported rig container has a custom name, without per-character rotation authoring.
 
 ## Technical Requirements
 
@@ -156,6 +168,45 @@ or component path exists.
 47. After `RefreshComponents()` commits its replacement projection, Character must expose the committed state through a
     Core-level component-projection refresh contract and publish its notification. Character remains Mind-free;
     subscribers own any downstream rebinding.
+48. Every character asset composes through exactly three authored layers: a character scene rooted in an instance of
+    the character's own source import (TR 8-9 attach the `Character` root script to that import), an optional local
+    per-character template (TR 50), and the character installer child (TR 51). Character scenes must not parent base or
+    role template scenes at any depth; base and role templates exist only as installer inputs.
+49. The character scene authors only intentional, character-owned content:
+    - the root `Id` — identity must be valid from `Instantiate()`, before the installer runs, because consumers read it
+      pre-install; the local template may carry the same value as a default, but the character scene is the identity
+      owner;
+    - root group memberships: `Actors` and `VisualSubjects` (TR 26 and TR 32 own the semantics), plus `Player` for the
+      player role (SCN-001 owns player designation);
+    - the `PlayerCharacter` root script override for the player role;
+    - character-specific new nodes — nodes that exist in no shared template — when they must attach to the character's
+      own imported content, such as 이만복's eyes rig on the imported skeleton;
+    - the character installer child.
+50. A local per-character template is optional. When present, it is named `<character>_template.tscn` — or
+    `<character>_<role>_template.tscn` when the character ships multiple role variants — and lives beside the character
+    scene. Its root instances the role template (`reference_male_npc.tscn`, `reference_female_npc.tscn`,
+    `reference_male_player.tscn`, or `reference_female_player.tscn`). It carries only per-character content:
+    calibration overrides of template-provided nodes, such as `SpeechGenerator` voice settings or visual-cue
+    descriptions, and character-specific new nodes that install with the template chain, such as 이만복's Mind and
+    scenario wiring. When a character has no calibration, no local template exists and the installer's `Template`
+    points directly at the role template.
+51. The character installer is an instance of `npc_installer.tscn` or `player_installer.tscn`. Per character, it
+    configures `Template` to the local template (or the role template directly), `TemplateBaseline` to the character's
+    gender blend (`reference_female.blend` or `reference_male.blend`), and `ColliderProfile` where a per-character
+    profile exists. `TemplateBaseline` is the wholesale-install vehicle: at `Install()`, everything in the template
+    chain beyond the blend is installed onto the blend-born character after identity is final, under the CORE-005
+    baseline mechanics.
+52. Facing correction is single-sourced as the 180° Y rotation on the blend container child in the gender base
+    templates (`reference_female_base.tscn`, `reference_male_base.tscn`). It propagates to every blend-born character at
+    installation, including custom-named containers, through CORE-005 baseline-delta propagation and target-equivalent
+    resolution. Character scenes must not author a competing container transform: target-scene precedence would decline
+    the propagated base value. A character authors that rotation only to deviate from the base.
+53. At installation, template-root exports — including `Id` when the template root carries one — transfer onto the live
+    root before voice-ID assignment, and every character-owned voice local `Id` is then assigned the final root `Id`,
+    preserving the TR 30 semantics.
+54. The authoring contract is the intentional set defined by TR 49 and TR 50. Godot accumulates override noise across
+    editor saves — float-jitter transforms and redundant re-exports — which is not part of this contract: such noise
+    must not be treated as required state or replicated into new characters.
 
 ## In Scope
 
@@ -181,6 +232,12 @@ or component path exists.
 - A Core-level post-commit component-projection refresh contract for downstream consumers.
 - Validated, published template-authored whole-character visual-cue references, explicit refresh, and
   character-specific description overrides.
+- Three-layer character composition: an own-import character scene, an optional local per-character template, and role
+  installer configuration.
+- The character-scene authoring contract: pre-install root identity, group memberships, the player root-script
+  override, character-specific new nodes, and the installer child.
+- Single-sourced gender-base facing correction and the prohibition on competing character-scene container transforms.
+- Intentional-authoring semantics for character scenes and local templates, excluding editor-save override noise.
 
 ## Out Of Scope
 
@@ -222,6 +279,15 @@ or component path exists.
 13. NPCs expose visual and hearing senses through ordinary character component composition.
 14. Speech and other downstream systems use the voice authored on the Character component projection, with no duplicate
     Mind-authored output voice.
+15. Character assets expose the three-layer composition: a root instancing the character's own source import, an
+    installer child, and — when calibration exists — a local `<character>_template.tscn` beside the character scene,
+    with no base or role template parented into the character scene.
+16. Instantiating a character scene yields the correct `Id`, group memberships, and role root type before any installer
+    runs; player scenes instantiate a `PlayerCharacter` root.
+17. Per-character calibration such as voice settings and appearance-cue descriptions is authored only in
+    character-owned layers; shared base and role templates contain no character-specific content.
+18. Characters assembled from a gender blend, including ones with custom-named rig containers, face the shared-base
+    direction after installation without per-character rotation authoring.
 
 ### Technical Requirement Acceptance
 
@@ -295,6 +361,21 @@ or component path exists.
     duplicated output-voice reference.
 33. Composition tests verify a post-commit component-projection refresh contract is available without introducing a
     Character-to-Mind dependency.
+34. Scene review or composition tests verify character scene roots instance the character's own source import and that
+    no base or role template scene is parented into a character scene.
+35. Scene review verifies character scenes author exactly the intentional TR 49 set — root `Id`, group memberships, the
+    player root-script override where applicable, character-specific new nodes, and the installer child — treating
+    editor-save override noise as non-normative.
+36. Installer configuration review verifies `Template` resolves to the local template or directly to the role template,
+    `TemplateBaseline` to the character's gender blend, and `ColliderProfile` to the per-character profile where one
+    exists, with local templates named and placed per TR 50.
+37. Installation tests verify template-root exports, including a template-carried `Id`, transfer onto the live root
+    before voice-ID assignment, and that the final root `Id` drives every character-owned voice local `Id`.
+38. Installation tests verify the gender-base 180° Y rotation reaches blend-born characters with custom-named rig
+    containers, and that a competing character-scene container transform declines the propagated base value under
+    target-scene precedence.
+39. Template review verifies local per-character templates carry only per-character content — calibration overrides and
+    character-specific new nodes — and that no character-specific content appears in shared base or role templates.
 
 ## Implementation Status
 
@@ -302,6 +383,11 @@ The implementation conforms to the role-root architecture: production NPC roots 
 player composition uses `PlayerCharacter : Character, IPlayer`, `CharacterLocomotion` through `ILocomotion`, and
 disabled-by-default `PlayerNavigation`. NPC composition uses `NPCNavigation` through `INavigation` and contains no
 player `CharacterLocomotion` or `ILocomotion`.
+
+Character composition follows the three-layer convention: content characters such as 이만복 and 박소희 root in their own
+imports and install through per-character templates and installer configuration, with facing correction propagated from
+the gender bases. The reference characters `ally_npc`, `ally_player`, and `vadim_npc` compose through the same
+convention: each roots in its gender blend and installs through a per-character local template.
 
 ## References
 
@@ -322,3 +408,5 @@ player `CharacterLocomotion` or `ILocomotion`.
 - [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
 - [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
+- `@game/content/the_price_of_dissent/characters/이만복/` — Canonical three-layer character exemplar (character scene,
+  local template, installer configuration)
