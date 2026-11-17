@@ -1,0 +1,60 @@
+{
+  "frames": [
+    796,
+    799,
+    802,
+    805,
+    808,
+    811,
+    814,
+    817,
+    820,
+    823,
+    826,
+    829,
+    832,
+    835,
+    838,
+    841,
+    844,
+    847,
+    850,
+    853,
+    855
+  ],
+  "views": {
+    "oblique": [
+      4.0,
+      -6.0,
+      2.0
+    ],
+    "feet": [
+      4.0,
+      -6.0,
+      2.0
+    ]
+  },
+  "resolution": [
+    640,
+    480
+  ],
+  "ortho_scale": 3.4,
+  "camera": "Fixed world, shared baseline/candidate; supplementary centreX1.05m, body3.8ortho640x480 with source offset1.35m, feet1.9ortho960x720 Female only; ground axes fixed",
+  "markers": {
+    "forward": [
+      0,
+      -1,
+      0
+    ],
+    "left": [
+      1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      1
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "authority": "Explicit user approval of preferred landing-ablation source and audited middle/cycle/cue policy; normal shared CTRL/NAV replacement, no opt-in.",
+  "disposition": "Meaningful stepping/foot-sliding mitigation accepted; initial twitch explicitly deferred. Not a no-slip/naturalness or seamless-loop certification.",
+  "preview": "Existing calibrated Female temporal review of this exact preferred source, full 1\u20131200 chronology retained.",
+  "source_sha256": "3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a",
+  "authoring_sha256": "ef6cf9c5b26ea034b05c246eaaa001c53ee4e682c9a98bec3beb2779c8125538",
+  "historical_evidence": "game/temp/motionbricks/anim002-turn-landing-ablation-01/source-run-01/candidate-01",
+  "evidence_hashes": {
+    "all-frame-geometry.json": "1bf8969e05bb6033ad5a8da130510cb6f990ceda655ab22b574514af05fa0edc",
+    "full-capture-record.json": "cfb9c7c95252c5eea429777dee6f7dcd3830d4c24d393397d065f678cd37117c",
+    "earlier-capture-record.json": "6f431daa804efb545ec5e8cfd2d5035441f7bc36ea9d13071a26f4fc2f93842c"
+  },
+  "limits": "References bind prior evidence, not a new capture or new visual inspection."
+}

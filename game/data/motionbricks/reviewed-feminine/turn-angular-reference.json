@@ -1,0 +1,168 @@
+{
+  "left_turn": {
+    "recoveryTrial": {
+      "schema": "stationary_turn_recovery_trial_v1",
+      "status": "EXPERIMENTAL_NOT_ADMITTED",
+      "sourceBundleSHA256": "dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af",
+      "criterion": "Offline source choice: lowest maximum pelvis-relative foot joint origin after lowering the preceding lift and before the incoming peak; four original poses stay before the unqualified raw seam. Not contact/support; no runtime search.",
+      "measurementConvention": "canonical FK foot/toe joint origin +Y, including source root; not sole clearance/contact",
+      "primaryFootEventsRemainAuthoritative": true,
+      "events": [
+        {
+          "id": "lift_LeftFoot",
+          "kind": "primary_lift",
+          "foot": "LeftFoot",
+          "frame": 947,
+          "phaseFrames": 1,
+          "phaseSeconds": 0.03333333333333333,
+          "sourceAngularProgressRadians": 0.0780358782160202
+        },
+        {
+          "id": "recover_after_LeftFoot",
+          "kind": "recovery",
+          "recoveringFoot": "LeftFoot",
+          "frame": 951,
+          "phaseFrames": 5,
+          "phaseSeconds": 0.16666666666666666,
+          "sourceAngularProgressRadians": 0.3141697809019668
+        },
+        {
+          "id": "lift_RightFoot",
+          "kind": "primary_lift",
+          "foot": "RightFoot",
+          "frame": 961,
+          "phaseFrames": 15,
+          "phaseSeconds": 0.5,
+          "sourceAngularProgressRadians": 0.6787916670295289
+        },
+        {
+          "id": "recover_after_RightFoot",
+          "kind": "recovery",
+          "recoveringFoot": "RightFoot",
+          "frame": 1001,
+          "phaseFrames": 55,
+          "phaseSeconds": 1.8333333333333333,
+          "sourceAngularProgressRadians": 1.1969260074791457
+        }
+      ]
+    },
+    "schemaProposal": "stationary_turn_angular_reference_v1",
+    "sourceBundleSHA256": "dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af",
+    "first": 946,
+    "endExclusive": 1006,
+    "periodFrames": 60,
+    "sourceFPS": 30,
+    "measuredSignedSpanRadians": 1.166607429767872,
+    "durationSeconds": 2.0,
+    "representativeAngularRateRadiansPerSecond": 0.583303714883936,
+    "facingConvention": "atan2(evaluated canonical Hips Basis.Z.x, Basis.Z.z); +Y up, canonical forward +Z; left positive; apply existing ModelToWorld conversion",
+    "orderedAngularProgression": "Bound full source samples[].heading_radians; unwrap in source order, including holds/reversals. No inverse yaw clock.",
+    "liftMeasurement": "canonical FK foot/toe joint origin +Y, including source root; not sole clearance/contact",
+    "primaryFootEvents": [
+      {
+        "foot": "LeftFoot",
+        "frame": 947,
+        "phaseSeconds": 0.03333333333333333,
+        "sourceAngularProgressRadians": 0.0780358782160202,
+        "jointOriginHeightMetres": 0.08248736341835061,
+        "associatedToePeakFrame": 946,
+        "associatedToeSourceAngularProgressRadians": 0.0,
+        "associatedToeOriginHeightMetres": 0.02839810118980457
+      },
+      {
+        "foot": "RightFoot",
+        "frame": 961,
+        "phaseSeconds": 0.5,
+        "sourceAngularProgressRadians": 0.6787916670295289,
+        "jointOriginHeightMetres": 0.07602891109117582,
+        "associatedToePeakFrame": 964,
+        "associatedToeSourceAngularProgressRadians": 0.7907085307547117,
+        "associatedToeOriginHeightMetres": 0.02442921531217674
+      }
+    ],
+    "toePeaksAreAnnotationsNotAdditionalEndpointPromises": true
+  },
+  "right_turn": {
+    "recoveryTrial": {
+      "schema": "stationary_turn_recovery_trial_v1",
+      "status": "EXPERIMENTAL_NOT_ADMITTED",
+      "sourceBundleSHA256": "dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af",
+      "criterion": "Offline source choice: lowest maximum pelvis-relative foot joint origin after lowering the preceding lift and before the incoming peak; four original poses stay before the unqualified raw seam. Not contact/support; no runtime search.",
+      "measurementConvention": "canonical FK foot/toe joint origin +Y, including source root; not sole clearance/contact",
+      "primaryFootEventsRemainAuthoritative": true,
+      "events": [
+        {
+          "id": "lift_RightFoot",
+          "kind": "primary_lift",
+          "foot": "RightFoot",
+          "frame": 1103,
+          "phaseFrames": 7,
+          "phaseSeconds": 0.23333333333333334,
+          "sourceAngularProgressRadians": -0.3649087973149694
+        },
+        {
+          "id": "recover_after_RightFoot",
+          "kind": "recovery",
+          "recoveringFoot": "RightFoot",
+          "frame": 1107,
+          "phaseFrames": 11,
+          "phaseSeconds": 0.36666666666666664,
+          "sourceAngularProgressRadians": -0.6825005234275636
+        },
+        {
+          "id": "lift_LeftFoot",
+          "kind": "primary_lift",
+          "foot": "LeftFoot",
+          "frame": 1120,
+          "phaseFrames": 24,
+          "phaseSeconds": 0.8,
+          "sourceAngularProgressRadians": -1.4368534907358885
+        },
+        {
+          "id": "recover_after_LeftFoot",
+          "kind": "recovery",
+          "recoveringFoot": "LeftFoot",
+          "frame": 1152,
+          "phaseFrames": 56,
+          "phaseSeconds": 1.8666666666666667,
+          "sourceAngularProgressRadians": -1.5946977850307724
+        }
+      ]
+    },
+    "schemaProposal": "stationary_turn_angular_reference_v1",
+    "sourceBundleSHA256": "dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af",
+    "first": 1096,
+    "endExclusive": 1156,
+    "periodFrames": 60,
+    "sourceFPS": 30,
+    "measuredSignedSpanRadians": -1.594391769013173,
+    "durationSeconds": 2.0,
+    "representativeAngularRateRadiansPerSecond": -0.7971958845065865,
+    "facingConvention": "atan2(evaluated canonical Hips Basis.Z.x, Basis.Z.z); +Y up, canonical forward +Z; left positive; apply existing ModelToWorld conversion",
+    "orderedAngularProgression": "Bound full source samples[].heading_radians; unwrap in source order, including holds/reversals. No inverse yaw clock.",
+    "liftMeasurement": "canonical FK foot/toe joint origin +Y, including source root; not sole clearance/contact",
+    "primaryFootEvents": [
+      {
+        "foot": "RightFoot",
+        "frame": 1103,
+        "phaseSeconds": 0.23333333333333334,
+        "sourceAngularProgressRadians": -0.3649087973149694,
+        "jointOriginHeightMetres": 0.08113612636615808,
+        "associatedToePeakFrame": 1099,
+        "associatedToeSourceAngularProgressRadians": -0.1255190184924544,
+        "associatedToeOriginHeightMetres": 0.03533863719233955
+      },
+      {
+        "foot": "LeftFoot",
+        "frame": 1120,
+        "phaseSeconds": 0.8,
+        "sourceAngularProgressRadians": -1.4368534907358885,
+        "jointOriginHeightMetres": 0.1412322555289265,
+        "associatedToePeakFrame": 1120,
+        "associatedToeSourceAngularProgressRadians": -1.4368534907358885,
+        "associatedToeOriginHeightMetres": 0.0598982761385585
+      }
+    ],
+    "toePeaksAreAnnotationsNotAdditionalEndpointPromises": true
+  }
+}

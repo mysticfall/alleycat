@@ -1,411 +1,282 @@
 ---
-title: Kimodo Locomotive Animation-Set Pipeline
+title: Kimodo Motion Sources
 ---
 
-# Kimodo Locomotive Animation-Set Pipeline
+# Kimodo Motion Sources
 
 ## Requirement
 
-Define the manually invoked Kimodo workflow that creates, validates, and publishes selected variant-scoped locomotion
-and idle package sets for any supported character without becoming a gameplay-policy or production-content oracle.
+Preserve Kimodo authoring inputs and provide truthful source-selection and conversion evidence for the
+[shared animation contract](../../animation/index.md). Game-owned source roles and dynamic sampling are defined by
+[ANIM-002](../../animation/002-locomotive-animation-set/index.md), not by MotionBricks itself.
+
+This page governs tooling/source protection and the required ANIM-002 source properties, reviewed-action ingestion and
+publication contract for artists, implementers and reviewers. Normal CTRL/NAV share the reviewed feminine eight-role
+source set; that adoption does not complete broader variant/default admission or runtime quality acceptance.
 
 ## Goal
 
-Technical artists can deliver selected compatible locomotive and idle variants for any supported character with
-truthful motion and per-foot planted-interval metadata, idle and locomotion clips bound to the same calibrated
-per-character retarget setup, preserved source assets, transactional publication, explicit cross-character package
-reuse, and clear validation failures.
+Artists and implementers can identify usable locomotion/idle sources, their calibration and provenance, and any missing
+inputs without confusing generated packages with protected source assets or with proof of runtime suitability.
 
 ## User Requirements
 
-1. Artists can bootstrap a character-present authoring workspace from a supplied retarget setup and audit generation
-   themselves.
-2. Supplied setups and source animations remain unmodified. Invalid inputs produce actionable diagnostics rather than
-   in-place repair.
-3. Failed or interrupted stages preserve prior published content and leave no partial package.
-4. The selected variant publishes the complete ANIM-002 role set and, for each clip, its own duration, endpoint
-   displacement and yaw, a native-key-rate root trajectory table with an error bound, phase events, stitch mappings,
-   and per-foot planted intervals.
-5. The current transaction and runtime configuration publish one selected variant per animation set. Alternative
-   compatible fixture variants can be tested independently but do not enable additional production publication or live
-   switching.
-6. Artists can republish metadata from unchanged validated animation packages when all affected bindings remain valid.
-7. Missing, stale, or mismatched motion or planted-interval data is reported truthfully. Tooling does not fabricate
-   intervals or conclude content inadequacy.
-8. Every published locomotion and idle clip states when each of both feet is planted, matching the clip's role and
-   motion, including rolling about the ball of the foot and clips whose retargeted feet float or sink slightly.
-   Authored ground slides and low shuffles are known pipeline artefacts: they count as swing, are not pinned, and the
-   user judges them in-game.
-9. Source animation is not regenerated or changed merely to conceal a runtime implementation defect.
-10. A clean clone can import and load published packages without regeneration, repackaging, or local cache state.
-11. Artists can rely on stable repository source assets and per-character authored inputs for reproducible bootstrap,
-    workspace composition, extraction, and idle package workflows.
-12. Artists can distinguish protected authoring inputs from generated, processed, and runtime outputs, which are not
-    substitutes for those inputs.
-13. Each repository source asset and each per-character authored input has an explicit lifecycle contract so it is not
-    deleted or replaced by assumption; missing required inputs produce clear failures.
-14. Published idle clips animate with the character setup's calibration intact: an idle bake that bypasses or deviates
-    from the approved calibrated setup is refused before publication instead of appearing mis-oriented in-game.
-15. A published package remains usable by another supported character's runtime where that reuse is declared: it plays
-    without silent breakage, and animation tracks for bones the consuming skeleton lacks are known to no-op safely.
-16. Adding a supported character requires only that character's own inputs and baseline approval; it does not modify
-    another character's inputs, baselines, or published packages.
+1. Supplied setups and source animations remain unmodified; invalid or missing inputs produce actionable diagnostics.
+2. Artists own external source creation, template duplication/adjustment where used, prompt authoring, mandatory motion
+   review and calibration approval. A reviewed Blender action can be ingested without a pipeline generation runner.
+   Source motion is not regenerated merely to conceal a runtime defect.
+3. Supply the shared eight-role locomotion source and externally owned idle from our Kimodo content where available.
+   Verify availability rather than assuming it, and never substitute evaluation-only upstream sample motions.
+4. Failed processing/publication preserves prior content and leaves no partial package. A delivered output is loadable
+   from a clean checkout with documented prerequisites, without relying on an undocumented local cache.
+5. Another character's inputs and approved baselines are not changed to add or validate a character.
+6. Artists own each variant's local source reference posture without supplying a matching external runtime idle asset.
+   Source acceptance considers the full motion, not just matching boundary poses or prompt wording.
 
 ## Technical Requirements
 
 ### Tool and Source Boundary
 
-1. Kimodo owns its manually invoked commands, implementation, configuration, Godot scripts, tests, and operational
-   documentation under `tools/kimodo-pipeline/`. [The operational README][readme] defines supported invocation and
-   destructive boundaries.
-2. Authoring bootstrap and idle staging consume a complete user-supplied retarget setup as-is. They may create a
-   variant workspace or a staged idle copy from a copy of it, but never alter calibrated helpers, constraints, poses,
-   overrides, or source files.
-3. Artists remain responsible for prompt authoring, generation, and visual audit. The pipeline does not automate content
-   acceptance.
-4. Source selection and bounded seam repair preserve anatomy, contact safety, hierarchy, recurrence, intended direction,
-   and one-time root ownership. Repair may correct a candidate locally but must not mutate the protected source.
+1. Kimodo owns its commands, implementation, configuration, external Godot scripts, tests, and operational
+   [README](../../../tools/kimodo-pipeline/README.md) under `tools/kimodo-pipeline/`; follow
+   [Developer Tool Layout](../index.md). The README describes executable tooling, not a separate runtime motion
+   contract.
+2. Bootstrap and idle staging use verified copies of the supplied calibrated setup. They never modify protected
+   helpers, constraints, poses, overrides, or source files. Source selection and local processing preserve anatomy,
+   hierarchy, intended direction, contact safety, and one-time root ownership.
+3. Source suitability and conversion to MotionBricks target windows require explicit evidence under the shared
+   animation contract. A packaged idle/walk clip or Blender calibration alone does not prove SOMA conversion,
+   actual-rig retargeting, or realised-context feedback.
 
 ### Repository Source Asset Contract
 
-The exact baseline digests belong to the linked tool implementation rather than this prose contract.
-
 1. **KIMODO-SRC-001:** `game/assets/characters/animations/source/kimodo_source.blend` is the repository-fixed
-   canonical clean Kimodo rig used by bootstrap and workspace composition. It contains the clean `Kimodo_Source` rig
-   without actions, meshes, or materials. `bootstrap_paths.py` owns its path, and `bootstrap_workspace.py` owns and
-   enforces its approved baseline digest. Preserve it byte-for-byte. Replacement requires deliberate baseline
-   re-approval and coordinated path, validation, and test updates.
+   clean Kimodo rig, containing `Kimodo_Source` without actions, meshes, or materials. Preserve it byte-for-byte.
+   `bootstrap_paths.py` owns its path; `bootstrap_workspace.py` owns its approved baseline. Replacement requires
+   deliberate baseline re-approval and coordinated path, validation, and test updates.
 2. **KIMODO-SRC-002:** `game/assets/characters/animations/source/locomotion/locomotion_template.blend` is the
-   repository-fixed, character-neutral locomotion template containing pose references, root waypoints, and neutral
-   reference actions, including the default locomotion bootstrap idle pose reference (KIMODO-IDLE-001).
-   `bootstrap_paths.py` owns its path, and `bootstrap_workspace.py` owns and enforces its approved baseline digest.
-   Preserve it byte-for-byte. Replacement requires baseline re-approval and coordinated composition, validation, and
-   test updates.
+   character-neutral bootstrap template with pose references, root waypoints, and neutral reference actions.
+   Preserve it byte-for-byte. Its path and baseline have the same owners as the canonical rig; replacement requires
+   baseline re-approval and coordinated composition, validation, and test updates.
 3. **KIMODO-SRC-003:** `game/assets/characters/animations/source/locomotion/locomotion.blend` is the read-only
-   monolithic locomotion bootstrap and extraction input. It contains the source actions and semantic segments together
-   with character and template content. `bootstrap_extraction.py` owns it and must never save over it. It is not a
-   runtime package. Retirement requires an approved replacement for bootstrap extraction and every reproducibility and
-   provenance dependency.
-4. **KIMODO-SRC-004:** Generated workspaces, processed authoring carriers, runtime packages, metadata, and reports are
-   derivatives. Their content or apparent similarity does not make them replacements for repository source assets or
-   evidence that a source asset can be retired. Reproducibility is defined over durable artefacts — repository source
-   assets, per-character authored inputs, approved baselines, and retained processed and published outputs — so
-   provenance that names a transient staging carrier (for example a materialised multi-role blend) records direct
-   lineage truthfully without implying that the carrier is durable reproducible state.
-5. **KIMODO-SRC-005:** Repository bootstrap and default paths fail clearly when a required input is missing.
-   Validation and tests cover path ownership, expected source structure, baseline or before/after byte integrity,
-   provenance, and migration gates. Structural and read-only source checks remain separate from behavioural fixtures
-   and production-content delivery oracles.
-6. **KIMODO-SRC-006:** Each supported character owns two character-scoped authored input families beneath its
-   character asset root: the calibrated retarget setup at
-   `[character asset root]/animations/source/kimodo_retarget_setup.blend` and the animated idle sources at
-   `[character asset root]/animations/source/idle/<variant>.blend`. They are protected authoring inputs, not
-   repository-fixed assets and not derivatives. `bootstrap_paths.py` owns their path derivation, and the pipeline must
-   never modify them. Their baseline approval is per character (KIMODO-CHAR-002).
+   monolithic bootstrap/extraction input, owned by `bootstrap_extraction.py`. Never save over it. Retirement requires
+   an approved replacement for extraction and every reproducibility/provenance dependency; runtime replacement alone
+   does not authorise source deletion.
+4. **KIMODO-SRC-004:** Workspaces, processed carriers, runtime packages, metadata, and reports are derivatives, not
+   source replacements. Preserve truthful lineage, including transient staging carriers, without representing those
+   carriers as durable reproducible inputs. Reproducibility depends on protected sources, approved baselines, and
+   retained processed/published outputs.
+5. **KIMODO-SRC-005:** Required missing inputs fail clearly. Checks cover path ownership, structure, baseline or
+   before/after byte integrity, provenance, and replacement/retirement gates, separately from behavioural evidence.
+6. **KIMODO-SRC-006:** Per-character authored inputs are protected, not derivatives: the calibrated setup at
+   `[character asset root]/animations/source/kimodo_retarget_setup.blend` and animated idle sources at
+   `[character asset root]/animations/source/idle/<variant>.blend`. `bootstrap_paths.py` owns path derivation;
+   approval is per character. The pipeline never modifies these inputs.
 
 ### Character Setup and Calibration Contract
 
-1. **KIMODO-SET-001:** The per-character calibrated retarget setup is the single calibration reuse unit. Every
-   locomotion workspace and every idle package is staged from a verified copy of that character's setup, so every
-   published clip carries the same calibration guarantee.
-2. **KIMODO-SET-002:** Every bake binds to the character's approved setup baseline through a setup-parity gate: the
-   staged setup copy's byte hash matches the approved baseline, and a constraint/helper fingerprint covering helper
-   bone basis and roll state plus constraint mute state matches the approved setup. Any deviation refuses the bake
-   before publication. The fingerprint names the calibration-relevant state so calibration drift is diagnosed as
-   calibration drift, not opaque byte drift.
-3. **KIMODO-SET-003:** The calibration state a baseline protects is explicit. For the calibrated reference setup,
-   `thigh_l/_r_RET` helpers carry 35° axial rolls with their Locked Track constraints muted, and `lowerarm_l/_r_RET`
-   helpers carry 50° rolls; these authored helper states define correct limb orientation. Another character's approved
-   setup bytes are that character's calibration record. Limb-roll miscalibration preserves root position and planted
-   intervals, so motion and interval gates cannot detect it; the setup-parity gate is the control that does.
+1. **KIMODO-SET-001:** The approved per-character setup remains the calibration reuse unit for Kimodo baking.
+   Locomotion workspaces and idle staging use a verified copy of it.
+2. **KIMODO-SET-002:** Every bake verifies setup parity before publication: approved setup-byte hash and a
+   constraint/helper fingerprint covering basis, roll, and constraint mute state. Refuse deviations as calibration
+   failures rather than opaque byte drift.
+3. **KIMODO-SET-003:** The reference calibration includes `thigh_l/_r_RET` 35° axial rolls with Locked Track
+   constraints muted and `lowerarm_l/_r_RET` 50° rolls. Each other character's approved setup records its own
+   calibration; matching root motion cannot prove limb calibration.
+4. Idle staging must bind the appended animated source action, including slotted actions, and retain frame-varying
+   motion through the admitted range. A bootstrap single-pose reference is not an animated idle source, and keys
+   spanning a duration do not prove retained motion. The neutral template remains the bootstrap reference default.
+5. Character-generic processing uses explicit target rig, asset root, and root-axis parameters; validate the resolved
+   rig and record the actual target skeleton. Approvals are per character and do not alter another baseline.
+6. Cross-character reuse is explicit and validated: prove remaining tracks bind and absent-bone tracks no-op safely.
+   Preserve truthful authorship and retarget lineage. Source reuse does not prevalidate future variants or Godot motion.
+   Automated setup transplantation remains unauthorised unless separately approved after direct reuse is rejected.
 
-### Idle Package Flow Contract
+### Source Production Contract
 
-1. **KIMODO-IDLE-001:** Idle has two distinct roles. Role A is the animated idle loop source that becomes an idle
-   package (KIMODO-IDLE-002). Role B is the locomotion bootstrap single-pose reference `pose_ref_idle`, sourced by
-   default from the neutral locomotion template's pose references, preserving the reproducibility of published
-   locomotion packages; an animated idle loop cannot satisfy single-frame admission. A future variant may declare an
-   idle-derived pose reference as an explicit extension; it is not the default and is not required for delivery.
-2. **KIMODO-IDLE-002:** Per-character animated idle sources live at
-   `[character asset root]/animations/source/idle/<variant>.blend`. Each is a staged copy of that character's
-   calibrated retarget setup with the animated idle action (Kimodo-space) appended. Inert staging rigs (`Kimodo_IK`
-   and foot markers) are not part of idle sources.
-3. **KIMODO-IDLE-003:** Idle packages flow without a locomotion workspace: a staged, setup-parity-verified copy of
-    the character's setup with the appended idle action → visual-constraint bake → package → validated publication at
-    `[character asset root]/animations/runtime/idle/<variant>`, publishing the artefacts Technical Requirement 7
-    defines. The appended action must drive the source rig during evaluation, including correct slot binding for
-    slotted actions; unresolved or ambiguous binding is refused rather than guessed. The bake retains the source's
-    frame-varying motion over the admitted range, not merely keys and duration for a frozen pose. Generated provenance
-    records the per-character idle source path and action.
+1. **KIMODO-PROD-001:** Source creation is external and artist-owned; the repository delivers reviewed-action ingestion,
+   calibrated export and source-set publication, not source-generation machinery or an executable template recipe.
+   Retain inspectable authored Blender sources and reference/authoring inputs. Record source, variant/posture,
+   local reference identity, stages, roles, timing, constraints, calibrated setup, root/facing trajectories and
+   available prompts/seed/generation settings. Do not invent generator provenance for user-authored actions or promise
+   bit-identical stochastic inference. Prefer short literal subject/action/direction prompts without style
+   embellishments; constraints carry spatial requirements. The reference
+   is local to the variant, not a runtime idle dependency, and may be arms-down or another authored posture.
+2. **KIMODO-PROD-002:** An acceptable complete variant has one continuous take containing all eight ANIM-002 roles, not
+   separate per-role takes. Reviewed subsets may support representative implementation without claiming completeness.
+   Constrain each role's start and end to the same variant reference using whole-pose placement: preserve child-pose
+   configuration while the root follows that boundary's declared world position and facing. Travel and facing remain
+   separate; ground Root and Hips/pelvis height are not interchangeable. Do not substitute mirrors or reverse playback.
+3. **KIMODO-PROD-003:** Artist-owned source production declares multiple intended cycles per role, acquisition/settling
+   allowances, middle usable ranges and representative-speed intervals before source creation. Preserve the predeclared
+   middle-cycle extraction policy; acquisition and settling remain outside retained ranges.
+   Never automatically select favourable windows or silently shift failed ranges. A deliberate human range revision
+   creates a new source/review revision, not a retroactive pass.
+   Retain full chronology, role boundaries and provenance. Review covers the declared ranges before ingestion.
+4. **KIMODO-PROD-004:** External authoring preserves declared constraints and source protections; unconstrained output
+   must not be represented as satisfying constrained authoring. No repository generation runner, fixed extension or
+   extra misplaced-constraint tests are delivery prerequisites. Human review decides artistic suitability, not new
+   aesthetic constraint gates. Essential processing checks reject nonfinite data, unsupported skeleton/coordinates/rate,
+   invalid ranges, mismatched source identity and incomplete role coverage when claiming a complete variant.
+   Foot-joint targets are not sole-contact
+   assertions. Preserve calibrated sources, helpers and preview setup; approval does not waive data integrity.
+5. **KIMODO-PROD-005:** Provide a maintained command to ingest an arbitrary approved Blender source/action with explicit
+   role/review metadata, independent of generation-runner receipts. Evaluate original calibrated Kimodo/SOMA poses
+   read-only, without a MakeHuman round-trip or saving/rebaking source files. Use a small versioned format with generic
+   variants containing one or more speed stages. Retain all chronological samples and provenance. Slicing may use
+   ranges/sample offsets over the full take; separate clips are not required. Preserve consecutive four-frame 30 Hz
+   windows, local motion and placement displacement/facing, without sampling across unrelated role boundaries.
+   Document and verify each technical sanitising operation's pose/trajectory fidelity; normalisation/cleanup must not
+   repair gait, plant feet, invent steps, perform runtime seam stitching or teleport endpoints. Optional source-boundary
+   processing follows the cycle policy below, not mandatory sanitising. Escalate intended-motion changes.
+   Validate physical representative reference velocity/speed separately from local velocity/angular progression,
+   travel separately from facing and intended phase separately from observed evidence. Preserve uneven motion; do not
+   fabricate positive reference translation speed for stationary turns. Identify a candidate complete cycle supported by
+   actual source motion, manually or with reused deterministic tools; no particular algorithm is mandatory. Freeze
+   source bounds, period, endpoint-duplicate convention and accumulated travel/facing transform before a raw
+   repeated-sampling trial. New experimental cycle metadata wholly inside an approved role retains its approval bounds
+   and whole chronology; it does not mutate the source, relabel rejected motion or admit runtime-loop quality.
+   Exact pose/derivative equality or certified recurrence is not a prerequisite: first test without boundary processing.
+   Measure boundary discrepancies diagnostically and apply
+   [ANIM-002 TR4/8](../../animation/002-locomotive-animation-set/index.md#technical-requirements) for wrap-straddling
+   four-frame sampling, cumulative placement and repeated actual-rig generated evidence before accepting cyclic use.
+   MotionBricks interpolation may tolerate discrepancies; it does not guarantee suitability. Source-boundary processing
+   is only an optional, explicitly documented and human-reviewed fallback when discrepancies visibly harm generated
+   motion, not automatic gait/output repair. Undeclared non-cyclic content retains truthful exhaustion, never silent
+   wrapping.
+6. **KIMODO-PROD-006:** Require human approval bound to source hash, action identity and reviewed ranges. Review the
+   full relevant window on canonical source and calibrated character preview where applicable: reference, acquisition,
+   movement interiors, transitions and settling. Boundary agreement, prompt wording and transport checks alone cannot
+   admit motion. Retain rejected takes/reports; failed or unreviewed motion cannot become admitted content. Publish
+   content and review/provenance metadata atomically per destination, preserving prior valid outputs on failure.
+   Record hashes, action/frame/rate identities, units, tool identities and available generation provenance. Human
+   artistic approval is distinct from independent implementation safety review and actual-rig runtime proof.
+   Retain feminine and masculine defaults, feminine first, as styles rather than sex-wide claims. A reviewed subset
+   may support representative implementation; final default acceptance needs both actual sources and reference-character
+   previews. Missing complete content does not authorise generation or make a representative result complete.
 
-### Character-Generic Pipeline and Cross-Character Reuse Contract
+### Output and Validation Boundary
 
-1. **KIMODO-CHAR-001:** The retarget processor is character-generic. The target rig name, character asset root, and
-   root lateral-location axis convention are explicit per-character parameters with no single-character default; rig
-   validation checks the resolved target rig; processed indexes record `target_skeleton` derived from the actual
-   target rig.
-2. **KIMODO-CHAR-002:** Gate-1 baseline approval is per character. Onboarding a new character setup adds that
-   character's own baseline entry; an existing character's baseline is never edited to admit another character.
-3. **KIMODO-CHAR-003:** Cross-character package reuse (Technical Requirement 10) is validated, not accidental:
-   validation proves that animation tracks for bones absent from the consuming skeleton (for example `breast_l/r`
-   when a male reference character consumes female-authored packages) no-op safely, and that the remaining tracks bind
-   the consuming skeleton. Runtime templates binding another character's published libraries are the established
-   consumption pattern this contract validates.
-4. **KIMODO-CHAR-004:** Script-generated setup transplantation is an optional, undelivered future fallback for a
-    character without a hand-calibrated setup, conditional on rejection of direct reuse and explicit authorisation.
-    No setup-transplant command is currently provided or required for delivery. If authorised and implemented, its
-    candidate must pass per-character baseline approval, the setup-parity gate, and artist visual audit before use as
-    an approved input. Direct cross-character reuse remains the default path. The reference male directly consumes
-    the female-authored `sad` idle and locomotion packages
-    through its existing runtime template wiring; no male-authored setup or package publication is required for this
-    accepted reuse. Artist acceptance covers interactive Blender review, not in-game/VR validation or equivalence to
-    runtime motion scaling, procedural twist, or controller behaviour. Each future variant requires its own reuse
-    validation and artist audit; this acceptance does not prevalidate it, remove character onboarding, or authorise
-    future fallback implementation.
-
-### Variant and Package Contract
-
-5. Every processed index, metric, descriptor, provenance record, runtime library, catalogue, and planted-interval file
-   is scoped by character, set, and the selected variant. No variant-neutral writable metadata slot may obscure that
-   identity.
-6. The publication manifest, transaction, and runtime configuration own exactly one selected variant per character and
-   animation set. They reject a different additional variant before publication changes durable content.
-7. Runtime roots follow `[character asset root]/animations/runtime/<set>/<variant>`. Locomotion publishes
-   `locomotion_<variant>.tres`, `locomotion_<variant>_catalogue.json`, and per-foot planted-interval data
-   (`per_foot_planted_intervals_v1.json`); idle publishes `idle_<variant>.tres` and `idle_<variant>_catalogue.json`,
-   whose `per_foot_planted_intervals` field holds the idle planted intervals.
-8. Runtime animations are embedded in the package `AnimationLibrary` and resolved by animation identity. Publication
-   emits no standalone clip directory or runtime clip-path contract.
-9. A manifest stages complete locomotion and idle packages, validates both, and publishes them through a journalled
-   all-or-rollback transaction. The durable roots are not mutated until preflight and reload validation succeed.
-10. Cross-character package use is explicit and validated (KIMODO-CHAR-003): a package authored for one character is
-    consumed by another character's runtime only through declared, validated consumption whose absent-bone no-op is
-    proven. Provenance retains truthful authorship and retarget lineage.
-
-### Motion and Planted-Interval Data Publication
-
-11. Publication copies each explicit ANIM-002 capability and validates the complete 22-capability inventory. It does
-    not infer behaviour, phase lane, direction, anatomy, or operation from role/clip names, file names, order, counts,
-    hashes, or `sad` conventions.
-12. Each clip publishes exactly the variant-owned metadata that
-    [ANIM-002 Technical Requirements 5–8](../../animation/002-locomotive-animation-set/index.md#motion-metadata)
-    require: duration, endpoint root displacement and yaw, the root trajectory table with its key rate and declared
-    error bound, phase events, stitch mappings, and per-foot planted intervals, in the declared coordinates and units.
-13. The root trajectory table samples each clip's cumulative planar root position and yaw at its native key rate.
-    Values are in source units; publication applies no rig's `motion_scale`, which consumers apply under the
-    [ANIM-002 scale rule](../../animation/002-locomotive-animation-set/index.md#motion-metadata). The declared error
-    bound holds against the embedded root track, so consumers can predict slice displacement and yaw within it,
-    including moves below complete entry/exit transitions. Published metadata does not impose exact distance, rate,
-    or clip completion on runtime consumers.
-    - **Ball joints:** ball-joint data is not published, because it is rig-specific bind-time runtime data under
-      [NAV-001 Technical Requirement 7](../../nav/001-npc-navigation/index.md#arrival-planner).
-14. For every locomotion and idle clip, the pipeline emits per-foot planted and swing intervals over source time for
-    **both** anatomical feet, covering the whole clip. Intervals are derived from the clip's declared role (entry,
-    cycle, exit, side-step, pivot, arc, idle) and each one is checked against the clip. Idle intervals are written to
-    the idle catalogue's `per_foot_planted_intervals` field.
-15. A clip whose intervals are incomplete or fail verification is refused for publication and reported; it is never
-    published with a gap or a guessed interval. Derivation implements the weight-bearing planted definition of
-    [ANIM-002 Technical Requirement 8](../../animation/002-locomotive-animation-set/index.md#motion-metadata): a ball
-    moving along the ground faster than the policy tolerance is swing, so authored slides and low shuffles are not
-    planted.
-    - **Signals:** the ball joint (the toe-bone rest-pose origin) height relative to that foot's own low ball-height
-      baseline within the clip, so a constant float or sink left by retargeting does not affect the result, and the
-      ball's planar ground speed. Derivation never uses the foot bone origin's speed or height.
-    - **Role structure:** each role declares its expected step structure: the number and order of planted and swing
-      phases per foot, the leading foot, and the start and end state. For example, a forward cycle is one full cycle,
-      `i2f_l` starts from idle and ends with its left foot, the
-      [leading foot](../../animation/002-locomotive-animation-set/index.md#runtime-capability-contract), lifting
-      into the walk cycle after the right foot's first step, a stop ends with both feet planted, idle is planted
-      throughout, and side-steps and pivots have a known step structure. Derivation heuristically fits this structure
-      to the signals.
-    - **Policy:** per-role expectations, signal tolerances, and heuristics are tunable policy data, not spec constants.
-      Detection accuracy must be reasonable, not perfect. A clip whose signals cannot be fitted to its role's structure
-      with adequate confidence is refused and reported.
-    - **Boundary evidence:** each interval boundary records its cause, either height or speed; a speed-caused boundary
-      also records the ground-level ball slide. Boundaries come only from signal crossings: the role-structure fit
-      selects among those crossings and never creates a boundary.
-    - **Derivation report:** derivation writes a durable `per_foot_planted_interval_derivation_report_v1.json` holding
-      each boundary's cause and slide. It is retained in the processed package's
-      `processed/<set>/<variant>/provenance/` folder next to the retained interval copy, is deterministic, contains no
-      paths or timestamps, and is bound to the interval document by `intervals_sha256`. The runtime does not consume
-      it.
-    - **Independent verification:** checks independent of the classifier that placed the boundaries verify each
-      planted interval: the ball descends into contact before its start, rises or leaves by the speed criterion after
-      its end, and its planar drift inside the interval stays within the policy limit. Over-drift, no descent, no
-      lift, and an unfittable structure are refusal causes.
-16. The pinned point is the ball joint defined by [IK-003 Foot
-    Planting](../../ik/003-leg-feet-ik/index.md#foot-planting).
-17. Planted-interval data declares its schema version and derivation provenance. Producers, validators, and runtime
-    loaders reject unknown or mismatched versions.
-18. Published metadata describes motion only. It grants nothing and authorises no runtime movement or decision.
-19. Each selected-package report derives its clip and per-foot inventory from that package and reports coverage,
-    check results, and provenance. A data gap is reported as a data gap; it does not by itself establish missing
-    clips or a need to generate animation.
-20. Metadata-only publication is allowed only when retained animation, motion and planted-interval data, package
-    identity, generation, and all integrity bindings remain valid. Otherwise the affected derived metadata is
-    deliberately regenerated and validated from preserved source inputs.
-21. Generated runtime catalogues, descriptors, planted intervals, and reports are pipeline-owned and are not
-    hand-edited.
-
-### Validation and Performance
-
-22. Package validation checks complete capabilities, package/variant identity, finite data, frames and units, embedded
-    library correspondence, root-trajectory and planted-interval provenance, both-foot coverage, hashes/generations,
-    consumer compatibility, and clean-clone loading. Runtime-library SHA-256 bindings cover deterministic
-    `ResourceSaver` text after excluding only the path-owned top-level resource UID annotation that Godot adds during
-    import; embedded subresource identities and all animation data remain hash-covered.
-23. Behavioural fixtures may use deterministic synthetic packages, but real selected-content checks are required for
-    delivery behaviour. Production names, hashes, timings, distances, counts, and one variant's metadata are not
-    universal fixture authority.
-24. Runtime-facing data is precomputed and bounded. Consumers do not parse package data or search the animation library
-    every frame.
-25. Representative measurement records publication cost and relevant runtime data size/selection work using existing
-    facilities. No unratified exact performance threshold is introduced by this specification.
-26. Structural and numerical checks are preferred. Screenshots are optional diagnostic aids, not routine proof or a new
-    fixture prerequisite. Pipeline validation does not claim subjective movement naturalness.
+1. The [shared animation contract](../../animation/index.md) and
+   [ANIM-002](../../animation/002-locomotive-animation-set/index.md) own runtime role/variant/stage and dynamic-window
+   needs. Normal CTRL/NAV load the same current full-source export through `reviewed-feminine/set.json`, without
+   source activation switches or a prototype movement fallback. No planted-interval catalogue, stitch table or
+   clip-seam repair is required.
+2. Retained outputs identify character, source, variant, calibration, coordinates, units, and provenance truthfully.
+   Generated data is tool-owned, not hand-edited to conceal mismatches. Unknown or contradictory bindings fail clearly.
+3. Stage and validate output before durable mutation; publication is all-or-rollback. Metadata-only changes require
+   retained animation, identity, and integrity bindings to remain valid. No partial or stale publication is accepted.
+4. Verify selected real content and consumer loading as well as synthetic contract fixtures. Report gaps as gaps,
+   not proof of content inadequacy or motion quality. Measure processing costs diagnostically without new numerical
+   gates.
+5. Do not redesign the broader pipeline as a prerequisite to the actual-rig walk-to-idle demonstration. Record which
+   source extraction/conversion path works and which tooling remains unadapted; never label an unexecuted path ready.
+6. The minimal MotionBricks export path lives under `tools/kimodo-pipeline/`: `export_motionbricks.py` reads protected
+   calibrated setup and external-idle inputs without saving or rebaking them and verifies before/after hashes.
+   Moving/turn roles use the separate reviewed-source ingestion under KIMODO-PROD-005;
+   `export_motionbricks_frames.py` exports named `SOMASkeleton77.global_rot_offsets` from the approved Kimodo
+   installation.
+   It does not export evaluation motions or replace source-authoritative offsets with USD rests.
+7. Export `poses.json` and `model-frames.json` under `game/data/motionbricks/`. `catalogue.json` supplies external idle;
+   all eight normal movement roles use `reviewed-feminine/set.json`, binding `landing-ablation-01.json` and its angular
+   sidecar. The durable approved source/authoring/descriptor/provenance prefix is
+   `game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01`.
+   Preserve full 1–1200 at 30 Hz chronology and source/action/slot identity. Validate bundle/set/angular metadata
+   together before coordinated replacement with consumers stopped and rollback bytes available; per-file atomic
+   publication is not multi-file hot publication. Current ranges/cues are bound by
+   [ANIM-002](../../animation/002-locomotive-animation-set/index.md#implementation-status) and the
+   [source-data guide](../../../game/data/motionbricks/reviewed-feminine/README.md), not duplicated nominal angles.
+   Runtime must not depend on diagnostic JSON; independent validation oracles may retain separate fixtures.
+8. Document Blender, the approved Kimodo Python environment, source inputs and export commands in the operational
+    [MotionBricks export instructions](../../../tools/kimodo-pipeline/README.md#motionbricks-exports).
+    Link the separately provisioned [SOMA FP32 model setup](../../../game/models/motionbricks/README.md) and
+    [NVIDIA CUDA/cuDNN runtime prerequisites](../../../game/src/Motion/README.md#launch), rather than bundling
+    model weights. ANIM TR6 owns ignored root-project weights and worktree sharing; NAV-001 TR2 owns runtime path
+    selection and host-qualified launch requirements. Provisioning evidence must distinguish a reused local setup
+    from clean-checkout reproducibility.
 
 ## In Scope
 
-- Authoring bootstrap, source-safe selection and repair, materialisation, package validation, and publication.
-- Idle package authoring from per-character idle sources through the calibrated retarget setup, including the
-  setup-parity gate and idle-source lifecycle.
-- Repository source-asset roles, ownership, immutability, provenance, replacement, and retirement contracts,
-  including character-scoped authored inputs.
-- Character-generic processing, character onboarding with approved inputs, per-character baseline approval, and
-  cross-character package reuse validation.
-- Complete selected-variant ANIM-002 capability, motion, and planted-interval metadata, including schema,
-  derivation, provenance, publication-refusal, and runtime-loader validation contracts.
-- Single-selected-variant publication, additional-variant refusal, transactional rollback, clean-clone loading, and
-  selected-content package checks.
+- Source discovery and preservation, calibrated source processing where used, provenance, licensing checks through
+  the shared animation contract, safe output publication, and real consumer validation.
+- Existing bootstrap/input lifecycle safeguards and per-character calibration/reuse boundaries.
+- Externally authored source/reference inputs, continuous multi-role source requirements and essential integrity checks.
+- Reviewed-action ingestion, technical sanitising, role slicing, versioned metadata and failure-safe publication.
 
 ## Out Of Scope
 
-- Player input, NPC navigation/arrival, runtime foot planting, IK actuation, and obstacle planning. This exclusion does
-  not remove package handoff or consumer schema validation from scope.
-- Additional or simultaneous production-variant publication, live variant switching, unattended generation, and
-  subjective naturalness approval.
-- Creating or regenerating source animation to repair gameplay implementation defects.
-- Implementing the optional setup-transplant fallback without rejection of direct reuse and explicit authorisation
-  (KIMODO-CHAR-004). This exclusion does not defer character onboarding, approved-baseline enforcement, every-bake
-  calibration checks, or per-variant reuse validation.
-- Hand-calibrating or visually approving a character's retarget setup: calibration approval and visual audit remain
-  artist-owned decisions.
-- Idle-derived locomotion pose references beyond the declared extension point; the neutral-template default is the
-  delivery contract.
-- Broader pipeline redesign unrelated to source preservation.
+- Runtime routing, player movement, corrective foot planting, general action catalogues, and broad pipeline redesign.
+- Unattended content acceptance, new animation generation to mask runtime faults, and unapproved setup transplantation.
+
+These exclusions do not defer required idle/walk source verification, conversion, loading, or source protection.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. **KIMODO-UAC-001:** An artist bootstraps and audits a variant workspace without modifying the supplied setup or
-   source animation; invalid input produces an actionable diagnostic.
-2. **KIMODO-UAC-002:** Failed staging, validation, or publication preserves the prior package and leaves no partial
-   transaction artefacts.
-3. **KIMODO-UAC-003:** One selected full-role variant publishes with its own metadata. Attempting to publish a different
-   additional variant is refused without changing the selected package; fixture testing remains variant-neutral.
-4. **KIMODO-UAC-004:** A clean-clone check loads the published package without regeneration or pre-existing cache state.
-5. **KIMODO-UAC-005:** Reports expose missing or failed planted-interval data without fabricating intervals,
-   successful locomotion, or content inadequacy.
-6. **KIMODO-UAC-006:** Every real selected clip publishes both-foot planted intervals that match the clip, including
-   rolling about the ball of the foot and clips whose retargeted feet float or sink slightly. Authored ground slides
-   and low shuffles, known pipeline artefacts, are published as swing, so they are not pinned; the user judges them
-   in-game.
-7. **KIMODO-UAC-007:** From a clean checkout, an artist can identify each repository source asset's and each
-   per-character input's workflow role and lifecycle, reproduce a supported source-dependent workflow (bootstrap,
-   workspace composition, extraction, idle publication), distinguish inputs from derivatives, and receive an
-   actionable missing-input failure instead of silent substitution.
-8. **KIMODO-UAC-008:** An idle package publishes through the setup-calibrated flow with provenance naming its
-   per-character idle source, and the user accepts its in-game appearance; a bake whose staged setup fails the
-   setup-parity gate is refused before publication rather than shipping mis-oriented limbs.
-9. **KIMODO-UAC-009:** A package authored for one supported character plays on another supported character's runtime
-   through declared reuse, without silent breakage; tracks for bones absent from the consuming skeleton demonstrably
-   no-op.
+1. **KIMODO-UAC-001 (UR1–3):** Reports identify actual idle/walk inputs and missing inputs, preserve source bytes and
+   artist approval boundaries, and distinguish source readiness from runtime motion evidence. The maintained
+   reviewed-action command ingests externally artist-authored sources without a pipeline generation receipt.
+2. **KIMODO-UAC-002 (UR4–5):** Failure checks preserve prior outputs and unrelated character inputs; a delivered output
+    loads from a clean checkout using documented prerequisites.
+3. **KIMODO-UAC-003 (UR6):** Source/authoring audit proves local reference ownership without an external idle
+   dependency.
+   Whole-window source/preview evidence and human review assess interior motion independently of boundary agreement.
 
 ### Technical Requirement Acceptance
 
-1. **KIMODO-TAC-001:** Package tests verify all 22 capabilities, variant-scoped metadata and provenance,
-   embedded-library resolution, coherent package binding, and rejection of inferred, mixed, stale, or contradictory
-   declarations.
-2. **KIMODO-TAC-002:** Transaction tests cover staged validation, reload, normal commit, every rollback point, metadata-
-   only publication, and refusal of a different additional variant before durable mutation.
-3. **KIMODO-TAC-003:** Planted-interval checks verify both-foot, whole-clip coverage for every locomotion and idle clip;
-   role-aware derivation from ball height relative to each foot's own low ball-height baseline and planar ground
-   speed, with ground slides above the policy tolerance classified as swing; a recorded height or speed cause for every
-   boundary and the recorded slide at every speed-caused boundary; production and retention of the derivation report,
-   bound by `intervals_sha256`, in the package's provenance folder; start and end verification independent of the
-   classifier; refusal of incomplete clips, with refusal tests demonstrating over-drift, no descent, no lift, and an
-   unfittable role structure; native-key-rate root trajectory tables in source units, within their declared error
-   bound against the embedded root track; and rejection of unknown or mismatched schema versions across producer,
-   validator, and runtime loader.
-4. **KIMODO-TAC-004:** A selected-package report derives its inventory, reports coverage, check results, and
-   provenance, and does not convert a data gap into a content-quality conclusion. Alternative compatible
-   fixture packages are tested independently and do not imply additional production publication.
-5. **KIMODO-TAC-005:** Validation proves protected source immutability, clean-clone loading, bounded precomputed data,
-   no per-frame consumer parsing/library search, and representative performance measurement.
-6. **KIMODO-TAC-006:** A real selected package passes package and consumer checks; synthetic fixtures alone do not prove
-   delivered-content behaviour or subjective naturalness. Short-motion checks distinguish missing metadata from missing
-   source content without requiring new animation generation.
-7. **KIMODO-TAC-007:** Source-contract checks bind the canonical rig and neutral template to their repository-fixed
-   paths and approved baselines, prove the monolithic locomotion input remains read-only, bind each character's setup
-   and idle sources to their per-character baselines, and verify generated provenance names the per-character idle
-   source and repository sources where required.
-8. **KIMODO-TAC-008:** Tests cover clear missing-input failures and the coordinated replacement or retirement gates for
-   all repository source assets and character-scoped authored inputs. Structural and read-only checks are classified
-   separately from synthetic behavioural fixtures and real selected-package delivery checks.
-9. **KIMODO-TAC-009:** Setup-parity tests prove every bake binds to the character's approved setup baseline — byte
-    hash plus constraint/helper fingerprint parity covering helper basis and roll state and constraint mute state —
-    and refuse a deviating or uncalibrated staged setup before publication, including the documented reference
-    calibration state (`thigh_l/_r_RET` 35° rolls with muted Locked Tracks, `lowerarm_l/_r_RET` 50° rolls).
-    Idle-bake regression checks prove that an appended slotted action drives the source rig even when its slot
-    identifier differs from the rig name, and that the baked clip retains frame-varying motion across the admitted
-    range; constant-valued keys spanning that range do not establish motion retention.
-10. **KIMODO-TAC-010:** Character-generic and reuse tests prove the parameterised target rig name, character asset
-    root, and root lateral-location axis with no single-character default; `target_skeleton` recorded from the actual
-    target rig; per-character baseline approval that leaves existing characters' baselines untouched; declared
-    cross-character consumption whose absent-bone tracks are validated to no-op (for example `breast_l/r` on male).
-    Candidate-output checks apply only if the optional KIMODO-CHAR-004 fallback is authorised and implemented; they
-    must prove that its output remains unapproved until baseline approval, setup parity, and artist visual audit pass.
+1. **KIMODO-TAC-001:** Tool/source-boundary and source-lifecycle checks verify ownership, protected inputs, provenance,
+   baseline integrity, missing-input failures, and coordinated replacement/retirement gates (KIMODO-SRC-001–006).
+2. **KIMODO-TAC-002:** Where Kimodo baking/reuse is used, checks verify calibration parity (KIMODO-SET-001–003), actual
+   idle motion, explicit character parameters, isolated approvals, and absent-bone reuse safety.
+3. **KIMODO-TAC-003:** Output checks verify truthful bindings, rollback, clean loading, real selected-source conversion,
+    and the absence of a legacy catalogue prerequisite. The recorded supported path and gaps match executed evidence.
+    For MotionBricks, verify read-only export/input integrity, named frame provenance, catalogue/action-window loading
+    from runtime data paths and documented external prerequisites. Reused exports or an existing import cache alone do
+     not satisfy clean-checkout acceptance.
+4. **KIMODO-TAC-004 (KIMODO-PROD-001–006, UR2/4/6):** Verify externally authored source/reference provenance,
+   whole-pose boundary placement, multiple intended cycles and predeclared extraction policy, without requiring
+   repository source-generation machinery. Test essential identity, format/range and claimed-complete coverage failures,
+   not extra misplaced-constraint fixtures. Demonstrate ingestion of a reviewed Blender action without a generation
+   receipt, binding approval to hash/action/ranges; explicit range
+   revisions need new review. Verify read-only full ordered export, documented sanitising fidelity, traceable slices,
+   physical/phase metadata and ordinary/boundary sampling, including truthful non-cyclic handling. Audit complete-cycle
+   identification, frozen bounds/period/endpoint convention and experimental-versus-admitted metadata. Raw-cycle trials
+   require no exact-seam gate; boundary measurements remain diagnostic. Apply ANIM-002-TAC-001–003 for repeated-wrap
+   sampling/placement and actual-rig evidence. Fallback source-boundary processing needs visible generated-harm
+   evidence, explicit changes and human review, not mandatory sanitising. Verify atomic content/review publication
+   preserves valid outputs on failure and refuses failed/unreviewed sources. Full source
+   and calibrated-preview evidence distinguishes human suitability, technical integrity and actual-rig runtime proof.
+   A complete variant requires all eight roles; final default acceptance requires both defaults and their previews,
+   not merely a representative subset. Independent implementation review remains required.
 
-### Acceptance Traceability
+Technical acceptance 1 covers Tool and Source Boundary and Repository Source Asset Contract; acceptance 2 covers
+Character Setup and Calibration Contract; acceptance 3 covers Output and Validation Boundary; acceptance 4 covers
+Source Production Contract. NAV-001 owns final playable evidence; source and gameplay suitability remain human-owned.
 
-- User Requirements 1–3 → KIMODO-UAC-001–002.
-- User Requirements 4–5 → KIMODO-UAC-003.
-- User Requirements 6–7 → KIMODO-UAC-005 and KIMODO-TAC-002–003.
-- User Requirement 8 → KIMODO-UAC-006 and KIMODO-TAC-003.
-- User Requirement 9 → KIMODO-UAC-001 and KIMODO-TAC-005, KIMODO-TAC-007.
-- User Requirement 10 → KIMODO-UAC-004.
-- User Requirements 11–13 → KIMODO-UAC-007 and KIMODO-TAC-007–008.
-- User Requirement 14 → KIMODO-UAC-008 and KIMODO-TAC-009.
-- User Requirements 15–16 → KIMODO-UAC-009 and KIMODO-TAC-010.
-- KIMODO-SRC-001–006 → KIMODO-UAC-007 and KIMODO-TAC-007–008.
-- KIMODO-SET-001–003 → KIMODO-UAC-008 and KIMODO-TAC-009.
-- KIMODO-IDLE-001–003 → KIMODO-UAC-007–008 and KIMODO-TAC-007, KIMODO-TAC-009.
-- KIMODO-CHAR-001–004 → KIMODO-UAC-009 and KIMODO-TAC-010; fallback candidate-output checks are conditional on
-  authorised implementation, not current delivery.
-- Technical Requirements 1–4 → KIMODO-TAC-005–006.
-- Technical Requirements 5–10 → KIMODO-TAC-001–002, KIMODO-TAC-005.
-- Technical Requirements 11–18 → KIMODO-TAC-001, KIMODO-TAC-003, KIMODO-TAC-006.
-- Technical Requirement 19 → KIMODO-TAC-004.
-- Technical Requirements 20–21 → KIMODO-TAC-002–003.
-- Technical Requirements 22–26 → KIMODO-TAC-001, KIMODO-TAC-005–006.
+## Implementation Status
+
+The maintained reviewed-action ingestion and set publisher deliver the complete feminine
+`source_feminine_landing_ablation_01` action, with protected durable source/authoring copies, descriptor, approval and
+provenance receipts. `reviewed-feminine/set.json` binds every role to `landing-ablation-01.json`; the angular sidecar
+uses actual exported headings/FK measurements and current primary/recovery landmarks, including authored reversal.
+Source ranges remain non-cyclic and raw repetitions `EXPERIMENTAL_NOT_ADMITTED`; these are quality-admission labels,
+not feature switches. No source poses are repaired or regenerated by normal runtime loading.
+
+The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records
+read-only full export, complete eight-role publication, coordinated set/angular replacement and normal consumer checks.
+Runtime JSON is self-contained; durable Blender inputs retain host-specific texture references, not a proved portable
+texture archive. Migration technical checks pass; combined independent review remains pending, and no multi-file
+atomic hot-publication, default-entrypoint native-motion, performance or artistic quality certification is claimed.
+Human acceptance covers source stepping/foot-sliding mitigation with initial twitch deferred. Raw repetitions,
+generated gait/contact/sliding, headset quality, masculine/default content and previews, and known shutdown/hand-origin
+risks remain open. Plan steps 5/6 and broader ANIM-002 acceptance remain deferred-with-risk. No new take, retry,
+model-call budget, source processing or tuning is authorised by this documentation revision.
 
 ## References
 
-- [Project Specifications Index](../../index.md)
+- [Project Specifications](../../index.md)
 - [Developer Tool Layout](../index.md)
-- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
-- [IK-003: Leg and Feet IK System](../../ik/003-leg-feet-ik/index.md)
-- [Operational README][readme]
-- [Bootstrap Path Ownership][bootstrap-paths]
-- [Bootstrap Baseline Ownership][bootstrap-workspace]
-- [Monolithic Bootstrap Extraction][bootstrap-extraction]
-- [Retarget Processor][blender-retargeting]
-- [Idle Export Defaults][retargeting]
-
-[readme]: ../../../tools/kimodo-pipeline/README.md
-[bootstrap-paths]: ../../../tools/kimodo-pipeline/kimodo_pipeline/bootstrap_paths.py
-[bootstrap-workspace]: ../../../tools/kimodo-pipeline/kimodo_pipeline/bootstrap_workspace.py
-[bootstrap-extraction]: ../../../tools/kimodo-pipeline/kimodo_pipeline/bootstrap_extraction.py
-[blender-retargeting]: ../../../tools/kimodo-pipeline/kimodo_pipeline/blender_retargeting.py
-[retargeting]: ../../../tools/kimodo-pipeline/kimodo_pipeline/retargeting.py
+- [Shared Animation Contract](../../animation/index.md)
+- [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
+- [Operational README](../../../tools/kimodo-pipeline/README.md)

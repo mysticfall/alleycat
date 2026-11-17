@@ -64,5 +64,5 @@ These exclusions do not defer required command, ownership, README, environment, 
 ## References
 
 - [Character Generator](character-generator/index.md)
-- [Kimodo Locomotive Animation-Set Pipeline](kimodo-pipeline/locomotive-animation-set.md)
+- [Kimodo Motion Sources](kimodo-pipeline/locomotive-animation-set.md)
 - [GDScript API Documentation Generator](gdscript-api-doc-generator/index.md)

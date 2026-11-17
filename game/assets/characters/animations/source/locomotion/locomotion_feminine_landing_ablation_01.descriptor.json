@@ -1,0 +1,245 @@
+{
+  "schema": "anim002_reviewed_descriptor_v1",
+  "source": {
+    "path": "game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01.blend",
+    "sha256": "3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a",
+    "action": "source_feminine_landing_ablation_01",
+    "slot": "OBKimodo",
+    "rig": "Kimodo_Source",
+    "frames": [
+      1,
+      1200
+    ],
+    "fps": 30
+  },
+  "variants": [
+    {
+      "id": "feminine",
+      "posture": "normal_local_reference",
+      "stages": [
+        {
+          "id": "normal",
+          "coverage": "complete",
+          "roles": [
+            {
+              "role": "forward",
+              "usable": [
+                46,
+                106
+              ],
+              "representative": [
+                46,
+                106
+              ],
+              "travel_direction": [
+                0,
+                0,
+                1
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    46,
+                    106
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "backward",
+              "usable": [
+                196,
+                256
+              ],
+              "representative": [
+                196,
+                256
+              ],
+              "travel_direction": [
+                0,
+                0,
+                -1
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    196,
+                    256
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "left_noncross",
+              "usable": [
+                346,
+                406
+              ],
+              "representative": [
+                346,
+                406
+              ],
+              "travel_direction": [
+                1,
+                0,
+                0
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    346,
+                    406
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "right_noncross",
+              "usable": [
+                496,
+                556
+              ],
+              "representative": [
+                496,
+                556
+              ],
+              "travel_direction": [
+                -1,
+                0,
+                0
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    496,
+                    556
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "left_cross",
+              "usable": [
+                646,
+                706
+              ],
+              "representative": [
+                646,
+                706
+              ],
+              "travel_direction": [
+                1,
+                0,
+                0
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    646,
+                    706
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "right_cross",
+              "usable": [
+                796,
+                856
+              ],
+              "representative": [
+                796,
+                856
+              ],
+              "travel_direction": [
+                -1,
+                0,
+                0
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    796,
+                    856
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "left_turn",
+              "usable": [
+                946,
+                1006
+              ],
+              "representative": [
+                946,
+                1006
+              ],
+              "travel_direction": [
+                0,
+                0,
+                0
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    946,
+                    1006
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            },
+            {
+              "role": "right_turn",
+              "usable": [
+                1096,
+                1156
+              ],
+              "representative": [
+                1096,
+                1156
+              ],
+              "travel_direction": [
+                0,
+                0,
+                0
+              ],
+              "loopability": "non_cyclic",
+              "phase": {
+                "intended": {
+                  "source_middle": [
+                    1096,
+                    1156
+                  ]
+                },
+                "observed_support": "unknown",
+                "transfer_compatibility": "unverified"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

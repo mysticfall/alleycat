@@ -1,0 +1,63 @@
+{
+  "schema": "anim002_reviewed_approval_v1",
+  "decision": "accepted",
+  "reviewer": "User",
+  "approval_origin": "Explicit source-adoption scope amendment after reviewed preferred-source improvement; twitch deferred",
+  "descriptor_sha256": "85e83fb1802bddfe46e7b5beb0fa2395b2c2463f566e28b1d557751a47fe7831",
+  "source": {
+    "path": "game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01.blend",
+    "sha256": "3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a",
+    "action": "source_feminine_landing_ablation_01",
+    "slot": "OBKimodo",
+    "rig": "Kimodo_Source",
+    "frames": [
+      1,
+      1200
+    ],
+    "fps": 30
+  },
+  "accepted_ranges": {
+    "feminine/normal/forward": [
+      46,
+      106
+    ],
+    "feminine/normal/backward": [
+      196,
+      256
+    ],
+    "feminine/normal/left_noncross": [
+      346,
+      406
+    ],
+    "feminine/normal/right_noncross": [
+      496,
+      556
+    ],
+    "feminine/normal/left_cross": [
+      646,
+      706
+    ],
+    "feminine/normal/right_cross": [
+      796,
+      856
+    ],
+    "feminine/normal/left_turn": [
+      946,
+      1006
+    ],
+    "feminine/normal/right_turn": [
+      1096,
+      1156
+    ]
+  },
+  "full_window": [
+    1,
+    1200
+  ],
+  "preview_rig": "Female",
+  "calibration_preserved": true,
+  "evidence_sha256": {
+    "game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01.blend": "3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a",
+    "game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01.approval.json": "608fa2f88e3366eb8c98af06d2f5dc45722b0f31672c3004b7ee0feabfeb3f26"
+  }
+}

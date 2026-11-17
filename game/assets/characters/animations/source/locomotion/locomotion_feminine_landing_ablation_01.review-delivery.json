@@ -1,0 +1,33 @@
+{
+  "files": {
+    "authoring-bridge-review.blend": {
+      "path": "/home/mysticfall/.local/share/opencode/worktree/5204354870fbeec1893f680015d64d2ffeaefac0/motion-bricks-test/game/temp/motionbricks/anim002-turn-landing-ablation-01/source-run-01/candidate-01/authoring-bridge-review.blend",
+      "sha256": "ef6cf9c5b26ea034b05c246eaaa001c53ee4e682c9a98bec3beb2779c8125538",
+      "python": "/home/mysticfall/workspace/kimodo/kimodo-venv/bin/python3",
+      "constraintStringExact": true,
+      "derivedPayloadDifferences": [],
+      "authoredInputsExact": true,
+      "sourceAction": "normal_local_start_pose_REFERENCE_ONLY",
+      "frameRange": [
+        1,
+        1200
+      ]
+    },
+    "source-review.blend": {
+      "path": "/home/mysticfall/.local/share/opencode/worktree/5204354870fbeec1893f680015d64d2ffeaefac0/motion-bricks-test/game/temp/motionbricks/anim002-turn-landing-ablation-01/source-run-01/candidate-01/source-review.blend",
+      "sha256": "3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a",
+      "python": "/home/mysticfall/workspace/kimodo/kimodo-venv/bin/python3",
+      "constraintStringExact": true,
+      "derivedPayloadDifferences": [],
+      "authoredInputsExact": true,
+      "sourceAction": "source_feminine_landing_ablation_01",
+      "frameRange": [
+        1,
+        1200
+      ]
+    }
+  },
+  "humanApproval": false,
+  "runtimePublished": false,
+  "note": "Open authoring-bridge-review.blend to regenerate the fullset; source-review.blend to review this generated candidate. Explicit Python path is an operational setting only; payload unchanged."
+}

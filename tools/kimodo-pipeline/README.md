@@ -1,7 +1,128 @@
 # Kimodo Pipeline
 
 This tool owns Kimodo bootstrap, materialisation, packaging, publication, and validation. Its normative contract is
-[Kimodo Locomotive Animation-Set Pipeline](../../specs/tooling/kimodo-pipeline/locomotive-animation-set.md).
+[Kimodo Motion Sources](../../specs/tooling/kimodo-pipeline/locomotive-animation-set.md).
+
+MotionBricks runtime requirements are defined by the [shared animation contract](../../specs/animation/index.md).
+The package/publication commands below are not prerequisites for that playtest. Its minimal read-only exports are
+documented separately below; source-preservation and calibration safeguards remain in force.
+
+## MotionBricks Exports
+
+For artist-authored and reviewed actions, use [Reviewed Source Ingestion](#reviewed-source-ingestion).
+Source generation and artistic review are external to these export and publication commands.
+
+The minimal reference-Female runtime data can be reproduced from the repository root:
+
+```sh
+blender --background --factory-startup --python-exit-code 1 \
+  --python tools/kimodo-pipeline/export_motionbricks.py
+"$KIMODO_PYTHON" tools/kimodo-pipeline/export_motionbricks_frames.py
+```
+
+`KIMODO_PYTHON` is a Python interpreter with the approved Kimodo installation and its dependencies available.
+The first command reads the calibrated setup and `idle/sad.blend` action `kimodo_m0a3dyf0`.
+It hashes inputs before/after and never saves a `.blend`. The second exports only named
+`SOMASkeleton77.global_rot_offsets`, not evaluation motions. Outputs are `game/data/motionbricks/poses.json` and
+`model-frames.json`; the small authored `catalogue.json` selects the sad variant's idle stage. Existing
+outputs are replaced deliberately during provisioning; evidence directories are never touched.
+
+Catalogue stages name an action, normalised source speed and zero-based four-frame `entry`/`exit` indices at
+30 Hz. Normal CTRL/NAV use the catalogue for idle; moving and turn roles use the shared reviewed source set
+published below. The externally licensed SOMA FP32 ONNX model is not included. See the
+[runtime launch instructions](../../game/src/Motion/README.md#launch).
+
+## Reviewed Source Ingestion
+
+`ingest_reviewed_source.py` is the maintained **Blender action → full ordered source → runtime-reader** path for
+ANIM-002. It does not modify the idle `MotionCatalogue` or wire player/NPC clocks. Prerequisites:
+Blender (tested 5.2.3), an existing calibrated SOMA77 `Kimodo_Source` saved with correct action rotation modes,
+and the prototype `poses.json` calibration provisioned above. No Kimodo service, model inference, generation receipt,
+MakeHuman bake/round-trip or Python environment change is required.
+
+Create a UTF-8 descriptor with schema `anim002_reviewed_descriptor_v1`:
+
+- `source`: `path`, saved-byte `sha256`, exact `action`, explicit `slot` identifier (or null for unslotted actions),
+  `rig`, inclusive original `frames`, `fps: 30`. All frames in the action are retained. Identity-object/metre/30 Hz
+  source and calibrated rest/joint order are required; unsupported inputs fail rather than implicitly retime/retarget.
+- `variants`: one or more `{id, posture, stages}`; stages are `{id, coverage, roles}`. IDs cannot contain `/`.
+  `coverage` is `partial` or `complete`; complete requires all eight ANIM-002 roles. Missing roles have no fallback.
+- Each role declares `role`, inclusive `usable` and `representative` frame pairs, `travel_direction` in canonical
+  XYZ, `loopability: non_cyclic`, and `phase: {intended, observed_support, transfer_compatibility: unverified}`.
+  Observed support is `unknown`, `supported` or `mismatched`; intended phase is authored information, never inferred
+  displayed contact. Representative intervals must be inside usable ranges. Optional `generation` records only known
+  provenance; no pipeline generation recipe or receipt is required.
+
+Human review is a separate `anim002_reviewed_approval_v1` JSON: `decision: accepted`, `reviewer`, `approval_origin`,
+exact `descriptor_sha256`, identical `source`, `accepted_ranges` keyed `variant/stage/role`, full action `full_window`,
+`preview_rig: Female`, `calibration_preserved: true` and `evidence_sha256` binding at least source/preview evidence.
+Hash the final descriptor bytes, after review. Revised ranges require a new descriptor/review identity, not editing
+failed receipts. Review is a human attestation, not a cryptographic signature or automatic aesthetic judgement.
+
+```sh
+blender --background --factory-startup --python-exit-code 1 \
+  --python tools/kimodo-pipeline/ingest_reviewed_source.py -- \
+  --descriptor PATH/descriptor.json --review PATH/review.json \
+  --calibration game/data/motionbricks/poses.json --destination PATH/reviewed-source.json
+```
+
+The self-contained `anim002_reviewed_source_v1` JSON includes the original descriptor text/hash, approval, tool/source
+provenance, full samples, and derived metadata. Publication validates before writing, fsyncs/read-validates a staged
+JSON, then atomically replaces **one destination**; failures preserve prior bytes. Source/descriptor/review/calibration
+and evidence paths cannot be destinations. Inputs are hashed before/after. There is no multi-file transaction promise.
+
+### Multi-Take Reviewed Sets
+
+`publish_reviewed_set.py --selection PATH/selection.json --destination PATH/set.json` binds multiple adjacent
+`anim002_reviewed_source_v1` bundles without combining their frame numbers or losing individual action/review
+identities. Selection lists `source`, `variant`, `stage`, `role`, `first`, `end_exclusive`, `kind` (`gait_cycle` or
+`angular_episode`) and an explicit `reason`. All eight unique roles of one variant/stage are required. The publisher
+validates existing approvals, binds bundle hashes, measures the raw SE2 endpoint transform, then stages/readbacks/
+atomically replaces only the set. Incomplete selections refuse and preserve the previous set. Sources remain adjacent
+durable JSON; embedded original source/evidence paths are provenance, not runtime requirements. Do not overwrite a
+bundle in a live set: publish a new named bundle, then switch its set atomically.
+
+Repetition metadata remains explicitly experimental, independent of human source approval. No source poses/ranges
+are changed or admitted as seamless loops. A turn episode may include holds and is not a constant-rate stepping
+cycle. The shared runtime `ReviewedRoleSampler` uses measured raw repetition/elapsed phase, with role changes
+invalidating old phase and per-sample SE2 accumulation across wrapped windows. Normal CTRL stationary turns use
+source-bound lift/recovery landmarks; normal NAV uses source-rate native-path targets and finite terminal turns.
+See [the durable feminine playtest set](../../game/data/motionbricks/reviewed-feminine/README.md) for selections,
+controls and known quality limits. No activation flags or new generation command are involved. Coordinate the
+fixed set/angular sidecar switch with consumers stopped; the publishers do not provide a multi-file transaction.
+
+### Technical Transforms and Sampling
+
+Only representation changes are applied: Blender `(x,y,z)` → canonical `(x,z,-y)` metres; evaluated bone/rest axes →
+canonical identity-rest orientations; canonical world → parent-local transforms; normalised XYZW unit quaternions.
+No extra sanitising was necessary on the reviewed probe. There is no pose, mesh, gait, foot, root-path, endpoint or seam
+repair. The root is **evaluated Hips**, not ground `Root` or the model's separately smoothed root. Its global placement,
+height and articulated local motion remain in full samples. Hips facing is `atan2(forward.x, forward.z)`, unwrapped;
+travel is independently declared. Unit/rate conversion is not silently guessed. Non-rigid transforms are refused.
+
+Per-sample forward differences retain uneven velocity/angular progression; the final sample has no invented future
+derivative. `physical_reference` records net velocity, planar net/path speed and facing progression over the declared
+representative interval. These are measurements, not intended speed, contact or a naturalness gate. Turns retain actual
+measured translation/drift; no positive locomotion speed is fabricated. No cycle is admitted by this reader.
+
+`AlleyCat.Motion.ReviewedMotionSource(path, calibration)` loads this data without changing `SomaMotionData` or normal
+gameplay. `GetRole(variant, stage, role)` is explicit; `CopyWindow(role, originalFrame, callerBuffer)` copies four
+frame-major canonical poses at 30 Hz, refusing starts before `usable[0]` or after `usable[1]-3`. No clamping/wrapping.
+`FrameAtTime(seconds)` floors absolute time since the first source sample (one product ULP allowed for floating-point
+boundary roundoff). It does not advance a clock, infer a phase, apply target placement or choose a horizon. The owning
+controller must later supply those policies and decide what follows a non-cyclic end.
+
+### Focused Contract Checks
+
+The maintained checks cover reviewed-source identity, format, approval and publication failure behaviour, complete-set
+publication and source-alias refusal. They do not run source generation or require a local Kimodo service. Source
+fixtures and disposable publication outputs stay separate from the accepted Blender assets and runtime data.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/kimodo-pipeline/tests -p test_reviewed_source.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/kimodo-pipeline/tests -p test_reviewed_set.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/kimodo-pipeline/tests -p test_reviewed_set_source_alias.py
+```
 
 ## Package Layout
 
@@ -297,6 +418,18 @@ Runtime-library SHA-256 bindings use deterministic `ResourceSaver` text while ex
 apply the same canonicalisation; subresource IDs and all animation payload bytes remain covered.
 
 ## Verification Boundary
+
+The MotionBricks exporters (`export_motionbricks.py` and `export_motionbricks_frames.py`) validate complete
+structural, finite-data and applicable provenance bindings before publication. They write a sibling temporary JSON,
+read it back and validate it, then atomically replace the destination. Validation, write or replace failure preserves
+the previous destination and removes staging. Atomicity is per destination, not a transaction across both exports;
+this is not a power-loss durability guarantee. No source animation is saved or rebaked.
+
+Run their focused publication checks with:
+
+```bash
+python tools/kimodo-pipeline/tests/test_motionbricks_publication.py
+```
 
 Use the tool-owned focused checks appropriate to the changed command or contract. Behavioural expectations must use
 synthetic fixtures; production motion and planted-interval data are structural, provenance, and immutability inputs,

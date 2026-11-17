@@ -1,0 +1,15 @@
+{
+  "variants": [
+    {
+      "name": "sad",
+      "stages": [
+        {
+          "action": "idle",
+          "speed": 0.0,
+          "entry": 0,
+          "exit": 0
+        }
+      ]
+    }
+  ]
+}

@@ -35,6 +35,11 @@ EXTERNAL_RUNTIME_COMMANDS = {
 }
 ALLOWED_PYTHON_OCCURRENCES = {
     (
+        "tools/kimodo-pipeline/export_motionbricks.py",
+        "<module>",
+        "game/assets/characters/reference/female/animations/source/kimodo_retarget_setup.blend",
+    ): "structural/calibration input path",
+    (
         "tools/kimodo-pipeline/kimodo_pipeline/bootstrap_extraction.py",
         "<module>",
         "game/assets/characters/animations/source/locomotion/locomotion.blend",
