@@ -7,767 +7,410 @@ title: NPC Navigation
 
 ## Requirement
 
-Define how an NPC follows a route and arrives precisely and naturally at a target position and heading using real
-ANIM-002 clips, with feet that stay planted and no movement after completion.
+Animate one NPC along Godot's native navigation-agent path in the existing scene, with in-process Godot/C#
+MotionBricks generation on NVIDIA hardware and game-owned dynamic source conditioning under ANIM-002.
+This is the implementation/review contract. Normal NAV uses the shared eight-role source set and native path/handoff,
+including finite terminal-facing turns; broader content and generated-motion quality acceptance remain open.
 
 ## Goal
 
-NPCs walk, side-step, and turn like people: they choose a sensible movement, arrive within tolerance, and stand still.
-Many useful targets are closer than a complete authored start plus stop, so short moves must be built from parts of
-real clips rather than from synthetic sliding.
-
-The design keeps one arrival planner, one movement owner, one heading policy, and one completion rule. Distance and
-heading are corrected only while a foot is in the air, so a planted foot never slides and no repair happens after the
-move ends.
-
-Where two real pieces meet, the join reads as one motion: the planner prefers fewer pieces and direct continuations,
-cuts an existing clip before its slow tail rather than playing the tail, and, while exactly one foot is planted,
-aligns the body across the join instead of letting the planted foot jump.
+Let the user judge whether generated motion is naturally continuous and precise enough for navigation, without
+preserving a parallel clip-planning implementation or disguising model limitations with corrective locomotion.
 
 ## User Requirements
 
-1. Each accepted request ends with exactly one outcome: `Completed`, `Blocked`, `Failed`, `Cancelled`, or `Superseded`.
-2. A completed NPC is within `0.01 m` of the target position and `1°` of the target heading. These defaults are
-   configurable; relaxing them requires measurement and user agreement.
-3. Movement choice looks purposeful:
-   - a distant lateral target arcs into forward walking;
-   - a nearby lateral target uses a side-step;
-   - a target behind the NPC causes a turn before walking;
-   - a stationary heading change turns in place as one continuous motion, without an unnecessary stop between its
-     steps;
-   - a heading change while travelling is walked as an arc, not performed as a stationary turn: the two are not
-     interchangeable; and
-   - final heading shapes the arrival, not the whole route.
-4. Short moves, including moves shorter than a full start plus stop, heading-only requests, and combined
-   move-and-turn requests, use real authored motion: a start/stop slice pair, a side-step, or a pivot.
-5. Planted feet stay planted. Rolling about the ball of the foot, including heel lift, is acceptable; visible foot
-   sliding, body sliding over planted feet, foot pops, warping, and body jerks are not.
-6. After completion the NPC does not creep, slide, settle, or step.
-7. Repeated requests, lateral requests, and turn-only requests complete like any other request.
-8. The NPC follows a route through any via-points in order without stopping at them. At a sharp corner it may adapt
-   its arc or slow and turn largely in place when an arc would look unnatural or leave the route. The Waypoint Route
-   scenario verifies this.
-9. An NPC that cannot reach a target ends the request honestly and finitely. It never shuffles, retries, or walks in
-   place indefinitely.
-10. Naturalness is a manual user judgement, supported but not replaced by automated evidence.
-11. A request is a destination and facing, optionally preceded by an ordered list of via-points. Arrival accuracy and
-    stillness apply only at the final destination; via-points are passed through, not stopped at.
-12. A move uses as few real pieces as the clips allow. Unnecessary Idle bridges, filler motion before locomotion, and
-    slow wind-down playback are avoided where a feasible direct continuation exists, and smaller aligned joins are
-    preferred over larger ones. Bounded purposeful corrective steps may complete a simpler plan; they never relax
-    arrival accuracy.
+1. Reuse `game/assets/testing/navigation/navigation_test.tscn`, its destination position/facing selection, authored
+   waypoints, and static obstacle layout. Do not introduce a second navigation scene.
+   - Right-drag orbits, middle-drag pans, and the wheel zooms; camera gestures do not submit destinations.
+   - Blue hover previews the pointer's collider hit. Left press locks that position in amber; dragging previews facing
+     live, and release submits once. Free hover resumes afterwards, hidden while navigation runs or no collider is hit;
+     there is no persistent committed-destination marker.
+   - Shift-click queues visible ordered pass-through waypoints without submitting; submission or Escape clears them.
+   - Speed UI consumes input without starting world gestures. Releasing over UI ends camera gestures and cancels
+     placement without submission; Escape cancels pending gestures as well as navigation.
+2. The NPC departs idle, follows Godot's native route through static detours and pass-through waypoints, and plays an
+   arrival sequence targeting the requested position/facing before settling into idle. Waypoints do not require stops.
+    Sequence completion does not guarantee endpoint convergence; expose the realised endpoint for user evaluation.
+    Modest generated deviation from the path is tolerable, not wide arcs, circling or substantial veering away.
+    Do not reject a native-valid route because a custom motion guide or geometry proof cannot represent it.
+3. A destination set during movement supersedes the old request from current realised motion, without an idle reset.
+4. Requests accept optional normalised speed `0 < n <= 1`, relative to the selected locomotion variant's maximum.
+   Provide a reasonable constant default and a playtest control. Requested speed is not an exact realised-speed promise.
+5. An ordinary route/collision failure has a finite, truthful reported outcome followed by one generated transition
+   into idle when inference is available. Escape cancels and generates an idle transition. If setup or inference is
+   unavailable, report the cause and retain the last safe pose instead; do not attempt an elaborate fallback.
+    Repeated shuffling or an endless attempt to correct the endpoint is not an acceptable outcome. External physics
+    may block realised movement; this does not promise prediction of every obstruction or automatic stall recovery.
+6. The user judges motion naturalness and endpoint precision in the playable scene. Diagnostics expose limitations;
+   neither endpoint agreement nor a static screenshot proves acceptable motion.
+7. Navigation selects source roles and posture appropriate to remaining travel, actual motion and desired facing.
+   Nearby positioning favours direct forward/backward steps or non-crossing left/right sidesteps where feasible,
+   rather than an unnecessary forward-facing loop, detour or circling. Longer journeys turn towards the valid route
+   and walk forward, allowing turning while stepping rather than requiring a stationary turn before departure.
+   Crossing lateral travel is used sparingly, only for bounded short relocation where retaining facing makes sense;
+   it is not routine diagonal travel. Reconsider positioning and facing near the destination and after intent/route
+   changes, without role chattering. Stationary turns remain available where appropriate, including final facing,
+   but do not replace simple translation or introduce a recovery sequence. Lateral roles are repeatable, not mandatory
+   transition clips. Variant/stage physical speeds govern movement intent; source-phase progression must not delay
+    replacement/cancellation or require displayed support-foot matching. Idle remains externally owned and compatible
+    with the selected posture.
+   Once positioning is reached, an unchanged terminal-facing request uses a finite source-cycle/landmark turn plan.
+   Preserve its ordered stepping cues through playback, then finish the requested facing and settle into compatible
+   idle; ordinary lookahead/handoffs must not skip cues or create endless small adjustments. Replacement, cancellation,
+   collision and genuine motion-provider failure remain truthful interruption boundaries, not promises to finish.
+8. Automatically record ordinary play in the existing navigation test scene, with no additional recording switch.
+   Let the user mark a bad scenario, save feedback while continuing play, and share the folder for recorded-state
+   inspection and focused reproduction/regression work before manually repeating the scenario. Show numbered attempts
+   (including refusals), accepted request identity, session path and save/recording health. Do not upload automatically;
+   accumulated recordings remain for the user to delete manually. This feedback loop does not require routine video
+   capture or an exhaustive motion-quality campaign.
 
 ## Technical Requirements
 
-### Ownership
+### Runtime and Content
 
-1. NAV owns request lifecycle, route following (including via-point requests under Technical Requirements 18–19),
-   movement choice, arrival planning, heading policy, completion, and outcomes. It adds no obstacle-planning subsystem
-   and reuses existing route and collision responsibilities.
-2. Exactly one movement owner moves the NPC actor. Foot planting ([IK-003][ik-003]) and animation never move the actor
-   independently of it.
-3. Each physics tick has one actor movement operation, including collision. Its input is the AnimationTree's evaluated
-   root motion for the tick, consumed once, plus any swing-phase correction under Technical Requirements 8–10 and any
-   seam body alignment under Technical Requirements 23–28, composed into one proposal.
-4. One heading policy owns yaw for the whole request. No second component turns the actor.
+1. Run inference and required MotionBricks runtime helpers in-process through Godot/C#, initially for one NPC on
+   NVIDIA hardware. No Python sidecar, Smart Primitives port, or full Python demo port is permitted.
+2. Establish the exact ONNX binding, execution provider, and deployment dependencies through a representative
+    execution probe. Installed libraries or upstream examples alone are not proof of an operational runtime.
+    The current path uses ONNX Runtime GPU with CUDA and a separately provisioned SOMA FP32 model (ANIM TR6).
+    The exported `ModelPath` defaults to `res://models/motionbricks/onnx/mmm_v6_soma_fp32.onnx`; an optional non-blank
+    `MOTIONBRICKS_MODEL` takes precedence. Globalise the selected path on the scene thread before native worker IO.
+    Ordinary source-checkout playtests need neither the override nor `LD_PRELOAD` on the verified host; this is not
+    a universal CUDA compatibility claim. Retain host-specific dependency checks and the prerequisites in the
+    [runtime README](../../../game/src/Motion/README.md#launch).
+3. The [shared animation contract](../../animation/index.md) and
+   [ANIM-002](../../animation/002-locomotive-animation-set/index.md) are normative for generic speed stages, dynamic
+    source windows, externally supplied idle/action compatibility, SOMA conversion, realised feedback and licensing.
+   Normal installation loads `reviewed-feminine/set.json`, shared with CTRL and bound wholly to the current
+   `landing-ablation-01.json` source. No source/controller activation flag or prototype movement fallback is required.
+4. Demonstrate generated walk-to-idle on the actual MakeHuman rig with realised-pose feedback before expanding route
+   integration. Prefer native Godot retargeting only if installed capabilities and actual-rig evidence support it.
+   Bone-name correspondence alone is insufficient.
 
-### Arrival Planner
+### Navigation and Motion Ownership
 
-5. One arrival planner builds each move as a sequence of real ANIM-002 clips selected by direction, distance, and
-   heading change using [ANIM-002 root-motion metadata][anim-metadata]:
-   - longer moves: entry → forward or directional cycles → exit;
-   - short moves: a slice pair, the head of an entry clip joined to the tail of the matching exit clip (for example
-     the head of `entry_forward_*` joined to the tail of `exit_forward_*`), or the equivalent for another direction;
-   - nearby lateral positioning: a side-step;
-   - heading-only or turn-first requests: one or more whole or partial pivots; and
-   - **Plan ranking and composition:** feasible plans are ranked for naturalness and stationary turns are composed
-     under Technical Requirements 21–22.
-6. A slice pair is chosen by direction and distance together. The join occurs where the same anatomical foot is planted
-   in both slices according to the [ANIM-002 per-foot planted intervals][anim-metadata], so the joined motion keeps a
-   consistent support foot.
-7. The planner predicts the endpoint of its sequence from metadata and replans only at bounded events such as request
-   start, step boundaries, and waypoint changes. It performs no per-frame package parsing or unbounded search.
-   - Root predictions use the [ANIM-002 root trajectory tables][anim-metadata], scaled by the bound skeleton's
-     `motion_scale` under the ANIM-002 scale rule; yaw is unscaled. Until the pipeline publishes the tables, the
-     planner uses the ANIM-002 interim root derivation at bind time.
-   - **Ball-joint trajectories:** seam choice compares ball-joint positions. These depend on each rig's bone
-     proportions, so they are rig-specific runtime data, not ANIM-002 package metadata. Once at bind time, never per
-     frame, the planner evaluates each clip on the bound skeleton and tabulates, for each anatomical foot, the ball
-     joint's position (defined by [IK-003 Foot Planting][ik-003-planting]) relative to the root, at the clip's native
-     key rate and in that rig's runtime units. The table declares an error bound against the evaluated post-FK ball
-     positions. It is never derived by scaling source units. The tables require both toe bones; if either is missing,
-     navigation binding fails with a clear error.
-   - **Planner set:** the seam table covers only the clip pairs and seam kinds the arrival planner uses to produce
-     natural NPC navigation. The set is a planner design decision and may change. ANIM-002 clips or pairs outside it
-     are excluded from planning; they are not defects, and the bind-time seam report lists them as excluded, distinct
-     from unavailable.
-   - **Seam alignment:** a seam is every crossfade the planner issues within its set: entry → cycle, cycle → cycle
-     lane switches, cycle → exit, slice joins, manoeuvre ↔ Idle, and same-role pivot re-entry. A seam `(a, b)` names
-     the outgoing clip's playback position `a` on the tick the transition is requested and the incoming clip's seek
-     position `b`. On the
-     entry tick the outgoing clip advances one physics tick while the incoming clip starts at `b`, so alignment is
-     evaluated over the window the runtime actually plays: the outgoing clip from `a + dt` and the incoming clip from
-     `b`, for the pair's crossfade duration minus `dt`, with both playback positions advancing through the blend, not
-     only at the switch instant. Seam tables are therefore valid for one physics delta `dt`. `a` and `b` are chosen
-     so that the window satisfies both parts of alignment:
-     - **Phase agreement (strict, not tunable):** at every tick of the window, both clips mark every foot with the
-       same planted or swing state under their [ANIM-002 per-foot planted intervals][anim-metadata], at their playback
-       positions, so both clips are at the same stride phase.
-     - **Pose agreement (tunable):** at every tick of the window, the separation between the two clips' ball-joint
-       positions for each foot, root-relative, stays within the seam tolerance. Its default is derived from measured
-       seam separations of the planner set only, with the existing clips, and reported to the user for agreement. Like
-               the arrival tolerance of User Requirement 2, it is not relaxed without measurement and user agreement.
-   - **Crossfade durations:** the crossfade duration may differ per clip pair in the planner set. It is tunable, with
-     a base default and a floor. The AnimationTree's authored crossfade for each planner-set pair equals the duration
-     the seam table uses for that pair, and no NPC transition is authored outside the planner set.
-   - **Same-role re-entry:** a planner-set pair whose outgoing and incoming clips share one pivot role (a same-role
-     pair, or self-pair) is realised in the authored graph through a continuation alias state: a second authored
-     state that loops the same canonical clip as the role's canonical pivot state. The state machine cannot author a
-     `from == to` transition, and travelling to the current state never re-enters it, so the alias arc is the
-     authored realisation of the pair's crossfade. The alias arc carries the pair's crossfade duration, and the
-     planner-set, alignment, and duration checks of this requirement assess the canonical and alias states of one
-     role as that one pair at the level of the logical role. Native looping within one segment (Looping confined
-     manoeuvres) is distinct: it plays on within a single state and issues no transition.
-   - **Required continuation states:** every NPC rig's AnimationTree authors a continuation alias state for each
-     pivot role — `NPCPivotLContinuation` and `NPCPivotRContinuation` — each looping the same clip as its canonical
-     pivot state. Navigation binding fails with a clear error if either state is missing or does not loop its
-     canonical clip: a rig without them cannot materialise same-role pivot re-entry, and no degrade path exists.
-   - **Looping confined manoeuvres:** a side-step or pivot whose ANIM-002 `loop_intent` is true is played as looping.
-     The planner may run a whole step from one double-support phase, across the authored loop point, to the next.
-   - **Exits:** exit clips are selected by the current stride phase, not by the lane used on entry. An exit starts only
-     at a seam time that satisfies alignment.
-   - **No aligned seam:** a candidate seam that fails either part of alignment is excluded. The planner then uses other
-     options: whole clips, side-steps, pivots, and corrective steps within budget. An unaligned crossfade is never
-     issued. If no aligned plan remains, the request ends `Failed` under Technical Requirement 13.
-   - **Cyclic clip availability:** at bind time, the planner's seam table determines, for each cyclic clip and each
-     looping confined manoeuvre in the planner set, its aligned exit seams under this alignment rule, to any exit lane
-     in the set selected by phase. Such a clip with no aligned exit seam in each cycle or loop is unavailable: the
-     planner never enters it, and the bind-time seam report lists it. Every cyclic clip or looping confined manoeuvre
-     the planner enters therefore has at least one aligned exit seam per cycle or loop.
-   - **Bind-time seam report:** the report lists the planner set and the excluded clips and pairs, and records the
-     seam tolerance in force, the measured seam-separation data it was derived from, the user-agreement record, and
-     each pair's crossfade duration. It also flags each seam kind that the pair's crossfade duration makes impossible,
-     because the window cannot fit within a same-phase segment of both clips, so that its absence is not mistaken for
-     a planner defect.
+5. Godot's `NavigationAgent3D` owns path selection, native path-point progression and rerouting, including static
+    detours. The game preserves ordered requested pass-through vias using native routing, adapts the current native
+    path into animation targets, and owns request identity/replacement, collision-realised movement and terminal
+    outcomes. MotionBricks bridges supplied target pose windows, not semantic intentions or a replacement route planner.
+    Accept native-valid paths without bespoke mesh-shape, topology/connectivity, forecast-centre or turn-radius
+    admission proofs. Do not require a single flat rectangular navigation region or refuse vias categorically.
+    Preserve finite-input, native availability and request/route ownership checks; accepting a path does not authorise
+    consuming stale work or ignoring actual collisions and failures.
+   Preserve the character-facing `INavigation`/`INavigator` capability boundary rather than creating a parallel
+   character hierarchy. The normal NPC role installs `MotionBricksNavigation` as its `NavigationBase` and rebinds
+   `Character.Navigation`; this is not a diagnostic controller beside the production role.
+6. A minimal motion adapter samples targets by distance ahead along the same ordered native path, using the agent's
+    current progress, selected variant/stage physical metadata, requested normalised speed and horizon. It does not
+    construct a replacement route, custom turn arc or off-path guide. Destination facing remains game-owned intent;
+    source role selection does not replace native path authority or require every turn before translation.
+    Realise generated root motion through Godot's `MoveAndCollide` using the actor's actual root collider.
+    Feed actual realised motion back into generation; do not silently teleport the actor into endpoint agreement.
+     `MotionBricksNavigation` is the single collision-root movement owner. Targets follow native path order through
+     corners and vias, without obstacle shortcuts or requiring every target window to fit one straight segment.
+    Modest realised deviation under UR2
+    is not a reason to reject the native path. Speed changes target-displacement intent, not playback time or a
+    guarantee of measured speed. Do not apply a walking-specific distance to crawling or confuse phase-local velocity
+    with cycle/reference speed.
+    Native path validity and route ownership constrain navigation intent, not guaranteed physical clearance. Do not add
+    bespoke predictive physics admission: no swept-body/clearance forecast, support-floor proof or `TestMove` preflight.
+    Actual collisions and external physics may limit realised movement; this is not a physics-aware planner.
+7. Destination replacement uses current realised motion rather than replaying departure from idle. Ordinary
+    navigation-agent rerouting is allowed; new stall-triggered rerouting is deferred. Detection and reporting of
+    supported navigation failures remain navigation responsibilities;
+   MotionBricks supplies the transition into idle after failure, not a corrective manoeuvre planner or collision AI.
+    Terminalise ordinary failure before that one transition, using realised history; keep engine collision handling
+    active throughout without triggering another transition. Do not replace it with a fixed-duration blend or
+    retry loop.
+8. Do not retain a parallel legacy implementation, compatibility machinery, clip-seam correction, or add a foot-IK
+    rescue system. Preserve unrelated character, VR, arm/hand IK, and physical interaction behaviour.
 
-### Correction and Completion
+#### Outcome and Worker Contract
 
-8. The residual between the predicted endpoint and the target, in position and heading, is corrected only while a foot
-   is swinging. Correction is spread over the remaining swing phases and capped per step.
-9. There is no correction while both feet are planted, on a frozen or finished pose, or in Idle. No settlement stage
-   exists. Seam body alignment (Technical Requirements 23–28) is zero in exactly these states and phases.
-10. The swing/planted state that gates correction comes from the ANIM-002 per-foot planted intervals of the clips
-    being played, combined under the [ANIM-002 Planted Combination Rule][planted-rule], the same state
-    [IK-003 foot planting][ik-003] uses. The intervals grant nothing; NAV alone decides and applies correction.
-11. If the residual still exceeds tolerance when the planned sequence ends, the planner adds purposeful corrective
-    steps, each a side-step or pivot, corrected under the same swing-only rule. Their number is small, bounded, and
-    tunable.
-12. A request is `Completed` when the collision-realised position and heading are within the configured tolerance and
-    the final clip has returned to Idle. The planner's internal tolerances equal the configured spec tolerance.
-13. After `Completed`, NAV applies no actor movement. `Blocked` means the route or target cannot be reached because of
-    an obstruction. `Failed` means the target is reachable but still outside tolerance after the corrective steps, no
-    aligned plan remains under Technical Requirement 7, or the request makes no progress within a bounded time and
-    work budget. Replanning resets neither the corrective-step count nor the time and work budget.
-14. Outcomes are exact-once and first-terminal-wins. Cancellation and supersession are prompt and stop or redirect the
-    NPC through the same planner, using real clips and the swing-only correction rule; there is no settlement stage.
-    - **Prompt:** the stopping or redirecting transition begins at the first aligned seam time under Technical
-      Requirement 7. No motion discontinuity, such as a pose snap, root-motion jump, or unaligned crossfade, is used
-      to begin it sooner.
-    - **Promptness bound:** the tunable default bound on that delay is one stride cycle of the current clip. For a
-      cyclic clip this is the clip's cycle duration; for a looping confined manoeuvre under Technical Requirement 7 it
-      is the time until its next aligned seam, bounded by one loop duration; for any other non-cyclic clip (entry,
-      exit, non-looping side-step or pivot, or slice) it is the remaining duration of that clip until its next aligned
-      seam or its end. Alignment takes precedence: if the first aligned seam falls later than the bound, the
-      transition still waits for it. Exceeding the bound is report-only, not a failure.
-    - **No aligned seam before the end:** if a finite current clip has no aligned seam before its end, it plays to its
-      end and continues through its authored successor, the clip boundary it was planned to hand off to (for example
-      entry → cycle or exit → Idle), until the first aligned seam. The delay is reported. The rule applies to finite
-      clips only: under the cyclic clip availability rule of Technical Requirement 7, every cyclic clip or looping
-      confined manoeuvre the planner enters has an aligned exit seam in each cycle or loop.
-    - A replacement request plans from the current collision-realised state, and A2 applies from the superseded
-      request's issue through to completion of the replacement.
+The following clauses refine TR5–8 and are covered by NAV-TAC-002:
 
-### Animation Tree Use
+- `Completed` with `ArrivalSequenceCompleted` means the generated arrival sequence ended, not that the destination
+  converged. Record the measured transform, position/facing errors, configured tolerances and signed margins as
+  diagnostics. Facing comes from the realised root/hips orientation, not an unchanged actor-node basis. Commit this
+  outcome before ordinary idle playback. Preserve convergence-based `TryComplete` semantics for other consumers.
+- Setup/inference unavailability logs and retains its cause, fails accepted requests with `MotionUnavailable`, and
+  preserves that cause on subsequent requests. Retain the last safe pose under normal scheduling, including pose-input
+  reapplication where modifier output is transient. No generated idle, authored-idle reset or elaborate blend/retry is
+  required when inference is unavailable.
+- Replacement invalidates old ownership and uses current displayed context without an idle reset. Copy submitted pose
+  arrays; retain only the latest queued request and reject stale results. Worker factories/callbacks must not access
+  live scene nodes. Submission, cancellation and result consumption belong to the scene thread; native work does not.
+- One worker owns model construction, generation and disposal. Ordinary scene exit signals shutdown without waiting
+  and observes completion/faults asynchronously without retaining scene nodes. Dispose only after an in-flight native
+  call returns, never concurrently with it. `Game` retains pending workers even after their scene is removed. Menu exit
+  and root-window close share one application-shutdown boundary: reject new MotionBricks work, signal all workers,
+  and asynchronously await every worker's completion, including native disposal, before final application quit.
+  Cancellation and the 30-second request budget are logical: they cannot interrupt native load/CUDA calls. A native
+  call that never returns prevents graceful application exit indefinitely; do not promise bounded native shutdown.
+  Forced process termination and direct `SceneTree.Quit` bypass this boundary and are not supported graceful-exit paths.
 
-15. The AnimationTree is used as designed: a statically authored graph driven through its parameters. There is no
-    runtime graph surgery, no parallel blend model, and no time-stretching of clips to a shared cadence, whether by
-    blend-space sync or by custom timelines.
-16. Clip slices are played through standard AnimationTree playback controls on the authored graph.
-    - **Crossfade timing:** a crossfade is requested only at a seam `(a, b)` chosen under the seam alignment rule of
-      Technical Requirement 7: on the tick the outgoing clip is at `a`, the incoming clip seeks to `b`. The crossfade
-      uses the pair's authored duration, so it runs for the window that alignment was evaluated over.
-    - **Same-role re-entry:** a planned segment that re-enters the pivot role currently playing is issued as a
-      crossfaded transition to that role's continuation alias state (Technical Requirement 7), alternating the
-      canonical and alias physical states. The crossfade timing and mid-clip entry rules of this requirement apply
-      unchanged, so re-entry is a blended seam at a planned seek rather than a playback reset, and no pose teleport
-      occurs.
-    - **Mid-clip entry:** entering a clip at a slice start may use a same-tick, zero-delta pre-evaluation of the
-      AnimationTree (`Advance(0)`) before the seek takes effect. This is sanctioned use under Technical Requirement 15.
-    - **Entry tick:** the entered clip is evaluated at the slice start on the entry tick itself, so there is no pose
-      pop, and the entered clip contributes zero root motion on that tick. During a crossfade, the outgoing clip's
-      weighted root-motion contribution continues normally on the entry tick. The seek never integrates root motion
-      across the jump.
-    - **Final evaluation only:** the pre-evaluation leaves an intermediate state with the entered clip at position
-      `0`. Only the tick's final AnimationTree evaluation is observed: by the [IK-003 foot-planting][ik-003]
-      provider's input pose, by planted-state evaluation under the [Planted Combination Rule][planted-rule], by the
-      actor movement operation's root-motion read under Technical Requirement 3, and by the Technical Requirement 17
-      recording. The pre-evaluation is not a separate tick and produces no observable sample: no IK solve, no
-      planted-state step, no recorded sample, and no root-motion read.
+### Validation and Delivery
 
-### Validation Instrumentation
+9. Focused automated checks cover runtime contracts, coordinate/pose conversion, realised-context sampling, state
+    ownership, request replacement, engine collision-realised movement, and finite reported navigation outcomes.
+   Playtest selection uses physics-tick raycasts with collision mask 1, not an infinite ground plane or a navigability
+    filter: obstacle hits may preview without a valid native route. Do not reject a native-valid route merely because
+    the hit is on an obstacle. Check the viewport/GUI gesture boundary as well.
+10. Capture full temporal evidence on the displayed MakeHuman rig: initial idle, departure, sustained walking,
+    turns/detours, waypoint passage, arrival/facing transition, and settled idle. Separately capture replacement
+    while moving and navigation failure through idle and the reported terminal outcome.
+11. Measure endpoint position/facing error, foot slip, discontinuities, and inference latency diagnostically. Do not
+    inherit legacy numerical quality gates or invent arbitrary thresholds. Distinguish integration defects from
+    model limitations; escalate material design changes or model unsuitability rather than adding corrective policy.
+12. Before playable handoff, run relevant automated checks and repository format/build validation, inspect temporal
+    evidence under the visual-verification guidance, and have a dedicated reviewer independently inspect source,
+    captured images, and temporal evidence.
+     Fix admitted blockers and re-review. Report failures and their scope honestly, including player failures.
+    Required commands are `dotnet format --verify-no-changes AlleyCat.sln` and
+    `dotnet build AlleyCat.sln -warnaserror`; relevant Godot tests follow the integration-testing guidance.
+13. Delivery identifies the scene and launch instructions, required local model/runtime setup, evidence paths,
+     diagnostics, review disposition, separate player scope, and the outstanding user suitability decision.
+     Do not commit bulky model artefacts or secrets.
+14. **Conditioning Controller:** navigation owns variant, state, role, virtual source clock/phase, expected source foot
+    phase and target selection under the
+    [ANIM-002 lifecycle](../../animation/002-locomotive-animation-set/index.md#technical-requirements). Select the role
+    before constructing its motion guide, under the selection policy below. Sample future consecutive source windows
+     using virtual playback and target horizon outside the finite terminal-facing exception below, preserving local
+     motion while adapting the native path under TR5–6;
+    engine physics determines realised movement. Apply the shared advance,
+    loop/end, role/stage/variant-switch and overlapping-request rules. Snapshot phase/window/placement with request
+     ownership; model duration/completion must not set elapsed source-clock pace. The finite plan's service cursor
+     advances only when its owned landmark endpoint is actually played. Replacement, cancellation and
+    terminal outcomes supersede old progression immediately; do not wait for source-cycle completion or require a
+    matching displayed support foot. Connect from actual context to a new role or compatible external idle/action
+    targets. Missing/incompatible inputs follow the explicit unavailable-motion policy, without a fabricated idle
+    anchor, procedural fallback or retry loop. Preserve route/outcome, single collision-root and worker guarantees;
+    no leading-foot variants, dedicated arc-turn or start/stop/reversal clips are prerequisites.
+15. **Playtest Feedback Recording (UR8):** restrict automatic recording to the existing navigation test scene. The
+    [recorder workflow and schema](../../../game/src/Navigation/Recording/README.md) are normative dependencies for
+    controls, storage and bundle interpretation. Correlate attempts/bookmarks, accepted requests and inference tickets
+    without conflating them. Preserve full command inputs (actual starting pose/facing, destination transform, ordered
+    vias, speed, replacement, cancellation and refusals), effective settings/source identity, submitted context/targets,
+    actual returned model chunks including stale results, role decisions, post-modifier actor/bones/blendshapes,
+    aligned camera/timing and truthful outcomes. Observe read-only: do not change source selection, realised history,
+    collision-root ownership, pacing, routing, outcomes or worker ownership to make recording succeed. Bound memory;
+    use asynchronous storage, explicit loss/truncation/error reporting and atomic checkpoints readable during continued
+    play; recording failures must not become navigation/inference failures. Drain native workers before finalising the
+    recorder. Record no secrets or full environment dump. Support inspection of recorded sampled states without fresh
+    inference; do not promise identical fresh inference/live physics, every rendered frame, pixel-perfect reproduction
+    or a whole-asset archive. Clearly label incomplete/lossy sessions rather than describing them as exact.
 
-17. The navigation test scene (`game/assets/testing/navigation/navigation_test.tscn`) records per tick: request
-    identity, planned sequence and current clip, per-foot ANIM-002 planted state, pre-IK and post-IK ball points (the
-    ball joint defined by [IK-003][ik-003]), the tick's movement decomposition — consumed root motion, seam-alignment
-    contribution, and residual-correction contribution, recorded separately with their combined totals against the
-    configured budgets — the per-foot contact identity and retained pin consumed from the
-    [IK-003 contact observations][ik-003-contact], collision-realised actor position and heading, via-points passed,
-    residual, predicted reach margin, and outcome. It also records the AnimationTree graph state (blend parameters,
-    transition progress, and each clip's playback position) so that the A2 and NAV-TAC-008 measurements compute
-    effective clip weights and planted state under the [Planted Combination Rule][planted-rule] from the recording,
-    independently of the foot-planting code. Post-IK ball points come from the IK-003 post-solve capture; planted-foot
-    yaw verification is normatively [IK-003][ik-003]'s (its Technical Requirement 26), and A2 remains planar. Recording
-    continues for `1 s` after completion. Screenshots are optional diagnostics.
+#### Role Selection Policy
 
-### Requests and Via-Points
+The following clauses refine TR14 and UR7; NAV owns this policy, not CTRL's joystick-component mapping:
 
-18. A request carries a destination, a final facing, and an optional ordered list of via-points. The planner plans the
-    path through each via-point's pass radius in order, then to the destination. A via-point counts as passed when the
-    NPC comes within that tunable radius; it is never a stopping point, and no stop clip, completion, or arrival
-    correction occurs there. A missed via-point is not a reason to backtrack or stop.
-19. Arrival rules (Technical Requirements 11–13, A1, and A3) apply only at the final destination. Final facing shapes
-    only the final approach. The corrective-step count and time and work budget cover the whole request.
+- Base selection on actual realised orientation/motion, intended route travel, remaining journey/positioning distance
+  and desired facing. Use post-modifier realised context under the shared animation contract, not actor-node facing,
+  source phase or a previously constructed forward guide as a substitute for current motion.
+- For nearby feasible positioning, favour forward/backward steps or non-crossing sidesteps according to displacement
+  relative to realised facing. A short diagonal does not universally require crossing, nor a short rear move a turn.
+  Reserve crossing roles for bounded short relocation where preserving facing is appropriate. For longer journeys,
+  turn towards valid route travel and walk forward rather than sustaining backward, sideways or crossing travel.
+  Remaining destination and route context govern this distinction: short local navmesh segments do not make a long
+  journey into a series of positioning moves. Preserve valid detours and waypoint order; direct positioning does not
+  authorise obstacle shortcuts or destination projection. Turning may accompany forward stepping.
+- Re-evaluate remaining displacement/facing near the destination and after intent or route changes. Use configurable
+  distance/angular bounds and bounded hysteresis for stable choices, not universal gait or motion-quality thresholds.
+  Hysteresis must not delay cancellation/replacement or force source-cycle completion. Final stationary turning is
+  available when appropriate, not a mandatory stage or substitute for feasible simple translation.
+- Expose the selection inputs and decision before guide/window placement. Each owned request snapshots the selected
+  role, variant/stage, intended phase, actual context, source window and route-bounded placement. A changed selection
+  invalidates incompatible queued/in-flight work; late results must not restore the old role or guide. Apply ANIM-002
+  phase transfer/initialisation and compatible-overlap rules without treating source phase as actual displayed motion.
+  Replacement/cancellation supersede old ownership immediately, with no idle reset or mandatory cycle completion.
+  During the finite terminal-facing plan below, ordinary role/lookahead reconsideration must not abandon the unchanged
+  request's remaining landmarks; its explicit replacement/cancellation and safety interruption rules still apply.
 
-### Test Scene Route Authoring
+#### Finite Terminal-Facing Turn Plan
 
-20. In the navigation test scene, shift-click drops a visible waypoint marker on the ground and queues it as a
-    via-point. A normal click, with drag for facing, sets the destination and issues the request with the queued
-    via-points. Starting a new route clears the previous markers.
+These clauses refine UR2/5/7 and TR14 only after position is reached and terminal facing still requires a stationary
+turn. They do not require turn-first departure, change native routing, or replace CTRL's stationary-turn policy.
 
-### Plan Selection and Composition
-
-21. The planner ranks feasible plans and issues a minimal-cost one from its bounded candidate set.
-    - **Feasible:** every join is an aligned seam under Technical Requirement 7, the sequence is playable through the
-      authored AnimationTree controls, and the predicted endpoint is reachable within the configured tolerances using
-      the combined bounded swing correction (Technical Requirements 8–10) and the bounded purposeful corrective steps
-      of Technical Requirement 11. An exactly matching uncorrected endpoint is not required, and a passing seam table
-      alone is not sufficient.
-    - **Naturalness cost:** lower cost means purposeful movement with fewer unnecessary pieces, fewer Idle bridges,
-      less slow-tail playback, and smaller joins, measured by the seam pose separation of Technical Requirement 7
-      within the configured tolerance. Cost terms and weights, and any slow-tail detector, are tunable configuration
-      with declared measurements behind them; diagnostic thresholds are not acceptance bounds.
-    - **Repeated-pivot generation:** chains of repeated pivot segments (Technical Requirement 22) are generated per
-      request and enter the normal ranking path with no priority over bind-time families; every composed chain is
-      charged to the shared composition budget, and a chain whose yaw residual alone cannot reach the finalists'
-      threshold is skipped before composition, exactly as the travel families pre-filter theirs. The bind-time seam
-      menu keeps its legacy capacity and contents — no slot is reserved or evicted, and per-request generated
-      recipes never displace bind-time ones. Chain duration estimates omit entry seeks under the existing family
-      convention, but re-materialised finalists are predicted exactly, so ranking decides on exact values.
-    - Ranking never trades away arrival accuracy: tolerances, budgets, and corrective-step bounds are constraints, not
-      cost terms. It never eliminates an authorised movement family (slice pairs, side-steps, pivots, arcs) to satisfy
-      a test; small sliced moves and pivots remain available where genuinely required, and smooth continuations are
-      preferred over avoidable resets to Idle.
-    - Ranking applies to plan selection only. It never delays or overrides the promptness rule of Technical
-      Requirement 14: cancellation and supersession still begin at the first aligned seam, and the finite-end and
-      corrective-step requirements are unchanged.
-22. Stationary turns and walking arcs are not interchangeable: a stationary heading change turns in place with pivots;
-    a heading change while travelling is walked as an arc.
-    - **Stationary-turn continuity:** the successive pivot pieces of one stationary turn join through aligned seams as
-      one continuous motion. The planner does not insert an Idle return between turn units (for example after each
-      `45°` pivot) unless no aligned join between the pieces exists, in which case the no-aligned-seam options of
-      Technical Requirement 7 apply.
-    - **Repeated same-role chains:** a stationary turn may be planned as a homogeneous chain of restart units of one
-      looping pivot's self seam: Idle → entry → N ≥ 2 pivot segments of that role, each joined to the next at the
-      self seam through Technical Requirement 7's same-role re-entry → Idle. The family is admitted only when the
-      requested heading change exceeds three native cycles of the role and matches the role's turning direction.
-    - **Phase-complete unit admission:** a restart unit is admitted only when its advancing incoming window — the
-      restart crossfade, the native solo back to the seam's outgoing time, and the entry seek — fully contains one
-      swing interval of each foot per the clip's planted-interval metadata: a complete alternating swing cycle. A
-      window covering only a single foot's swing is not a restart unit.
-    - **Shared native reserve:** per chain, each additional restart and each explicit extra native loop (placed
-      after the last restart) is charged against the same extra-native reserve — `MaxPivotLoops` native loops' worth
-      of both yaw and time — with every unit's entry seek included on the time axis. A necessary wrap inside a
-      partial segment is not a charged extra loop.
-    - **Truthful materialisation:** each repeated segment derives its own exit-cycle count from its real fade, solo,
-      and extra-loop elapsed; counts are never copied between segments, and a wrapped partial plays with zero extra
-      cycles. `Steps` keeps its segments-plus-loops meaning; no count is relabelled as a swing count.
-    - **Slow-tail slicing:** a pivot may be sliced before a wind-down tail and joined to the next piece at an aligned
-      seam, so the tail is not played. A sliced join is issued only when its complete crossfade satisfies both parts
-      of alignment under Technical Requirement 7, the composed schedule is geometrically feasible under Technical
-      Requirements 29–31, and it is playable through the authored AnimationTree controls of Technical Requirements
-      15–16. Joins enabled this way, such as pivot → pivot or pivot → entry, may be added to the planner set and seam
-      table. The statically authored graph edges may change to enable them; there is no runtime graph surgery, no
-      second blend controller, no new clips, no time-stretching, and no change to native clip playback speeds.
-
-### Seam Body Alignment
-
-23. NAV alone computes, budgets, and applies seam body alignment: a bounded, NAV-owned actor translation that
-    supports the feasibility of a planted foot's retained world pin across a join, instead of the pin being moved or
-    the foot sliding. Alignment is not an exact pre-IK coincidence guarantee between the native ball point and its
-    pin; three layers stay distinct:
-    - the **ideal native-ball demand** is the exact planar offset of Technical Requirement 27, a geometric target;
-    - the **applied alignment** is the bounded actor displacement actually scheduled under the shared budgets of
-      Technical Requirement 28; and
-    - the **post-IK pin constraint** is what the IK-003 planted hold then achieves.
-    A remaining native-ball offset after the applied displacement is permitted only where the combined schedule keeps
-    the retained pin reachable and continuous and A2 still holds with its bound unchanged; it never authorises an
-    instant full-demand shift, a cap relaxation, or an A2 relaxation. IK-003 supplies read-only committed
-    [contact observations][ik-003-contact]; it never issues a movement request, `CharacterIK` remains the sole
-    foot-target actuator, and IK-003 gains no hips or actor authority ([IK-003][ik-003] Technical Requirements
-    16–20). Alignment is NAV-owned movement under Technical Requirements 1–4 and the single movement operation of
-    Technical Requirement 3.
-24. Alignment is eligible only on a tick where exactly one foot is planted under the [Planted Combination
-    Rule][planted-rule] and that foot has a retained, usable anchor (Technical Requirement 25). It is exactly zero:
-    - while both feet are planted (double support), which includes every strict phase-aligned Idle join, because Idle
-      marks both feet planted throughout;
-    - in Idle, on a frozen or finished pose, and after completion; and
-    - while both feet swing, which has no planted anchor; the existing flight-phase residual correction is unchanged.
-    Where an aligned Idle join would need body alignment, the planner selects a feasible alternative plan or schedules
-    preparatory correction earlier during eligible single-support motion. No exception to A4 exists.
-25. NAV retains contact and release history across animation seams, plan changes, requests, and completion. Nothing
-    resets at request start, and no replant is manufactured to create an anchor. A usable anchor requires that the
-    foot's latest committed IK-003 contact snapshot:
-    - is actively holding: the solver state is hold. Releasing — including an unfinished release blend —
-      release-complete, and free states are excluded, so a pin reach-released by IK-003 while metadata still marks
-      the foot planted is never a usable anchor;
-    - was committed by the immediately preceding completed physics tick (the tick order of Technical Requirement 26),
-      with the foot's metadata contact under the [Planted Combination Rule][planted-rule] continuous from that
-      snapshot's planted interval through the current tick; and
-    - carries the interval, binding, and reset identities matching the foot's current continuous planted interval
-      and the rig, and a finite retained pin.
-    Missing or stale history grants no alignment. History is preserved; it is never reset or recaptured to regain
-    permission. A new contact has no usable anchor before its post-movement IK commitment: its acquisition tick gains
-    no alignment through provisional capture, and it becomes eligible on a following tick only if every condition
-    above holds. The previous committed snapshot is history: the current tick's final native pre-IK pose is the only
-    pose input, never the snapshot's pose ([IK-003][ik-003] Technical Requirement 19).
-26. The tick pose order is exactly:
-    1. the AnimationTree's final native evaluation of the tick, never an intermediate `Advance(0)` state (Technical
-       Requirement 16);
-    2. one root-motion read, consumed once (Technical Requirement 3);
-    3. one composed NAV movement proposal for the tick — root motion, seam alignment, and endpoint-residual
-       correction together — computed from the current actor-relative pre-IK pose and the retained history;
-    4. one collision resolution of that proposal; and
-    5. IK-003 commits each capture and release from that same pose under the realised transform (its Technical
-       Requirement 20): new contacts are captured after the tick's movement, never provisionally before it.
-27. Alignment geometry is signed and frame-explicit. The reference transform `T` is the tick's pre-alignment
-    candidate actor world transform: the composition of the tick's evaluated root motion, NAV's planned heading, and
-    the candidate residual correction — including that correction's yaw-pivot origin displacement, counted exactly
-    once — before that candidate's seam-alignment translation is added. Alignment is never included in `T` and then
-    applied again. With the actor-relative native ball point `b_i` of the planted foot from that tick's final pre-IK
-    pose, and the persistent world-planar pin `P_i` retained for that foot, the exact planar demand is
-    `d_i = P_i − XZ(T · b_i)`, where `XZ` projects onto the world horizontal plane. `d_i` is the ideal native-ball
-    demand of Technical Requirement 23 — a geometric demand, not permission for an instantaneous full shift:
-    - Alignment is applied as a bounded continuous schedule through the join, with no snap on entry and no snap-back
-      on exit.
-    - Root motion, alignment, and residual correction are jointly accounted: the composed proposal must keep pins and
-      reach feasible, residual correction may not cancel alignment without checking the resulting pin and reach
-      geometry, and a yaw pivot's origin shift is counted exactly once. Changing the candidate residual correction
-      changes its pre-alignment reference consistently, and the final schedule jointly checks and caps both
-      contributions.
-    - Two planted feet generally demand different translations: violations are not averaged away, one foot is not
-      silently chosen, reach is not enlarged, and pins are not released or replanted to manufacture phase permission.
-      Double support keeps zero alignment regardless.
-28. Alignment and residual correction are charged together:
-    - Both draw on the same per-step and per-request synthetic movement budgets, with no fresh allowance at a seam or
-      replan. Their contributions are recorded separately, and their combined total is what A4 and the per-step cap
-      evidence check. Numeric caps remain configuration; this specification sets none.
-    - The collision-realised transform, not the proposal, feeds every subsequent residual, pin, reach, and completion
-      check, and no second collision-bypassing translation is applied.
-
-### Prediction and Feasibility
-
-29. Plan prediction carries the complete planned synthetic movement schedule — per-tick root motion, alignment, and
-    residual correction — together with the retained contact and release history, not only sequence endpoints.
-    Feasibility and naturalness ranking evaluate that combined schedule.
-30. Predicted geometry is bound-rig native-pose-compatible: ball positions, foot orientation and ankle transforms,
-    upper-leg positions, foot-local ball offsets, and chain reach, each with a declared, validated error bound. It
-    extends the bind-time rig sampling of Technical Requirement 7 and the [ANIM-002 scale rule][anim-metadata]; it
-    introduces no second playback controller and no new package format.
-    - Linearly point-blended ball positions alone are not reach evidence: feasibility is verified against
-      independently observed final native pre-IK poses.
-    - Body translation does not change root-relative seam pose separation, so it cannot legitimise an otherwise
-      unaligned join.
-31. Reach and feasibility:
-    - Ankle-target reach is evaluated per [IK-003][ik-003] Technical Requirement 14, yaw-compensated about the ball,
-      for both legs, over the complete transition and the resulting stance, including the first pure incoming sample
-      (the first tick the incoming clip alone drives the pose). A fixed ball is not an unchanged ankle reach.
-    - A candidate schedule whose combined movement leaves any retained pin or ankle target unreachable is infeasible
-      and is rejected. The planner then uses bounded feasible alternatives and corrective steps, keeps honest
-      `Blocked` for obstruction and `Failed` for exhausted or no-aligned-plan cases under Technical Requirement 13,
-      and never weakens its finite lifecycle. IK-003 reach release remains a safety fallback, never an A2 success.
-
-Tuning values such as correction caps, the corrective-step count, the via-point pass radius, budgets, the seam
-tolerance, the per-pair crossfade durations and their base default and floor, the NAV-TAC-008 swing-travel bound, the
-promptness bound, the plan-ranking cost weights, slow-tail detection thresholds, and the seam-alignment schedule
-bounds are configuration, not spec constants. Implementation still delivers a documented default for each, with the
-measurements that justify and validate it; leaving exact values configurable does not defer that delivery or its
-validation. The seam tolerance is also subject to the measurement and user-agreement rule of Technical Requirement 7.
-Phase agreement is not a tuning value.
+- **Finite Angular Allocation:** bind the unchanged request, actual starting orientation, signed remaining arc,
+  selected source and its measured signed cycle span/ordered primary foot landmarks. Allocate cycles greedily up to
+  an initial maximum of 120 degrees per cycle, then the remainder: 180 degrees becomes 120+60, not repeated receding
+  lookahead targets. This approved initial policy is not a universal naturalness bound; no minimum cycle angle,
+  expansion-ratio or rate-quality limit is introduced. Do not add CTRL's recovery landmarks to this NAV policy.
+- **Source-Angle Mapping:** expand or contract each cycle's root-yaw progression by allocated signed angle divided
+  by measured signed source span, anchored at that cycle's planned start facing. Use actual source angular progress
+  at each landmark, not source-time fraction as angular fraction. Thus two primary lifts per source cycle yield four
+  ordered lift targets over a 120+60 plan. Preserve local holds/micro-reversals, source coordinates, chronological
+  order and declared cycle-boundary transforms; do not invert yaw as a clock or turn backwards to catch up to a
+  skipped forward cue. Each connection supplies four consecutive original 30 Hz source poses with unchanged non-root
+  articulation and consistently mapped local root yaw, not four widely spaced interior keyframes or source replay.
+- **Endpoint Service and Ownership:** keep planned source phase/landmark cursor separate from elapsed observation
+  time, context horizon and variable generated duration. Source phase is an ordered plan coordinate, not a clock
+  advanced by model output length. Each planned primary landmark must be the first guide and reach its actually
+  played endpoint before the next ordinary handoff can truncate it. Planning the next connection ahead is allowed;
+  consuming it early, skipping cycles/cues or replacing them with elapsed-lookahead samples is not. Snapshot plan,
+  cycle, landmark, mapping and request identity immutably. Each submission uses actual post-modifier realised context,
+  never a sampled source pose or unplayed prediction. Endpoint service proves playback, not lift, support or contact.
+- **Finite Finish:** after the last primary lift, complete the remaining mapped cycle angle and connect from actual
+  context to a compatible external idle target at the requested final position/facing, rather than stopping with a
+  raised-foot target. This is a finite end sequence, not a new idle system or mandatory four-recovery controller.
+  The existing reached-position contract/configured tolerance admits this end sequence; the turn source's incidental
+  translation distance must not re-gate final arrival or restart small-turn/cue-catch-up loops. Completion remains
+  sequence completion independent of convergence, with realised errors reported, not a new threshold or repair.
+- **Safety and Feasibility:** replacement/cancellation invalidate the plan and stale results immediately; actual
+  collision or genuine provider failure interrupts truthfully under TR5–8. Preserve native path authority, the
+  request-local lockout fix, worker lifetime, generated-root `MoveAndCollide`, rig modifiers and endpoint handling.
+  No procedural actor rotation, output repair, foot IK, artificial fixed pace or unbounded debt/recovery planner is
+  permitted. Correct mapping, context, supplied cues, untruncated playback and rig fidelity make poor motion evidence
+  about source suitability for this angular mapping and/or the MotionBricks connector, not proof of either's sole
+  fault. Reached landmarks alone do not guarantee coordinated stepping, acceptable pace or non-sliding settled arrival.
 
 ## In Scope
 
-- Request lifecycle, route and via-point following, movement choice, arrival planning, correction, completion, and
-  outcomes.
-- Short moves through slice pairs, side-steps, and pivots of existing ANIM-002 clips.
-- Naturalness-ranked plan selection, stationary-turn composition, and slow-tail slicing within existing ANIM-002
-  clips.
-- NAV-owned single-support seam body alignment, its contact-history, prediction, and feasibility contracts, and their
-  validation instrumentation.
-- Integration with IK-003 foot planting on the NPC rig.
-- The navigation test scene, its route-authoring controls, and its outcome instrumentation.
+- Single-NPC animation along native-agent paths, existing-scene controls, engine collision-realised root movement,
+  and idle.
+- Actual-rig conversion and feedback, runtime setup, source/licence checks, diagnostics, and automated/temporal
+  evidence.
+- Upfront replacement of obsolete locomotion machinery and independent review before playable handoff.
+- Game-owned source role/phase control, physical-speed placement and dynamic sampling with external idle integration.
 
 ## Out Of Scope
 
-- Player input and movement policy ([CTRL-001][ctrl-001]).
-- Obstacle planning, off-mesh traversal, terrain adaptation, generic motion matching, and live variant switching.
-- New short-step or turn clips. These may be considered only as a measured fallback after the user approves them.
-- Synthetic body alignment in double support, Idle, frozen, or finished states; a wider alignment policy needs a
-  separate user decision.
-- Retuning the arrival tolerance or relaxing the seam tolerance without measurement and user approval.
+- Player locomotion restoration, multi-NPC batching, broad hardware support, and ARDY integration.
+- Terrain/contact adaptation and a general action/idle catalogue. ANIM-002 role coverage, generic variants/stages,
+  physical speed metadata and lifecycle remain required; pending migration is not an exclusion from delivery.
+- AgenticMind action selection and Smart Primitives.
+- Physics-aware planning, bespoke predictive physical admission, and new stall detection/recovery or stall-triggered
+  rerouting. Existing navigation-agent rerouting and actual engine collision handling remain in scope.
+- Wrist/finger fidelity refinement and a future evidence-derived endpoint quality gate. These do not waive gross-body
+  posture, safe-pose retention, truthful diagnostics or full-window verification for this playable slice.
+
+Player delivery is separate under [CTRL-001](../../ctrl/001-locomotion/index.md); NPC acceptance does not establish
+player readiness. A broken NPC playtest is not a delivered prototype.
 
 ## Acceptance Criteria
 
-### Scenarios
+### User Requirement Acceptance
 
-All acceptance criteria apply to these scenarios in the navigation test scene, except as noted below the table:
-
-| Scenario | Request |
-| -------- | ------- |
-| Oblique | `0.79 m` at a bearing `39°` left of forward, final heading `39°` left. |
-| Terminal Slide | `1.50 m` at a bearing `19°` right of forward, final heading `19°` right. |
-| Terminal Slide Mirror | Terminal Slide mirrored about the actor's forward axis. |
-| Repeated Requests | Oblique; on its completion tick, the Oblique target plus `0.3 m` along its final facing. |
-| Lateral | `0.5 m` to the side, unchanged heading. |
-| Distant Lateral | About `3 m` to the side, unchanged heading. |
-| Behind | `1.5 m` behind, unchanged heading. |
-| Turn-Only | `90°` heading change without translation. |
-| Turn-Only Reverse | `180°` heading change without translation. |
-| Long Straight | `4 m` straight ahead, unchanged heading. |
-| Waypoint Route | From the origin facing `-Z`: via-point `(0, 0, -2)`, destination `(2, 0, -2)`, final facing `+X`. |
-
-The Waypoint Route scenario is an L-shaped route with a sharp corner. It is checked against A1–A4 and judged by the user
-under A6; A5 does not apply to it.
-
-### Parent Acceptance Criteria
-
-These criteria must not be weakened.
-
-1. **A1:** Every scenario reports `Completed` within `0.01 m` and `1°`.
-2. **A2:** Every planted run of each foot, from request issue to `1 s` after completion, is evaluated; the worst run's
-   slip is at most `5 mm`.
-   - **Planted run:** a continuous run of ticks on which the foot is planted under the ANIM-002
-     [Planted Combination Rule][planted-rule], never the foot-planting implementation's own planted state. Each run
-     has its own anchor. A split run, even by a single-tick flicker, restarts the anchor at the start of the new run.
-   - **Slip:** the greatest horizontal (planar world XZ) distance of the post-IK ball joint from its position at the
-     start of the run, that is, the maximum excursion from the planted-start position.
-   - **Not slip:** rotation about the ball joint, including heel lift, and vertical motion.
-   - **Report-only:** summed per-tick path length and net start-to-end displacement per run are diagnostics, not
-     criteria.
-3. **A3:** Actor movement after completion is zero, from completion to `1 s` after.
-4. **A4:** No synthetic actor correction is applied while both feet are planted.
-5. **A5:** Movement choice is correct: distant lateral targets arc into forward walking, nearby lateral targets
-   side-step, and targets behind turn first.
-6. **A6:** The user judges the result natural in the test scene.
+1. **NAV-UAC-001 (UR1–2):** In the reused scene, temporal evidence shows the full idle-to-route-to-idle sequence,
+   including static detours, pass-through waypoints, and the arrival sequence targeting the requested facing. Inspect
+   the full window, including inference holds, for the pronounced diagonal/raised-spread posture defect; isolated
+    favourable frames or diagnostic angles do not establish its absence. Compare actual motion with the native path:
+    modest deviation is acceptable, but wide arcs, circling and substantial veering are not. A successful component
+    check does not establish the manual journey or motion quality.
+   Interactive checks show orbit/pan/zoom without submission, blue collider-hit hover, amber locked placement with
+   live facing, one submission on release, and free preview resuming only when navigation is not running and a hit
+   exists. Verify visible ordered vias and clearing on submission/Escape, speed UI consumption, and UI-release/Escape
+    cancellation without stuck gestures or accidental submission. Distinguish native-unreachable selections from
+    native-valid submissions; a visible preview does not promise a route, but a custom guide must not veto a valid one.
+2. **NAV-UAC-002 (UR3–5):** Interactive checks show speed control/default behaviour, a replacement destination during
+   motion without idle reset, Escape-to-idle, and a finite reported ordinary failure followed by generated idle.
+   Unavailable-inference evidence instead shows truthful failure, preserved cause on later requests and last-safe-pose
+    retention across the failure boundary and subsequent observation window. Report an externally blocked/collision
+    outcome truthfully when observed; predictive physical clearance and new stall recovery are not acceptance gates.
+3. **NAV-UAC-003 (UR6):** The playable candidate and measured diagnostics are presented for the user's naturalness
+   and endpoint-precision judgement. Prototype readiness is reported separately from that suitability decision.
+4. **NAV-UAC-004 (UR7):** Full actual-rig temporal demonstrations cover representative nearby left/right, front/rear
+   and diagonal positioning, contrasted with longer journeys. Feasible small lateral moves use non-crossing sidesteps
+   without unnecessary forward detours or circling; short front/rear moves favour direct steps. Longer lateral,
+   diagonal and rear destinations turn towards the valid route and walk forward, allowing turning while stepping.
+   Show crossing used sparingly for short facing-preserving relocation, not routine diagonal or sustained side travel.
+   Include desired-facing differences, a genuine obstacle detour, near-destination reconsideration and a changed
+   destination during motion. Choices remain stable without delaying replacement/cancellation; stationary final
+   turning does not replace feasible simple translation. Inspect variant-appropriate speed/posture, repeatable lateral
+   motion and compatible external idle. Do not require every short diagonal to cross, every rear move to turn,
+    displayed-foot matching, fixed step counts or mandatory transition clips.
+   For the finite terminal-facing plan, inspect the complete fixed-request turn and settled arrival on the actual rig,
+   including inference holds and every planned primary cue. The user judges coordinated stepping, acceptable pace and
+   non-sliding arrival; target/endpoint agreement and synthetic service checks do not close those outcomes.
+5. **NAV-UAC-005 (UR8):** In the existing scene, recording starts without an extra switch; the user can identify an
+   attempt (including a refusal or visually bad completed request), bookmark it, save a readable session while play
+   continues, and share its folder for focused investigation and manual repetition. Path, identity, save progress and
+   loss/error status are visible. No automatic upload or retention deletion occurs.
 
 ### Technical Requirement Acceptance
 
-1. **NAV-TAC-001:** Traces show one movement owner, one actor movement operation per tick, root motion consumed once,
-   and one heading policy. On the entry tick of every mid-clip slice entry, the recorded playback position of the
-   entered clip equals the slice start (no pose pop) and the entered clip contributes zero root motion (no root-motion
-   jump); during a crossfade from seam `(a, b)`, the outgoing clip's recorded playback position on the entry tick is
-   `a + dt`, and the tick's root motion equals the outgoing clip's normal weighted contribution. On every
-   such entry tick there is exactly one IK solve, one planted-state step, one recorded sample, and one root-motion
-   read, and all of them come from the final evaluation only: the IK-003 provider's input pose, the planted state
-   under the Planted Combination Rule, and the recorded sample all reflect the entered clip at the slice start, never
-   the pre-evaluation state at position `0`.
-2. **NAV-TAC-002:** Traces show each request's planned clip sequence, and short scenarios use a slice pair, side-step,
-   or pivot joined where the same foot is planted in both slices. Replanning occurs only at the bounded events of
-   Technical Requirement 7, and replanning never resets the corrective-step count or the time and work budget.
-   Predicted root distances are scaled by the bound skeleton's `motion_scale` under [ANIM-002-TAC-006][anim-002]. On
-   each reference rig, the bind-time ball-joint table matches the evaluated post-FK ball positions on that rig,
-   relative to the root, within its declared error bound, is built once at bind time, and is not scaled from source
-   units. A rig missing either toe bone fails navigation binding with a clear error.
-3. **NAV-TAC-003:** Correction appears only on ticks where a foot is swinging under the [Planted Combination
-   Rule][planted-rule], and stays within the configured per-step cap. Seam body alignment appears only on ticks where
-   exactly one foot is planted under that rule (Technical Requirement 24), and its contribution together with residual
-   correction stays within the configured per-step cap; A4 and cap evidence check the combined total. A2 evidence is,
-   per planted run, the maximum planar excursion of the recorded ball point from its planted-start position, as
-   defined by A2. Planted state and effective clip weights for that evidence are computed from the recorded graph
-   state and animation positions, independently of the foot-planting code.
-4. **NAV-TAC-004:** Completion uses the configured tolerance directly, with no stricter or looser internal value, and
-   no correction occurs after the final clip returns to Idle.
-5. **NAV-TAC-005:** Corrective steps stay within the configured count. An obstructed request ends as `Blocked`; a
-   reachable request still outside tolerance after its corrective steps, left with no aligned plan under Technical
-   Requirement 7, or making no progress within its budget, ends as `Failed`. Cancellation and supersession are
-   exact-once and stop through the planner with no settlement stage. They are prompt under Technical Requirement 14:
-   traces show the transition beginning at the first aligned seam time after the cancellation or supersession, with
-   no motion discontinuity before it, and report the delay against the configured promptness bound. A delay beyond
-   that bound is reported, not failed. Where a finite current clip had no aligned seam before its end, traces show it
-   playing to its end and continuing through its authored successor until the first aligned seam, with the delay
-   reported.
-6. **NAV-TAC-006:** An inspection confirms the AnimationTree graph is not modified at runtime, no parallel blend model
-   exists, and clips are not time-stretched to a shared cadence by blend-space sync or custom timelines. Mid-clip
-   entry uses only the sanctioned zero-delta pre-evaluation of Technical Requirement 16.
-7. **NAV-TAC-007:** In the Waypoint Route scenario, traces show via-points passed in order within the configured radius
-   (a missed via-point fails this criterion), no stop clip, completion, or arrival correction at any via-point, and
-   arrival rules applied only at the final destination. A test-scene check proves shift-click queues a visible marker, a
-   normal click issues the request with the queued via-points, and a new route clears old markers.
-8. **NAV-TAC-008:** For every crossfade the planner issues in every scenario (entry → cycle, cycle → cycle lane
-   switches, cycle → exit, slice joins, manoeuvre ↔ Idle, and same-role pivot re-entry), at every tick of the
-   crossfade window actually played
-   (the outgoing clip from `a + dt` and the incoming clip from `b`, for the pair's duration minus `dt`):
-   - **Phase agreement:** both clips mark every foot with the same planted or swing state under their ANIM-002
-     intervals at their recorded playback positions;
-   - **Pose agreement:** for each foot, the separation between the two clips' ball-joint positions, taken from the
-     bind-time ball-joint tables at the recorded playback positions, stays within the configured seam tolerance. This
-     check uses the planner's own bind-time tables; independent pose evidence comes from the swing-travel check and
-     A2; and
-   - **Swing travel:** the pre-IK swing-foot ball-joint travel does not exceed the travel predicted by the two clips'
-     ball-joint trajectories, blended by their effective weights, by more than a tunable bound.
-   - **Frame and independence:** pre-IK ball points are compared root-relative: each recorded world position is
-     expressed in that tick's recorded actor frame (its position and heading), matching the ball-joint tables. The
-     measurement uses the recorded pre-IK ball points, graph state, and playback positions of Technical
-     Requirement 17, independently of the foot-planting code.
-   - Traces also show that no unaligned crossfade was issued, and that a request left with no aligned plan ended
-     `Failed`.
-   - **Cyclic clip availability:** on each reference rig, the bind-time seam report lists, for every cyclic clip and
-     looping confined manoeuvre in the planner set, its aligned exit seams per cycle or loop, and lists each such clip
-     that has none as unavailable. Traces show the planner never enters an unavailable clip.
-   - **Planner set:** the bind-time seam report lists the planner set and, separately from unavailable clips, the
-     excluded ANIM-002 clips and pairs. Traces show the planner never issues a crossfade outside the set.
-   - **Authored crossfades:** the authored crossfade is the per-transition `xfade_time` of an
-     `AnimationNodeStateMachineTransition` in the NPC AnimationTree state machine. Arcs map to pairs at the level of
-     the logical role, so a same-role pair's continuation alias arc is that pair's transition. An inspection fails
-     if a planner-set pair has no such transition, if any authored NPC arc, canonical or alias, has an `xfade_time`
-     that differs from the seam table's duration for its pair, or if an NPC transition exists outside the planner
-     set.
-   - **Required continuation states:** an inspection of each reference rig confirms both continuation alias states
-     are authored and each loops the same clip as its canonical pivot state. A rig whose AnimationTree lacks either
-     fails navigation binding with a clear error, and its runtime binding never activates.
-   - **Seam report contents:** the bind-time seam report contains the seam tolerance in force, the measured
-     seam-separation data of the planner set it was derived from, the user-agreement record, each pair's crossfade
-     duration, and a flag for each seam kind made impossible by that pair's crossfade duration.
-9. **NAV-TAC-009:** Plan selection and composition traces, in every scenario:
-   - the issued plan is feasible under Technical Requirement 21, and the planner's recorded candidate costs show it is
-     a minimal-cost feasible plan within the evaluated candidate set under the declared configuration;
-   - no authorised movement family is unavailable in selection; small sliced moves and pivots still appear where
-     genuinely required;
-   - the Turn-Only scenarios (`90°` and `180°`) show stationary turns composed through aligned seams without an
-     intervening Idle return, except where no aligned join exists and the Technical Requirement 7 fallback applies;
-   - a repeated chain traces its per-chain reserve ledger — restart units and explicit extra loops charged jointly on
-     the yaw and time axes, entry seeks included — its phase-complete unit coverage of both feet, its per-segment
-     derived exit cycles, and the exact finalist prediction of the issued chain, with no Idle between its turn units;
-   - any pivot sliced before a slow tail joins at an aligned seam and is played through authored controls, with no
-     new clip, time-stretch, or native-speed change (checked with NAV-TAC-006 and NAV-TAC-008), and any joins added
-     to the planner set carry authored crossfades under Technical Requirement 7;
-   - traces show no avoidable filler pieces before locomotion and no avoidable Idle bridges between pieces; these
-     structural checks support, and do not replace, the A6 user judgement; and
-   - promptness is unchanged: cancellation and supersession transitions still begin at the first aligned seam
-     (NAV-TAC-005).
-10. **NAV-TAC-010:** Seam body alignment traces show, per tick:
-    - alignment is non-zero only when exactly one foot is metadata-planted with a retained usable anchor, and exactly
-      zero in double support (including strict phase-aligned Idle joins), Idle, frozen or finished states, and after
-      completion; both-feet-swing ticks keep the unchanged flight-residual correction, recorded separately;
-    - the usable-anchor rule of Technical Requirement 25 holds per tick: alignment appears only when the foot's
-      latest committed snapshot is actively holding, was committed by the immediately preceding completed physics
-      tick, and has uninterrupted metadata contact through the current tick with matching interval, binding, and
-      reset identities and a finite pin; a reach-released pin within a still-planted interval, an unfinished or
-      completed release, a stale or missing snapshot, and a new contact's acquisition tick before its post-movement
-      commitment each show zero alignment, with no reset or recapture used to restore permission;
-    - exactly one root-motion read and one composed movement proposal per tick, collision-resolved once, with no
-      second collision-bypassing translation, and subsequent residual, pin, reach, and completion checks using the
-      collision-realised transform;
-    - the ideal planar demand `d_i` against the pre-alignment reference transform of Technical Requirement 27, the
-      bounded alignment displacement actually applied, and the resulting post-IK pin offset are recorded separately.
-      A remaining native-ball offset is permitted only where the combined schedule keeps full-stance reach and
-      continuity and A2 still holds, and a nonzero offset alone is never a failure: traces distinguish a cap-limited
-      remaining offset safely held by IK-003 planting from a genuinely infeasible schedule rejected in favour of
-      bounded alternatives (NAV-TAC-011);
-    - the alignment series is continuous through the join: within the configured per-tick bound at entry and exit,
-      with no snap-back after the join;
-    - alignment and residual correction are recorded separately and their combined total stays within the configured
-      per-step and per-request budgets, with no fresh allowance at a seam or replan; and
-    - contact and release history persists across seams, plans, requests, and completion, with no request-start
-      reset, and rebind or teleport resets are identifiable through the IK-003 identity fields.
-11. **NAV-TAC-011:** Prediction and feasibility evidence:
-    - an oracle independent of the planner verifies, against recorded final native pre-IK poses through crossfades,
-      the predicted ball, ankle, upper-leg, and foot-local-offset geometry within the declared error bounds, and
-      point-blended ball estimates are never the reach evidence. Its numeric coverage includes a crossfaded
-      same-role pivot re-entry issued through the continuation alias path, so the self-join is verified numerically;
-    - yaw-compensated ankle reach is evaluated for both legs over complete transitions and resulting stances,
-      including the first pure incoming sample, and schedules that violate a retained pin or ankle reach are rejected
-      rather than averaged, foot-picked, reach-enlarged, or replanted;
-    - rejected schedules are replaced by bounded feasible alternatives or corrective steps; obstruction still ends
-      `Blocked` and exhausted or no-aligned-plan requests still end `Failed`; IK-003 reach releases are recorded and
-      never counted as A2 success.
+1. **NAV-TAC-001 (TR1–4):** A representative in-process NVIDIA execution and actual MakeHuman walk-to-idle run prove
+   the selected runtime, required helpers, retargeting, and realised SOMA feedback against the shared animation
+    contract. Verify the globalised exported default and non-blank override precedence, and record representative
+     loading/generation without `MOTIONBRICKS_MODEL` or `LD_PRELOAD` on the supported host.
+   Normal scene installation without source activation variables binds all eight roles and angular metadata to the
+   same source as CTRL; missing/inconsistent content is an explicit failure, not fallback motion.
+2. **NAV-TAC-002 (TR5–8):** Automated checks and runtime traces demonstrate navigation/motion ownership, engine
+    collision-realised movement, request replacement, and truthful outcomes without endpoint teleportation or corrective
+    manoeuvre policy. Source review confirms actual-root `MoveAndCollide` handling without bespoke predictive physics
+    admission, while preserving native path authority, route ownership and realised feedback. Focused checks cover
+    native-valid request acceptance and ordered target progression through a corner and requested vias without custom
+    geometry, connectivity, forecast-centre or turn-radius admission gates. Separate actual native unavailability or
+    invalid/stale ownership from limitations of the animation adapter. Route intent is not a physical
+    clearance guarantee; do not require a substitute forecast or new stall detector/recovery.
+    Source/composition review confirms no parallel legacy runtime or foot-IK rescue is installed.
+    Verify sequence completion independently of convergence, preserving diagnostics outside configured tolerances and
+    the unchanged convergence API. Check copied latest-request ownership, stale rejection, and nonblocking ordinary
+    scene exit during actual native load/generation with worker-exclusive disposal after native return. Verify menu
+    exit and OS root-window close through actual process exit without a crash, with all worker completion/disposal
+    preceding final quit, including pending workers retained after scene removal. Check rejection of new work once
+    shutdown starts. Do not treat direct `SceneTree.Quit` or forced termination as graceful-exit evidence, or successful
+    representative exits as universal provider safety. Verify timeout/failure handling separately;
+    successful calls or model-load exceptions do not prove timeout handling or failure during moving generation.
+    Record safely exercised cases and unresolved evidence gaps; inducing a genuine GPU hang is not required.
+3. **NAV-TAC-003 (TR9–13):** Focused checks, full temporal captures, diagnostic measurements, repository validation,
+   independent review, and the setup/evidence handoff are recorded. Deferred failures are not reported as passes.
+    Source review and interactive checks confirm mask-1 physics-hit selection and safe viewport/GUI gesture handling.
+4. **NAV-TAC-004 (TR14, TR3, TR5–8):** Apply ANIM-002 sampling/lifecycle acceptance to route-driven requests.
+   Focused selection checks and runtime traces cover NAV-UAC-004's short/long contrasts, including realised-facing
+   changes, remaining-route context versus short local subdivisions, desired facing, obstacle and waypoint constraints.
+   Verify role selection precedes guide construction and metadata-based window placement, with inspectable inputs and
+   decisions rather than a forward-guide bias or inherited joystick rule. Check near-destination/intent/route
+   re-evaluation and configurable bounded hysteresis, independently of generated-motion quality. Role changes snapshot
+   actual context separately from intended phase and invalidate incompatible work; stale completion cannot restore
+   the previous role/guide. Immediate replacement/cancellation must not wait for hysteresis or source-cycle completion.
+   Check physical reference/local velocity distinctions, sample-ahead and loop boundaries, role/stage/variant
+   switches, arrival/failure/cancellation handoffs and compatible overlaps. Trace intended phase separately from
+    actual context and generated duration; stale results cannot restore old route/state. Preserve native path order,
+    collision-realised feedback, finite outcomes and safe native shutdown under the dynamic source controller.
+   For finite terminal-facing plans, verify 180→120+60 allocation, source-bound angular mapping at both primary lifts
+   of each cycle, consecutive four-pose windows and retained local reversals/boundaries. Verify immutable fixed-request
+   authority, actual-context provenance and every first-guide endpoint actually played before ordinary handoff, not
+   merely submitted/generated. Check final-angle/compatible-idle completion without source-translation gating or
+   repeated small-turn loops, plus replacement/cancellation, stale rejection and truthful collision/provider failure.
+   Keep planned phase/service separate from elapsed time and native duration. Synthetic checks establish technical
+   mechanics only; NAV-UAC-004's full actual-rig turn/settled window remains mandatory.
+5. **NAV-TAC-005 (TR15, UR8):** Focused bundle inspection and ownership review establish correlated full inputs,
+   submitted/returned motion and final sampled display/camera states, readable ongoing checkpoints, bounded-memory
+   nonfatal recording and worker-before-recorder finalisation. Distinguish transport completion from navigation success,
+   report loss/truncation and reproduction limits, and preserve the existing motion/route/worker contracts. Synthetic
+   evidence establishes only the exercised technical recording contract, not native quality or manual suitability.
 
-### Acceptance Traceability
+## Implementation Status
 
-- User Requirements 1, 7, 9 → A1, NAV-TAC-005.
-- User Requirements 2, 4 → A1, NAV-TAC-002, NAV-TAC-004.
-- User Requirement 3 → A5–A6, NAV-TAC-002, NAV-TAC-009.
-- User Requirements 5–6 → A2–A4, NAV-TAC-003–004, NAV-TAC-008, NAV-TAC-010.
-- User Requirements 8, 11 → Waypoint Route scenario (A1–A4, A6), NAV-TAC-007.
-- User Requirement 10 → A5–A6.
-- User Requirement 12 → A5–A6, NAV-TAC-009.
-- Technical Requirements 1–4 → NAV-TAC-001; Technical Requirement 1 route following → NAV-TAC-007; Technical
-  Requirement 3 composed proposal → NAV-TAC-010.
-- Technical Requirements 5–7 → NAV-TAC-001–002, Technical Requirement 5 plan ranking → NAV-TAC-009; Technical
-  Requirement 7 seam alignment (phase and pose agreement, per-pair crossfade durations, no aligned seam, same-role
-  re-entry, required continuation states) → NAV-TAC-005, NAV-TAC-008.
-- Technical Requirements 8–10 → A4, NAV-TAC-003; Technical Requirement 9 alignment-zero states → NAV-TAC-010.
-- Technical Requirements 11–14 → A1–A3, NAV-TAC-002, NAV-TAC-004–005; Technical Requirement 13 no-aligned-plan
-  `Failed` → NAV-TAC-005, NAV-TAC-008; Technical Requirement 14 promptness → NAV-TAC-005, NAV-TAC-008.
-- Technical Requirements 15–16 → NAV-TAC-006; Technical Requirement 16 mid-clip entry → NAV-TAC-001; Technical
-  Requirement 16 crossfade timing and same-role re-entry → NAV-TAC-008.
-- Technical Requirement 17 → A1–A5, NAV-TAC-008–011.
-- Technical Requirements 18–20 → NAV-TAC-007, Waypoint Route scenario.
-- Technical Requirements 21–22 → A5–A6, NAV-TAC-002, NAV-TAC-006, NAV-TAC-008–009; Technical Requirement 21
-  repeated-pivot generation and Technical Requirement 22 repeated chains → NAV-TAC-009; Technical Requirement 21
-  feasibility → NAV-TAC-011; Technical Requirement 21 prompt precedence → NAV-TAC-005.
-- Technical Requirements 23–28 → A2–A4, NAV-TAC-001, NAV-TAC-003, NAV-TAC-010.
-- Technical Requirements 29–31 → NAV-TAC-002, NAV-TAC-011; Technical Requirement 31 outcomes → NAV-TAC-005.
+Normal NAV loads `reviewed-feminine/set.json`, wholly bound to `landing-ablation-01.json`, without activation flags.
+The existing scene uses Godot's native path authority, source-rate target placement/native handoff and the finite
+terminal-facing plan above. Both primary lifts are source-angle mapped per allocation and actually serviced before
+the next planned submission; fresh post-`SkeletonUpdated` context precedes one finite external-idle arrival connection.
+Request-local overrun/lockout handling, stale-result rejection, provider-failure retention, generated-root
+`MoveAndCollide` and worker disposal remain required. The automatic scene recorder remains part of normal play.
 
-## Current Status
-
-This section is non-normative current status, not fresh verification or a claim of code/spec alignment. The scenario
-table and every acceptance criterion above remain normative and unchanged; nothing here weakens A1, A2, or any bound.
-
-### Automated Outcome Coverage
-
-By user decision on 2026-10-04, nine failing NAV outcome facts were removed as reduced coverage. Removal asserts no
-pass and fixes no behaviour:
-
-- Arrival outcomes removed: Oblique, Terminal Slide, Repeated Requests, Distant Lateral, Behind, Long Straight, and
-  the user-shuffle arrival.
-- Corner regressions removed: the authored around-cylinder corner and the from-idle west-quadrant destination.
-
-Automated outcome coverage currently spans Terminal Slide Mirror, Lateral, Turn-Only, the Waypoint Route, and the
-from-idle corner obstacle scenario. Those retained facts assert the full arrival criteria set on unchanged assertions
-and were green in the recorded 2026-10-04 default matrix, run before the removals. Every scenario or regression
-listed above as removed now has no automated outcome guard.
-
-### Suite Redesign (2026-10-10)
-
-By user decision on 2026-10-10, the NAV/CTRL integration suite was redesigned rather than optimised. The NAV-001
-implementation is incomplete with unresolved problems, the current `sad` ANIM-002 variant is placeholder content to be
-replaced, no male retarget setup exists, and the expensive per-tick replay and diagnostic classes had come to encode
-current placeholder behaviour as if it were a contract. Those tests were deleted, not fixed; removal asserts no pass
-and fixes no behaviour. This entry supersedes the retained-facts list above: the 2026-10-04 retained outcome classes
-were themselves removed on 2026-10-10.
-
-The current automated end-to-end coverage is a two-fact spine, `NAV001LocomotionEndToEndIntegrationTests`, female
-default rig only:
-
-1. `WalkToDestination_ArrivesAndSettles_WithSmoothStitching` (foot IK disabled): a multi-metre turning walk reaches
-   its destination within the A1 tolerance (`0.01 m`, `1°`), ends `Completed`, and settles to unfaded Idle across the
-   post-completion window; maximum per-tick actor displacement and inter-sample hips/ball bone deltas stay inside the
-   spine's envelopes.
-2. `WalkToDestination_PlantedFeetHoldStance_NoFootSliding` (foot IK enabled): every observed contact stance holds its
-   world anchor within the A2 `5 mm` planar bound, both feet across multiple stances, and the realised terminal actor
-   transform agrees with the independently observed settled actor. Ownership evidence is outcome-level agreement
-   only, not exclusive per-tick mutation authority.
-
-The settled-drift (`1 mm`) and per-tick envelopes (actor `150 mm`, hips/ball `250 mm`) are loose engineering bounds
-pending replacement content — not measured `sad` thresholds, not aesthetic seam-quality claims, and not spec numbers
-(numeric caps remain configuration, not spec constants). They must be reviewed and replaced with content-independent
-bounds when replacement content lands, and must not be tightened to current `sad` output.
-
-Removed automated coverage (per-class inventory: `game/temp/suite-redesign-v13/report.md`):
-
-- Superseded outcome scenarios: `NAV001ArrivalOutcomeIntegrationTests`, `NAV001WaypointRouteOutcomeIntegrationTests`,
-  and `NAV001CornerRouteOutcomeIntegrationTests` — the 2026-10-04 retained spine is itself superseded.
-- Heavy replay and diagnostic classes: `NAV001CorrectedArrivalIntegrationTests` (corrected-arrival population and pin
-  evidence), `NAV001SequencePredictorOracleIntegrationTests`, `NAV001ArrivalPlannerIntegrationTests` (planner seam and
-  planner-set), `NAV001PinFeasibilityIntegrationTests`, `NAV001SplicePruningIntegrationTests`,
-  `NAV001StationaryPartialTurnIntegrationTests`, `NAV001PlantedSeamSeparationIntegrationTests`, and
-  `NAV001ReplayPacingIntegrationTests`.
-- Diagnostic probes: `NAV001RoboticMotionProbeIntegrationTests`, `NAV001NativeSpeedGraphIntegrationTests`,
-  `NAV001MidClipEntryIntegrationTests`, `NAV001PivotContinuationIntegrationTests`,
-  `NAV001PlantedStateRecorderValidationIntegrationTests`, `NAV001ComposedSectionContainmentIntegrationTests`,
-  `NAV001SectionEndpointBoundIntegrationTests`, `NAV001TerminalContinuationAdmissibilityIntegrationTests`,
-  `NPCSameTickPoseOrderingIntegrationTests`, `SeamTableIntegrationTests`, and
-  `NPCNavigationQueuedManoeuvreIntegrationTests`.
-- `IK003NavigationFootPlantingIntegrationTests`, replaced by spine fact 2; the IK-side removals, including the
-  `IK003FootPlantingRigIntegrationTests` trim from 21 facts to one, are recorded under IK-003's status.
-- Non-physics tautology and redundancy removals: `DirectTransformNavigationIntegrationTests` trimmed from 24 facts to
-  four atomic request-boundary guards, `NPCNavigationTrajectoryBindingIntegrationTests` reduced to its bound
-  `motion_scale` equation fact, and two `INavigationFacadeTests` declaration/enum restatements deleted.
-
-Criteria coverage after the redesign — every criterion keeps its normative force; the table records only its current
-automated guard:
-
-| Criterion | Current Automated Guard |
-| --------- | ----------------------- |
-| A1 | Spine fact 1 only (single female default-rig walk); no per-scenario guard. |
-| A2 | Spine fact 2 only (observed contact stances on that walk). |
-| A3 | Spine fact 1's settle window only. |
-| A4 | None. |
-| A5 | None; unit-level movement-choice algorithm tests remain. |
-| A6 | Manual judgement; not yet performed. |
-| NAV-TAC-001 | Outcome-level ownership agreement in spine fact 2 only; per-tick trace checks removed. |
-| NAV-TAC-002 | Bound `motion_scale` equation fact retained; sequence, slice-pair, and ball-table checks removed. |
-| NAV-TAC-003 | None. |
-| NAV-TAC-004 | Completion exercised by spine fact 1; tolerance-trace checks removed. |
-| NAV-TAC-005 | Atomicity guards and unit lifecycle tests retained; promptness and cancel/replace traces removed. |
-| NAV-TAC-006 | None (inspection criterion). |
-| NAV-TAC-007 | Route-authoring UI tests retained; via-point traversal outcome guard removed. |
-| NAV-TAC-008 | None; synthetic seam unit tests remain. |
-| NAV-TAC-009 | None; synthetic planner unit tests remain. |
-| NAV-TAC-010 | None. |
-| NAV-TAC-011 | None; synthetic geometry unit tests remain. |
-
-Retained NAV-side guards: the four atomic request-boundary facts of `DirectTransformNavigationIntegrationTests`
-(map-not-ready rejection, replacement atomicity, zero-delta and already-complete non-mutation), the bound
-`motion_scale` equation fact of `NPCNavigationTrajectoryBindingIntegrationTests`, the production-package boundary
-completeness facts, the non-reference mirror-room bind-crash regression, the playtest controller and startup-gate
-facts (17 facts, including destination-marker and via-authoring UI), and the synthetic planner, seam, predictor,
-budget, route, and lifecycle unit tests, which use independent synthetic inputs rather than recorded placeholder
-output.
-
-No automated male-rig locomotion coverage remains: the male replay twins were deleted, no retarget setup exists, and
-the retained male selection/bind facts are not retarget verification. Rigs resume automated coverage when replacement
-content and male retargeting land.
-
-The post-redesign full windowed suite gate is 1213 passed / 0 failed / 1 skipped (one pre-existing, unrelated
-dynamic-rig fixture skip) in 11 m 36.8 s wall time — roughly 60% shorter than the 29 m 11 s pre-redesign baseline.
-The reduction comes from deliberately smaller scope, not faster equivalent coverage, and establishes no criterion as
-met.
-
-### Unresolved Outcomes
-
-Measured in the removed facts' final failing runs; each remains a live product deficit:
-
-- Planted-run slip (A2) exceeded the unchanged `5 mm` bound in the removed scenarios that failed it, by 45–161 mm
-  (Oblique and Repeated Requests 161.018 mm; Long Straight 45.217 mm; the cylinder corner 147.576 mm).
-- The west-quadrant corner destination does not converge: `ConvergenceFailed` at 1543.56 mm position error and
-  15.77° heading error, outside A1's `0.01 m` and `1°`.
-- The around-cylinder corner inserted an idle bridge — 3 settled single-clip Idle ticks inside the replacement
-  window — against User Requirement 12.
-- NAV-TAC-008 swing-travel excesses of 49–142 mm were recorded across the removed scenarios, against the harness's
-  provisional, not-yet-user-agreed `50 mm` swing-travel bound. The bound stays tunable configuration; validating or
-  revising it remains an open user decision, unchanged by the removal.
-
-### Remaining Acceptance Work
-
-- A6 manual naturalness judgement has not been performed and is outstanding.
-- The deficits above are unresolved and unguarded after the removal; nothing in this section may be read as A1–A6
-  achieved.
-- The 2026-10-10 spine's engineering envelopes must be reviewed and replaced with content-independent bounds when
-  replacement animation content and male retargeting land; automated guards for the criteria listed above as
-  unguarded must be rebuilt on that content.
+The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records shared
+source identity/normal installation, finite cue service, route replacement/cancellation, actual-context/handoff and
+overrun preservation checks, with clean format/build results. Combined independent review of this normal-source
+migration remains pending; native-free component evidence is not native gait, arrival quality or performance proof.
+Source stepping/foot-sliding mitigation is user accepted with initial twitch deferred, not certified no-slip motion.
+Full actual-rig route/turn/settled-arrival and user naturalness/pace judgement remain open, including the unresolved
+around-corner/arrival outcomes. Raw repetition admission, broader stage/default content and previews, headset and known
+native-shutdown risks remain deferred-with-risk. Plan steps 5/6 and final acceptance remain open.
+No new source generation, model-call budget or shutdown retry follows from this documentation alignment.
 
 ## References
 
-- [Project Specifications Index](../../index.md)
-- [ANIM-002: Locomotive Animation Set][anim-002]
-- [IK-003: Leg and Feet IK System][ik-003]
-- [CTRL-001: Locomotion][ctrl-001]
-
-[anim-002]: ../../animation/002-locomotive-animation-set/index.md
-[anim-metadata]: ../../animation/002-locomotive-animation-set/index.md#motion-metadata
-[planted-rule]: ../../animation/002-locomotive-animation-set/index.md#planted-combination-rule
-[ik-003]: ../../ik/003-leg-feet-ik/index.md
-[ik-003-planting]: ../../ik/003-leg-feet-ik/index.md#foot-planting
-[ik-003-contact]: ../../ik/003-leg-feet-ik/index.md#contact-observations
-[ctrl-001]: ../../ctrl/001-locomotion/index.md
+- [Project Specifications](../../index.md)
+- [Shared Animation Contract](../../animation/index.md)
+- [ANIM-002: Locomotive Conditioning Sources](../../animation/002-locomotive-animation-set/index.md)
+- [Runtime Setup and Evidence Limits](../../../game/src/Motion/README.md)
+- [Navigation Recorder Workflow and Schema](../../../game/src/Navigation/Recording/README.md)
+- [Character Root](../../character/002-character-root/index.md)
+- [Leg and Feet IK](../../ik/003-leg-feet-ik/index.md)
+- [Visual Verification Scope](../../testing/002-visual-verification-scope/index.md)
+- Upstream reference checkout: `/home/mysticfall/workspace/motionbricks`, especially `docs/runtime_api.md`,
+  `docs/onnx_inference.md`, `docs/soma_model.md`, and `docs/scene_preview.md`. These establish model/runtime facts,
+  not proof of this project's implementation.

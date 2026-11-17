@@ -91,7 +91,7 @@ Provide a hand grab input system that:
    provenance, regardless of the committed global hand-pose mode. Optical grab recognition acts only while the
    committed mode is `Optical` (mode contract in XR-002). Grab ownership is never implicitly transferred between
    sources on a mode change.
-7. Mode gating applies only to optical grab recognition. Unrelated controller consumers (locomotion via CTRL-001,
+7. Mode gating applies only to optical grab recognition. Unrelated controller consumers (player movement when restored,
    the game menu, transcription input) are unaffected by the committed mode.
 8. The committed mode-change notification from the XR-001 runtime boundary is the signal used to cancel pending
    and release held grabs originated by the previously active source, per the provenance contract in
@@ -283,7 +283,7 @@ such hardware.
 
 - [Project Specifications Index](../../index.md)
 - [CTRL: Player Character Control System](../index.md)
-- [CTRL-001: Locomotion](../001-locomotion/index.md)
+- [Player Character Control](../index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
 - [INTR-001: Grabbable Interface](../../interaction/001-grabbable/index.md)

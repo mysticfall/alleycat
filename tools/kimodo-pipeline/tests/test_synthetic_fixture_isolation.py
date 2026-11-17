@@ -168,14 +168,18 @@ def _category_for(path: Path, symbol: str, literal: str) -> str:
     relative = path.relative_to(ROOT).as_posix()
     if relative == "tools/kimodo-pipeline/tests/test_synthetic_fixture_isolation.py":
         return "static guard policy data"
-    if relative == "integration-tests/src/AnimationCatalogue/RuntimeFixtureIsolationIntegrationTests.cs":
-        return "static guard data"
-    if relative == "integration-tests/src/Support/SyntheticLocomotionRuntimeFixture.cs":
-        return (
-            "unclassified"
-            if "[Fact]" in literal or "Assert." in literal
-            else "synthetic runtime fixture declaration"
-        )
+    if relative == "integration-tests/src/Motion/MotionBricksDeliveryIntegrationTests.cs" and symbol == "<text>":
+        # These exact statements remove obsolete provenance from a startup fixture and assert its absence.
+        # Do not exempt the file: any additional authored-content oracle must still fail the guard.
+        remaining = literal
+        for statement in (
+            '_ = poses["sources"]!.AsObject().Remove("game/assets/characters/animations/source/locomotion/locomotion.blend");',
+            'Assert.False(data.Calibration.GetProperty("sources").TryGetProperty(\n'
+            '            "game/assets/characters/animations/source/locomotion/locomotion.blend", out _));',
+        ):
+            remaining = remaining.replace(statement, "")
+        if remaining != literal and not _contains_forbidden_authored_content(remaining):
+            return "structural/obsolete provenance absence"
     if relative in EXTERNAL_RUNTIME_COMMANDS:
         return "production runtime command default path"
     if path.name in VISUAL_EVIDENCE_SOURCES:
@@ -249,9 +253,9 @@ def test_production_stride_distance():
 def test_precise_synthetic_and_structural_classifications_are_accepted() -> None:
     """Permit only the named synthetic declarations and structural contracts."""
     synthetic = _category_for(
-        ROOT / "integration-tests/src/Support/SyntheticLocomotionRuntimeFixture.cs",
-        "<text>",
-        "synthetic loc_sad_ declaration",
+        ROOT / "tools/kimodo-pipeline/tests/test_runtime_package_descriptor.py",
+        "fixture_package",
+        "locomotion_catalogue.json",
     )
     path_derivation = _category_for(
         ROOT / "tools/kimodo-pipeline/kimodo_pipeline/bootstrap_extraction.py",
@@ -269,16 +273,28 @@ def test_precise_synthetic_and_structural_classifications_are_accepted() -> None
         "game/assets/characters/animations/source/locomotion/locomotion.blend",
     )
     synthetic_assertion = _category_for(
-        ROOT / "integration-tests/src/Support/SyntheticLocomotionRuntimeFixture.cs",
+        ROOT / "integration-tests/src/Motion/MotionBricksDeliveryIntegrationTests.cs",
         "<text>",
         '[Fact] public void ProductionOracle() { Assert.Equal(0.9, productionMotion); }',
     )
 
-    assert synthetic == "synthetic runtime fixture declaration"
+    assert synthetic == "synthetic package descriptor fixture"
     assert path_derivation == "structural/path derivation"
     assert structural == "structural/immutability smoke"
     assert near_miss == "unclassified"
     assert synthetic_assertion == "unclassified"
+
+
+def test_delivery_absence_contract_does_not_allow_neighbouring_content_oracles() -> None:
+    """SA-B01 absence checks are structural; a new authored motion oracle in the same file is not."""
+    path = ROOT / "integration-tests/src/Motion/MotionBricksDeliveryIntegrationTests.cs"
+    source = path.read_text(encoding="utf-8")
+    assert _category_for(path, "<text>", source) == "structural/obsolete provenance absence"
+    assert _category_for(path, "<text>", source + '\nAssert.Equal("loc_sad_fixture", actual);') == "unclassified"
+    exporter = ROOT / "tools/kimodo-pipeline/export_motionbricks.py"
+    calibration = "game/assets/characters/reference/female/animations/source/kimodo_retarget_setup.blend"
+    assert _category_for(exporter, "<module>", calibration) == "structural/calibration input path"
+    assert _category_for(exporter, "test_motion", calibration) == "unclassified"
 
 
 def test_core_asset_smoke_variant_identity_is_structural_not_behavioural() -> None:

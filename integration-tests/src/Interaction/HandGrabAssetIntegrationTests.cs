@@ -66,6 +66,7 @@ public sealed partial class HandGrabAssetIntegrationTests
         PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/ally_npc.tscn");
         Node root = scene.Instantiate();
         SceneTree sceneTree = TestUtils.GetSceneTree();
+        sceneTree.NodeAdded += BindAmbientGrabSession;
         sceneTree.Root.AddChild(root);
 
         try
@@ -77,6 +78,7 @@ public sealed partial class HandGrabAssetIntegrationTests
         }
         finally
         {
+            sceneTree.NodeAdded -= BindAmbientGrabSession;
             root.QueueFree();
             await TestUtils.WaitForNextFrameAsync(sceneTree);
         }
@@ -3391,6 +3393,29 @@ public sealed partial class HandGrabAssetIntegrationTests
         fingerBodiesBySide[leftSide] = new List<PhysicsBody3D> { leftFingerProxy };
     }
 
+    /// <summary>
+    /// Native-free endpoint for the ambient NPC navigation worker. Grab tests never verify locomotion;
+    /// binding this before Ready keeps the unrelated MotionBricksNavigation from constructing a real CUDA
+    /// session (its worker is eager) while leaving every grab assertion on production wiring.
+    /// </summary>
+    private sealed class AmbientGrabSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientGrabSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientGrabSession();
+        }
+    }
+
     private static T GetPrivateField<T>(object instance, string fieldName)
     {
         FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
@@ -3713,8 +3738,12 @@ public sealed partial class HandGrabAssetIntegrationTests
             Assert.True(runtime.Initialise(new SubViewport(), maximumRefreshRate: 90));
             xrManager.SetRuntime(runtime);
 
+            // The fixture's ambient Ally NPC installs MotionBricksNavigation on tree entry; its worker is
+            // eager, so bind the native-free grab session before any Ready fires. Locomotion is not under test.
+            sceneTree.NodeAdded += BindAmbientGrabSession;
             sceneTree.Root.AddChild(root);
             await TestUtils.WaitForFramesAsync(sceneTree, 10);
+            sceneTree.NodeAdded -= BindAmbientGrabSession;
             await TestUtils.WaitForPhysicsFramesAsync(sceneTree, 2);
 
             Node player = referenceFixture.GetNode("Actors/Player");

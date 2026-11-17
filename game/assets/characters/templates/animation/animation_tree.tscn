@@ -1,6 +1,6 @@
-[gd_scene uid="uid://degycvmqbvjx1" format=3]
+[gd_scene format=3 uid="uid://degycvmqbvjx1"]
 
-[ext_resource type="AnimationNodeBlendTree" uid="uid://c485owf86etdu" path="res://assets/characters/templates/animation/animation_tree_root_npc.tres" id="1_ibtlu"]
+[ext_resource uid="uid://c485owf86etdu" type="AnimationNodeBlendTree" path="res://assets/characters/templates/animation/animation_tree_root_npc.tres" id="1_ibtlu"]
 
 [node name="AnimationTree" type="AnimationTree" unique_id=2098590596]
 root_motion_track = NodePath("%GeneralSkeleton:Root")
@@ -10,12 +10,12 @@ anim_player = NodePath("../AnimationPlayer")
 parameters/EyesBlinkOneShot/active = false
 parameters/EyesBlinkOneShot/internal_active = false
 parameters/EyesBlinkOneShot/request = 0
-parameters/States/Walking/Locomotion/blend_position = Vector2(0, 0)
-parameters/States/Walking/Locomotion/Movement/blend_position = Vector2(0, 0)
+parameters/EyesBlinkTimeScale/scale = 1.0
 parameters/EyesVerticalLookBlend/blend_amount = 1.0
 parameters/EyesVerticalLookSeek/seek_request = -1.0
 parameters/EyesHorizontalLookBlend/blend_amount = 1.0
 parameters/EyesHorizontalLookSeek/seek_request = -1.0
 parameters/RightHandBlend/blend_amount = 0.0
 parameters/LeftHandBlend/blend_amount = 0.0
-parameters/EyesBlinkTimeScale/scale = 1.0
+parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
+parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0

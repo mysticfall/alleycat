@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+; Minimal authored membership fixture for SceneContext integration coverage: two reference characters in
+; the Actors group, one of them the authored player. No role installers, no MotionBricks, no unrelated
+; features — the scene under test is exactly the membership structure the provider resolves.
+
+[ext_resource type="Script" path="res://src/Character/Character.cs" id="1_character"]
+
+[node name="MembershipRoom" type="Node3D"]
+
+[node name="Actors" type="Node3D" parent="."]
+
+[node name="Player" type="CharacterBody3D" parent="Actors" groups=["Actors", "Player", "VisualSubjects"]]
+script = ExtResource("1_character")
+Id = "membership_player"
+
+[node name="Npc" type="CharacterBody3D" parent="Actors" groups=["Actors"]]
+script = ExtResource("1_character")
+Id = "membership_npc"

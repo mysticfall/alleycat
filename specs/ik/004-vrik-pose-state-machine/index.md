@@ -105,7 +105,7 @@ permission outputs that gate player movement in non-standing poses.
 - [Standing Pose State](standing-pose-state.md)
 - [Kneeling Pose State](kneeling-pose-state.md)
 - [AllFours Pose State](all-fours-pose-state.md)
-- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [Player Character Control](../../ctrl/index.md)
 - @game/assets/characters/templates/ik/vrik.tscn
 - @game/assets/characters/templates/animation/animation_tree_root_player.tres
 - @game/assets/characters/templates/reference_female/reference_female_player.tscn

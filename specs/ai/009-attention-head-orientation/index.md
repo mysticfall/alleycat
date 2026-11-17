@@ -283,7 +283,13 @@ leaving eye presentation to VISION-001, which owns eye–head turn synchronisati
     if the contract cannot be met without wider redesign.
 26. Before production integration, independently validate repaired measurement oracles, then prove upstream/solved
     separation, evaluation/delta ownership, zero influence and lifecycle in the installed engine for both production
-    and isolated-fixture scheduling. Gate the geometric helper with source-independent coupled-axis, partial-influence,
+    and isolated-fixture scheduling. During MotionBricks replacement, isolated-fixture validation remains required;
+    replacement-runtime production startup and scheduling integration remain **PENDING** until the actual runtime can
+    exercise them. This temporary deferral permits retained head/gaze fixture migration and build restoration without
+    restoring deleted locomotion machinery; it neither removes the production gate nor establishes correctness.
+    Production evidence must exercise the replacement runtime under [NAV-001](../../nav/001-npc-navigation/index.md)
+    and the [shared animation contract](../../animation/index.md), not legacy activation or idle-state machinery.
+    Gate the geometric helper with source-independent coupled-axis, partial-influence,
     comfort-boundary, envelope-clipping and near-target tests, including 14° actual local yaw at −40° head pitch.
     Keep CCDIK, modifier ordering and the IK-001 authored cones unchanged; cone and ordering changes follow IK-001 and
     require an approved user decision. Failure of anatomy or reach requires a decision supported by measurements, not
@@ -329,10 +335,15 @@ leaving eye presentation to VISION-001, which owns eye–head turn synchronisati
 ## Acceptance Criteria
 
 New behavioural coverage uses the reference female in a minimal real-pipeline fixture; existing dual-character
-authoring/regression coverage and production-startup photobooths remain required. Frozen bounds and complete windows
-below require explicit user approval supported by measurements to change. Valid current-fixture results establish only
-conditional acceptance: historical original-build reconstruction is waived, not proof of historical symptom resolution
-or universal animated-idle correctness.
+authoring/regression coverage remains required. During MotionBricks replacement, a dedicated clip-driven photobooth may
+exercise retained head/gaze acceptance through the real head/eye/IK pipeline, with observable upstream animation phase
+for the required setup and observation windows. It must preserve all applicable bounds, complete windows,
+dual-character coverage and isolated scheduling checks; it is not production-startup-equivalent evidence.
+Replacement-runtime production-startup photobooths and production scheduling checks remain required and **PENDING**
+under Technical Requirement 26; clip-driven fixture passes or build restoration cannot satisfy that gate.
+Frozen bounds and complete windows below require explicit user approval supported by measurements to change.
+Valid current-fixture results establish only conditional acceptance: historical original-build reconstruction is waived,
+not proof of historical symptom resolution or universal animated-idle correctness.
 
 Demand-window Head acceptance applies the user-approved provisional playtest acceptance profile: Head position
 error ≤10 mm and Head rotation error ≤0.5°, inclusive, on every recorded demand sample. Joint swing and off-X hinge
@@ -345,9 +356,9 @@ original criteria, with any reclassification identified separately.
 
 ### User Requirements
 
-1. Visual verification and integration coverage show a tall NPC looking down at a shorter character — the player —
-   craning its neck naturally, with the eyes no longer carrying the downward angle alone; the short-NPC looking-up
-   case behaves symmetrically.
+1. Integration coverage and manual visual verification show a tall NPC looking down at a shorter character — the
+   player — craning its neck naturally, with the eyes no longer carrying the downward angle alone; the short-NPC
+   looking-up case behaves symmetrically.
 2. Coverage shows a same-height sustained target well within eye rotation bounds receiving full head centring after
    the centring delay: the NPC faces its conversation partner rather than fixing its face and rolling its eyes.
 3. Coverage shows brief in-cone glances retaining the pre-glance character-relative command with continued easing,
@@ -360,10 +371,10 @@ original criteria, with any reclassification identified separately.
    under Technical Requirement 23. Arrival and rest must read as trying to see, not a frozen approach.
    (TRACES UR-5, UR-9)
 6. Coverage confirms player templates remain free of the controller and the player's XR head path is unaffected.
-7. Photobooth coverage on the reference female shows no visible head roll while tracking: sustained lateral and
+7. Isolated-fixture coverage on the reference female shows no head roll while tracking: sustained lateral and
    diagonal holds keep the mean roll magnitude within 2.0° over any 0.5 s window and transient peaks within 3.5°
    across the original alternating ±35° yaw/∓25° pitch sequence and 55° lateral hold for 3.2 s.
-8. Photobooth and isolated-fixture coverage on the reference female shows a low target (the −40° stoop target)
+8. Isolated-fixture coverage on the reference female shows a low target (the −40° stoop target)
    producing a distributed stoop: the Head bone carries at most 55% of the face pitch, and the Neck and UpperChest
    bones each carry at least 10% of the face pitch with the same sign — no counter-rotation. The head contribution
    itself stays same-signed with the face aim. Retain original warm-up, settling and hold windows and accurate aim
@@ -391,7 +402,9 @@ original criteria, with any reclassification identified separately.
     before Vision resolution, projection-safe rebinding, teardown to safe idle with influence 0, and settings
     validation including envelope-exceeds-comfort-cone per axis.
     Prove snapshot generation/sequence invalidation, inactive missing-input handling, marked bootstrap, prior-evaluation
-    feedback transport, once-only advancement and zero-delta non-ageing in both scheduling paths. (TR-14, TR-15, TR-17)
+    feedback transport, once-only advancement and zero-delta non-ageing in both scheduling paths. Report isolated
+    fixture results separately from the **PENDING** replacement-runtime production path under Technical Requirement 26;
+    passing the former does not pass this criterion for the latter. (TR-14, TR-15, TR-17, TR-26)
 15. Integration tests verify the roll-free intent construction: the published intent basis carries zero roll across
     frames even when the solved head is externally rolled. Release follows upstream roll-free pose, then native
     animation including roll at zero influence; re-engagement does not reuse stale held state. (TR-12, TR-19, TR-20)
@@ -476,5 +489,7 @@ original criteria, with any reclassification identified separately.
 - `game/src/Mind/Attention/GeometricGazeSaturation.cs`
 - `game/src/Vision/EyesLookMath.cs`
 - `game/src/Vision/EyesController.cs`
-- `integration-tests/src/Mind/Attention/IsolatedFemaleTrackingIntegrationTests.cs`
+- `integration-tests/src/Mind/Attention/IsolatedFemaleTrackingIntegrationTests.cs` — assertion-only facts on the
+  isolated reference-female rig: hold, roll, stoop, fold, partial influence, once-only advancement, eye fixation and
+  40° reassignment transit (Acceptance Criteria 3, 7, 8, 10, 12, 14, 16–18; Complete-Window Evidence Contract)
 - `integration-tests/src/Mind/Attention/DownwardFoldAngularAcceptance.cs`

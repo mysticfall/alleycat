@@ -353,7 +353,6 @@ public sealed class HeldEligibilityPauseDiagnosticIntegrationTests
                 PlayerController controller = new()
                 {
                     HandHolderNode = hand.GetParent(),
-                    LocomotionNode = locomotion
                 };
                 root.AddChild(controller);
                 _ = fixture.Get<XRManager>("XRManager").EmitSignal(XRManager.SignalName.Initialised, true);

@@ -68,15 +68,15 @@ const SWAY_CLIP_LENGTH_SECONDS := 7.966667
 const SWAY_ANCHOR_PHASE_SECONDS := 0.48
 const SWAY_PHASE_WINDOW_SECONDS := 0.10
 
-# Settlement sampling under the production startup (see _wait_head_stable): the settle margin added
-# to every _wait_head_stable caller timeout because the production-idle re-engagement excursion
+# Settlement sampling under animated idle (see _wait_head_stable): the settle margin added
+# to every _wait_head_stable caller timeout because the animated-idle re-engagement excursion
 # lengthens the settle by seconds. Chain-trace evidence: chain_trace_probe.gd under the
 # eye_neutral_fix root. HEAD_SETTLE_CONSECUTIVE_POLLS applies to the no-anchor return-to-rest
 # branch; the assigned-anchor branch uses the longer HEAD_SETTLE_CONFIRMATION_POLLS span.
 const HEAD_SETTLE_CONSECUTIVE_POLLS := 3
-const PRODUCTION_IDLE_SETTLE_MARGIN_SECONDS := 4.0
+const ANIMATED_IDLE_SETTLE_MARGIN_SECONDS := 4.0
 
-# Rate-still threshold per 0.1 s settle poll (3.5°/s): the production-idle re-engagement excursion
+# Rate-still threshold per 0.1 s settle poll (3.5°/s): the animated-idle re-engagement excursion
 # slews the solved head at 10–60°/s while the idle sway that rides the settled head moves at
 # ≲1.2°/s, so a centred-but-slewing head is mid-excursion, not settled. Chain-trace evidence
 # (warmup_reengage2, console.chain_trace4.log): the excursion's return transit passes back through
@@ -139,20 +139,14 @@ func _run() -> void:
 	_install_test_minds(photobooth)
 	root.add_child(photobooth)
 
-	# Mirror the production NPC startup an installer-composed character performs (AutoInstallOnReady ->
-	# deferred install -> RefreshComponents -> NPCNavigation.ActivateRuntimeBinding -> manual AnimationTree
-	# processing with the NPC idle programme started), instead of the unassigned StandingCrouching advance
-	# the unactivated role template drifts into (the B0/B1 cold-start contamination). The trees are held
-	# inert until the binding takes over — production wins this race by deferred timing in a live tree;
-	# this runner's pre-loop context cannot — so the StandingCrouching clip stays frozen at zero exactly
-	# like the production startup. The state is verified after the activation settle, before any anchor
-	# placement or scenario.
+	# Real authored clips drive isolated head/gaze coverage. Replacement production startup remains pending;
+	# this fixture does not claim production scheduling equivalence.
 	var driver: Node = photobooth.get_node("Ai009OrientingPhotoboothDriver")
 	driver.call("HoldAnimationTreesInert")
 	await SceneUtils.wait_frames(self, 1)
-	if driver.call("ActivateProductionStartup") != true:
+	if driver.call("ActivateFixtureIdle") != true:
 		SceneUtils.fatal_error_and_quit(
-			"AI-009 photobooth failed to activate the production startup binding; scenarios must not run")
+			"AI-009 photobooth failed to activate fixture idle; scenarios must not run")
 		return
 	await SceneUtils.wait_frames(self, CAPTURE_SETTLE_FRAMES)
 
@@ -160,9 +154,9 @@ func _run() -> void:
 	_trace_driver = driver
 	RenderingServer.frame_post_draw.connect(_trace_frame)
 	await SceneUtils.wait_seconds(self, 0.3)
-	if driver.call("VerifyProductionIdleStartup") != true:
+	if driver.call("VerifyFixtureIdle") != true:
 		SceneUtils.fatal_error_and_quit(
-			"AI-009 photobooth did not hold the production idle startup state; scenarios must not run")
+			"AI-009 photobooth did not hold the animated fixture idle state; scenarios must not run")
 		return
 
 	print(
@@ -369,11 +363,11 @@ func _wait_head_stable(
 		expected_pitch_deg: float,
 		timeout_seconds: float) -> void:
 	# Polls until the solved head settles and STAYS settled for the required consecutive polls.
-	# Under the production startup the first engagement after a release can slew the head on a
+	# During animated idle the first engagement after a release can slew the head on a
 	# seconds-long re-engagement excursion before it converges (the orienting neutral-reference
 	# re-anchoring absorbs chain lag while the solved head lags the commanded intent); a poll that
 	# lands inside that excursion samples the later glance assertions mid-transit. The
-	# production-idle settle margin extends every caller timeout because the excursion adds seconds
+	# animated-idle settle margin extends every caller timeout because the excursion adds seconds
 	# to the settle.
 	#
 	# Settled-state oracle: while a gaze anchor is assigned, settlement means the head is CENTRED on
@@ -392,7 +386,7 @@ func _wait_head_stable(
 	var previous_yaw := 0.0
 	var previous_pitch := 0.0
 	var has_previous_sample := false
-	var deadline_seconds := timeout_seconds + PRODUCTION_IDLE_SETTLE_MARGIN_SECONDS
+	var deadline_seconds := timeout_seconds + ANIMATED_IDLE_SETTLE_MARGIN_SECONDS
 	while elapsed < deadline_seconds:
 		var settled: bool
 		var required_consecutive := HEAD_SETTLE_CONSECUTIVE_POLLS
@@ -608,7 +602,7 @@ func _run_scenarios(photobooth: Photobooth, driver: Node) -> void:
 	if not await _setup_assign(driver, photobooth, TALL, "TallStraightAnchor"):
 		return
 	await _wait_head_stable(driver, TALL, 0.0, tall_baseline_pitch, 5.0)
-	# Re-capture the eye-gaze neutral settled on the centred straight anchor: under the production startup the
+	# Re-capture the eye-gaze neutral settled on the centred straight anchor: during animated idle the
 	# Activate-time bootstrap captures the eye pose mid-animation-decay, which would offset every later eye
 	# reading. The driver's own contract requires a known-neutral moment, and this warm-up is one.
 	driver.call("CaptureEyeGazeNeutral", TALL)

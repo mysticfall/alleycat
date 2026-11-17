@@ -1,8 +1,6 @@
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.Interaction.Hands;
-using AlleyCat.Navigation;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
@@ -21,7 +19,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static readonly StringName _eyesLibraryName = new("eyes");
     private static readonly StringName _actorsGroupName = new("Actors");
     private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
-    private static readonly StringName _locomotionLibraryName = new("locomotion");
     private static readonly StringName _idleLibraryName = new("idle");
     private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
@@ -106,8 +103,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             ConfigureEyeAnimationTreeFilters(animationTree, eyeFilterTargets);
             ValidateEyes(targetCharacter.Eyes);
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
-            ValidateRoleComposition(targetCharacter, templateCharacter, context.TargetRoot);
-            ValidateNavigation(targetCharacter.Navigation, context.TargetRoot);
+            ValidateRoleComposition(targetCharacter, templateCharacter);
             ValidatePerception(templateCharacter, targetCharacter);
             IdentityValidator.Validate(targetCharacter, nameof(context));
             Voice templateVoice = templateCharacter.Voice
@@ -120,10 +116,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             targetVoice.Id = targetCharacter.Id;
             ValidateVoiceIdentity(targetVoice, "final installed");
             targetCharacter.RefreshComponents();
-            if (targetCharacter.Navigation is NPCNavigation npcNavigation)
-            {
-                ActivateNPCNavigationWhenReady(npcNavigation);
-            }
 
             return SceneInstallationResult.Successful();
         }
@@ -178,17 +170,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static string DescribeNode(IVoice voice)
         => voice is Node node ? node.GetPath().ToString() : voice.GetType().FullName ?? voice.GetType().Name;
 
-    private static void ActivateNPCNavigationWhenReady(NPCNavigation navigation)
-    {
-        if (navigation.IsInsideTree())
-        {
-            navigation.ActivateRuntimeBinding();
-            return;
-        }
-
-        _ = navigation.CallDeferred(NPCNavigation.MethodName.ActivateRuntimeBinding);
-    }
-
     private static void RebaseAnimationMixerRoots(AnimationTree animationTree, AnimationPlayer animationPlayer, Skeleton3D skeleton)
     {
         Node modelRoot = skeleton.GetParent()
@@ -204,7 +185,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         AnimationPlayer targetAnimationPlayer)
     {
         bool changed = false;
-        changed |= RetainAuthoredAnimationLibrary(templateAnimationPlayer, targetAnimationPlayer, _locomotionLibraryName);
         changed |= RetainAuthoredAnimationLibrary(templateAnimationPlayer, targetAnimationPlayer, _idleLibraryName);
         return changed;
     }
@@ -596,11 +576,10 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         }
     }
 
-    private static void ValidateRoleComposition(Character target, Character template, Node targetRoot)
+    private static void ValidateRoleComposition(Character target, Character template)
     {
-        if (target is PlayerCharacter player && template is PlayerCharacter)
+        if (target is PlayerCharacter && template is PlayerCharacter)
         {
-            ValidateLocomotion(player.Locomotion, targetRoot);
             return;
         }
 
@@ -609,46 +588,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             throw new InvalidOperationException(
                 "Character runtime subsystem installer requires target and template roots to declare the same explicit player or NPC role.");
         }
-    }
-
-    private static void ValidateLocomotion(CharacterLocomotion? locomotion, Node targetRoot)
-    {
-        if (locomotion is null)
-        {
-            return;
-        }
-
-        locomotion.TargetCharacterBodyNode ??= targetRoot as CharacterBody3D
-            ?? throw new InvalidOperationException(
-                $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for locomotion binding.");
-        RequireAssigned(locomotion.AnimationTree, locomotion, nameof(CharacterLocomotion.AnimationTree));
-        RequireAssigned(locomotion.RootMotionReference, locomotion, nameof(CharacterLocomotion.RootMotionReference));
-    }
-
-    private static void ValidateNavigation(NavigationBase? navigation, Node targetRoot)
-    {
-        if (navigation is null)
-        {
-            return;
-        }
-
-        if (navigation is DirectTransformNavigation directTransformNavigation)
-        {
-            directTransformNavigation.Target ??= targetRoot as CharacterBody3D
-                ?? throw new InvalidOperationException(
-                    $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for navigation binding.");
-            return;
-        }
-
-        if (navigation is NPCNavigation npcNavigation)
-        {
-            npcNavigation.Actor ??= targetRoot as CharacterBody3D
-                ?? throw new InvalidOperationException(
-                    $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for NPC navigation binding.");
-            RequireAssigned(npcNavigation.AnimationTree, npcNavigation, nameof(NPCNavigation.AnimationTree));
-            RequireAssigned(npcNavigation.RootMotionReference, npcNavigation, nameof(NPCNavigation.RootMotionReference));
-        }
-
     }
 
     internal static Character ValidateCharacterHub(Node targetRoot)

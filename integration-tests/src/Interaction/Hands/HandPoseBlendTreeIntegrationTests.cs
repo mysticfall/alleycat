@@ -61,9 +61,13 @@ public sealed class HandPoseBlendTreeIntegrationTests
             exactMatch: false);
         string contents = Godot.FileAccess.GetFileAsString(NpcAnimationTreeRootPath);
 
-        Assert.Contains("states/NPCIdle/node", contents, StringComparison.Ordinal);
-        Assert.Contains("states/NPCWalkF/node", contents, StringComparison.Ordinal);
-        Assert.Contains("states/NPCI2FL/node", contents, StringComparison.Ordinal);
+        // The authored NPC root exposes the current pose states (locomotion stays generic; the retired
+        // NPCIdle/NPCWalkF/NPCI2FL clip states no longer exist) while keeping hand-pose overlays and the
+        // eyes look-seek nodes, and without the player's time-seek nodes.
+        Assert.Contains("states/StandingCrouching/node", contents, StringComparison.Ordinal);
+        Assert.Contains("states/Kneeling/node", contents, StringComparison.Ordinal);
+        Assert.Contains("states/AllFours/node", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("states/NPCIdle/node", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("AnimationNodeTimeSeek_kcdmd", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("AnimationNodeTimeSeek_phcyr", contents, StringComparison.Ordinal);
         Assert.Contains(EyesAnimationTreePaths.HorizontalLookSeekNode, contents, StringComparison.Ordinal);

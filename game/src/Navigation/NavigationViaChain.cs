@@ -43,7 +43,7 @@ public static class NavigationViaChain
             Vector3 target = index < vias.Count ? vias[index] : destination;
             foreach (Vector3 point in querySegment(cursor, target))
             {
-                if (point.X == cursor.X && point.Z == cursor.Z && path.Count > 0)
+                if (point == cursor && path.Count > 0)
                 {
                     continue;
                 }

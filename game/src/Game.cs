@@ -7,6 +7,7 @@ using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
 using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Lore;
+using AlleyCat.Motion;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
 using AlleyCat.UI;
@@ -26,6 +27,8 @@ public partial class Game : Node, IServiceProvider
     private static Game? _instance;
 
     private readonly ServiceCollection _services = [];
+    internal MotionBricksWorkers MotionWorkers { get; } = new();
+    private bool _exitRequested;
 
     /// <inheritdoc/>
     public Game()
@@ -122,6 +125,11 @@ public partial class Game : Node, IServiceProvider
         }
 
         SceneTree? tree = GetTree();
+        _ = (tree?.AutoAcceptQuit = false);
+        if (tree is not null)
+        {
+            tree.Root.CloseRequested += OnWindowCloseRequested;
+        }
         if (tree is not null && RuntimeContext.ShouldBypassGlobalStartup(tree))
         {
             return;
@@ -270,6 +278,7 @@ public partial class Game : Node, IServiceProvider
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        GetTree().Root.CloseRequested -= OnWindowCloseRequested;
         MainThreadDispatcher.Close();
 
         if (_xrManager is XRManager xrManager && _isSubscribedToXRInitialised)
@@ -359,9 +368,66 @@ public partial class Game : Node, IServiceProvider
     /// <param name="exitCode">Process exit code to return to the host.</param>
     public virtual void RequestExit(int exitCode = 0)
     {
+        if (_exitRequested)
+        {
+            return;
+        }
+        _exitRequested = true;
         GetService<ILogger<Game>>()?.LogInformation(
             "Game exit requested with exit code {ExitCode}.", exitCode);
-        GetTree().Quit(exitCode);
+        Task completion = DrainMotionAndDiagnosticsAsync();
+        if (completion.IsCompletedSuccessfully)
+        {
+            GetTree().Quit(exitCode);
+            return;
+        }
+        _ = CompleteExitAsync(completion, exitCode);
+    }
+
+    private void OnWindowCloseRequested() => RequestExit();
+
+    private readonly List<Func<Task>> _diagnosticDrains = [];
+
+    // Registered callbacks own transports, never scene nodes. Native outputs drain before diagnostics seal.
+    internal void RegisterDiagnosticDrain(Func<Task> drain) => _diagnosticDrains.Add(drain);
+
+    // Shared with the focused shutdown integration check, which must not quit the reusable test process.
+    internal Task DrainMotionAndDiagnosticsAsync() => DrainDiagnosticsAsync(MotionWorkers.Stop(), [.. _diagnosticDrains]);
+
+    private async Task DrainDiagnosticsAsync(Task workers, Func<Task>[] drains)
+    {
+        try
+        {
+            await workers.ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (Func<Task> drain in drains)
+            {
+                try
+                {
+                    await drain().ConfigureAwait(false);
+                }
+                catch (Exception error) { GetService<ILogger<Game>>()?.LogError(error, "Diagnostic shutdown failed"); }
+            }
+        }
+    }
+
+    private async Task CompleteExitAsync(Task completion, int exitCode)
+    {
+        try
+        {
+            await completion.ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            GetService<ILogger<Game>>()?.LogError(error, "MotionBricks worker shutdown failed");
+        }
+        ScheduleDeferred(() =>
+        {
+            GetService<ILogger<Game>>()?.LogInformation("MotionBricks workers completed before application quit");
+            GetTree().Quit(exitCode);
+        });
     }
 
     private void OnXRInitialised(bool succeeded)

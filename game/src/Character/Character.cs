@@ -1,4 +1,3 @@
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
@@ -24,15 +23,6 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
     {
         get; set;
     } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the player-role-authored locomotion reference. NPC templates leave it unassigned.
-    /// </summary>
-    [Export]
-    public CharacterLocomotion? Locomotion
-    {
-        get; set;
-    }
 
     /// <summary>
     /// Gets or sets the template-authored navigation capability reference.

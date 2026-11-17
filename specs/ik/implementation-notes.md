@@ -68,7 +68,7 @@ Required implementation, production integration, and validation remain mandatory
 - Preserve authored neck/arm/hand-copy order. The end/compensation stage follows solve/twist and precedes optical
   finger retargeting, which remains last.
 - Lower-limb ordering and cross-body integration follow the normative
-  [IK-003](003-leg-feet-ik/index.md#ownership-and-solve) and
+  [IK-003](003-leg-feet-ik/index.md#technical-requirements) and
   [Leg-Feet IK](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements) contracts.
 
 The IK-005 TR26 versus RIG-002 TR7 hand-fallback disagreement remains subject to the
@@ -79,7 +79,8 @@ does not choose a stale/invalid-hand fallback interpretation.
 
 - Lower-limb configuration follows the
   [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements).
-- Lower-limb validation is defined only by the [IK-003 validation requirements](003-leg-feet-ik/index.md#validation).
+- Lower-limb validation is defined only by the
+  [IK-003 acceptance criteria](003-leg-feet-ik/index.md#acceptance-criteria).
 
 ## Character IK Architecture
 
@@ -109,11 +110,19 @@ does not choose a stale/invalid-hand fallback interpretation.
 
 - `PlayerVRIK` exposes player `Viewpoint`, head and hand IK target bodies, and the
   solved `Skeleton3D`.
-- It inserts two callback stages into the skeleton modifier pipeline:
-  - **Pre-IK Stage:** aligns XR origin to the player transform, then drives head and
-    hand IK target bodies towards XR-derived transforms.
-  - **Post-IK Stage:** applies origin compensation from the physical XR head vs solved
-    head-bone position delta.
+- Its skeleton modifier callbacks maintain separate physical-input and rendered-origin responsibilities:
+  - **Pre-IK Stage:** restores an independent physical tracking frame, following actor translation without carrying
+    subsequent body yaw into the view, then drives head and hand targets from XR input.
+  - **Head Target:** applies existing positional constraints and configurable left/right body-relative yaw limits,
+    each defaulting to 100 degrees. Physical hip turning is not reproduced by the avatar; the relaxed allowance
+    avoids premature compensation. [CTRL-001 UR4/TR6](../ctrl/001-locomotion/index.md) owns this normative policy.
+  - **Post-IK Stage:** skips compensation for an unconstrained, reachable head target. Otherwise, preserves solved
+    positional attachment and constrained target orientation through rendered XR-origin compensation; reach-only
+    compensation retains physical view orientation. Rendered compensation must not become the next physical head
+    input frame. This is neither unconditional camera locking nor a body-stop policy.
+- Preserve existing positional/head-limit compensation without adding physical head collision, which remains outside
+  [RIG-001](../rigging/001-physical-collision/index.md). Preserve hands and disclose the known hand-origin/epoch risk;
+  independent head input does not by itself prove same-epoch hand behaviour.
 
 ### World-Scale Calibration Contract
 
@@ -206,8 +215,8 @@ does not choose a stale/invalid-hand fallback interpretation.
 - **XR fallback:** With head or hand fallback providers wired in `ally_player.tscn`, the system behaves as if the
   relevant XR source (controller by default; optical per XR-002) is active when no custom provider overrides it.
 - **Scene wiring:** `ally_player.tscn` may populate head and hand modifier groups so provider influence gates direct
-  solvers and side-effect modifiers without duplicate per-limb exports. Lower-limb foot planting is defined by
-  [IK-003](003-leg-feet-ik/index.md#foot-planting), using ANIM-002 per-foot planted intervals, rather than by this
+  solvers and side-effect modifiers without duplicate per-limb exports. Lower-limb solving is defined by
+  [IK-003](003-leg-feet-ik/index.md), rather than by this
   player upper-body wiring note.
 - **Side resolution:** XR fallback providers must prove left/right controller selection from
   their own `LimbSide` setting rather than a manually assigned source node.
@@ -228,10 +237,8 @@ owner.
   target transform, activity gate, and modifier influence.
 - Per-side isolation and idempotent order repair follow the
   [Leg-Feet IK technical requirements](003-leg-feet-ik/leg-feet-ik-contract.md#technical-requirements).
-- The lower-limb foot-planting provider is an ordinary value-only per-foot provider. When a foot is planted follows
-  [ANIM-002 per-foot planted intervals](../animation/002-locomotive-animation-set/index.md#motion-metadata) and its
-  [Planted Combination Rule](../animation/002-locomotive-animation-set/index.md#planted-combination-rule); its normative
-  contract is [IK-003 Foot Planting](003-leg-feet-ik/index.md#foot-planting).
+- The locomotion integration boundary is [IK-003](003-leg-feet-ik/index.md); generic providers do not imply a
+  foot-planting or corrective movement requirement for MotionBricks.
 
 ## Acceptance Criteria
 
@@ -244,8 +251,8 @@ Acceptance must cover user-visible outcomes and technical delivery at the linked
 - **Lower limbs:** IK-003 [user acceptance](003-leg-feet-ik/index.md#user-requirement-acceptance) and
   [technical acceptance](003-leg-feet-ik/index.md#technical-requirement-acceptance), with
   [leg-feet traceability](003-leg-feet-ik/leg-feet-ik-contract.md#acceptance-traceability).
-- **Lower-limb evidence:** [IK-003 validation](003-leg-feet-ik/index.md#validation) and
-  [acceptance traceability](003-leg-feet-ik/index.md#acceptance-traceability) define required evidence within its stated
+- **Lower-limb evidence:** [IK-003 acceptance](003-leg-feet-ik/index.md#acceptance-criteria) and
+  [technical requirements](003-leg-feet-ik/index.md#technical-requirements) define required evidence within its stated
   adoption scope.
 
 ## References

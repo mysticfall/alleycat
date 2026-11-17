@@ -593,7 +593,7 @@ opposition roll.
      provenance-scoped source-exit policy in Requirement 54; it cannot create a per-hand mixed mode or revoke an
      unrelated publisher.
 42. Controller input surfaces (`IXRHandController`) are unchanged. Controller consumers other than grab input —
-    locomotion via `PlayerController` (CTRL-001), the game menu, and the Transcriber — are unaffected in both modes;
+    player movement when restored, the game menu, and the Transcriber — are unaffected in both modes;
     only grab edges are gated by the committed mode (Requirement 46).
 
 ### Resource Profile

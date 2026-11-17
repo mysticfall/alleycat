@@ -40,7 +40,7 @@
 ## Animation
 
 - [ANIM: Animation](animation/index.md)
-  - [ANIM-002: Locomotive Animation Set](animation/002-locomotive-animation-set/index.md)
+  - [ANIM-002: Locomotive Conditioning Sources](animation/002-locomotive-animation-set/index.md)
 
 ## Scene
 
@@ -66,8 +66,7 @@
 ## Character Control
 
 - [CTRL: Player Character Control System](ctrl/index.md)
-  - [CTRL-001: Locomotion](ctrl/001-locomotion/index.md)
-    - [Current Implementation and Acceptance Gaps][ctrl-locomotion-status]
+  - [CTRL-001: Player Locomotion](ctrl/001-locomotion/index.md)
   - [CTRL-002: Hand Grab Input](ctrl/002-hand-grab-input/index.md)
 
 ## IK
@@ -137,7 +136,5 @@
 
 - [Developer Tool Layout](tooling/index.md)
 - [Character Generator](tooling/character-generator/index.md)
-- [Kimodo Locomotive Animation-Set Pipeline](tooling/kimodo-pipeline/locomotive-animation-set.md)
+- [Kimodo Motion Sources](tooling/kimodo-pipeline/locomotive-animation-set.md)
 - [GDScript API Documentation Generator](tooling/gdscript-api-doc-generator/index.md)
-
-[ctrl-locomotion-status]: ctrl/001-locomotion/index.md#current-implementation-and-acceptance-gaps

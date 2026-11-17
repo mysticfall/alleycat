@@ -117,4 +117,4 @@ For each runner execution:
    File existence alone is not sufficient evidence.
 3. Compare screenshots across scenarios: distinct scenarios must produce visually distinct results.
 4. Iterate scene setup/feature implementation until visual output is correct.
-5. Then add or update the corresponding C# integration test.
+5. Keep the runner as a directly run debug device; do not convert it into an integration test.

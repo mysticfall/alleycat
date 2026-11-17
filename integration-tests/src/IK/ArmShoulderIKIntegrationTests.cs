@@ -1,5 +1,4 @@
 using System.Text;
-using AlleyCat.IntegrationTests.Support;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -13,6 +12,29 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class ArmShoulderIKIntegrationTests
 {
+    /// <summary>
+    /// Native-free endpoint for the authored NPC navigation worker. Arm IK frame facts never verify locomotion;
+    /// binding this before Ready keeps the unrelated MotionBricksNavigation from constructing a real CUDA session
+    /// (its worker is eager) while every arm assertion keeps running on production nodes.
+    /// </summary>
+    private sealed class AmbientArmSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientArmSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientArmSession();
+        }
+    }
+
     private const string VerificationScenePath = "res://tests/ik/arm_shoulder_ik_test.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string NPCScenePath = "res://assets/characters/reference/ally_npc.tscn";
@@ -172,23 +194,6 @@ public sealed class ArmShoulderIKIntegrationTests
 
             if (poseFailures.Length > 0)
             {
-                // Make the active pose markers and hand targets visible for diagnostic screenshots.
-                leftMarker.Visible = true;
-                rightMarker.Visible = true;
-                leftHandTarget.Visible = true;
-                rightHandTarget.Visible = true;
-
-                await PhotoboothHelper.CaptureScreenshotsAsync(
-                    sceneTree,
-                    sceneRoot,
-                    $"char002/arm_shoulder_ik/failures/{pose.Slug}.jpg");
-
-                // Restore visibility.
-                leftMarker.Visible = false;
-                rightMarker.Visible = false;
-                leftHandTarget.Visible = false;
-                rightHandTarget.Visible = false;
-
                 failures.Add(poseFailures.ToString());
             }
         }
@@ -329,9 +334,18 @@ public sealed class ArmShoulderIKIntegrationTests
         bool verifyDirectPoleSolve)
     {
         SceneTree sceneTree = GetSceneTree();
-        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(scenePath));
-        Assert.Equal(Error.Ok, changeSceneError);
-        await WaitForFramesAsync(sceneTree, 2);
+        sceneTree.NodeAdded += BindAmbientArmSession;
+        try
+        {
+            Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(scenePath));
+            Assert.Equal(Error.Ok, changeSceneError);
+            await WaitForFramesAsync(sceneTree, 2);
+        }
+        finally
+        {
+            sceneTree.NodeAdded -= BindAmbientArmSession;
+        }
+
         Node actor = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException($"Expected runtime {actorLabel} scene to become current scene.");
 

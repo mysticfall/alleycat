@@ -3,6 +3,14 @@ using Godot;
 
 namespace AlleyCat.Navigation;
 
+// Native path samples and request ownership are captured together, never inferred from endpoint proximity.
+internal sealed class NavigationPathQuery(Transform3D destination, long generation, ReadOnlySpan<Vector3> points)
+{
+    internal Transform3D Destination { get; } = destination;
+    internal long Generation { get; } = generation;
+    internal IReadOnlyList<Vector3> Points { get; } = Array.AsReadOnly(points.ToArray());
+}
+
 /// <summary>
 /// Immutable route data captured from one coherent navigation poll.
 /// </summary>
@@ -18,7 +26,8 @@ public sealed class NavigationRouteSnapshot
         long destinationRequestGeneration,
         long routeRevision,
         bool usedAcceptedPathFallback,
-        bool wasReplanned)
+        bool wasReplanned,
+        NavigationPathQuery? query = null)
     {
         _pathPoints = Array.AsReadOnly(pathPoints.ToArray());
         ActivePathIndex = activePathIndex;
@@ -28,6 +37,12 @@ public sealed class NavigationRouteSnapshot
         RouteRevision = routeRevision;
         UsedAcceptedPathFallback = usedAcceptedPathFallback;
         WasReplanned = wasReplanned;
+        Query = query;
+    }
+
+    internal NavigationPathQuery? Query
+    {
+        get;
     }
 
     /// <summary>

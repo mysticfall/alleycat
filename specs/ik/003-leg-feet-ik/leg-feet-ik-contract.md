@@ -35,13 +35,12 @@ solvers rewrite unrelated state or policy.
    Only `CharacterIK` applies the selected target, gate, and influence for each side.
 6. The modifier order is `sync → provider → hip reconciliation (when present) → lower-leg consumers`. `CharacterIK`
    repairs this order idempotently on initialisation or retry.
-7. Providers resolve from the same-tick animated pose: after the AnimationTree has applied the current tick and after
+7. Providers resolve from the same-tick animated pose: after the animation source has applied the current tick and after
    that tick's actor movement operation. A target resolved from an earlier tick's pose is never applied. When a tick
-   evaluates the AnimationTree more than once, only the final evaluation is used, and an intermediate evaluation
-   triggers no provider resolution or solve; see
-   [NAV-001 Animation Tree Use](../../nav/001-npc-navigation/index.md#animation-tree-use).
+   evaluates animation more than once, only the final evaluation is used, and an intermediate evaluation
+   triggers no provider resolution or solve.
 8. `CharacterIKSubsystemInstaller` sets `Skeleton3D.ModifierCallbackModeProcess` to `Physics` before activating
-   modifier groups, and the AnimationTree applies before the modifier chain within each physics tick.
+   modifier groups, and the animation source applies before the modifier chain within each physics tick.
 9. Post-modification poses are observable only inside `Skeleton3D.SkeletonUpdated`. The engine applies modifier
    output to the skin and then restores canonical bone poses, so reads at physics-timer time cannot observe IK output.
    Diagnostics and test instruments capture post-IK output there, bound to the tick that produced it.
@@ -56,24 +55,18 @@ solvers rewrite unrelated state or policy.
 
     A tunable rest-leg-derived minimum pole offset applies.
 11. The solver never writes a target's position, rotation, or scale.
-12. Foot planting geometry uses the ball joint defined by [IK-003 Foot Planting](index.md#foot-planting): the
-    rest-pose origin of the toe bone in foot-local space. The foot bone origin is never treated as the pinned point.
-    Both toe bones are required rig data: if either is missing, foot-planting binding fails with a clear error, with
-    no degraded per-foot mode.
-    - A target whose rotation differs from the animated foot pose, such as the IK-003 planted facing hold, still
-      places the ball joint as [IK-003](index.md#foot-planting) defines: the rotation acts about the ball joint, not
-      the foot-bone origin. Ball-point placement and reach checks derived from a target use the composed position and
-      rotation in one consistent world frame, with no second application of any scale conversion.
+12. Target geometry and reach checks use composed position and rotation in one consistent world frame, with no
+    second application of any scale conversion. This generic solve does not impose locomotion foot planting.
 13. The path contains no terrain probe, pelvis or whole-body adjustment, or downstream target overwrite.
 
 ## In Scope
 
 - Target synchronisation, provider composition and actuation, same-tick ordering, and post-IK observability.
-- Pole prediction, two-bone solving, and ball-joint resolution on both reference rigs.
+- Pole prediction and two-bone solving on both reference rigs.
 
 ## Out Of Scope
 
-- Foot-planting policy, which [IK-003](index.md#foot-planting) owns.
+- Locomotion generation and contact adaptation; see the [IK-003 boundary](index.md).
 - Numeric pole thresholds and scene-node names, which remain rig configuration.
 - Terrain adaptation and pelvis authority.
 
@@ -94,10 +87,8 @@ solvers rewrite unrelated state or policy.
 4. A real-NPC trace proves `Physics` callback mode, animation before modifiers, same-tick provider input, and post-IK
    capture inside `Skeleton3D.SkeletonUpdated`.
 5. Fixtures prove pole fallback, the minimum pole offset, and that the solver never writes its target.
-6. Per-foot checks prove foot planting geometry uses the toe-bone ball joint, and a rig missing either toe bone fails
-   foot-planting binding with a clear error. They also prove a target rotated away from the animated pose keeps the
-   ball joint at its intended world position, with ball-point and reach computation using the composed target
-   transform in one consistent world frame.
+6. Per-foot checks prove target geometry and reach computation use the composed target transform in one consistent
+   world frame, without duplicate scaling.
 7. An audit confirms no terrain probe, pelvis adjustment, or downstream target overwrite exists.
 
 ### Acceptance Traceability
@@ -113,4 +104,4 @@ solvers rewrite unrelated state or policy.
 ## References
 
 - [IK-003 Overview](index.md)
-- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
+- [Shared Animation Contract](../../animation/index.md)

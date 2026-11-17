@@ -72,19 +72,6 @@ public sealed class INavigationFacadeTests
         AssertNoTargetNamedMembers(typeof(INavigator));
     }
 
-    /// <summary>
-    /// Verifies the concrete direct-transform implementation keeps its intentionally exported moved-node Target.
-    /// </summary>
-    [Fact]
-    public void DirectTransformNavigation_ExposesOnlyIntentionalDeclaredTargetMember()
-    {
-        MemberInfo[] targetMembers = typeof(DirectTransformNavigation)
-            .GetMember(nameof(DirectTransformNavigation.Target), BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-
-        MemberInfo targetMember = Assert.Single(targetMembers);
-        Assert.True(targetMember is PropertyInfo);
-    }
-
     private static bool ExposesType(MemberInfo member, Type exposedType) => member switch
     {
         PropertyInfo property => ContainsType(property.PropertyType, exposedType),

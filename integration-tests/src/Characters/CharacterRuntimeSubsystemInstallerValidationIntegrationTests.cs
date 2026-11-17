@@ -66,17 +66,16 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
             fixture.CreateContext(targetSceneOverrides));
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
-        Assert.Equal(5, targetRoot.Components.Count);
+        Assert.Equal(4, targetRoot.Components.Count);
         Assert.Same(fixture.TargetEyes, targetRoot.Components[0]);
-        Assert.Same(fixture.TargetNavigation, targetRoot.Components[1]);
+        Assert.Same(fixture.TargetVoice, targetRoot.Components[1]);
         ICharacter character = targetRoot;
-        Assert.Same(fixture.TargetNavigation, character.RequireNavigation());
+        Assert.False(character.TryGetComponent<INavigation>(out _));
         Assert.Same(fixture.TargetEyes, character.RequireVision());
         Assert.Same(fixture.TargetVoice, character.RequireVoice());
         Assert.Same(fixture.TargetLeftHand, character.RequireHand(LimbSide.Left));
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
         Assert.False(targetRoot.TryGetComponent<ILocomotion>(out _));
-        Assert.Same(targetRoot, fixture.TargetNavigation!.Target);
         Assert.Equal("voice", fixture.TargetVoice!.Type);
         Assert.Equal("target_override_identity", fixture.TargetVoice!.Id);
         Assert.Equal("voice:target_override_identity", fixture.TargetVoice.FullId);
@@ -613,16 +612,6 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
 
         public CharacterHub TemplateCharacter => Assert.IsType<CharacterHub>(_templateRoot, exactMatch: false);
 
-        public CharacterLocomotion? TargetLocomotion
-        {
-            get; private init;
-        }
-
-        public DirectTransformNavigation? TargetNavigation
-        {
-            get; private init;
-        }
-
         public AnimationTree? TargetAnimationTree
         {
             get; private init;
@@ -736,15 +725,11 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
                 };
                 targetCapabilities.Voice.AddChild(targetSpeechGenerator);
 
-                targetCharacter.Locomotion = new CharacterLocomotion { Name = "StaleLocomotion" };
-                targetCharacter.Navigation = new DirectTransformNavigation { Name = "StaleNavigation" };
                 targetCharacter.Eyes = new EyesBehaviour { Name = "StaleEyes" };
                 targetCharacter.Voice = new TestVoice { Name = "StaleVoice", Id = "stale_voice" };
                 targetCharacter.LeftHand = new HandPoseBehaviour { Name = "StaleLeftHand", Side = LimbSide.Left };
                 targetCharacter.RightHand = new HandPoseBehaviour { Name = "StaleRightHand", Side = LimbSide.Right };
 
-                templateRoot.Locomotion = templateCapabilities.Locomotion;
-                templateRoot.Navigation = templateCapabilities.Navigation;
                 templateRoot.Eyes = templateCapabilities.Eyes;
                 templateRoot.Voice = templateCapabilities.Voice;
                 templateRoot.LeftHand = templateCapabilities.LeftHand;
@@ -759,8 +744,6 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
                 {
                     TargetAnimationTree = animationTree,
                     OriginalAnimationTreeRoot = originalAnimationTreeRoot,
-                    TargetLocomotion = targetCapabilities.Locomotion,
-                    TargetNavigation = targetCapabilities.Navigation,
                     TargetEyes = targetCapabilities.Eyes,
                     TargetVoice = targetCapabilities.Voice,
                     TemplateVoice = templateCapabilities.Voice,
@@ -864,7 +847,6 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
         private static CapabilityNodes AddCapabilityNodes(CharacterHub root, AnimationTree animationTree, string prefix)
         {
             var eyeOrigin = new Node3D { Name = $"{prefix}_EyeOrigin" };
-            var rootMotion = new Node3D { Name = $"{prefix}_RootMotion" };
             var leftTarget = new Node3D { Name = $"{prefix}_LeftTarget" };
             var rightTarget = new Node3D { Name = $"{prefix}_RightTarget" };
             var leftAttachment = new BoneAttachment3D { Name = $"{prefix}_LeftAttachment" };
@@ -873,7 +855,6 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
             var rightCollision = new StaticBody3D { Name = $"{prefix}_RightCollision" };
             var physicalRig = new DynamicPhysicalRig { Name = $"{prefix}_PhysicalRig" };
             root.AddChild(eyeOrigin);
-            root.AddChild(rootMotion);
             root.AddChild(leftTarget);
             root.AddChild(rightTarget);
             root.AddChild(leftAttachment);
@@ -882,16 +863,6 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
             root.AddChild(rightCollision);
             root.AddChild(physicalRig);
 
-            var locomotion = new CharacterLocomotion
-            {
-                Name = "Locomotion",
-                AnimationTree = animationTree,
-                RootMotionReference = rootMotion,
-            };
-            var navigation = new DirectTransformNavigation
-            {
-                Name = "Navigation",
-            };
             var eyes = new EyesBehaviour
             {
                 Name = "Eyes",
@@ -919,18 +890,14 @@ public sealed partial class CharacterRuntimeSubsystemInstallerValidationIntegrat
                 HeldCollisionTarget = rightCollision,
                 PhysicalRig = physicalRig,
             };
-            root.AddChild(locomotion);
-            root.AddChild(navigation);
             root.AddChild(eyes);
             root.AddChild(voice);
             root.AddChild(leftHand);
             root.AddChild(rightHand);
-            return new CapabilityNodes(locomotion, navigation, eyes, voice, leftHand, rightHand);
+            return new CapabilityNodes(eyes, voice, leftHand, rightHand);
         }
 
         private sealed record CapabilityNodes(
-            CharacterLocomotion Locomotion,
-            DirectTransformNavigation Navigation,
             EyesBehaviour Eyes,
             TestVoice Voice,
             HandPoseBehaviour LeftHand,

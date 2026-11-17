@@ -17,7 +17,7 @@ namespace AlleyCat.IntegrationTests.Scene;
 /// </summary>
 public sealed class SceneContextIntegrationTests
 {
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+    private const string MembershipRoomScenePath = "res://assets/testing/scene_context/membership_room.tscn";
 
     /// <summary>
     /// Shared character bases provide Actors discovery and surface each role's canonical identity as the raw
@@ -54,19 +54,22 @@ public sealed class SceneContextIntegrationTests
     }
 
     /// <summary>
-    /// The Mirror Room's player is discoverable before deferred role installation can run.
+    /// The authored player is discoverable from Actors membership immediately, without any installer
+    /// or deferred installation participating. Uses the minimal membership fixture, not a production
+    /// scene wired with unrelated features.
     /// </summary>
+    [Headless]
     [Fact]
-    public async Task MirrorRoom_ImmediatelyResolvesAuthoredPlayerFromActorsMembership()
+    public async Task MembershipRoom_ImmediatelyResolvesAuthoredPlayerFromActorsMembership()
     {
         SceneTree sceneTree = GetSceneTree();
-        Node mirrorRoom = ResourceLoader.Load<PackedScene>(MirrorRoomScenePath).Instantiate();
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mirrorRoom);
+        Node membershipRoom = ResourceLoader.Load<PackedScene>(MembershipRoomScenePath).Instantiate();
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(membershipRoom);
 
         try
         {
-            CharacterHub player = mirrorRoom.GetNode<CharacterHub>("Actors/Player");
-            ISceneContext context = new SceneContextProvider(mirrorRoom).GetCurrent();
+            CharacterHub player = membershipRoom.GetNode<CharacterHub>("Actors/Player");
+            ISceneContext context = new SceneContextProvider(membershipRoom).GetCurrent();
 
             Assert.True(player.IsInGroup("Actors"));
             Assert.True(player.IsInGroup("VisualSubjects"));
@@ -77,7 +80,7 @@ public sealed class SceneContextIntegrationTests
         }
         finally
         {
-            mirrorRoom.QueueFree();
+            membershipRoom.QueueFree();
             await WaitForFramesAsync(sceneTree, 2);
         }
     }

@@ -1,11 +1,13 @@
 using AlleyCat.Common;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
-using AlleyCat.Rigging.Installation;
+using AlleyCat.Rigging;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
@@ -21,7 +23,22 @@ namespace AlleyCat.IntegrationTests.Character;
 [Headless]
 public sealed class PerceptionCompositionIntegrationTests
 {
-    private const string VadimNPCScenePath = "res://assets/characters/reference/vadim_npc.tscn";
+    /// <summary>ResourceSaver-expanded defaults must not change provider behaviour.</summary>
+    [Fact]
+    public void NPCTemplates_SerialisedProviderDefaultsMatchConstructor()
+    {
+        using var defaultMind = new AgenticMind();
+        OpenAIClientProvider defaultProvider = Assert.IsType<OpenAIClientProvider>(defaultMind.ClientProvider);
+        foreach (string sex in new[] { "female", "male" })
+        {
+            using Node root = LoadPackedScene(
+                $"res://assets/characters/templates/reference_{sex}/reference_{sex}_npc.tscn").Instantiate();
+            AgenticMind mind = root.GetNode<AgenticMind>("Mind");
+            OpenAIClientProvider provider = Assert.IsType<OpenAIClientProvider>(mind.ClientProvider);
+            Assert.Equal(defaultProvider.ConfigPath, provider.ConfigPath);
+            Assert.Equal(defaultProvider.ChatClientKind, provider.ChatClientKind);
+        }
+    }
 
     /// <inheritdoc/>
     [Fact]
@@ -82,7 +99,11 @@ public sealed class PerceptionCompositionIntegrationTests
                     typeof(RelativePositionPerception),
                 ],
                 mind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
-            Assert.Equal(["EyesBehaviour", "NPCNavigation", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"], npc.Components.Select(component => component.GetType().Name));
+            // The current NPC template authors MotionBricksNavigation (NAV-001 TR5); component order
+            // follows ComposeComponents: eyes, navigation, voice, hearing, hands.
+            Assert.Equal(
+                ["EyesBehaviour", "MotionBricksNavigation", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"],
+                npc.Components.Select(component => component.GetType().Name));
             Assert.Same(mind, femaleSelector.GetParent());
             Assert.False(femaleSelector is IComponent);
             Assert.DoesNotContain(npc.Components, component => ReferenceEquals(femaleSelector, component));
@@ -159,34 +180,84 @@ public sealed class PerceptionCompositionIntegrationTests
     }
 
     /// <summary>
-    /// Verifies Vadim's authored speech faculty activates against the composed Hearing sense in a fresh scene tree.
+    /// Verifies the composed speech faculty activates against the composed Hearing sense on a minimal live
+    /// character, without any production role installer or MotionBricks participation.
     /// </summary>
     [Fact]
-    public async Task VadimNPCScene_LiveTree_ActivatesSpeechPerceptionForHearing()
+    public async Task MinimalNpcCharacter_LiveTree_ActivatesSpeechPerceptionForHearing()
     {
         SceneTree sceneTree = GetSceneTree();
-        Node vadimNode = LoadPackedScene(VadimNPCScenePath).Instantiate();
-        CharacterHub vadim = Assert.IsType<CharacterHub>(vadimNode, exactMatch: false);
-        RigRoleTemplateSceneInstaller installer = vadimNode.RequireNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
-        Assert.True(installer.AutoInstallOnReady);
+
+        // Minimal authored NPC: only the character shell ComposeComponents requires, plus the
+        // Hearing→SpeechPerception→AgenticMind wiring this fact verifies. No installer, no scene template.
+        CharacterHub npc = new()
+        {
+            Name = "MinimalPerceptionNpc",
+            Id = "minimal_perception_npc"
+        };
+        EyesBehaviour eyes = new()
+        {
+            Name = "Eyes"
+        };
+        AIVoice voice = new()
+        {
+            Name = "Voice",
+            Id = "minimal_perception_npc"
+        };
+        Hearing hearing = new()
+        {
+            Name = "Hearing"
+        };
+        HandPoseBehaviour leftHand = new()
+        {
+            Name = "LeftHand",
+            Side = LimbSide.Left
+        };
+        HandPoseBehaviour rightHand = new()
+        {
+            Name = "RightHand",
+            Side = LimbSide.Right
+        };
+        AgenticMind mind = new()
+        {
+            Name = "Mind"
+        };
+        // The Mind's activation contract requires its standard faculty set for every configured percept
+        // type; the minimal fixture authors exactly those four, matching template composition.
+        mind.AddChild(new SpeechPerception { Name = "SpeechPerception" });
+        mind.AddChild(new VisualSurveyPerception { Name = "VisualSurveyPerception" });
+        mind.AddChild(new VisualDescriptionPerception { Name = "VisualDescriptionPerception" });
+        mind.AddChild(new RelativePositionPerception { Name = "RelativePositionPerception" });
+        npc.AddChild(eyes);
+        npc.AddChild(voice);
+        npc.AddChild(hearing);
+        npc.AddChild(leftHand);
+        npc.AddChild(rightHand);
+        npc.AddChild(mind);
+        npc.Eyes = eyes;
+        npc.Voice = voice;
+        npc.Hearing = hearing;
+        npc.LeftHand = leftHand;
+        npc.RightHand = rightHand;
+
         TaskCompletionSource componentProjectionCommitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        vadim.ComponentsRefreshed += OnComponentProjectionCommitted;
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(vadimNode);
+        npc.ComponentsRefreshed += OnComponentProjectionCommitted;
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(npc);
+        npc.RefreshComponents();
+        await componentProjectionCommitted.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         try
         {
-            await componentProjectionCommitted.Task;
-
-            Assert.True(vadim.HasComponentProjection);
-            Hearing hearing = Assert.IsType<Hearing>(vadim.Hearing);
-            AgenticMind mind = Assert.IsType<AgenticMind>(vadim.GetNode("Mind"), exactMatch: false);
-            SpeechPerception speechPerception = Assert.IsType<SpeechPerception>(
-                Assert.Single(mind.GetChildren().OfType<IPerception>(), perception => perception is SpeechPerception));
-
-            Assert.Contains(hearing, vadim.Components);
+            Assert.True(npc.HasComponentProjection);
+            Assert.Same(hearing, npc.Hearing);
             Assert.True(mind.Enabled);
             Assert.Equal([typeof(SpeechPercept)], hearing.PerceptTypes);
+            SpeechPerception speechPerception = mind.GetNode<SpeechPerception>("SpeechPerception");
             Assert.Equal(typeof(SpeechPercept), speechPerception.PerceptType);
+            _ = Assert.IsType<SpeechPerception>(
+                Assert.Single(mind.GetChildren().OfType<IPerception>(), perception => perception is SpeechPerception));
+
+            Assert.Contains(hearing, npc.Components);
 
             List<SpeechPercept> published = [];
             List<ObservedSpeech> committed = [];
@@ -202,21 +273,21 @@ public sealed class PerceptionCompositionIntegrationTests
             ObservedSpeech committedObservation = Assert.Single(committed);
             Assert.Equal("runtime activation evidence", committedObservation.Content);
 
-            vadim.RefreshComponents();
+            npc.RefreshComponents();
             hearing.ReceiveVoice("second runtime activation evidence", new TestVoice("external_test_voice"));
             await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(2, committed.Count);
             Assert.Equal("second runtime activation evidence", committed[1].Content);
 
-            hearing.ReceiveVoice("self speech", vadim.Voice!);
+            hearing.ReceiveVoice("self speech", npc.Voice!);
             await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(2, committed.Count);
 
         }
         finally
         {
-            vadim.ComponentsRefreshed -= OnComponentProjectionCommitted;
-            vadimNode.QueueFree();
+            npc.ComponentsRefreshed -= OnComponentProjectionCommitted;
+            npc.QueueFree();
             await WaitForFramesAsync(sceneTree, 1);
         }
 

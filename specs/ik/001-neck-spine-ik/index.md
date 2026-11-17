@@ -39,11 +39,12 @@ base character template.
 3. The chain must run from the canonical `Spine` root bone to the canonical `Head` end bone,
    contain exactly five joints, and preserve its serialised per-joint constraint configuration —
    every joint explicit, with the Head end-bone joint's null limitation authored explicitly.
-4. Verification must exercise the locally authored configurations through the head-hips
-   photobooth verification flow and C# non-visual integration assertions; it must not depend
-   on a separate shared IK scene. Integration assertions must pin the engine's root-to-end
-   joint-to-bone order per joint by bone name — for example through `get_joint_bone_name` —
-   so a silent joint-order reversal cannot regress undetected.
+4. Verification must exercise the locally authored configurations through C# non-visual
+   integration assertions on the head-hips verification scene; it must not depend on a separate
+   shared IK scene. Visual checks are manual; the photobooth runner is an optional debug aid.
+   Integration assertions must pin the engine's root-to-end joint-to-bone order per joint by
+   bone name — for example through `get_joint_bone_name` — so a silent joint-order reversal
+   cannot regress undetected.
 5. Every supported base character template authors an identical per-joint constraint set for
    its `NeckSpineIK` chain: the same rotation axes, cone angles, and limitation frames — right
    axes and rotation offsets included — serialised identically across templates.
@@ -113,7 +114,7 @@ base character template.
 - Local `NeckSpineIK` authoring in every supported base character template.
 - One shared per-joint constraint set authored identically across all supported base character templates.
 - `NeckPivot` marker authoring at the neck articulation in every supported base character template.
-- Automated photobooth and integration verification using representative target head poses.
+- Automated integration verification and manual visual checks using representative target head poses.
 
 ## Out Of Scope
 
@@ -137,20 +138,21 @@ base character template.
 4. Each local configuration serialises a canonical `Spine`-to-`Head` chain with exactly five
    joints and explicit per-joint constraint configuration — including the Head end-bone joint's
    explicit null limitation — to keep rotations within plausible ranges. (TRACES TR-1, TR-3)
-5. Photobooth verification runs through the head-hips verification scene:
+5. Verification runs through the head-hips verification scene; its runner and photobooth base are
+   an optional manual debug aid, never a test:
    - `@game/tests/ik/head_hips_ik_test.tscn`
    - runner script: `@game/tests/ik/head_hips_ik_test.gd`
    (INHERITS `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn`)
 6. The verification scene defines target markers for visual and non-visual checks using
    `DebugMarker` for each required pose. (TRACES TR-4)
-7. Visual checks cover moderate and extreme target poses: forward, left, right, up,
+7. Manual visual checks cover moderate and extreme target poses: forward, left, right, up,
    down, stoop-forward, lean-back. (TRACES UR-1, UR-2)
-8. Before feature-level capture, runner performs a camera/marker framing pass to
-   confirm required markers and subject regions are visible.
-9. The automated runner exercises the locally authored `NeckSpineIK` configuration for each
-   pose scenario and captures screenshots using `Photobooth.capture_screenshots(...)`.
+8. When the optional runner is used for manual checks, it first performs a camera/marker framing
+   pass to confirm required markers and subject regions are visible.
+9. Integration assertions exercise the locally authored `NeckSpineIK` configuration for each
+   pose scenario; the optional manual runner may capture screenshots under `res://temp`.
    (TRACES TR-4)
-10. Visual checks confirm resulting pose remains natural without obvious over-rotation,
+10. Manual visual checks confirm resulting pose remains natural without obvious over-rotation,
     inversion, or discontinuous neck-spine deformation. (TRACES UR-1, UR-2)
 11. C# integration tests validate the locally authored neck-spine IK without a dedicated IK
     scene: base-template authoring assertions resolve each template's cached indices against
@@ -166,7 +168,7 @@ base character template.
     articulation, parented to the Neck bone node, mirroring the `Viewpoint`-under-Head
     authoring pattern. Integration verifies upstream Head and Neck/pivot capture without solved attachment feedback,
     animation advancement or bone writes, while preserving modifier order and other head-provider paths. (TRACES TR-7)
-14. Photobooth checks on the stoop-forward and down poses (reference female subject) show a
+14. Manual checks on the stoop-forward and down poses (reference female subject) show a
     distributed bend — the Neck and UpperChest bones visibly share the rotation rather than
     the Head bone carrying it alone. (TRACES UR-4, TR-4)
     Apply AI-009's frozen stoop/share/same-sign/aim bounds over its complete windows; authoring equality alone is not

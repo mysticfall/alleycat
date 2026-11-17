@@ -94,7 +94,7 @@ widget hosting, while guaranteeing that inputs held across the pause boundary ne
 - Recording stop and finalisation at the pause boundary.
 - Deferred unpause on close and synchronous unpause on teardown.
 - Exit through `Game.RequestExit`, including the shared `RequestExit` contract used by startup failure paths.
-- Runtime integration tests and the screenshot-based visual verification fixture.
+- Runtime integration tests and an optional screenshot-based visual verification runner (manual debug aid).
 
 ## Out Of Scope
 
@@ -151,6 +151,6 @@ AC-15.
 - Visual Fixture: @game/tests/ui/game_menu_visual.tscn, @game/tests/ui/game_menu_visual.gd,
   @game/tests/ui/GameMenuVisualStateDriver.cs, @game/tests/ui/GameMenuVisualGameStub.cs
 - Related Specs: [UI-003: UI Overlay](../../ui/003-ui-overlay/index.md),
-  [XR-001: XRManager](../../xr/001-xr-manager/index.md), [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md),
+  [XR-001: XRManager](../../xr/001-xr-manager/index.md), [Player Character Control](../../ctrl/index.md),
   [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md),
   [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)

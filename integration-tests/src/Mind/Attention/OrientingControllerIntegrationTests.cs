@@ -64,6 +64,29 @@ public sealed class OrientingControllerIntegrationTests
     private const string AllyNpcScenePath =
         "res://assets/characters/reference/ally_npc.tscn";
 
+    /// <summary>
+    /// Native-free endpoint for the authored NPC navigation worker. Head-orientation wiring facts never verify
+    /// locomotion; binding this before Ready keeps the unrelated MotionBricksNavigation from constructing a real CUDA
+    /// session (its worker is eager) while every wiring assertion keeps running on production nodes.
+    /// </summary>
+    private sealed class AmbientOrientingSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientOrientingSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientOrientingSession();
+        }
+    }
+
     private const double FrameDelta = 1d / 60d;
     private const float AnchorDistanceMetres = 2f;
     private const float CentredAngleToleranceDegrees = 1.5f;
@@ -126,7 +149,16 @@ public sealed class OrientingControllerIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         Node root = LoadPackedScene(AllyNpcScenePath).Instantiate();
-        sceneTree.Root.AddChild(root);
+        sceneTree.NodeAdded += BindAmbientOrientingSession;
+        try
+        {
+            sceneTree.Root.AddChild(root);
+        }
+        finally
+        {
+            sceneTree.NodeAdded -= BindAmbientOrientingSession;
+        }
+
         try
         {
             await WaitForFramesAsync(sceneTree, 12);

@@ -81,7 +81,7 @@ individual response modes.
 ## Out Of Scope
 
 - Specific ragdoll joint configuration and constraint tuning (deferred to child spec).
-- Detailed locomotion response under collision: CTRL-001 owns player locomotion policy and NAV-001 owns NPC navigation
+- Detailed locomotion response under collision: player locomotion restoration is deferred; NAV-001 owns NPC navigation
   movement accounting and durable outcomes.
 - Network synchronisation for multiplayer character physics.
 - Optional response-mode expansion beyond the normative contracts linked below.
@@ -123,6 +123,6 @@ individual response modes.
 - [RIG-001: Physical Collision](../../rigging/001-physical-collision/index.md)
 - [DynamicPhysicalRig Implementation](@game/src/Rigging/Physics/DynamicPhysicalRig.cs)
 - [Character Skeleton Profile](../001-character-skeleton/index.md)
-- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [Player Character Control](../../ctrl/index.md)
 - [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
 - [ITEM-001: Physics Chain Asset](../../item/001-physics-chain/index.md)

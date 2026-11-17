@@ -28,8 +28,9 @@ planners, implementers, and reviewers; owning feature specifications retain any 
    criterion before evaluating results. Justify objective bounds independently of the candidate implementation or its
    observed output; existing test thresholds alone are not approval.
 2. Select the least-intrusive method that proves that claim. An existing runtime scene or harness may suffice.
-   Screenshots, GDScript runners, photobooths, and C# integration tests are required only when selected for the evidence
-   method or mandated by the owning feature contract, not solely because acceptance is visual.
+   Screenshots, GDScript runners and photobooths are required only when selected for the evidence method or mandated
+   by the owning feature contract, not solely because acceptance is visual. Existing integration tests may supply
+   non-visual supporting assertions.
 3. For a reported defect, establish a genuine failing baseline caused by the original visible symptom before production
    implementation. Verify the final candidate against the same scenario, observation window, and criterion.
    Only urgent safety or integrity containment may precede reproduction when delay itself would be unsafe, as defined
@@ -47,12 +48,16 @@ planners, implementers, and reviewers; owning feature specifications retain any 
 7. Missing reproduction blocks verified symptom resolution. Only explicit user authorisation permits a conditional
    handoff under an alternative evidence contract; record its exact conditions, risks, limitations, and unproved
    remainder. Such a handoff is neither red-to-green evidence nor verified symptom resolution.
+8. Visual verification is an on-demand debug device for feature work and human review, not part of the test suite.
+   Run photobooths and capture runners directly; never write screenshot, capture or photobooth checks as xUnit or
+   integration facts, or place them where a test run discovers them. Artefacts under `res://temp` are disposable;
+   integration tests may also write diagnostic output there.
 
 ## In Scope
 
 - Feature-level visual checks tied to explicit spec expectations.
 - Representative runtime observations and static or time-resolved evidence.
-- Reusable photobooths, markers, capture runners, and C# assertions when relevant to the selected method.
+- Reusable photobooths, markers and directly run capture runners when relevant to the selected method.
 - Reproducible evidence and independent review of visible outcomes.
 
 ## Out Of Scope
@@ -60,6 +65,7 @@ planners, implementers, and reviewers; owning feature specifications retain any 
 - Defining art-direction preferences or replacing user judgement assigned by an owning feature specification.
 - Replacing existing logic, unit, or integration tests that already validate behaviour sufficiently.
 - Mandatory creation of verification infrastructure unrelated to the claim or owning feature contract.
+- Screenshot, capture or photobooth checks as automated test-suite facts (excluded by Technical Requirement 8).
 
 ## Workflow Contract
 
@@ -78,8 +84,9 @@ planners, implementers, and reviewers; owning feature specifications retain any 
    - When selecting screenshots, verify required camera views and applicable directional conventions before capture.
      Validate markers when used or required by the claim or owning contract. Capture with a renderer and independently
      inspect representative images; escalate unclear evidence.
-   - When selecting a runner or C# test, execute it against the representative scenario and retain relevant assertions
-     as supporting evidence. Mechanism assertions do not discharge a separate visible-outcome requirement.
+   - When selecting a runner, execute it directly against the representative scenario. An existing integration test's
+     non-visual assertions may be retained as supporting evidence; do not add visual checks to the suite. Mechanism
+     assertions do not discharge a separate visible-outcome requirement.
 4. **Compare and Hand Off**
    - Rerun the original regression after meaningful production changes and on the final candidate without weakening it.
    - Provide reproducible records and distinguish symptom evidence, supporting checks, and outstanding user judgement.
@@ -100,6 +107,8 @@ planners, implementers, and reviewers; owning feature specifications retain any 
    outcome proof, and identify required user judgement and any unproved remainder. (User 1–3; Technical 6)
 6. Without reproduction, only an explicitly user-authorised alternative contract permits a conditional handoff, with
    its conditions and limitations recorded and no claim of verified symptom resolution. (User 2; Technical 7)
+7. Visual evidence comes from directly run debug devices with artefacts under `res://temp`; no screenshot, capture or
+   photobooth check exists as a test-suite fact or is discovered by a test run. (User 1–2; Technical 2, 8)
 
 ## References
 

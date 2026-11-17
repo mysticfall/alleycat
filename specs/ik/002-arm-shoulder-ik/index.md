@@ -40,8 +40,9 @@ setups.
    while remaining non-invasive to hand-target solving and shoulder correction.
 7. Baseline pole-direction prediction must be continuous across all positional pose boundaries, in addition to the
    hand-rotation layer's continuity under AC-05.
-8. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions, including a
-   compressed folded-arm case that verifies enforced pole-offset floor behaviour.
+8. Validation must use C# non-visual integration assertions on the reusable verification scene, including a
+   compressed folded-arm case that verifies enforced pole-offset floor behaviour. Visual checks are manual human
+   verification; a photobooth is an optional debug aid, never a test.
 9. Anchor configuration must be resource-driven, with runtime consuming data from configurable ArmPoleAnchorSetResource
    assets authored through an editor bake workflow rather than hardcoded anchor tables.
 10. Authoring workflow must bake from editor node markers into resource assets, with one authoring root determining
@@ -111,15 +112,15 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-05 | Hand-rotation adjusts pole direction smoothly across full range. | Arm IK Contract |
 | AC-06 | ArmIKController applies pre-IK shoulder correction, preventing deformation. | Shoulder Adjustment Contract |
 | AC-07 | Portable IK scene avoids concrete `Female` node/mesh dependencies. | This Page |
-| AC-08 | Photobooth validates arm IK and shoulder correction across key poses. | This Page |
-| AC-09 | Visual checks confirm natural poses without deformation or discontinuities. | This Page |
+| AC-08 | Integration assertions validate arm IK and shoulder correction across key poses. | This Page |
+| AC-09 | Manual visual checks confirm natural poses without deformation or discontinuities. | This Page |
 | AC-10 | C# integration tests validate behaviour with non-visual assertions. | This Page |
 | AC-11 | Shoulder correction uses anatomical decomposition in body-basis. | Shoulder Adjustment Contract |
 | AC-12 | Shoulder corrections are deterministic per arm pose. | Shoulder Adjustment Contract |
 | AC-13 | Shoulder corrections are smooth across key poses with no jumps. | Shoulder Adjustment Contract |
 | AC-14 | Exported parameters configurable per instance in editor. | Shoulder Adjustment Contract |
 | AC-15 | Static ShoulderCorrectionComputer with pure math helpers and unit tests. | Shoulder Adjustment Contract |
-| AC-16 | Photobooth inherits arm-shoulder IK scene with required modifier order. | Shoulder Adjustment Contract |
+| AC-16 | Verification scene inherits arm-shoulder IK with required modifier order. | Shoulder Adjustment Contract |
 | AC-17 | Hand-rotation rotates elbow pole around shoulder-to-hand axis. | Hand-Rotation Correction Contract |
 | AC-18 | Reference rotations interpolated via inverse-distance weighting. | Hand-Rotation Correction Contract |
 | AC-19 | HandRotationWeight exported and configurable per instance. | Hand-Rotation Correction Contract |
@@ -133,7 +134,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-27 | Authoring workflow bakes from T-pose markers to resource asset. | Arm IK Contract |
 | AC-28 | Authoring root defines input container and output resource path. | Arm IK Contract |
 | AC-29 | Same resource on both arms produces symmetric results. | Arm IK Contract |
-| AC-30 | Photobooth validates behaviour with resource-driven anchors. | Arm IK Contract |
+| AC-30 | Integration assertions validate behaviour with resource-driven anchors. | Arm IK Contract |
 | AC-31 | C# tests validate resource loading, completeness, and symmetry. | Arm IK Contract |
 | AC-32 | Provider influence of 0 deactivates arm TwoBoneIK3D and shoulder correction for that side. | Provider Gating |
 | AC-33 | Provider target transforms drive hand target bodies via IKTargetIntentProvider contract. | Provider Gating |

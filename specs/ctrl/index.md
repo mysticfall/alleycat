@@ -18,6 +18,12 @@ routed by [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)).
 
 ## User Requirements
 
+### Player Locomotion Scope
+
+The initial [CTRL-001 player slice](001-locomotion/index.md) delivers left-stick movement and right-stick stationary
+body turning with movement priority. Requirements 1–5 remain broader goals, not extra acceptance gates for that probe.
+Simultaneous independent movement/turning and comfort validation beyond user headset judgement remain future work.
+
 1. Players must experience responsive VR character movement using intuitive
    controller input.
 2. Players must experience smooth and precise rotation control that does not
@@ -38,20 +44,18 @@ routed by [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)).
 2. Runtime XR-to-control integration boundaries must remain explicit
    via [XR-001: XRManager](../xr/001-xr-manager/index.md).
 3. Child specifications carry feature-level implementation contracts.
-4. Incremental delivery preserves established smooth control semantics.
+4. CTRL-001 owns the initial player slice; broader locomotion goals do not require obsolete movement machinery.
 5. Grab input routing is defined by
     [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md): controller grab
     edges are honoured in every committed mode while optical grab recognition
     acts only in `Optical` mode, and non-grab controller consumers are
-    unaffected in both modes. Locomotion remains controller-based (CTRL-001).
+    unaffected in both modes. CTRL-001 defines the initial controller-based locomotion slice.
 
 ## In Scope
 
 - A character control system for the player character in VR.
 - Runtime XR-to-control bridging for controller input and optical hand input.
-- Movement control via left controller stick.
-- Rotation control via right controller stick.
-- Smooth, continuous rotation control.
+- Initial left-stick movement and right-stick stationary body turning (CTRL-001), with broader goals retained above.
 - Grab input across controller and optical sources (CTRL-002).
 
 ## Out Of Scope
@@ -60,10 +64,11 @@ routed by [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)).
 - Network replication and backend concerns.
 - Platform certification and optimisation planning.
 - Snap turning. It may be reconsidered only as a new player-specific feature.
+- Complete player locomotion beyond the initial CTRL-001 slice.
 
 ## Child Specifications
 
-- [CTRL-001: Locomotion](001-locomotion/index.md)
+- [CTRL-001: Player Locomotion](001-locomotion/index.md)
 - [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)
 
 ## Runtime Integration Boundary
@@ -75,6 +80,9 @@ routed by [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)).
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
+
+Movement/rotation criteria 1–2 below describe broader goals, not initial player-slice or NPC readiness. The initial
+slice must meet CTRL-001 acceptance; grab-input acceptance remains required by CTRL-002.
 
 1. Control outcomes specify independent, simultaneous movement and smooth,
    continuous rotation without snap turns.
@@ -97,4 +105,4 @@ routed by [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)).
 
 - [Project Specifications Index](../index.md)
 - [XR-001: XRManager](../xr/001-xr-manager/index.md)
-- [CTRL-001: Locomotion](001-locomotion/index.md)
+- [NAV-001: NPC Navigation](../nav/001-npc-navigation/index.md)

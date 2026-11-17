@@ -1,7 +1,5 @@
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Logging;
 using AlleyCat.Interaction.Hands;
-using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.XR;
 using Godot;
@@ -11,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace AlleyCat.Control;
 
 /// <summary>
-/// XR input bridge that drives a player locomotion component.
+/// XR input bridge for player hand interactions.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -42,12 +40,15 @@ namespace AlleyCat.Control;
 [GlobalClass]
 public partial class PlayerController : Node
 {
+    /// <summary>Player-only generated motion owner; absent in hand-only fixtures.</summary>
+    [Export]
+    public PlayerMotionBricks? Motion
+    {
+        get; set;
+    }
     private XRManager? _xrManager;
     private IXRHandController? _leftHandController;
     private IXRHandController? _rightHandController;
-    private ILocomotion? _locomotion;
-    private IManualTranslationAcceptance? _manualTranslationAcceptance;
-    private INavigation? _navigation;
     private IHasHands? _hands;
     private ILogger<PlayerController>? _logger;
     private bool _xrInitialised;
@@ -87,26 +88,6 @@ public partial class PlayerController : Node
     }
 
     /// <summary>
-    /// Optional direct locomotion node reference.
-    /// </summary>
-    // TODO: Refactor this to target ILocomotive once a player node type owns locomotion as a holder trait.
-    [Export]
-    public Node? LocomotionNode
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Optional player navigation component whose active authority yields to manual input.
-    /// </summary>
-    [Export]
-    public Node? NavigationNode
-    {
-        get; set;
-    }
-
-    /// <summary>
     /// Optional node implementing <see cref="IHasHands" /> for hand grab routing.
     /// </summary>
     [Export]
@@ -139,30 +120,9 @@ public partial class PlayerController : Node
     [Export(PropertyHint.Range, "0,1,0.01")]
     public float GrabFloatReleaseThreshold { get; set; } = 0.35f;
 
-    /// <summary>
-    /// XR vector2 action consumed from the left controller.
-    /// </summary>
-    [Export]
-    public StringName MovementActionName
-    {
-        get;
-        set;
-    } = new("primary");
-
-    /// <summary>
-    /// XR vector2 action consumed from the right controller.
-    /// </summary>
-    [Export]
-    public StringName RotationActionName
-    {
-        get;
-        set;
-    } = new("primary");
-
     /// <inheritdoc />
     public override void _Ready()
     {
-        EnsureLocomotionAndNavigationResolved();
         _hands = ResolveHands();
         QueueHandsResolutionRetryIfNeeded();
         _xrManager = ResolveXRManager();
@@ -226,12 +186,8 @@ public partial class PlayerController : Node
 
         if (what == NotificationPaused)
         {
-            // A stick held deflected through the pause sends no new Vector2Changed event on unpause while
-            // its value is unchanged, so the last value would linger as stale movement input. Zeroing at
-            // the pause boundary keeps post-unpause input clean until the stick actually moves.
-            ZeroLocomotionInput();
+            Motion?.ClearInput();
             BeginPausedGripObservation();
-            ResolveLogger()?.LogInformation("Scene tree paused; locomotion input zeroed until it unpauses.");
         }
         else if (what == NotificationUnpaused)
         {
@@ -343,41 +299,8 @@ public partial class PlayerController : Node
         }
     }
 
-    private bool TryResolveLocomotion(out ILocomotion? locomotion)
-    {
-        locomotion = null;
-
-        Node? locomotionNode = LocomotionNode;
-        if (locomotionNode is null || !IsInstanceValid(locomotionNode))
-        {
-            locomotionNode = GetParent()?.GetNodeOrNull<Node>("Locomotion");
-        }
-
-        if (locomotionNode is null)
-        {
-            return false;
-        }
-
-        locomotion = locomotionNode as ILocomotion
-            ?? throw new InvalidOperationException(
-                $"Node '{locomotionNode.GetPath()}' must implement {nameof(ILocomotion)}.");
-        return true;
-    }
-
     private static XRManager ResolveXRManager()
         => Game.Instance.GetRequiredService<XRManager>();
-
-    private INavigation? ResolveNavigation()
-    {
-        Node? navigationNode = NavigationNode ?? GetParent()?.GetNodeOrNull<Node>("Navigation");
-        return navigationNode switch
-        {
-            null => null,
-            INavigation navigation => navigation,
-            _ => throw new InvalidOperationException(
-                $"Node '{navigationNode.GetPath()}' must implement {nameof(INavigation)}."),
-        };
-    }
 
     private IHasHands? ResolveHands()
     {
@@ -435,7 +358,7 @@ public partial class PlayerController : Node
     private bool TryBindControllers()
     {
         XRManager? xrManager = _xrManager;
-        if (xrManager is null || !TryResolveRuntimeDependencies())
+        if (xrManager is null || !EnsureHandsResolved())
         {
             return false;
         }
@@ -445,54 +368,38 @@ public partial class PlayerController : Node
         _leftHandController = xrManager.Runtime.LeftHandController;
         _rightHandController = xrManager.Runtime.RightHandController;
 
-        _leftHandController.ActionVector2InputChanged += OnLeftControllerVector2Changed;
-        _rightHandController.ActionVector2InputChanged += OnRightControllerVector2Changed;
         _leftHandController.ActionButtonPressed += OnLeftControllerButtonPressed;
         _leftHandController.ActionButtonReleased += OnLeftControllerButtonReleased;
         _leftHandController.ActionFloatInputChanged += OnLeftControllerFloatChanged;
+        _leftHandController.ActionVector2InputChanged += OnLeftStick;
         _rightHandController.ActionButtonPressed += OnRightControllerButtonPressed;
         _rightHandController.ActionButtonReleased += OnRightControllerButtonReleased;
         _rightHandController.ActionFloatInputChanged += OnRightControllerFloatChanged;
+        _rightHandController.ActionVector2InputChanged += OnRightStick;
         _isBound = true;
         SetProcess(false);
 
         return true;
     }
 
-    private bool TryResolveRuntimeDependencies()
-    {
-        EnsureLocomotionAndNavigationResolved();
-        return _locomotion is not null && EnsureHandsResolved();
-    }
-
-    private void EnsureLocomotionAndNavigationResolved()
-    {
-        if (_locomotion is null)
-        {
-            _ = TryResolveLocomotion(out _locomotion);
-        }
-
-        _manualTranslationAcceptance ??= _locomotion as IManualTranslationAcceptance;
-        _navigation ??= ResolveNavigation();
-    }
-
     private void DisconnectControllers()
     {
+        Motion?.ClearInput();
         if (_leftHandController is IXRHandController leftHandController)
         {
-            leftHandController.ActionVector2InputChanged -= OnLeftControllerVector2Changed;
             leftHandController.ActionButtonPressed -= OnLeftControllerButtonPressed;
             leftHandController.ActionButtonReleased -= OnLeftControllerButtonReleased;
             leftHandController.ActionFloatInputChanged -= OnLeftControllerFloatChanged;
+            leftHandController.ActionVector2InputChanged -= OnLeftStick;
             _leftHandController = null;
         }
 
         if (_rightHandController is IXRHandController rightHandController)
         {
-            rightHandController.ActionVector2InputChanged -= OnRightControllerVector2Changed;
             rightHandController.ActionButtonPressed -= OnRightControllerButtonPressed;
             rightHandController.ActionButtonReleased -= OnRightControllerButtonReleased;
             rightHandController.ActionFloatInputChanged -= OnRightControllerFloatChanged;
+            rightHandController.ActionVector2InputChanged -= OnRightStick;
             _rightHandController = null;
         }
 
@@ -502,14 +409,13 @@ public partial class PlayerController : Node
         BeginPausedGripObservation();
         SetProcess(_xrInitialised);
 
-        UpdateMovementInput(Vector2.Zero);
-        UpdateRotationInput(Vector2.Zero);
     }
 
     private void OnXRInitialised(bool succeeded)
     {
         if (!succeeded)
         {
+            DisconnectControllers();
             GD.PushWarning($"{nameof(PlayerController)} skipped XR controller binding because XR initialisation failed.");
             SetProcess(false);
             return;
@@ -525,32 +431,29 @@ public partial class PlayerController : Node
         }
     }
 
-    private void OnLeftControllerVector2Changed(string actionName, Vector2 value)
+    private void OnLeftStick(string action, Vector2 value)
     {
-        // XR controller relays keep emitting while the tree is paused, so locomotion stays fully
-        // suppressed during a pause; only grab grip state is retained for resume reconciliation
-        // (CTRL-002 TR18-TR19).
-        if (!CanProcess())
+        if (action == "primary")
         {
-            return;
-        }
-
-        if (actionName == MovementActionName)
-        {
-            UpdateMovementInput(value);
+            bool accepted = CanProcess();
+            Motion?.RecordControllerInput(true, value, accepted);
+            if (accepted)
+            {
+                Motion?.SetStick(true, value);
+            }
         }
     }
 
-    private void OnRightControllerVector2Changed(string actionName, Vector2 value)
+    private void OnRightStick(string action, Vector2 value)
     {
-        if (!CanProcess())
+        if (action == "primary")
         {
-            return;
-        }
-
-        if (actionName == RotationActionName)
-        {
-            UpdateRotationInput(value);
+            bool accepted = CanProcess();
+            Motion?.RecordControllerInput(false, value, accepted);
+            if (accepted)
+            {
+                Motion?.SetStick(false, value);
+            }
         }
     }
 
@@ -698,34 +601,6 @@ public partial class PlayerController : Node
 
     private ref bool GetGrabFloatLatch(LimbSide side)
         => ref (side == LimbSide.Left ? ref _leftFloatGrabPressed : ref _rightFloatGrabPressed);
-
-    private void UpdateMovementInput(Vector2 value)
-    {
-        EnsureLocomotionAndNavigationResolved();
-        CancelActiveNavigationForAcceptedManualTranslation(value);
-        _locomotion?.Move(value);
-    }
-
-    private void UpdateRotationInput(Vector2 value)
-    {
-        EnsureLocomotionAndNavigationResolved();
-        _locomotion?.Rotate(value);
-    }
-
-    private void CancelActiveNavigationForAcceptedManualTranslation(Vector2 value)
-    {
-        if (_manualTranslationAcceptance?.IsManualTranslationAccepted(value) == true
-            && _navigation?.IsMovementAuthorityActive == true)
-        {
-            _navigation.DeactivateMovementAuthority();
-        }
-    }
-
-    private void ZeroLocomotionInput()
-    {
-        UpdateMovementInput(Vector2.Zero);
-        UpdateRotationInput(Vector2.Zero);
-    }
 
     private ILogger<PlayerController>? ResolveLogger()
     {

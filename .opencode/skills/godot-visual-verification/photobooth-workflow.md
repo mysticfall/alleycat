@@ -3,7 +3,7 @@
 Use this guide when a photobooth is the selected evidence harness. The primary
 [`godot-visual-verification`](SKILL.md) skill owns claim selection, regression-first sequencing, static versus temporal
 evidence, conditional infrastructure, acceptance, and reporting. An actual reproducer may be more representative and
-does not require a photobooth, screenshot runner, or integration test.
+does not require a photobooth or screenshot runner.
 
 ## Step 1: Create A Test Scene
 
@@ -97,19 +97,12 @@ single-camera captures are needed.
 
 Rerun the unchanged visible regression after meaningful production changes and on the final candidate.
 
-## Optional Supporting C# Integration Tests
+## Photobooths Are Not Tests
 
-Add a C# integration test only when it is selected as supporting evidence. When selected, load the same test scene and
-validate behaviour using non-visual checks.
-
-Examples:
-
-- Distances to marker positions.
-- Transform/rotation constraints.
-- Node states and flags after scenario transitions.
-
-This test should verify supporting functional correctness corresponding to the visible evidence. Non-visual assertions
-do not replace time-resolved evidence for temporal claims.
+Photobooth scenes and capture runners are on-demand debug devices, run directly with `godot-mono`. Never wrap them
+in xUnit/integration facts or load them from the test suite, so no test run discovers or executes a capture.
+Existing integration tests may supply non-visual supporting evidence, such as transform constraints or node states,
+but non-visual assertions do not replace time-resolved evidence for temporal claims.
 
 ## Run Commands
 
@@ -124,7 +117,7 @@ godot-mono -d -s --headless --xr-mode off --path game "temp/<asset_or_setup_scri
 **Never use `--headless` for scripts that capture screenshots.** Headless mode disables the renderer, causing all
 viewport captures to fail with blank images or errors. This is the most common mistake in visual verification runs.
 
-All visual verification artefacts must be generated under `@game/temp/`. This is a mandatory requirement.
+All visual verification artefacts must be generated under `@game/temp/` (`res://temp`), which is disposable.
 
 - **Preferred:** Run without `--output-dir`. Screenshots default to `@game/temp`.
 - **If using `--output-dir`:** The path must still resolve to `@game/temp/<subdirectory>`. Use a relative path from the

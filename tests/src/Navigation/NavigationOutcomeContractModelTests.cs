@@ -65,6 +65,26 @@ public sealed class NavigationOutcomeContractModelTests
 
     /// <inheritdoc/>
     [Fact]
+    public void ArrivalSequenceCompletion_PreservesOutOfToleranceDiagnosticsWithoutClaimingConvergence()
+    {
+        var lifecycle = new NavigationRequestLifecycle(1);
+        NavigationDestinationAttempt accepted = Request(lifecycle, Requested(1));
+        NavigationTerminalContext context = Context(2, planarError: 0.5f, yawError: 0.25f);
+
+        Assert.True(lifecycle.TryFinishArrivalSequence(context, 14));
+
+        NavigationTerminalOutcomeRecord record = Assert.Single(lifecycle.TerminalOutcomes);
+        AssertMandatoryFields(record, accepted.Request!.Value, NavigationTerminalOutcome.Completed);
+        Assert.Equal(NavigationTerminalReason.ArrivalSequenceCompleted, record.Reason);
+        Assert.Equal(context.Error, record.Error);
+        Assert.Equal(Final(2), record.FinalTransform);
+        Assert.Equal(-0.4f, record.Margins.PlanarDistance);
+        Assert.Equal(-0.2f, record.Margins.YawRadians);
+        Assert.False(lifecycle.CurrentStatus.HasActiveRequest);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
     public void Failure_IsTerminalAndFirstTerminalCommitWins()
     {
         var lifecycle = new NavigationRequestLifecycle(1);

@@ -68,14 +68,11 @@ public sealed class ICharacterTests
     }
 
     /// <summary>
-    /// The player role adds locomotion without changing the common character contract.
+    /// The player role retains the common character contract while movement is deferred.
     /// </summary>
     [Fact]
-    public void IPlayer_ExtendsCharacterAndLocomotiveTraits()
-    {
-        Assert.True(typeof(ICharacter).IsAssignableFrom(typeof(IPlayer)));
-        Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(IPlayer)));
-    }
+    public void IPlayer_ExtendsCharacterTrait()
+        => Assert.True(typeof(ICharacter).IsAssignableFrom(typeof(IPlayer)));
 
     private sealed class FakeCharacter(params IComponent[] components) : ICharacter
     {

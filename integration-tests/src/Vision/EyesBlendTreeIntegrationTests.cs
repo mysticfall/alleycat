@@ -587,10 +587,42 @@ public sealed class EyesBlendTreeIntegrationTests
         return paths;
     }
 
+    /// <summary>
+    /// Native-free endpoint for the authored NPC navigation worker. Eye-tree facts never verify locomotion; binding
+    /// this before Ready keeps the unrelated MotionBricksNavigation from constructing a real CUDA session (its worker
+    /// is eager) while every eye assertion keeps running on production nodes.
+    /// </summary>
+    private sealed class AmbientEyesSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientEyesSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientEyesSession();
+        }
+    }
+
     private static async Task AddChildToRootAsync(SceneTree sceneTree, Node child)
     {
-        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, child);
-        await WaitForNextFrameAsync(sceneTree);
+        sceneTree.NodeAdded += BindAmbientEyesSession;
+        try
+        {
+            _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, child);
+            await WaitForNextFrameAsync(sceneTree);
+        }
+        finally
+        {
+            sceneTree.NodeAdded -= BindAmbientEyesSession;
+        }
+
         Assert.True(child.IsInsideTree(), $"Expected '{child.Name}' to enter the test scene tree.");
     }
 

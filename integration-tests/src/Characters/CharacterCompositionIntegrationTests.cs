@@ -8,7 +8,6 @@ using AlleyCat.TestFramework;
 using AlleyCat.Vision;
 using Godot;
 using Xunit;
-using CharacterContract = AlleyCat.Character.ICharacter;
 using CharacterHub = AlleyCat.Character.Character;
 using PlayerContract = AlleyCat.Character.IPlayer;
 using PlayerRoot = AlleyCat.Character.PlayerCharacter;
@@ -67,13 +66,12 @@ public sealed class CharacterCompositionIntegrationTests
 
         character.RefreshComponents();
 
-        Assert.Equal(5, character.Components.Count);
+        Assert.Equal(4, character.Components.Count);
         Assert.Same(character.Eyes, character.Components[0]);
-        Assert.Same(character.Navigation, character.Components[1]);
-        Assert.Same(character.Voice, character.Components[2]);
-        Assert.Same(character.LeftHand, character.Components[3]);
-        Assert.Same(character.RightHand, character.Components[4]);
-        Assert.Same(character.Navigation, ((CharacterContract)character).RequireNavigation());
+        Assert.Same(character.Voice, character.Components[1]);
+        Assert.Same(character.LeftHand, character.Components[2]);
+        Assert.Same(character.RightHand, character.Components[3]);
+        Assert.False(character.TryGetComponent<INavigation>(out _));
     }
 
     /// <summary>
@@ -84,44 +82,35 @@ public sealed class CharacterCompositionIntegrationTests
     public void PlayerCharacter_ProjectsExactRoleCapabilityOrder()
     {
         var player = new PlayerRoot { Name = "PlayerRoot" };
-        var navigation = new PlayerNavigation { Name = "navigation" };
         var eyes = new EyesBehaviour { Name = "eyes" };
         var voice = new TestVoice { Name = "voice", Id = "voice" };
         var leftHand = new HandPoseBehaviour { Name = "left_hand", Side = LimbSide.Left };
         var rightHand = new HandPoseBehaviour { Name = "right_hand", Side = LimbSide.Right };
-        var locomotion = new CharacterLocomotion { Name = "locomotion" };
-        player.AddChild(navigation);
         player.AddChild(eyes);
         player.AddChild(voice);
         player.AddChild(leftHand);
         player.AddChild(rightHand);
-        player.AddChild(locomotion);
-        player.Navigation = navigation;
         player.Eyes = eyes;
         player.Voice = voice;
         player.LeftHand = leftHand;
         player.RightHand = rightHand;
-        player.Locomotion = locomotion;
 
         player.RefreshComponents();
 
-        Assert.Equal(6, player.Components.Count);
+        Assert.Equal(4, player.Components.Count);
         Assert.Same(eyes, player.Components[0]);
-        Assert.Same(locomotion, player.Components[1]);
-        Assert.Same(navigation, player.Components[2]);
-        Assert.Same(voice, player.Components[3]);
-        Assert.Same(leftHand, player.Components[4]);
-        Assert.Same(rightHand, player.Components[5]);
+        Assert.Same(voice, player.Components[1]);
+        Assert.Same(leftHand, player.Components[2]);
+        Assert.Same(rightHand, player.Components[3]);
         PlayerContract contract = Assert.IsAssignableFrom<PlayerContract>(player);
         Assert.Same(eyes, contract.RequireVision());
-        Assert.Same(locomotion, contract.RequireComponent<ILocomotion>());
-        Assert.Same(navigation, contract.RequireNavigation());
+        Assert.False(contract.TryGetComponent<ILocomotion>(out _));
+        Assert.False(contract.TryGetComponent<INavigation>(out _));
         Assert.Same(voice, contract.RequireVoice());
         Assert.True(contract.TryGetHand(LimbSide.Left, out IHand? resolvedLeft));
         Assert.Same(leftHand, resolvedLeft);
         Assert.True(contract.TryGetHand(LimbSide.Right, out IHand? resolvedRight));
         Assert.Same(rightHand, resolvedRight);
-        Assert.False(navigation.IsMovementAuthorityActive);
     }
 
     /// <summary>
@@ -132,16 +121,16 @@ public sealed class CharacterCompositionIntegrationTests
     public void RefreshComponents_ReplacesCacheDeterministically()
     {
         CharacterHub character = CreateAuthoredCharacter();
-        NavigationBase firstNavigation = character.Navigation!;
+        Voice firstVoice = character.Voice!;
         character.RefreshComponents();
-        var replacementNavigation = new DirectTransformNavigation { Name = "replacement_navigation" };
-        character.AddChild(replacementNavigation);
+        var replacementVoice = new TestVoice { Name = "replacement_voice", Id = "replacement_voice" };
+        character.AddChild(replacementVoice);
 
-        character.Navigation = replacementNavigation;
+        character.Voice = replacementVoice;
         character.RefreshComponents();
 
-        Assert.DoesNotContain(firstNavigation, character.Components);
-        Assert.Same(replacementNavigation, character.Components[1]);
+        Assert.DoesNotContain(firstVoice, character.Components);
+        Assert.Same(replacementVoice, character.Components[1]);
     }
 
     /// <summary>
@@ -215,37 +204,52 @@ public sealed class CharacterCompositionIntegrationTests
     }
 
     /// <summary>
-    /// The reference female NPC template authors production locomotive navigation bound to its character root.
+    /// The reference female NPC template authors production <c>MotionBricksNavigation</c> as its character navigation
+    /// (CHAR-002 TR12/TR39, NAV-001 TR5) without a player <see cref="ILocomotive"/> or locomotion dependency.
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceFemaleNPCTemplate_AuthorsNPCNavigation()
-        => AssertNPCTemplateAuthorsNPCNavigation(ReferenceFemaleNPCScenePath);
+    public void ReferenceFemaleNPCTemplate_AuthorsMotionBricksNavigation()
+    {
+        PackedScene scene = ResourceLoader.Load<PackedScene>(ReferenceFemaleNPCScenePath);
+        CharacterHub character = Assert.IsType<CharacterHub>(scene.Instantiate(), exactMatch: false);
+        try
+        {
+            MotionBricksNavigation navigation = Assert.IsType<MotionBricksNavigation>(character.Navigation);
+            Assert.Same(character.GetNode("MotionBricksNavigation"), navigation);
+            Assert.Same(navigation, Assert.Single(character.GetChildren().OfType<NavigationBase>()));
+            Assert.IsNotAssignableFrom<ILocomotive>(character);
+            Assert.Empty(character.GetChildren().OfType<ILocomotion>());
+            Assert.NotNull(character.Eyes);
+            Assert.NotNull(character.LeftHand);
+            Assert.NotNull(character.RightHand);
+        }
+        finally
+        {
+            character.QueueFree();
+        }
+    }
 
     /// <summary>
-    /// The reference male NPC template authors production locomotive navigation bound to its character root.
+    /// The reference male NPC leaves navigation absent while replacement integration is pending.
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceMaleNPCTemplate_AuthorsNPCNavigation()
-        => AssertNPCTemplateAuthorsNPCNavigation(ReferenceMaleNPCScenePath);
+    public void ReferenceMaleNPCTemplate_DefersNavigation()
+        => AssertNPCTemplateDefersNavigation(ReferenceMaleNPCScenePath);
 
-    private static void AssertNPCTemplateAuthorsNPCNavigation(string scenePath)
+    private static void AssertNPCTemplateDefersNavigation(string scenePath)
     {
         PackedScene scene = ResourceLoader.Load<PackedScene>(scenePath);
         CharacterHub character = Assert.IsType<CharacterHub>(scene.Instantiate(), exactMatch: false);
         try
         {
-            NPCNavigation navigation = Assert.IsType<NPCNavigation>(character.Navigation);
-            Assert.Same(character, navigation.Actor);
-            Assert.Same(character.GetNode<AnimationTree>("AnimationTree"), navigation.AnimationTree);
-            Assert.Same(character.GetNode<Node3D>(character.Name.ToString()), navigation.RootMotionReference);
-            Assert.True(navigation.AwaitInstallerActivation);
-            Assert.False(navigation.IsRuntimeBindingActive);
-            Assert.False(navigation.IsPhysicsProcessing());
+            Assert.Null(character.Navigation);
             Assert.IsNotAssignableFrom<ILocomotive>(character);
-            Assert.Empty(character.GetChildren().OfType<CharacterLocomotion>());
-            _ = Assert.Single(character.GetChildren().OfType<NavigationBase>());
+            Assert.Empty(character.GetChildren().OfType<NavigationBase>());
+            Assert.NotNull(character.Eyes);
+            Assert.NotNull(character.LeftHand);
+            Assert.NotNull(character.RightHand);
         }
         finally
         {
@@ -256,17 +260,14 @@ public sealed class CharacterCompositionIntegrationTests
     private static CharacterHub CreateAuthoredCharacter()
     {
         var character = new CharacterHub { Name = "CharacterRoot" };
-        var navigation = new DirectTransformNavigation { Name = "navigation" };
         var eyes = new EyesBehaviour { Name = "eyes" };
         var voice = new TestVoice { Name = "voice", Id = "voice" };
         var leftHand = new HandPoseBehaviour { Name = "left_hand", Side = LimbSide.Left };
         var rightHand = new HandPoseBehaviour { Name = "right_hand", Side = LimbSide.Right };
-        character.AddChild(navigation);
         character.AddChild(eyes);
         character.AddChild(voice);
         character.AddChild(leftHand);
         character.AddChild(rightHand);
-        character.Navigation = navigation;
         character.Eyes = eyes;
         character.Voice = voice;
         character.LeftHand = leftHand;

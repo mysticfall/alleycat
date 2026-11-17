@@ -603,8 +603,8 @@ requirement does not establish measured feasibility: report conflicts rather tha
 |    |                   | around, matching blendshape-mode blink behaviour. |
 | 37 | Technical         | Existing character scenes require no authoring changes and continue exercising |
 |    |                   | the default blendshape backend. |
-| 38 | User              | A dedicated transform-eye photobooth fixture under `game/temp/eyes-transform/` |
-|    |                   | provides visual verification that: (a) neutral eyes rest at their authored |
+| 38 | User              | Manual visual verification, optionally using a transform-eye photobooth under |
+|    |                   | `game/temp/eyes-transform/`, confirms that: (a) neutral eyes rest at their authored |
 |    |                   | neutral pose, (b) directional look rotates both eyes up/down/left/right, |
 |    |                   | (c) extreme targets clamp to the shared limits, (d) target changes smooth |
 |    |                   | rather than snap, and (e) the character blinks while looking around. |

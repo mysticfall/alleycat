@@ -381,9 +381,12 @@ Provide a grab execution system that:
 56. Define a test ball asset:
     - RigidBody3D with sphere mesh, radius 4cm (0.04m).
     - `SphericalGrabPoint` component at centre.
-    - Authored in `test_ball.tscn` for photobooth verification.
+    - Authored in `test_ball.tscn` for grab integration fixtures and optional manual verification.
 57. The scene must remain discoverable and grabbable; physics is suspended on grab and
     restored on release.
+
+Grab integration fixtures use the rest pose, the [INTR-003](../003-hands/index.md) hand-pose layers and arm IK only.
+They exclude idle and locomotion animation, including MotionBricks, so grab outcomes do not depend on upstream posture.
 
 ### Optical Grab Lifecycle (Optical-Mode Input)
 

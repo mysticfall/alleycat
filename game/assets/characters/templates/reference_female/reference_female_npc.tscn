@@ -8,7 +8,6 @@
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_db11o"]
 [ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="7_xyj0a"]
 [ext_resource type="Resource" uid="uid://dvw63im28183y" path="res://assets/characters/prompts/generic_npc_prompt_stack.tres" id="9_beijb"]
-[ext_resource type="Script" uid="uid://bfalxt2riwwdb" path="res://src/Navigation/NPCNavigation.cs" id="12_navigation"]
 [ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Speech/Hearing.cs" id="13_hearing"]
 [ext_resource type="Script" uid="uid://crmq387m0tfyk" path="res://src/Mind/AI/Provider/OpenAIClientProvider.cs" id="13_npxpr"]
 [ext_resource type="Script" uid="uid://nb7frvgohlfq" path="res://src/Mind/Perception/SpeechPerception.cs" id="14_speech_perception"]
@@ -17,15 +16,15 @@
 [ext_resource type="Script" uid="uid://c84drh32xjhfh" path="res://src/Mind/Perception/RelativePositionPerception.cs" id="17_relative_position_perception"]
 [ext_resource type="Resource" uid="uid://b4j2nqhwnkrxw" path="res://assets/characters/prompts/current_scene.tres" id="18_current_scene_status"]
 [ext_resource type="Script" uid="uid://cg8pra7o1b3y7" path="res://src/Mind/AI/SceneStatus/AttendedCharacterSceneStatusProjector.cs" id="19_attended_status_projector"]
-[ext_resource type="Script" uid="uid://bxe5ivsvmoey4" path="res://src/Control/Locomotion/AnimationGraphPlantedStateSource.cs" id="30_planted_state_source"]
-[ext_resource type="Script" uid="uid://dv0jd4ag3mh0d" path="res://src/IK/FootPlantingTargetProvider.cs" id="31_foot_planting"]
 [ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
 [ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
+[ext_resource type="Script" path="res://src/Navigation/MotionBricksNavigation.cs" id="23_dau1w"]
+
 [sub_resource type="Resource" id="Resource_texme"]
 script = ExtResource("13_npxpr")
 
 [node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Navigation", "Voice", "Hearing") instance=ExtResource("1_vf6rf")]
-Navigation = NodePath("Navigation")
+Navigation = NodePath("MotionBricksNavigation")
 Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
 Hearing = NodePath("Hearing")
 
@@ -53,7 +52,7 @@ metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Female/GeneralSkeleton/Head/Voice" index="2" unique_id=1163782006]
 
-[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadTargetIntentProvider", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "RightFootTargetIntentProvider", "LeftFootTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadTargetIntentProvider", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("2_charik")
 Viewpoint = NodePath("../Female/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
@@ -66,8 +65,6 @@ PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
 HeadTargetIntentProvider = NodePath("../Mind/OrientingController")
 RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
 LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
-RightFootTargetIntentProvider = NodePath("RightFootPlanting")
-LeftFootTargetIntentProvider = NodePath("LeftFootPlanting")
 HeadModifierGroup = [NodePath("../Female/GeneralSkeleton/NeckSpineIK"), NodePath("../Female/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female/GeneralSkeleton/NeckTwistDisperser")]
 RightHandModifierGroup = [NodePath("../Female/GeneralSkeleton/RightArmIKController"), NodePath("../Female/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftArmIKController"), NodePath("../Female/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/LeftHandCopyRotation")]
@@ -82,69 +79,6 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 [node name="LeftHandGrabProvider" type="Node" parent="CharacterIK" index="1" unique_id=609771955]
 script = ExtResource("3_mgn5w")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
-
-[node name="PlantedStateSource" type="Node" parent="CharacterIK" index="2" unique_id=807423234 node_paths=PackedStringArray("AnimationTree")]
-script = ExtResource("30_planted_state_source")
-AnimationTree = NodePath("../../AnimationTree")
-metadata/_custom_type_script = "uid://bxe5ivsvmoey4"
-
-[node name="LeftFootPlanting" type="Node" parent="CharacterIK" index="3" unique_id=2128637021 node_paths=PackedStringArray("Skeleton", "PlantedStateSource")]
-process_physics_priority = -101
-script = ExtResource("31_foot_planting")
-Skeleton = NodePath("../../Female/GeneralSkeleton")
-PlantedStateSource = NodePath("../PlantedStateSource")
-BlendOutSeconds = 0.15
-MaxContinuationGapSeconds = 0.25
-metadata/_custom_type_script = "uid://dv0jd4ag3mh0d"
-
-[node name="RightFootPlanting" type="Node" parent="CharacterIK" index="4" unique_id=379070015 node_paths=PackedStringArray("Skeleton", "PlantedStateSource")]
-process_physics_priority = -101
-script = ExtResource("31_foot_planting")
-Side = 1
-Skeleton = NodePath("../../Female/GeneralSkeleton")
-PlantedStateSource = NodePath("../PlantedStateSource")
-BlendOutSeconds = 0.15
-MaxContinuationGapSeconds = 0.25
-metadata/_custom_type_script = "uid://dv0jd4ag3mh0d"
-
-[node name="Navigation" type="NavigationAgent3D" parent="." index="3" unique_id=2043362909 node_paths=PackedStringArray("Actor", "AnimationTree", "RootMotionReference")]
-process_physics_priority = -100
-path_desired_distance = 0.05
-target_desired_distance = 0.05
-script = ExtResource("12_navigation")
-Actor = NodePath("..")
-AnimationTree = NodePath("../AnimationTree")
-RootMotionReference = NodePath("../Female")
-CataloguePath = "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad_catalogue.json"
-AwaitInstallerActivation = true
-DestinationReachedDistance = 0.05
-AvoidanceRadius = 0.5
-AvoidanceHeight = 1.0
-AvoidanceMaxSpeed = 10.0
-metadata/_custom_type_script = "uid://bfalxt2riwwdb"
-
-[node name="AnimationTree" parent="." index="6" unique_id=527893103]
-parameters/States/NPCArcLL/Seek/seek_request = -1.0
-parameters/States/NPCArcLR/Seek/seek_request = -1.0
-parameters/States/NPCArcRL/Seek/seek_request = -1.0
-parameters/States/NPCArcRR/Seek/seek_request = -1.0
-parameters/States/NPCB2IL/Seek/seek_request = -1.0
-parameters/States/NPCB2IR/Seek/seek_request = -1.0
-parameters/States/NPCF2IL/Seek/seek_request = -1.0
-parameters/States/NPCF2IR/Seek/seek_request = -1.0
-parameters/States/NPCI2BL/Seek/seek_request = -1.0
-parameters/States/NPCI2BR/Seek/seek_request = -1.0
-parameters/States/NPCI2FL/Seek/seek_request = -1.0
-parameters/States/NPCI2FR/Seek/seek_request = -1.0
-parameters/States/NPCIdle/Seek/seek_request = -1.0
-parameters/States/NPCPivotL/Seek/seek_request = -1.0
-parameters/States/NPCPivotLContinuation/Seek/seek_request = -1.0
-parameters/States/NPCPivotR/Seek/seek_request = -1.0
-parameters/States/NPCPivotRContinuation/Seek/seek_request = -1.0
-parameters/States/NPCSideStepL/Seek/seek_request = -1.0
-parameters/States/NPCSideStepR/Seek/seek_request = -1.0
-parameters/States/NPCWalkB/Seek/seek_request = -1.0
-parameters/States/NPCWalkF/Seek/seek_request = -1.0
 
 [node name="Mind" type="Node" parent="." index="9" unique_id=917502219]
 script = ExtResource("7_xyj0a")
@@ -187,3 +121,11 @@ metadata/_custom_type_script = "uid://r0roprsf0efd"
 [node name="Hearing" type="Node" parent="." index="12" unique_id=1331716149]
 script = ExtResource("13_hearing")
 metadata/_custom_type_script = "uid://qs2mgtgqvri5"
+
+[node name="MotionBricksNavigation" type="NavigationAgent3D" parent="." index="10" unique_id=1188336255]
+script = ExtResource("23_dau1w")
+DestinationReachedDistance = 1.0
+AvoidanceRadius = 0.5
+AvoidanceHeight = 1.0
+AvoidanceMaxSpeed = 10.0
+metadata/_custom_type_script = "uid://tcvnill3txtq"

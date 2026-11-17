@@ -98,37 +98,6 @@ def test_planted_interval_derivation_fits_role_structure_and_refuses_each_failed
     assert "ANIM002_PLANTED_INTERVAL_DERIVATION_CHECKS=passed passed=179 failed=0" in result.stdout
 
 
-def test_published_planted_intervals_rederive_from_the_published_packages() -> None:
-    """Real selected-content check: re-deriving each package reproduces its published intervals exactly, and its
-    retained derivation report byte for byte, bound to the retained interval bytes."""
-    animations = GAME / "assets/characters/reference/female/animations"
-    runtime = animations / "runtime"
-    published = {
-        "locomotion": json.loads((runtime / "locomotion/sad" / INTERVALS_FILENAME).read_text(encoding="utf-8")),
-        "idle": json.loads((runtime / "idle/sad/idle_sad_catalogue.json").read_text(encoding="utf-8"))[INTERVALS_FIELD],
-    }
-    for name, document in published.items():
-        provenance = animations / "processed" / name / document["variant"] / "provenance"
-        retained_report = (provenance / REPORT_FILENAME).read_bytes()
-        assert json.loads(retained_report)["intervals_sha256"] == hashlib.sha256((provenance / INTERVALS_FILENAME).read_bytes()).hexdigest()
-        with tempfile.TemporaryDirectory(prefix="kimodo-rederive-", dir=GAME / "temp") as directory:
-            output = Path(directory) / INTERVALS_FILENAME
-            report = Path(directory) / REPORT_FILENAME
-            result = subprocess.run(
-                [
-                    "godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(DERIVE), "--",
-                    f"--package={name}", f"--variant={document['variant']}", f"--character={document['character']}",
-                    f"--output=res://{output.relative_to(GAME)}", f"--report=res://{report.relative_to(GAME)}",
-                ],
-                cwd=ROOT, text=True, capture_output=True, check=False, timeout=300,
-            )
-            assert result.returncode == 0, result.stdout + result.stderr
-            assert "refused=0" in result.stdout
-            assert json.loads(output.read_text(encoding="utf-8")) == document
-            assert output.read_bytes() == (provenance / INTERVALS_FILENAME).read_bytes()
-            assert report.read_bytes() == retained_report
-
-
 def test_animation_pose_sampler_matches_engine_skeleton_and_falls_back_to_rest_pose() -> None:
     result = subprocess.run(
         ["godot-mono", "--headless", "--xr-mode", "off", "--path", "game", "--script", str(ANIMATION_POSE_SAMPLER_TEST)],

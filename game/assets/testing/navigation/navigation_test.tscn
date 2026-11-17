@@ -1,25 +1,11 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://src/Navigation/DirectTransformNavigationPlaytestController.cs" id="1_tp3k7"]
+[ext_resource type="Script" path="res://src/Navigation/navigation_playtest.gd" id="1_1fai4"]
 [ext_resource type="PackedScene" path="res://assets/testing/navigation/navigation_test_npc.tscn" id="2_l83gb"]
 [ext_resource type="PackedScene" path="res://assets/testing/test_environment.tscn" id="3_l83gb"]
 [ext_resource type="Script" path="res://src/Character/Character.cs" id="3_xvcmc"]
 [ext_resource type="Texture2D" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="5_1fai4"]
 [ext_resource type="Script" path="res://tests/navigation/navigation_map_startup_gate.gd" id="8_fwf5n"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_preview"]
-resource_name = "DestinationMarkerPreviewMaterial"
-transparency = 1
-no_depth_test = true
-shading_mode = 0
-albedo_color = Color(0.1, 0.55, 1, 0.72)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_pressed"]
-resource_name = "DestinationMarkerPressedMaterial"
-transparency = 1
-no_depth_test = true
-shading_mode = 0
-albedo_color = Color(1, 0.65, 0.08, 0.82)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fllxo"]
 resource_name = "NavigationObstacleRedMaterial"
@@ -86,6 +72,13 @@ resource_name = "NavigationObstacleCylinderShape"
 height = 1.1
 radius = 0.55
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_preview"]
+resource_name = "DestinationMarkerPreviewMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(0.1, 0.55, 1, 0.72)
+
 [sub_resource type="CylinderMesh" id="CylinderMesh_dest_disc"]
 resource_name = "DestinationMarkerDiscMesh"
 top_radius = 0.28
@@ -104,16 +97,8 @@ albedo_color = Color(1, 1, 1, 0.9)
 resource_name = "DestinationMarkerForwardMesh"
 size = Vector3(0.12, 0.035, 0.58)
 
-[node name="DirectTransformNavigationPlaytest" type="Node3D" unique_id=1691104211 node_paths=PackedStringArray("Camera", "DestinationMarker", "DestinationMarkerSurface", "Actor")]
-script = ExtResource("1_tp3k7")
-Camera = NodePath("Camera3D")
-DestinationMarker = NodePath("DestinationMarker")
-DestinationMarkerSurface = NodePath("DestinationMarker/MarkerDisc")
-DestinationMarkerPreviewMaterial = SubResource("StandardMaterial3D_dest_preview")
-DestinationMarkerPressedMaterial = SubResource("StandardMaterial3D_dest_pressed")
-NavigationPath = NodePath("NavigationTestNpc/Navigation")
-Actor = NodePath("NavigationTestNpc")
-metadata/_custom_type_script = "uid://biulhrfvdujca"
+[node name="DirectTransformNavigationPlaytest" type="Node3D" unique_id=1691104211]
+script = ExtResource("1_1fai4")
 metadata/navigation_obstacle_material = SubResource("StandardMaterial3D_fllxo")
 
 [node name="NavigationTestPlayer" type="CharacterBody3D" parent="." unique_id=202647514 groups=["Actors", "Player"]]
@@ -149,11 +134,9 @@ mesh = SubResource("PlaneMesh_visible_ground")
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1715587127]
 navigation_mesh = SubResource("NavigationMesh_xvcmc")
 
-[node name="NavigationTestNpc" type="CharacterBody3D" parent="." unique_id=1207481256 groups=["Actors"] instance=ExtResource("2_l83gb")]
-script = ExtResource("3_xvcmc")
-Id = "navigation_test_npc"
+[node name="NavigationTestNpc" parent="." unique_id=1207481256 groups=["Actors"] instance=ExtResource("2_l83gb")]
 
-[node name="TestEnvironment" type="WorldEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_l83gb")]
+[node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_l83gb")]
 environment = SubResource("Environment_1blvp")
 camera_attributes = SubResource("CameraAttributesPractical_ux8bu")
 

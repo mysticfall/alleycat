@@ -7,6 +7,7 @@
     "cp -Rf $ROOT_PROJECT_PATH/graft .",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/onnx game/models/supertonic-3",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/voice_styles game/models/supertonic-3",
+    "ln -s \"$ROOT_PROJECT_PATH/game/models/motionbricks/onnx\" game/models/motionbricks/onnx",
     "git lfs pull",
     "dotnet restore game/AlleyCat.csproj",
     "dotnet build AlleyCat.sln -warnaserror"

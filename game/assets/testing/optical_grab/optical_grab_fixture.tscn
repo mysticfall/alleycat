@@ -1,0 +1,42 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/characters/templates/reference_female/reference_female_player.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://assets/testing/test_environment.tscn" id="2_environment"]
+[ext_resource type="PackedScene" path="res://assets/items/test_ball.tscn" id="3_ball"]
+[ext_resource type="PackedScene" path="res://assets/items/test_stick.tscn" id="4_stick"]
+[ext_resource type="Script" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="5_grabbable"]
+[ext_resource type="Script" path="res://src/Character/Character.cs" id="6_character"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_ball"]
+bounce = 0.5
+
+[node name="OpticalGrabFixture" type="Node3D"]
+
+[node name="Subject" type="Node3D" parent="."]
+
+[node name="Player" parent="Subject" node_paths=PackedStringArray("Eyes", "Voice", "LeftHand", "RightHand") groups=["Actors", "Player", "VisualSubjects"] instance=ExtResource("1_player")]
+script = ExtResource("6_character")
+Id = "reference_player"
+Eyes = NodePath("Eyes")
+Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+LeftHand = NodePath("Hands/LeftHand")
+RightHand = NodePath("Hands/RightHand")
+
+[node name="Environment" parent="." instance=ExtResource("2_environment")]
+
+[node name="Items" type="Node3D" parent="."]
+
+[node name="Ball" type="RigidBody3D" parent="Items" groups=["grabbable", "contact_receiver"] instance=ExtResource("3_ball")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.309, 1.1924, -0.3682)
+collision_layer = 2
+collision_mask = 11
+physics_material_override = SubResource("PhysicsMaterial_ball")
+freeze = true
+script = ExtResource("5_grabbable")
+
+[node name="Stick" type="RigidBody3D" parent="Items" groups=["grabbable", "contact_receiver"] instance=ExtResource("4_stick")]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.43, 1.1894, -0.5212)
+collision_layer = 2
+collision_mask = 11
+freeze = true
+script = ExtResource("5_grabbable")

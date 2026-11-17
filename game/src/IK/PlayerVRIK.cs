@@ -15,6 +15,36 @@ namespace AlleyCat.IK;
 [GlobalClass]
 public partial class PlayerVRIK : CharacterIK
 {
+    /// <summary>Opt-in walking diagnostic: animation-driven hips/limbs, retained head limits and solved-eye attachment.</summary>
+    [Export]
+    public bool AnimationBodyDiagnostic
+    {
+        get; set;
+    }
+    private PlayerAnimationBodyDiagnostic? _animationBodyDiagnostic;
+
+    /// <inheritdoc />
+    public override void _PhysicsProcess(double delta)
+    {
+        if (AnimationBodyDiagnostic && _animationBodyDiagnostic is null && _isBound)
+        {
+            _animationBodyDiagnostic = new PlayerAnimationBodyDiagnostic(GetResolvedSkeleton());
+        }
+        else if (!AnimationBodyDiagnostic && _animationBodyDiagnostic is not null)
+        {
+            _animationBodyDiagnostic.Dispose();
+            _animationBodyDiagnostic = null;
+        }
+        base._PhysicsProcess(delta);
+    }
+
+    /// <inheritdoc />
+    public override void _ExitTree()
+    {
+        _animationBodyDiagnostic?.Dispose();
+        _animationBodyDiagnostic = null;
+        base._ExitTree();
+    }
     private const float HeightEpsilon = 1e-4f;
     private static readonly StringName _rightHandBoneName = new("RightHand");
     private static readonly StringName _leftHandBoneName = new("LeftHand");
@@ -101,6 +131,43 @@ public partial class PlayerVRIK : CharacterIK
     private bool _isBound;
     private bool _isDrivingDebugOverlay;
     private float _worldScale = 1.0f;
+    private Transform3D _trackingFrame;
+    private Vector3 _trackingActorPosition;
+    private Transform3D? _virtualHead;
+
+    /// <summary>Physical hip turning is not tracked: allow relaxed head/body divergence before compensation.</summary>
+    [Export(PropertyHint.Range, "0,180,1,suffix:°")]
+    public float HeadLeftYawLimitDegrees { get; set; } = 100f;
+
+    /// <summary>Independent right-hand head/body yaw allowance.</summary>
+    [Export(PropertyHint.Range, "0,180,1,suffix:°")]
+    public float HeadRightYawLimitDegrees { get; set; } = 100f;
+
+    /// <summary>Whether the current head request exceeds the configured body-relative yaw allowance.</summary>
+    public bool HeadYawLimited
+    {
+        get; private set;
+    }
+
+    /// <summary>Whether the latest solved head required XR compensation.</summary>
+    public bool XRCompensationApplied
+    {
+        get; private set;
+    }
+
+    internal bool HeadPositionLimited
+    {
+        get; private set;
+    }
+    internal bool HeadTargetReachable
+    {
+        get; private set;
+    }
+
+    private Transform3D PhysicalInputOrigin => _trackingFrame with
+    {
+        Origin = _trackingFrame.Origin + GlobalPosition - _trackingActorPosition
+    };
     private Vector3 _mostRecentOriginCompensationDelta = Vector3.Zero;
 
     private readonly FingerCollisionShapeMirror _rightFingerCollisionShapeMirror = new("Right");
@@ -111,6 +178,7 @@ public partial class PlayerVRIK : CharacterIK
     /// <inheritdoc />
     public override void _Ready()
     {
+        AnimationBodyDiagnostic |= System.Environment.GetEnvironmentVariable("PLAYER_ANIMATION_BODY") == "1";
         base._Ready();
         ConfigurePlayerBodyCollisionExceptions();
         ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
@@ -120,14 +188,14 @@ public partial class PlayerVRIK : CharacterIK
     protected override bool CanProcessProviderTargets => _isBound;
 
     /// <inheritdoc />
-    protected override bool CanProcessPhysicalActuators => _isBound;
+    protected override bool CanProcessPhysicalActuators => _isBound && !AnimationBodyDiagnostic;
 
     /// <inheritdoc />
     protected override void BeforeProviderTargetProcessing()
     {
         if (_origin is IXROrigin origin)
         {
-            origin.OriginNode.GlobalTransform = GlobalTransform;
+            origin.OriginNode.GlobalTransform = PhysicalInputOrigin;
         }
     }
 
@@ -151,12 +219,13 @@ public partial class PlayerVRIK : CharacterIK
         if (stateMachine is null || !stateMachine.Active)
         {
             ClearHipDebugMessage();
+            CaptureVirtualHead(skeleton, null);
             return;
         }
 
         PoseStateContext context = BuildPoseStateContext(skeleton, delta);
         PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
-        ApplyHeadSolveTargetTransform(tickResult.LimitedHeadTargetTransform);
+        CaptureVirtualHead(skeleton, tickResult.LimitedHeadTargetTransform);
         UpdateHipDebugMessage(tickResult.Context, tickResult);
     }
 
@@ -168,19 +237,100 @@ public partial class PlayerVRIK : CharacterIK
             return;
         }
 
-        Transform3D compensatedOriginTransform = ComputeCompensatedOriginTransform(
-            skeleton,
-            _camera.CameraNode,
-            _origin.OriginNode);
+        BeforeProviderTargetProcessing();
+        XRCompensationApplied = false;
+        HeadTargetReachable = _virtualHead is { } current && IsHeadTargetWithinNativeReach(skeleton, current.Origin);
+        if (_virtualHead is not { } target || (!AnimationBodyDiagnostic && !HeadYawLimited && !HeadPositionLimited
+            && HeadTargetReachable))
+        {
+            return;
+        }
+        // Preserve solved positional attachment and constrained target orientation, without feeding
+        // rendered compensation back into the next physical-input epoch.
+        Transform3D virtualCamera = target * ViewpointLocalTransform;
+        Transform3D solvedCamera = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(HeadBoneIndex) * ViewpointLocalTransform;
+        virtualCamera.Origin = solvedCamera.Origin;
+        if (!HeadYawLimited && !HeadPositionLimited)
+        {
+            virtualCamera.Basis = _camera.CameraNode.GlobalBasis;
+        }
+        _origin.OriginNode.GlobalTransform = virtualCamera * _camera.CameraNode.GlobalTransform.AffineInverse()
+            * _origin.OriginNode.GlobalTransform;
+        XRCompensationApplied = true;
+    }
 
-        _origin.OriginNode.GlobalTransform = compensatedOriginTransform;
+    private void CaptureVirtualHead(Skeleton3D skeleton, Transform3D? positionalLimit)
+    {
+        Transform3D physical = GetDefaultHeadTargetTransform();
+        Transform3D target = positionalLimit ?? ResolvedHeadIKTarget!.GlobalTransform;
+        HeadPositionLimited = !target.Origin.IsEqualApprox(physical.Origin);
+        HeadYawLimited = false;
+        if (HipBoneIndex >= 0)
+        {
+            Basis hips = (skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(HipBoneIndex)).Basis;
+            Basis hipAxes = skeleton.GetBoneGlobalRest(HipBoneIndex).Basis.Orthonormalized().Inverse();
+            Basis headAxes = skeleton.GetBoneGlobalRest(HeadBoneIndex).Basis.Orthonormalized().Inverse();
+            Vector3 up = (hips * hipAxes * Vector3.Up).Normalized();
+            Vector3 forward = hips * hipAxes * HipLimitSemanticFrame.ReferenceRig.AvatarForwardLocal;
+            Vector3 looking = target.Basis * headAxes * HipLimitSemanticFrame.ReferenceRig.AvatarForwardLocal;
+            forward -= up * forward.Dot(up);
+            looking -= up * looking.Dot(up);
+            if (forward.LengthSquared() > 1e-8f && looking.LengthSquared() > 1e-8f)
+            {
+                float yaw = forward.SignedAngleTo(looking, up);
+                float limited = Mathf.Clamp(yaw, -Mathf.DegToRad(HeadRightYawLimitDegrees), Mathf.DegToRad(HeadLeftYawLimitDegrees));
+                HeadYawLimited = yaw != limited;
+                target.Basis = new Basis(up, limited - yaw) * target.Basis;
+            }
+        }
+        _virtualHead = target;
+        ApplyHeadSolveTargetTransform(target);
+    }
+
+    private static readonly StringName _nativeHeadRootProperty = new("settings/0/root_bone");
+    private static readonly StringName _nativeHeadEndProperty = new("settings/0/end_bone");
+    private ulong _reachSkeletonID, _reachSolverID;
+    private int _headReachRootBone = -1;
+
+    private bool IsHeadTargetWithinNativeReach(Skeleton3D skeleton, Vector3 target)
+    {
+        if (HeadModifierGroup.Length == 0 || HeadModifierGroup[0] is not { } solver)
+        {
+            return false;
+        }
+        ulong skeletonID = skeleton.GetInstanceId(), solverID = solver.GetInstanceId();
+        if (skeletonID != _reachSkeletonID || solverID != _reachSolverID)
+        {
+            _reachSkeletonID = skeletonID;
+            _reachSolverID = solverID;
+            _headReachRootBone = solver.IsClass("CCDIK3D") && solver.Get(_nativeHeadEndProperty).AsInt32() == HeadBoneIndex
+                ? solver.Get(_nativeHeadRootProperty).AsInt32() : -1;
+        }
+        if (_headReachRootBone < 0 || _headReachRootBone >= skeleton.GetBoneCount())
+        {
+            return false;
+        }
+        Vector3 joint = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(HeadBoneIndex).Origin;
+        float length = 0;
+        for (int bone = skeleton.GetBoneParent(HeadBoneIndex); bone >= 0; bone = skeleton.GetBoneParent(bone))
+        {
+            Vector3 parent = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(bone).Origin;
+            length += joint.DistanceTo(parent);
+            if (bone == _headReachRootBone)
+            {
+                return parent.DistanceSquaredTo(target) < length * length;
+            }
+            joint = parent;
+        }
+        return false;
     }
 
     /// <inheritdoc />
     protected override Transform3D GetDefaultHeadTargetTransform()
-        => _camera is null
+        => _camera is null || _origin is null
             ? ResolvedHeadIKTarget?.GlobalTransform ?? Transform3D.Identity
-            : _camera.CameraNode.GlobalTransform * ViewpointLocalInverseTransform;
+            : PhysicalInputOrigin * _origin.OriginNode.GlobalTransform.AffineInverse()
+                * _camera.CameraNode.GlobalTransform * ViewpointLocalInverseTransform;
 
     /// <inheritdoc />
     // HipBoneIndex may remain -1 when the skeleton does not expose a hips bone; consumers
@@ -210,6 +360,8 @@ public partial class PlayerVRIK : CharacterIK
 
         _origin = origin;
         _camera = camera;
+        _trackingFrame = GlobalTransform;
+        _trackingActorPosition = GlobalPosition;
         EnsureResolvedNodes();
         ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
 

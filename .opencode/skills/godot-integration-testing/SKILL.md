@@ -93,8 +93,15 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
 
 `--headless` overrides every test's `Headless` attribute and routes all selected tests to the single headless session.
 
-If a test validates rendering, screenshots, visual timing, viewport contents, animation visibility, or other
-renderer-backed behaviour, prefer windowed execution unless the test's own contract says headless is valid.
+If a test depends on renderer-backed behaviour, such as viewport state or animation timing, prefer windowed execution
+unless the test's own contract says headless is valid.
+
+## Visual Verification Is Not a Test
+
+Never write screenshot, capture or photobooth checks as xUnit facts or anywhere a test run could discover them.
+Visual verification is an on-demand debug device for building features and requesting human review; follow the
+`godot-visual-verification` skill and run its GDScript runners directly. A test may still write disposable diagnostic
+output under `res://temp`; nothing there is permanent.
 
 ## Virtual Display (Xvfb)
 
@@ -291,8 +298,6 @@ Physics-tick systems — VRIK/`CharacterIK` solving, `SkeletonModifier3D` solver
 activation and region upload syncs, and Jolt hand-collision proxies — advance on physics ticks, not process frames.
 When a test waits for such a system to settle or sync, wait on physics frames via
 `TestUtils.WaitForPhysicsFramesAsync` or a physics-frame poll loop, never a fixed process-frame count.
-`VrikSettlePhysicsFrames` in the optical finger-tracking photobooth tests and
-`NPCNavigationIntegrationTests.WaitForNavigationLaneSyncAsync` are the precedents.
 
 The project config disables vsync (`window/vsync/vsync_mode=0`), so a warm windowed session renders uncapped and a
 fixed process-frame wait spans an environment-dependent number of physics ticks.

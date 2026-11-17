@@ -1,364 +1,441 @@
 ---
 id: CTRL-001
-title: Locomotion
+title: Player Locomotion
 ---
 
-# Locomotion
+# Player Locomotion
 
 ## Requirement
 
-Define responsive player locomotion that uses authored animation and metadata as adaptable motion input while preserving
-collision, foot-planting, and control ownership.
+Deliver headset-playable MotionBricks player locomotion through the existing player startup route, with game-owned
+source playback and dynamic conditioning under ANIM-002. Normal installation uses the shared eight-role feminine
+source set and source-bound stationary-turn conditioning without activation flags. This is the implementation/review
+contract, not a claim of completed content, headset or generated-motion quality acceptance.
 
 ## Goal
 
-Player movement should look and feel better than a conventional eight-direction blendspace without IK or per-clip
-metadata, while remaining practical for precise manual positioning.
-
-Planners, implementers, and reviewers should consult
-[current implementation and acceptance gaps](#current-implementation-and-acceptance-gaps) before claiming delivery.
+Let the user judge stick responsiveness and body-turn feel with live tracking before expanding locomotion or polishing
+motion. Implementers and reviewers must preserve existing XR, hand, gaze, and interaction behaviour.
 
 ## User Requirements
 
-1. Movement has convincing body motion and stable supported feet. Rolling about the ball of the foot, including heel
-   lift, and small inconspicuous slip are acceptable; visible sliding, warping, stiff legs, and body jerks are not
-   acceptable precision fixes.
-2. Releasing translation input ends ordinary travel demand on the first eligible physics tick, then stops the body
-   within the release bounds on every lane: release-to-stop within 400 ms and post-release displacement within 200 mm
-   (defaults, tunable). Stop responsiveness outranks continuation naturalness: remaining stop motion is compressed to
-   fit the bounds so marker positioning, taps, and repeated nudges stay practical.
-3. Fresh translation or yaw input is prompt and interruptible during starts, travel, stopping, and stationary movement.
-   It does not wait for a clip or step to finish. A direction reversal is the bounded exception: its authored braking
-   exit plays out before the opposite direction enters (User Requirement 9).
-4. Runtime may adapt translation, yaw, stride, timing, and swing-foot placement to satisfy player intent. Authored root
-   motion guides the result but is not immutable authority. Taps and nudges may be shorter than a full entry or exit;
-   retained clips, slices, and coherent adaptation must support them without requiring new animation content.
-5. Optional navigation yields before non-neutral manual movement. Permission loss produces a safe, finite response.
-6. Releasing input at any point, including during an entry or crossfade, transitions into governed stop presentation
-   and does not continue ordinary travel. Non-lateral lanes play their real stop animation, rate-compressed inside the
-   release bounds (User Requirement 2); lateral-dominant releases take the neutral stop policy of User Requirement 11 —
-   a bounded crossfade, not a hard idle drop. Feet that ANIM-002 marks planted stay planted through the stop or neutral
-   crossfade into Idle.
-7. Naturalness is ultimately a manual user judgement. Automated evidence supports diagnosis but does not replace that
-   judgement.
-8. A held turn with no translation input presents authored turn-in-place motion and turns the actor toward the
-   requested side at the authored content's rate. Releasing the turn returns through the authored transition, and
-   translation input takes precedence immediately without an idle interlude.
-9. Reversing between forward and backward travel presents authored braking for the travelled direction instead of an
-   instant opposite-gait contradiction of realised motion. The opposite direction then enters through the normal start
-   path.
-10. Held translation input moves the actor along the intended actor-frame direction regardless of the visual rig's own
-    orientation or any rotated parent transform.
-11. Releasing a lateral-dominant input never rotates the body's remaining velocity into another lane. Releasing a
-    strafe or lateral-dominant diagonal stops in place through the neutral stop policy, with no forward lunge:
-    post-release forward displacement on a pure-lateral release stays within 100 mm (default, tunable). Forward- and
-    backward-dominant releases keep their scaled authored stops.
+1. Left-controller stick direction follows the existing player input convention; its magnitude supplies normalised
+   speed intent. Different magnitudes request different speeds, not an exact measured-speed guarantee.
+2. Right-controller stick requests stationary avatar-body turning in either direction. Movement takes priority over
+   stationary turning; during travel, right input steers walking under UR7. The mapping is documented and tunable;
+   intensity-to-total-angle mapping, particular deadzones, and requested turn-angle limits are not prescribed.
+   The head/body divergence limit in UR4
+   is separate from this stick mapping.
+3. Releasing movement or stationary-turn input immediately begins settling towards idle and discards remaining intent.
+   Releasing walking steering alone instead retains the acquired course under UR7. Do not require the
+   full queued motion segment or stale turn to finish, or add recovery-step sequences. This is not instant inference.
+4. Tracked head motion stays live. Ordinary body turning must not simply rotate the view with the avatar. Introduce
+   body/view separation with a tunable head/body yaw divergence limit defaulting to 100 degrees per side. This relaxed
+   allowance accounts for physical hip turning that the avatar does not reproduce, avoiding premature disturbing
+   compensation. Beyond the limit use existing XR-origin compensation, not a new body-stop policy. Retain existing
+   positional/anatomical compensation within the existing physical scope in TR6; this is not an unconditional
+   camera-lock or physical head-to-wall collision guarantee.
+5. MotionBricks generates movement, turning footwork, and idle transitions on the calibrated reference Female rig.
+   The player is not always animation-driven; current tracked and modified posing remains part of the experience.
+6. Provide a normal launch path, the implemented stick mapping, known limitations, and a short headset checklist.
+   The user's headset judgement decides responsiveness and feel; synthetic input cannot establish comfort.
+7. Source-guided walking predicts near-cycle travel and supplies a separate farther generation
+   guide without continually discarding useful work under small stick fluctuations. Left travel must not request
+   changes to body heading, including strafe/backward travel. While walking, holding right stick continuously steers
+   intended travel and heading together; stronger deflection turns faster. Releasing right stick stops steering but
+   continues walking along the acquired course. Movement priority selects walking steering, not simultaneous
+   stationary turning. Preserve immediate movement
+   release/sharp-change handling, a stable movement reference across magnitude changes, and distinct cycle/submitted/
+   active diagnostics. Held travel chains useful work without redundant unchanged-input snapshot resubmission.
+   Source adoption and chaining do not establish headset usability or resolution of awkwardness, sway or comfort.
+   Expose backward requested speed as a tunable ratio of forward requested speed at the same original stick magnitude
+   and authored stage. Preserve forward/lateral requests;
+   the ratio adjusts intent, not guaranteed actual speed or comfort.
+8. Player intent selects distinct forward/backward, non-crossing left/right interaction-positioning sidesteps,
+   crossing left/right lateral travel, and stationary turn roles from the selected variant. Both lateral types may
+   repeat. Posture and physical speed follow that variant/stage; source phase must not delay release or require a
+   displayed support-foot match. Idle remains externally supplied, not an ANIM-002 locomotion anchor.
 
 ## Technical Requirements
 
-1. CTRL owns player input policy, movement response, animation scheduling, and optional-navigation arbitration. It does
-   not own NPC route policy, foot planting, or IK actuation.
-2. Each eligible physics interval has one authoritative actor movement composition and collision operation. Evaluated
-   animation motion and requested adaptation are recorded separately from collision-realised movement. Nonlinear
-   collision results are not decomposed by subtraction.
-3. Evaluated authored root is consumed at most once. Runtime adaptation may alter its translation, yaw, stride, timing,
-   or swing-foot placement; no parallel root owner or duplicate animation-tree evaluation may move the actor. Coordinate
-   body motion, timing, and swing landing while [IK-003 foot planting][ik-003] keeps planted feet in place and
-   `CharacterIK` remains the sole foot actuator.
-4. Neutral translation input ends ordinary travel demand and changes stop policy on the first eligible tick. Tail
-   playback, meaning playback of the selected stop clip that takes the player from travel to Idle, may begin after
-   bounded selection and graph-transition latency; that latency does not authorise continued ordinary travel demand.
-   CTRL may use bounded stop-clip selection without routing every manoeuvre through it. Scheduling is presentation that
-   follows current intent and never gates physical response; while the body still travels against fresh intent, the
-   presented gait agrees with realised motion. Sustained travel playback rate is a demand-magnitude schedule onto the
-   configurable minimum-to-maximum playback-rate bounds, and an authored exit holds the last published travel rate so
-   its crossfade does not step the cadence; realised-speed coupling is not a runtime contract. Those bounds must
-   actually govern stop playback: stop clips route through playback-rate governance (Technical Requirement 16)
-   instead of playing outside it at a fixed 1.0×, and within the release bounds stop responsiveness outranks cadence
-   continuity at the stop seam. Presentation degradation is reported with evidence rather than silently accepted, and a
-   brief bounded idle-to-entry crossfade slide is accepted seam smoothing.
-5. New input promptly invalidates incompatible stop or manoeuvre state, except the authored braking exit that a
-   direction reversal routes through (Technical Requirement 14), which plays out while the body still travels against
-   the fresh intent. Unchanged neutral input must not create a no-progress retry loop or walking-in-place fallback.
-6. Foot planting follows [IK-003][ik-003]. It never moves the actor, steers, brakes, delays input, or gates stop
-   selection.
-7. Release at any point, including an entry or crossfade, accepts release on the first eligible tick, stops ordinary
-   travel demand, and transitions into governed stop presentation: the lane's real production stop animation,
-   rate-scaled inside the release bounds (Technical Requirement 16), or the neutral stop policy for lateral-dominant
-   releases (Technical Requirement 17). Stop candidates are ranked by measured whole-motion suitability.
-8. Actor-relative planar input uses the actor yaw frame (forward −Z, right +X). Imported rig-space conversion occurs
-   once at its declared boundary.
-9. Motion selection is bounded and event-driven. Per-frame animation-library search or metadata parsing is prohibited;
-   immutable package metadata may be shared while mutable movement state remains actor-local.
-10. Validation records the release tick, release-to-stop tick count, graph states, actual displacement and heading,
-    evaluated animation motion, requested adaptation, collision-realised movement, selected metadata, interruption, and
-    planted-foot horizontal slip of the ball point inside ANIM-002 planted intervals, as defined for NAV-001 A2. From
-    these per-tick traces, tests assert the release bounds per lane — release-to-stop within 400 ms, post-release
-    displacement within 200 mm, and pure-lateral forward displacement within 100 mm (defaults, tunable) — rather than
-    merely recording them. Naturalness of the bounded stop remains the manual judgement of User Requirement 7 on the
-    same evidence.
-11. Stationary turning is authored content only: held turn input with no translation presents the wired turn-in-place
-    states playing the authored pivot clips, loops while held, and releases through the authored crossfaded return,
-    with a hard idle start only on permission loss. Movement wins, handing off directly into the movement entry with
-    no idle interlude. Yaw reaches the actor solely through the authored root-rotation path; synthetic yaw and second
-    yaw actuators are prohibited. The turn rate is owned by the authored pivot content — a content decision, not a
-    runtime tuning knob. Degradation is availability-gated: reported finitely, and only when the wired tree lacks both
-    turn states.
-12. Authored root motion composes through the actor frame, never the rig's. The authored delta follows the fixed
-    ANIM-002 skeleton-authoring convention — avatar forward is skeleton-local +Z and avatar right is −X — maps to the
-    semantic actor yaw frame (forward −Z, right +X) as (−root.X, 0, −root.Z), and composes with the actor body's
-    orthonormalised world basis. The rig container's own yaw never enters semantics, parent transforms compose through
-    the body's global basis, and the production 180-degree rig behaviour is preserved by associativity.
-    Movement-owner discipline is unchanged: one root-read pair, one guarded yaw application, one velocity assignment,
-    and a single collision operation per interval (Technical Requirements 2–3).
-13. Validation covers sustained travel and supported feet beyond the release trace of Technical Requirement 10.
-    Production-rig trajectory pairing records per-tick actor transform, response model, evaluated graph state, and
-    foot-bone world positions through the genuine controller-event input path, paired with captured frames for narrow
-    visual acceptance. Synthetic fixtures must not present their own authoring as motion evidence: a fixture whose
-    foot tracks are continuous sweeps with no stance phase cannot author a supported-foot drift bound, so gliding
-    guards rest on frozen-pose progression plus the production pairing.
-14. A travel-domain reversal — fresh intent whose domain differs from the travelled blend's under the backward-entry
-    selection convention (forward versus backward-or-lateral) — routes through the authored exit for the travelled
-    direction. The authored stop clips are the braking presentation: the player body's velocity is the authored root
-    velocity, so there is no momentum model to decay and a positive-bounded playback rate cannot flip the authored
-    sign — only authored content rooted in the travelled direction can present braking. The opposite direction enters
-    afterwards through the normal idle-to-entry path, and while the exit plays the travelled blend and rate stay
-    published, so no full-rate opposite-gait sample is presented. An opposing intent during the exit lets the stop
-    play out; a same-direction resume keeps the no-interlude path. Lateral-within-lateral retargeting is not a
-    reversal and keeps in-place retargeting.
-15. The player may use a subset of ANIM-002 with relaxed seams: player intent, unlike an NPC route, is not known in
-    advance, so the [NAV-001][nav-001] seam-alignment rules do not bind CTRL-001, while the ANIM-002 planted
-    combination rule and package integrity contracts remain authoritative. Player consumers of catalogue distances or
-    root-trajectory positions apply the [ANIM-002 scale rule][anim-scale]: multiply by the bound skeleton's motion
-    scale; yaw is not scaled.
-16. Stop playback is rate-governed per lane to compress the stop's playback time and presentation; because a stop
-    clip's root displacement is rate-invariant — playing it faster shortens the time while the body still travels the
-    authored distance — rate alone cannot meet the 200 mm displacement bound of User Requirement 2. That bound is
-    enforced by the early-Idle cut permitted below together with the continuity clamp on translation adaptation
-    authorised by User Requirement 4. The stop rate is computed from the selected
-    clip and the bounds — by default `clipLength / min(400 ms, 200 mm × clipLength / authoredDisplacement)`, where
-    `authoredDisplacement` is the clip's whole-clip displacement in actor units (catalogue endpoint times the
-    [ANIM-002 scale rule][anim-scale]) — with headroom for the bounded selection and graph-transition latency of
-    Technical Requirement 4, so the measured release-to-stop time satisfies the 400 ms bound of User Requirement 2,
-    including the travel-to-stop crossfade's travel contribution. Stop rates clamp to configurable stop-rate bounds
-    whose default maximum is raised (for example 4.0) and configured independently of the sustained-travel maximum.
-    The early-Idle cut applies where a lane cannot meet both bounds by rate alone, and every such cut is reported as
-    degradation evidence. This requirement binds release-initiated stops; the direction-reversal braking exit of
-    Technical Requirement 14 keeps its own authored-exit contract.
-17. Lateral-dominant releases — pure-lateral lanes and diagonals whose lateral component dominates — use a neutral stop
-    policy: a bounded direct-to-idle crossfade with no stop-clip routing, so realised velocity decays in its own lane
-    instead of rotating into a forward glide. The neutral stop accepts release on the first eligible tick, ends
-    ordinary travel demand, and its crossfade is bounded so the release bounds of User Requirement 2 hold.
-    Post-release forward displacement on a pure-lateral release stays within 100 mm (default, tunable), asserted from
-    per-tick traces. Non-lateral lanes keep their lane's rate-scaled authored stop (Technical Requirement 16), and foot
-    planting never gates the stop-policy choice (Technical Requirement 6).
+1. Wire a player-side intent owner through production controller input and the existing startup/content spawning route
+   using `game/assets/characters/templates/reference_female/reference_female_player.tscn`. Install the shared
+   `reviewed-feminine/set.json` driver normally, without a source activation switch or fallback movement catalogue.
+   Trace that route rather than
+   inferring missing startup from `empty.tscn`. Do not create another scene or adapt NPC destination navigation into
+   stick control. Preserve NPC navigation and unrelated tracking, hands, gaze, and interaction functionality.
+2. The [shared animation contract](../../animation/index.md) is normative for content, inference helpers, conversion,
+   calibrated retargeting, source-proportioned feedback, licensing, and explicit missing-channel approximations.
+   Reuse the in-process Godot/C# NVIDIA SOMA FP32 runtime. The
+   [ANIM-002 source contract](../../animation/002-locomotive-animation-set/index.md) is normative for role/variant
+   sources and dynamic sampling; external idle/action targets follow its compatibility boundary. Apply
+   [NAV-001 TR2](../../nav/001-npc-navigation/index.md#runtime-and-content) for shared model provisioning and path
+   selection:
+   exported default `res://models/motionbricks/onnx/mmm_v6_soma_fp32.onnx`, with neither `MOTIONBRICKS_MODEL` nor
+   `LD_PRELOAD` required for ordinary launch on the verified host. This does not import NPC route/arrival policy.
+3. Maintain one character-root movement owner, distinct from `PlayerVRIK`'s XR-origin authority. Realise generated root
+    motion through Godot's `MoveAndCollide` using the actual root collider, without bespoke predictive physics admission
+    such as swept-body/clearance forecasts, support-floor proofs or `TestMove` preflights. External physics may block or
+    limit realised movement; input targets do not guarantee physical clearance. Preserve actual collision handling and
+    truthful blocked/collision diagnostics, not a physics-aware planner. No procedural turn, teleport, foot-IK rescue,
+    authored-idle reset, or corrective locomotion may substitute for generated footwork.
+4. Condition generation on actual realised player poses after applicable tracking and skeleton modifiers, following
+   ANIM TR5's normal-scheduling observation boundary and timestamped context. Do not use authored idle, pre-modifier
+   snapshots, or unplayed predictions as realised feedback. Validate the actual solved-skeleton boundary in production.
+   The player `AnimationTree` keeps its physics-callback update beneath the MotionBricks stage. Once a generated pose
+   exists, MotionBricks owns every mapped body bone and root motion; tree root motion is unused. Unmapped layers, such
+   as [INTR-003](../../interaction/003-hands/index.md) hand poses and eyes, stay live, including while idle.
+   Before the first generated pose, the player shows the tree's own posture: the IK-004 standing/crouching continuum
+   at standing head height, with no idle or locomotion loop.
+5. Current input owns movement/turn requests. Movement/stationary-turn release and incompatible trajectory changes
+   invalidate superseded queued/in-flight intent; reject stale results and start the appropriate transition without
+   waiting for a whole stale segment, using realised context. TR9 retains compatible walking
+   work across small direction changes. Separately, stationary turning may retain live
+   active/pending work only with unchanged role, zero old/new movement and no settling. Old/latest requested turn and
+   each live submitted/active owner must be finite, same-sign and have exact processed absolute magnitude `0.95` or `1`.
+   Preserve ownership epoch, tickets, source phase, play time and immutable targets; latch the latest requested
+   magnitude for the next already-eligible submission without requiring another input change. Historical tickets
+   cannot confer or revive ownership. Release, reversal, other magnitude changes and movement/role changes still
+   retire immediately; `0.95→0.9` retires and `0.9→0.95` cannot resurrect old work. This grants no broader
+   input compatibility. Adapt only scheduling needed for responsiveness.
+    Under the ANIM-002 stationary-turn contract, intensity changes update prospective phase/facing intent without
+    rewinding intended phase or changing immutable owned work. This does not broaden the compatibility exception or
+    choose a new gain/replanning policy; release, reversal and material-change retirement remain mandatory.
+    Preserve copied requests,
+   scene-thread submission/consumption, worker-exclusive native ownership and disposal, and graceful application-exit
+   draining under the [shared worker contract](../../nav/001-npc-navigation/index.md#outcome-and-worker-contract).
+   Those worker guarantees do not impose NPC destination outcomes. Report unavailable setup/inference explicitly;
+   preserve a safe pose without concealing it through fallback locomotion.
+6. Preserve `PlayerVRIK` head-target, post-solve and XR-origin ownership, body/view separation and the
+   unconstrained/reachable compensation skip. The default yaw divergence limit is 100 degrees per side and
+   configurable. Within the limit, skip compensation when the
+   tracked head is unconstrained and reachable; retain existing constrained position/orientation compensation for
+   positional/anatomical constraints and beyond the limit. Preservation of wall-related behaviour does not require
+   adding physical head collision: [RIG-001](../../rigging/001-physical-collision/index.md) excludes head collision,
+   and a wall alone need not constrain a shapeless head target. Existing positional constraints and head-limit
+   compensation remain required. Do not conceal the known hand-origin/epoch issue,
+   or introduce new hands, tracking, gaze, or interaction regressions. The
+   [XR runtime boundary](../../xr/001-xr-manager/index.md) and
+   [player IK integration](../../ik/implementation-notes.md#player-xr-integration-layer) remain normative dependencies.
+7. Begin verification with representative end-to-end production input and tracked posing, using focused automated
+   checks and full temporal observation rather than exhaustive infrastructure. Record input-to-response timing and
+   inference latency diagnostically, without invented millisecond or inherited motion-quality gates. Apply the
+   integration-testing and visual-verification guidance; retain unrelated coverage and report known broad-suite
+   failures honestly rather than repairing them in this slice.
+8. Before playable handoff, run `dotnet format --verify-no-changes AlleyCat.sln` and
+   `dotnet build AlleyCat.sln -warnaserror`. Obtain independent code/spec and selected visual-evidence review, repair
+   admitted blockers, and re-review. Deliver launch/setup, mapping, evidence, limitations, review disposition, and
+   headset checklist. Escalate material scope changes, tracking/interaction regressions, or model limitations that
+   prevent a usable probe rather than adding corrective machinery.
+9. **Source-Guided Travel:** [Player Motion](../../../game/src/Control/PLAYER-MOTION.md) documents normal launch,
+   mapping and independent diagnostics. The shared source controller follows these placement/chaining rules;
+   tuning defaults do not replace variant metadata or prescribe source phase:
+   - Use finite, magnitude-bounded, unquantised left input after the existing deadzone. Capture actor yaw at walking
+     bout start and retain it across magnitude/direction changes until release. Left input controls travel independently
+     of body heading, without extrapolating generated yaw or automatically facing travel velocity. Preserve processed
+     right input while walking and accumulate a steering offset over real elapsed time relative to the stable bout
+     frame. Apply it coherently to requested travel and heading. Expose a separate tunable walking angular-rate
+      mapping, separate from TR10 stationary-turn conditioning. Right release stops accumulation and retains the
+      offset until the bout ends; a new bout uses existing reference acquisition. Do not procedurally rotate actor/view.
+   - **Backward Requested-Speed Ratio:** expose `PlayerMotionBricks.BackwardSpeedRatio` on the existing normal
+     player `MotionBricks` Inspector surface and copy it into the driver at initialisation; restart to apply edits.
+     The current default/fallback is 0.75, not a universal tuning requirement or quality bound. Accept
+     finite `(0,1]`; clamp finite values above 1 to 1 and use the fallback for zero, negative or nonfinite values.
+     There is no hidden positive minimum; the Inspector's 0.01 step is not a runtime limit. Ratio 1 restores the prior
+     requested mapping; zero is not a stop command. After existing stick normalisation, multiply only negative left Y
+     by the ratio, before bout/course/steering rotation. Leave X and positive Y unchanged and do not renormalise.
+      Select the variant's forward-reference speed stage using the original magnitude, not a reduced-magnitude slower
+      posture. Use ANIM-002 physical reference metadata, not the velocity of one fixed source window.
+     Use this one adjusted desired velocity for near/far prediction, terminal velocity, all four guide roots and
+     trajectory compatibility. This ratio governs player requests, not NPC navigation.
+   - In common horizontal source coordinates, let `p` be the latest actual ground-root position, `v` its measured
+      collision-realised velocity, and `u` stick-requested velocity in the steered frame, scaled by the selected
+      variant/stage's physical reference speed. Reference/cycle speed is distinct from sampled phase-local velocity.
+     Set `h = nextComparisonTime - lastActualObservationTime`; advance a due deadline before prediction, otherwise
+     retain it. Include observation age. Predict curved requested velocity under held steering over both positive `h`
+     and the separate generation horizon `H`, conditioning on actual `v`. Endpoint heading, terminal velocity and all
+      target placement samples must describe the same trajectory, not a position-only or heading-only update.
+     With zero steering, reduce to the existing linear transition: `p_cycle = p + (v + u) * h / 2`.
+     This predicts a target, not procedural actor acceleration or realised feedback.
+   - Integrate the generation guide from the same actual observation. With zero steering and `H >= h`, use
+     `p_guide = p_cycle + u * (H - h)` with terminal velocity `u`. With zero steering and `H < h`, use
+     `p_guide = p + v * H + (u - v) * H² / (2 * h)` with terminal velocity `v + (u - v) * H / h`.
+      With steering, placement roots/headings follow the same curved trajectory. ANIM-002 dynamically sampled source
+      windows supply articulated cues and phase-local root variation around that placement; do not overwrite an uneven
+      source cycle with constant-velocity terminal samples. Retain authored heights and ordered poses. Do not stretch
+      the velocity transition to `H`, restore radial placement or integrate an unbounded destination. The near-cycle
+      prediction need not equal the native generation target, and neither horizon owns intended source phase.
+   - Periodically compare current generation-guide position/heading with the **last actual submitted guide**, not the
+     near-cycle marker or previous snapshot, so gradual changes accumulate. Retain useful work for compatible changes;
+     keep only the latest desired value for the next eligible comparison or normal chaining submission.
+   - **Stable-Input Chaining:** suppress snapshot resubmission for unchanged processed movement/turn input since
+     the last actual submission when turn is zero. Keep input sampling and virtual-target/marker updates live.
+     Latch accepted changes until actual submission, including change-and-return; nonzero steering retains existing
+     snapshot eligibility. Preserve the existing early 10-frame chaining path, immediate release/sharp retirement,
+     stale-result rejection, actual post-modifier feedback, collision-root ownership, and native shutdown guarantees.
+   - Apply sharp-change replacement to materially incompatible trajectories relative to active/submitted work, not
+     every right-stick callback. Movement release bypasses sampling and initiates settlement; retained steering must
+     not revive released movement. Right release alone retains the course. Reject obsolete results arriving late.
+     Retained compatible work is not permission to consume superseded work. Actual realised feedback, collision-root
+     ownership, and worker guarantees in TR3–5 remain mandatory; virtual targets are not realised context.
+   - Use fixed `H = 49/30 s`, selected from observed native durations, not a
+     universal horizon requirement or arrival-time promise. Native duration remains model-selected and variable.
+     Tunable defaults remain a 0.2 s comparison interval, 0.08 m position difference, 10-degree heading difference,
+     and 45-degree sharp-change boundary. These are tuning settings, not quality bounds or timing gates;
+     exact realised speed and comfort remain unproved. Stationary turning retains TR5's bounded compatible-work
+     policy; do not apply walking's 10/45-degree thresholds to stationary magnitude compatibility.
+   - Optional diagnostics must distinguish VIRTUAL near-cycle prediction, immutable last SUBMITTED generation guide
+     with request identity, and ACTIVE displayed-playback guide with identity/state, including held completion.
+     Targets are not achieved motion; remove retired movement markers on release/sharp supersession.
+     Stationary-turn recordings must distinguish latest requested magnitude from immutable submitted and actually
+     adopted magnitudes with their tickets and live pending/active/held state. Retained work must not be relabelled
+     with the latest magnitude; historical receipts are not live ownership.
+10. **Conditioning Controller:** implement the normative
+    [ANIM-002 lifecycle](../../animation/002-locomotive-animation-set/index.md#technical-requirements) on the game side.
+    Own variant, state, role, virtual source phase, expected source foot phase and future consecutive-window selection.
+    Resolve roles from player movement/turn and interaction-positioning intent; expose how non-crossing sidestepping
+    is distinguished from crossing lateral travel without inventing an additional binding in this specification.
+    Use variant/stage physical metadata with input magnitude and placement horizon, including the backward ratio;
+    never treat a crawling/limping source as a walking-speed replacement. Apply ANIM-002 advance, loop, sample-ahead,
+    role/stage/variant switch and overlapping-request rules. Snapshot source selection with request identity alongside
+    actual realised context; compatible retention must not let a late result own phase progression. Release or
+    interruption abandons old intended progression immediately and requests compatible external idle/action targets
+    or the new role without waiting for source-cycle completion. Missing/incompatible sources or targets are explicit
+    availability failures under TR5, not permission for procedural fallback or authored-idle reset. Source foot phase
+     is intended information only; no inferred displayed-foot matching, leading-foot variants or arc/transition clips
+     are prerequisites. Keep existing input responsiveness, steering, tracking, collision and worker authority.
+     For stationary turns, use measured signed source angular span and ordered local progression with input intensity
+     and chosen rotation to coordinate phase/window selection and target facing. Preserve both ordered foot-lift
+     phases where present, including their asymmetric angular positions and cyclic boundaries; do not assume a single
+     global lift or a time/angular midpoint. Independent fixed source pace ignoring angular intent is insufficient.
+     Declare the intent-dependent phase policy separately from model-selected duration; neither four target poses
+     nor metadata alone guarantees displayed mid-turn footwork. No angular-waypoint planner, fixed two-subrequest
+      policy, one-episode-per-call rule or new native interface is prescribed by this requirement.
+     The source-bound policy below governs normal player stationary turns without redefining NAV's finite turn plan.
+
+### Stationary-Turn Conditioning
+
+Normal player stationary turns use four source-bound lift/recovery landmarks, with no pace compensation.
+Content repetition/recovery admission labels describe quality, not activation switches or an alternative controller.
+
+- **Metadata and Clock:** load measured signed span, representative rate, source binding and both ordered primary
+  foot cues from `reviewed-feminine/turn-angular-reference.json`. Validate finite values, source hash/bounds/timing,
+  facing/measurement conventions, cue identities/order/angular associations and span/rate consistency. Toe annotations
+  do not add required endpoints. Keep `primaryFootEvents` authoritative for both feet; additive experimental
+  `recoveryTrial` binds four ordered full-pose landmarks to the same source hash, phase, angular association and
+  measurement convention. Validate primary agreement, stable unique IDs, typed `primary_lift|recovery`, subject foot
+  and four-original-pose recovery-window availability before the raw seam. Do not search for pose minima at runtime.
+  The current shared source selects left 947→951→961→1001 and right 1103→1107→1120→1152.
+  Read phases, angles and consecutive recovery windows from the source-bound metadata, not hard-coded time fractions.
+  Preserve full source geometry, including the late authored negative increment. These are content bindings, not
+  generic variant rules or sole/contact/support claims. Start source-relative phase `p=0`. Integrate
+  `p += F * abs(input) * dt`, where `F=30 Hz`; intensity changes affect only future advance. Output duration,
+  completion, actual yaw and displayed feet never advance or reset this clock. Retain `H=49/30 s` as planning horizon,
+  not requested native duration. Use first-guide angular cap
+  `B=abs(r) * abs(latest input) * H`, where `r` is the metadata representative angular rate.
+- **Selection and Lag:** at a stationary submission opportunity, forecast `q=p+F*abs(latest input)*H`. Select the next
+  unserved landmark or an interim phase before it, clipped by `floor(q)` and a nondecreasing submitted-phase floor,
+  subject to the overtake exception below. Copy four consecutive original 30 Hz poses with raw transforms at wraps.
+  Finish the current four-landmark group even when it lags `p`: the second primary lift does not end the group.
+  Complete its final recovery before choosing `kNext=max(kCurrent+1,floor(p/P))`, where `P` is the source period in
+  frames; only explicit passed-unplayed handling below may advance an overtaken landmark without completion.
+  Drop only intervening whole unstarted cycles and their prospective net yaw; do not move the actor, rewind `p`
+  or queue catch-up calls.
+- **Target Geometry:** anchor placement at actual actor-root yaw, distinct from anatomical heading and intended phase.
+  Use the preceding affine map to obtain remaining source-angle geometry. Uniformly scale only target root-yaw
+  variation to meet `B`, preserving ordered uneven angular shape; keep non-root articulation, consecutive timing and
+  existing positional placement unchanged. Record the scale and scaled local angular derivatives, distinct from
+  authored non-root derivatives and clock rate. No generated-output scaling, time warp or procedural actor yaw is
+  allowed. After matching-owner playback completion, rebase prospective geometry at actual root yaw with unit scale,
+  without resetting phase or replaying scaled-away rotation. Retain normal stationary completion cadence, not walking's
+  early splice. Only a landmark selected as first guide and completed through full playback by its matching owner is
+  serviced; interims and appearance in guides two to four do not count. Capped completion still services that source
+  event, without queueing unrealised yaw. Service receipts prove neither displayed lift/recovery nor whole gait/contact.
+- **Overtaken Landmarks:** distinguish authored holds/micro-reversals from backward catch-up to an already overtaken
+  forward lift or recovery. Mark the latter passed-unplayed, not serviced. If the forecast-clipped interim would also
+  chase backwards after such a pass, select the next unpassed ordered landmark even beyond forecast, under the same
+  cap, clock and immutable-owner rules. Bound the search to remaining landmarks in the current group plus the next
+  four-event group selected by the cycle/drop rule (at most eight candidates). Exhaustion is an explicit availability
+  failure, not arbitrary-cycle recovery, a new wait policy, silent re-anchoring or permission to rotate the actor.
+  Variable model duration guarantees neither strict future-only selection, realised angular pace nor natural footwork.
+- **Ownership and Input:** snapshot clock/forecast/selected phase, source indices, stable event ID/kind/subject foot,
+  magnitude, cap/map, context and owner identity immutably. Distinguish `IsLandmarkTarget` from `IsPrimaryLift`,
+  nullable primary `Foot` from `RecoveringFoot`, and primary/recovery completions from separate passed-unplayed counts.
+  Exact TR5 `0.95↔1` compatibility retains work; latest input controls the next eligible forecast/cap.
+  Material same-role changes retire the owner immediately but preserve clock, service cursor, submitted
+  floor and geometric lineage. A replacement uses fresh actual context; it cannot resurrect a retired owner or count
+  a cancelled landmark as serviced. `0.90` remains material; release abandons progression immediately and reversal/role
+  change starts the new role at entry with a fresh actual anchor. Recovery must delay neither. Preserve stale-result
+  rejection, actual post-modifier context, worker disposal, `CorrectEndpoints`, normal VRIK/XR and generated-root
+  `MoveAndCollide` ownership; targets are never realised feedback.
+- **Uncompensated Pace:** extra endpoint connections may roughly halve turning pace. The illustrative alternating
+  30/50-frame schedule increases group duration from 2.6 to 5.2 seconds; this is not measured native timing or a bound.
+  Accept and measure the cost without gain increases, retiming, shortened clips, output repair or procedural yaw.
+  Model duration remains variable; lower input does not guarantee linear realised speed. Four landmarks neither
+  prescribe exactly four calls nor provide timed interior constraints or guarantee coordinated steps within a clip.
 
 ## In Scope
 
-- Player translation and yaw response, stopping, nudges, interruption, scheduling, stationary turning,
-  direction-reversal braking, and navigation arbitration.
-- Adapted animation motion, movement composition, and collision accounting.
-- Numerical, structural, real-content, and focused manual acceptance evidence.
+- Existing-route player integration, stick movement and stationary body turning, responsive release and replacement.
+- Live tracking, body/view separation, collision/root and XR-origin ownership, realised feedback, safe worker lifetime.
+- Focused verification, temporal diagnostics, independent review, and headset playtest handoff.
+- Normal source-guided travel with continuous steering, held chaining and truthful diagnostics.
+- Game-owned role/phase control, dynamic source sampling and external idle/action integration under ANIM-002.
 
 ## Out Of Scope
 
-- NPC route and arrival policy.
-- Live animation-variant switching.
-- New animation generation, generic motion matching, procedural gait generation, and terrain adaptation.
-- IK-003 player-rig foot-planting adoption. The player has no IK-003 foot-planting stage yet; adoption is a separate
-  future task under the rig-neutral IK-003 contracts. The boundary rules of Technical Requirements 3 and 6 bind now
-  and at adoption.
-- Re-authored or shortened stop clips, and authored lateral stop clips: future content options that may improve
-  naturalness inside the release bounds. They are not required to deliver the stop-rate governance of Technical
-  Requirement 16 or the neutral stop policy of Technical Requirement 17; the neutral policy exists precisely because
-  authored lateral stops are unavailable now.
-- VR wall-clock perception measurement of responsiveness: the release bounds are asserted in physics-tick time and
-  millimetres, not as headset wall-clock perception studies.
+- Simultaneous movement plus independent stationary turning, snap turns, a general action/idle framework,
+  terrain/contact adaptation and broad rig/hardware support. ANIM-002 role coverage and generic variant/stage support
+   are required; normal feminine source adoption does not waive broader stage/default content or validation.
+- NPC pauses/small-step quality, physical foot sliding, and wrist refinement remain deferred unless a concrete issue
+   blocks this slice's core outcome. Preserve current calibrated approximations; do not claim full hand fidelity.
+- Multi-character performance, model precision comparisons, exhaustive tests, and broad-suite repair.
+- Physics-aware planning, bespoke predictive physical admission, and new stall detection/recovery or rerouting.
+  Actual engine collision handling and realised feedback remain required.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. **CTRL-UAC-001:** Real selected-content play demonstrates credible cardinal, diagonal, turning, release, marker,
-   tap, and repeated-nudge movement that is visibly better than the conventional blendspace baseline.
-2. **CTRL-UAC-002:** Release ends ordinary travel demand on the first eligible tick, and every lane stops inside the
-   release bounds: release-to-stop within 400 ms and post-release displacement within 200 mm (defaults, tunable),
-   asserted per lane from per-tick traces rather than judged from aggregates. Within the bounds, stop responsiveness
-   outranks continuation naturalness; naturalness of the bounded stop remains the separate manual judgement of
-   CTRL-UAC-005.
-3. **CTRL-UAC-003:** Fresh translation, reversal, and yaw input interrupt incompatible motion promptly without waiting
-   for clip completion.
-4. **CTRL-UAC-004:** Manual movement cancels optional navigation before CTRL consumes the sample; permission loss is
-   safe and finite.
-5. **CTRL-UAC-005:** Focused user review accepts supported-foot stability and motion naturalness, or records acceptance
-   as blocked with the observed defect.
-6. **CTRL-UAC-006:** Release during entry, crossfade, and sustained travel transitions into governed stop presentation
-   — the rate-scaled production stop for non-lateral lanes, or the neutral stop policy for lateral-dominant releases
-   (User Requirement 11) — without a hard idle drop or continued travel, and planted feet stay planted through the stop
-   or neutral crossfade into Idle.
-7. **CTRL-UAC-007:** A held stationary turn with no translation presents the authored turn-in-place pivot, turns the
-   actor toward the requested side, sustains while held, returns through the authored crossfade on release, and yields
-   to translation input immediately without an idle interlude.
-8. **CTRL-UAC-008:** Reversing forward/backward travel presents authored braking for the travelled direction — the
-   body decelerates through real stop content with no instant full-rate opposite gait — and the opposite direction
-   enters normally afterwards.
-9. **CTRL-UAC-009:** Held input moves the actor along the intended actor-frame world direction under the production
-   180-degree rig, an identity rig, and a rotated parent transform alike.
-10. **CTRL-UAC-010:** Production-rig trajectory pairing shows supported feet during sustained travel on production
-    clips, with supported-foot step ratios in the recorded production envelope (0.30–0.50 in current measurements)
-    presented as evidence for the manual judgement, not as a threshold.
-11. **CTRL-UAC-011:** Releasing a lateral-dominant input stops without cross-lane velocity rotation: no forward lunge,
-    pure-lateral post-release forward displacement within 100 mm (default, tunable), while non-lateral releases still
-    present their scaled authored stops.
+1. **CTRL-UAC-001 (UR1–3, UR5):** Full temporal evidence through production input shows current tracked idle, movement
+   start, differing stick magnitudes, direction changes and release, stationary turns both ways and turn release,
+   and movement priority. Inspect the whole window, including inference holds and settling; stale intent must not
+   finish after release. Show generated footwork, not only root displacement or isolated favourable frames.
+   For compatible stationary-turn retention, obtain a fresh manual full-turn observation after independent review,
+   including onset, the full held turn, release and settled tail. Playback continuity alone does not close slow-turn
+    or minimal-footwork outcomes; preserve the user's whole-window stepping-footwork judgement.
+   Include intensity changes and observe ordered left/right footwork across the full turn where source cues are
+    present, not only a terminal lift. Correct metadata, intended timing or four-pose targets do not prove cue transfer.
+   For stationary-turn conditioning, retain full pre-input/hold/intensity-change/release/settled observation both ways;
+   the user must judge consistent feet matching body turning and acceptable pace, not merely reached landmarks.
+2. **CTRL-UAC-002 (UR4–5):** Observe ordinary body turning with an unconstrained, reachable tracked view inside the
+   divergence limit, and existing constrained-head position/orientation compensation under positional/anatomical
+   constraints and beyond the limit on both sides. Distinguish head translation with/without a wall from an exercised
+   existing positional constraint; head-to-wall collision is not an acceptance gate. Confirm live head motion and
+   preserved unrelated XR behaviour without a new body-stop policy, unrestricted view-locking claim, or universal
+   VR correctness claim.
+3. **CTRL-UAC-003 (UR6):** Provide the playable candidate, actual mapping, normal launch instructions, limitations,
+   and headset checklist for user evaluation. Report synthetic verification separately from pending headset judgement.
+4. **CTRL-UAC-004 (UR7):** Compare complete representative windows of partial-stick noise, gradual magnitude change,
+   sharp direction change, and release/settling. Observe actual progress along requested forward/lateral/backward travel
+   without left-requested heading changes, preserved right-only turning/movement priority, and continued useful walking
+   under minor fluctuations. Distinguish cycle predictions from submitted/active guides when diagnostics are enabled.
+   For steering, compare the same full production-input sequence before/after the change: straight walking, right
+   steering, right release while walking, left steering, movement release and visible settled idle. Show corresponding
+   realised course changes, stronger-input faster intended steering, and retained course on right release, separately
+   from correct predictor values. Include inference holds and settling; input-state flags alone do not prove steering.
+   Inspect moving marker readability, not only recorded target equality.
+   Synthetic progress does not close headset usability, settling quality, or marker-presentation follow-ups.
+   For held-input chaining, present full matched windows including inference holds,
+   release and settled observation. Keep forward awkwardness/sway and headset judgement open: a synthetic speed
+   comparison is neither headset symptom resolution, a numerical quality gate, nor evidence of general steering benefit.
+   For backward-ratio adjustment, compare matched forward/backward input and full release/settling windows, separating
+   requested mapping from realised motion. Present the Inspector setting and ratio-1 restoration for user evaluation;
+   backward comfort and separate unresolved sway still require headset judgement, not an exact actual-speed ratio.
+5. **CTRL-UAC-005 (UR8):** Demonstrate the distinct roles, including repeatable non-crossing fine positioning versus
+   crossing lateral travel, and variant-appropriate speed/posture. Include switching, interruption and externally
+   supplied idle without waiting for displayed foot-phase agreement. User judgement of motion remains separate from
+   successful source selection or a stationary cue-transfer probe.
 
 ### Technical Requirement Acceptance
 
-1. **CTRL-TAC-001:** Traces prove one collision operation per interval, one authored-root consumption, actor-frame input
-   conversion, and truthful requested versus collision-realised movement records. Real retained-content taps and nudges
-   below full transition displacement verify coordinated body/timing/foot adaptation, not foot planting alone.
-2. **CTRL-TAC-002:** Tests retain an uninterrupted trace for every physics tick from accepted release until stop
-   completion (Idle entry) or a named bounded refusal occurs. Each tick records:
-   - zero ordinary-travel demand;
-   - graph/state identity and clock where applicable;
-   - evaluated animation/root motion;
-   - requested adaptation;
-   - composed requested actor movement; and
-   - collision-realised movement.
+1. **CTRL-TAC-001 (TR1–2):** The existing startup/player composition launches with the local default model on the
+   verified host and accepts both sticks through actual production input ownership. Verify shared runtime/content
+   dependencies without a new scene, NPC destination adapter, or required environment override.
+2. **CTRL-TAC-002 (TR3–6):** Focused checks and normal-scene traces demonstrate singular collision-root ownership,
+   separate XR-origin ownership, submitted context from actual post-modifier observations, stale-result rejection on
+   release/replacement, and safe worker shutdown/disposal. Verify the idle player's tree still evaluates hand-pose
+   layers beneath the MotionBricks stage without moving the root. Verify the 100-degree-per-side default,
+   configurability, unconstrained/reachable compensation skip inside the configured limit, and retained compensation
+   outside it on both sides and under existing positional/anatomical constraints. Fixture expectations must respect
+   RIG-001's head-collision exclusion; a wall-crossing assertion alone does not establish a product regression.
+   Review hands and tracking preservation, including the known hand-origin/epoch risk; introduce no arbitrary
+   numerical evidence tolerances. Manual diagnostic scheduling or
+    predicted context does not satisfy realised-feedback acceptance. Source review confirms actual-root `MoveAndCollide`
+    without bespoke predictive physics admission; retain actual collision handling and truthful blocked/collision
+    diagnostics without requiring a substitute forecast or new stall detector/recovery.
+3. **CTRL-TAC-003 (TR7–8):** Record full representative temporal evidence, timing diagnostics, focused check results,
+   format/build outcomes, and independent review disposition. Repair admitted blockers and re-review; disclose
+   remaining evidence gaps and unrelated failures. A usable probe is not complete locomotion or a comfort guarantee.
+4. **CTRL-TAC-004 (TR9, TR3–5):** Verify normal source-guided installation, bounded targets and stable bout reference,
+   independent left travel/heading, measured/requested velocity and deadline arithmetic, both horizon branches,
+   and curved target placement with ordered phase-local source motion, without substituting predictions for feedback.
+   Use independently derived checks
+   for steering signs, accumulated course, elapsed-time consistency and zero-steering reduction to the straight
+   predictor. Check right-input propagation, retained offset on right release, and new-bout reference acquisition.
+   Preserve the source-bound stationary-turn mapping in TR10.
+    Verify distinct cycle/guide markers,
+   last-submitted comparisons, gradual changes reaching actual submissions, and retained useful pending work under
+   small changes. Exercise immediate movement-release/sharp retirement and actual late-result rejection. Verify
+   request/marker identity against displayed playback, actual post-modifier feedback, and collision-realised movement.
+   Record full
+    temporal behaviour and diagnostic timings without turning tuning defaults or measured progress into gates.
+   For stable-input chaining, verify normal production startup without activation variables. Check unchanged-input
+   suppression, latched change-and-return, nonzero steering eligibility and preservation of early chaining/release/sharp
+   safety. Prior full-window evidence may be reused only with demonstrated executable algorithm equivalence and
+   preserved evidence; independent review of that equivalence, startup wiring and evidence is required before
+   headset handoff. Wiring checks alone do not establish the parent outcome.
+   For backward ratio, verify the normal exported Inspector setting reaches production driver initialisation with
+   normal held chaining, including configured values, validation/fallback and ratio-1 restoration. Check
+   backward-only scaling after normalisation and before rotation, unchanged forward/lateral components, diagonals
+   without renormalisation, and original-magnitude stage selection. Independently verify the adjusted request in both
+    predictors, placement velocity, dynamically sampled target windows and compatibility. Retain release/stale
+    rejection,
+    actual post-modifier feedback, collision and worker ownership. NPC policy isolation remains required;
+    measured reduction alone does not establish comfort or authorise quality thresholds.
+   For TR5's stationary exception, exercise same-sign exact processed `0.95↔1` changes in both directions with genuine
+   active and pending owners. Verify epoch/ticket, source-phase and play-time continuity, immutable targets and
+   latest-magnitude use at the next already-eligible submission without another input change. Check each live owner,
+   immediate release/reversal/incompatible-magnitude and movement/role retirement, non-resurrection and late-result
+   rejection. Verify requested/submitted/adopted joins and unchanged-role/zero-movement/no-settling eligibility.
+   Synthetic lifecycle checks establish ownership behaviour, not generated footwork or manual symptom resolution.
+5. **CTRL-TAC-005 (TR10, TR2–5, TR9):** Apply ANIM-002 lifecycle/metadata acceptance to production player input.
+   Trace selected role/stage, virtual phase, sample-ahead window and placement independently of actual post-modifier
+   context and generated duration. Check phase advance/wrap, role/variant switches, interrupted idle/action handoff,
+   compatible overlap and stale-result rejection without clock rewind. Verify input/horizon placement uses physical
+    reference metadata while preserving phase-local motion; preserve all existing release, XR and worker guarantees.
+   For stationary turns, validate the published angular/per-foot metadata against actual ordered sources under
+   ANIM-002, and trace intensity, chosen rotation, intended phase, target facing and immutable submitted/adopted owners.
+   Exercise intensity changes, both lift phases and wraps without phase rewind or target mutation; preserve TR5's
+   immediate release/reversal/material-change retirement and actual realised feedback. Full actual-rig turn/change/
+    release/settled evidence under CTRL-UAC-001 remains required independently of these technical checks.
+   Focused checks cover entry/clock and metadata-rate caps, both full four-landmark groups and the primary-lift
+    subsequence with intervening recoveries, source-derived angles/full poses, typed first-guide-only service versus
+    later-guide appearance, and interim/lagging selection. Preserve raw wraps and uniformly scaled root-yaw derivatives
+    with unchanged non-root poses. Verify separate primary/recovery completion and pass counters, immutable compatible
+    ownership/latest-next input, material lineage and stale completion rejection. Check capped recovery service without
+    queued unrealised yaw and final-recovery completion before whole-cycle drops without skipped yaw or clock/root
+    movement. Exercise the bounded eight-candidate beyond-forecast exception separately from authored reversal and
+    expose search exhaustion explicitly. Recoveries must not delay release/reversal; no pace compensation is permitted.
+   Synthetic endpoints establish component mechanics only, not generated footwork, realised pace or parent acceptance.
 
-   The schedule terminates finitely in completed stop presentation or that refusal. No retry, replay, unexplained
-   tick, or intervening tick may be omitted. From the trace, tests assert per lane the release bounds — release-to-stop
-   within 400 ms and post-release displacement within 200 mm (defaults, tunable; User Requirement 2, Technical
-   Requirement 16) — and the pure-lateral forward-displacement bound of 100 mm (default, tunable; User Requirement 11,
-   Technical Requirement 17). The same traces remain evidence for the manual naturalness judgement (User Requirement 7)
-   beyond the asserted bounds. Tests also cover immediate interruption, bounded selection, actor-local state, and no
-   idle-time retry.
-3. **CTRL-TAC-003:** Traces prove foot planting causes zero actor movement and does not gate stop selection, and that
-   `CharacterIK` remains the sole foot actuator.
-4. **CTRL-TAC-004:** Real selected-content tests prove graph entry and actual stop-clip-driven movement against the
-   selected package. Synthetic mechanism checks alone do not close player acceptance.
-5. **CTRL-TAC-005:** Tests prove stationary turning through authored content only: the wired pivot states, looping
-   while held, the authored crossfaded return with a hard start only on permission loss, movement priority with a
-   direct entry hand-off, yaw applied solely through the authored root-rotation path with no synthetic yaw, and a
-   degradation report that fires only when the wired tree lacks both turn states.
-6. **CTRL-TAC-006:** Tests prove rig-independent actor-frame semantics — signed world displacement against
-   independently placed markers under production-rig, identity-rig, and rotated-parent topologies — and the reversal
-   contract: travelled-direction authored-exit routing, the stop playing out under opposing intent, no-interlude
-   same-direction resume, and retained travel rate through authored exits.
-7. **CTRL-TAC-007:** Tests prove stop playback is genuinely rate-governed: the configured stop-rate bounds reach stop
-   playback, observed stop rates follow the per-lane computation of Technical Requirement 16 instead of a fixed 1.0×,
-   the raised default maximum (for example 4.0) is configurable independently of the sustained-travel maximum, and an
-   early-Idle cut fires only for lanes that cannot meet both release bounds by rate alone and is reported. Tests also
-   prove the neutral stop policy: lateral-dominant releases take the bounded direct-to-idle crossfade with no
-   forward-stop routing and no out-of-lane velocity rotation, with the pure-lateral forward bound asserted from
-   per-tick traces. Direction-reversal exits stay covered by the reversal contract of CTRL-TAC-006, not by these
-   release-bound assertions.
+## Implementation Status
 
-### Acceptance Traceability
+Normal player installation uses all eight roles from `reviewed-feminine/set.json`, bound to
+`landing-ablation-01.json`, and the [stationary-turn policy](#stationary-turn-conditioning) above. Travel uses a stable
+input frame, source-rate placement, continuous steering, backward ratio and held chaining. Stationary turns use the
+current source's four typed landmarks, intensity-dependent phase, immutable owners and bounded overtake/group-drop
+policy. Idle remains externally supplied. No source/controller activation flag or prototype movement fallback exists.
+See [Player Motion](../../../game/src/Control/PLAYER-MOTION.md) and the
+[shared source data](../../../game/data/motionbricks/reviewed-feminine/README.md).
 
-- User Requirement 1 → CTRL-UAC-001, CTRL-UAC-005, CTRL-UAC-010.
-- User Requirements 2–3 → CTRL-UAC-002–003, CTRL-UAC-006, CTRL-TAC-002.
-- User Requirements 4–5 → CTRL-UAC-001, CTRL-UAC-004.
-- User Requirement 6 → CTRL-UAC-006 and CTRL-TAC-003–004.
-- User Requirement 7 → CTRL-UAC-005, CTRL-UAC-010.
-- User Requirement 8 → CTRL-UAC-007, CTRL-TAC-005.
-- User Requirement 9 → CTRL-UAC-008, CTRL-TAC-006.
-- User Requirement 10 → CTRL-UAC-009, CTRL-TAC-006.
-- User Requirement 11 → CTRL-UAC-011, CTRL-TAC-002, CTRL-TAC-007.
-- Technical Requirements 1–3 → CTRL-TAC-001.
-- Technical Requirements 4–5 → CTRL-TAC-002, CTRL-TAC-006–007.
-- Technical Requirements 6–7 → CTRL-TAC-003–004, CTRL-TAC-007.
-- Technical Requirements 8–9 → CTRL-TAC-001–002.
-- Technical Requirement 10 → CTRL-TAC-002, CTRL-TAC-004.
-- Technical Requirement 11 → CTRL-TAC-005.
-- Technical Requirement 12 → CTRL-TAC-006.
-- Technical Requirement 13 → CTRL-TAC-004, CTRL-UAC-010.
-- Technical Requirement 14 → CTRL-TAC-006.
-- Technical Requirement 15 → CTRL-TAC-004.
-- Technical Requirements 16–17 → CTRL-TAC-002, CTRL-TAC-007.
-
-## Current Implementation and Acceptance Gaps
-
-This section is non-normative current status, not fresh verification or a claim of code/spec alignment.
-
-### Delivered and Reviewed
-
-The retained CTRL-001 implementation deltas are delivered and independently reviewed Ready:
-
-- Rig-independent actor-frame semantics (Technical Requirement 12), together with the fixture lateral-root correction
-  and the availability-gated stop-degradation evidence.
-- Stationary turning through authored pivots (Technical Requirement 11); the previously failing stick-yaw cases pass
-  with assertions unchanged.
-- Direction-reversal braking (Technical Requirement 14); the reversal cadence defect is closed by travelled-direction
-  authored-exit routing.
-
-### Known Boundaries
-
-- Stop responsiveness (User Requirements 2 and 11, Technical Requirements 16–17) is implemented and independently
-  reviewed against the 2026-09-30 baseline (`game/temp/ctrl001-stop-latency/run-01/report.md`): all 12 measured lanes
-  stop within 400 ms / 200 mm, lateral lanes at 17 ms with 0 mm forward displacement, and stop rates are genuinely
-  governed by the configured bounds. Every lane uses the early-Idle cut — root displacement is rate-invariant, so the
-  200 mm bound is enforced by the cut plus the User Requirement 4 continuity clamp (Technical Requirement 16) — and
-  the cut is reported. Foot slide during scaled braking is an accepted risk under the responsiveness-priority
-  decision, for VR manual acceptance to judge.
-- Lateral-to-lateral flips, for example right-to-left strafe, retarget in place; the reversal routing does not treat
-  them as reversals and no test pins the boundary.
-- Forward-to-pure-lateral intent routes through the authored exit as a domain flip — consistent with the domain model
-  and uncovered by tests.
-- A reversal costs the authored-stop duration before the opposite direction enters; a deliberate
-  responsiveness-for-braking trade.
-- Travelling turns ride the arc-blend channel.
-- Stationary turning is available only when the wired tree has both turn states; otherwise the degradation is reported
-  finitely (Technical Requirement 11).
-- The stationary turn rate follows the authored pivot content (measured ~0.48 rad/s live versus the fixture's 1.87) —
-  a content decision, not a runtime knob.
-
-### Suite Redesign (2026-10-10)
-
-By user decision on 2026-10-10, the NAV/CTRL integration suite was redesigned rather than optimised: the NAV/CTRL
-implementation is incomplete with unresolved problems, the current `sad` ANIM-002 variant is placeholder content to be
-replaced, and no male retarget setup exists. Expensive per-tick replay tests that encoded current placeholder
-behaviour were deleted, not fixed; removal asserts no pass and fixes no behaviour. CTRL-001's criteria are unchanged
-and normative; this entry records reduced shared automated evidence only.
-
-CTRL-scoped effects:
-
-- Retained unchanged: the playtest controller and startup-gate facts (17 facts covering startup/map/gate ownership,
-  scene selection, input queuing, structured request logging, camera interactions, and destination-marker and
-  via-authoring UI), and the unit-level control cadence, frame, contact, stop, and manual-ownership tests, which
-  exercise player control rather than NPC animation output and are not superseded by the NAV spine. The retained
-  explicit male pointer-rebinding fact is selection and bind coverage only, not retarget verification.
-- NPC locomotion end-to-end automated evidence now flows only through the NAV-001 two-fact spine (female default rig);
-  see [NAV-001 Current Status][nav-status].
-- The post-redesign full windowed suite gate is 1213 passed / 0 failed / 1 skipped (one pre-existing, unrelated
-  dynamic-rig fixture skip) in 11 m 36.8 s wall time, against the 29 m 11 s pre-redesign baseline — a reduction from
-  deliberately smaller scope, not faster equivalent coverage.
-
-### Remaining Acceptance Work
-
-- Focused manual naturalness and positioning acceptance (User Requirement 7) on real selected content, including VR
-  review of the bounded stop's naturalness and the accepted foot-slide risk (CTRL-UAC-002, CTRL-UAC-005); NPC local
-  acceptance cannot close player outcomes.
-- IK-003 player-rig foot-planting adoption, a separate future task; the planted-foot clauses of User Requirement 6 and
-  CTRL-TAC-003 bind at adoption, not before it.
-- Variant/performance checks and final validation against the acceptance criteria above.
-
-### Carried Validation Notes
-
-- The fixture models both lanes of a lateral side at ±0.744 while production's right-right lane authors 0.705 — an
-  alignment note for any future exact-rate use of the fixture.
-- ResourceSaver silently drops `.tres` header uids on scripted resave; any scripted asset mutation must re-verify the
-  uid afterwards.
-- Fixture turn states author ±π/4 yaw at fixture timing while production pivots author their own magnitudes —
-  sufficient for sign and rate assertions; revisit before any rate-exact assertion.
+The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records normal
+startup/source binding, all-role primary input, release/ownership, turn groups and native-free preservation checks,
+with clean format/build results. These are technical migration evidence; combined independent review remains pending.
+No default-entrypoint GPU inference or fresh headset/visual quality acceptance was established by those checks.
+The user's source stepping/foot-sliding mitigation is accepted with initial twitch deferred, not a no-slip guarantee.
+Raw repetition quality, generated gait/contact, turning pace, settled release and headset/interaction suitability
+remain open. Masculine/default content and previews, native-shutdown and hand-origin risks remain unresolved.
+Normal-source code/spec alignment is updated; broader ANIM-002 completion remains deferred-with-risk. Plan steps 5/6
+remain open. No new generation or model-call budget follows from this documentation alignment.
 
 ## References
 
-- [Project Specifications Index](../../index.md)
-- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
-- [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
-- [IK-003: Leg and Feet IK System][ik-003]
-
-[ik-003]: ../../ik/003-leg-feet-ik/index.md
-[anim-scale]: ../../animation/002-locomotive-animation-set/index.md#motion-metadata
-[nav-001]: ../../nav/001-npc-navigation/index.md#arrival-planner
-[nav-status]: ../../nav/001-npc-navigation/index.md#current-status
+- [Project Specifications](../../index.md)
+- [Player Character Control](../index.md)
+- [Shared Animation Contract](../../animation/index.md)
+- [ANIM-002: Locomotive Conditioning Sources](../../animation/002-locomotive-animation-set/index.md)
+- [NPC Navigation and Shared Runtime](../../nav/001-npc-navigation/index.md)
+- [Runtime Setup and Evidence Limits](../../../game/src/Motion/README.md)
+- [Character Root](../../character/002-character-root/index.md)
+- [Visual Verification Scope](../../testing/002-visual-verification-scope/index.md)

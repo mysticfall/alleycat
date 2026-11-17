@@ -1,5 +1,3 @@
-using AlleyCat.Control;
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK.Pose;
 using AlleyCat.Rigging.Installation;
@@ -121,27 +119,14 @@ public partial class PlayerRigInstaller : CharacterIKSubsystemInstaller
         {
             OrderHipReconciliationModifier(context.Skeleton);
             OrderOpticalFingerTrackingModifier(context.Skeleton);
-            PoseStateMachine poseStateMachine = ResolveIKNode(context.TargetRoot) is PlayerVRIK playerVRIK && playerVRIK.PoseStateMachine is not null
+            _ = ResolveIKNode(context.TargetRoot) is PlayerVRIK playerVRIK && playerVRIK.PoseStateMachine is not null
                 ? playerVRIK.PoseStateMachine
                 : throw new InvalidOperationException("Player rig installer could not resolve template-authored pose state machine after VRIK validation.");
-
-            LocomotionBase locomotion = FindSingleDescendant<LocomotionBase>(context.TargetRoot)
-                ?? throw new InvalidOperationException("Player rig installer requires template-authored locomotion under the target root.");
-            if (locomotion is CharacterLocomotion characterLocomotion)
-            {
-                characterLocomotion.IdleAnimationStateName = StandingPoseState.DefaultAnimationStateName;
-            }
 
             if (FindSingleDescendant<AnimationTree>(context.TargetRoot, required: false)?.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
                 is AnimationNodeStateMachinePlayback playback)
             {
                 playback.Start(StandingPoseState.DefaultAnimationStateName, reset: true);
-            }
-
-            locomotion.PermissionSourceNodes = [poseStateMachine];
-            if (FindSingleDescendant<PlayerController>(context.TargetRoot, required: false) is PlayerController playerController)
-            {
-                playerController.LocomotionNode ??= locomotion;
             }
 
             return SceneInstallationResult.Successful();

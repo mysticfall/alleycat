@@ -139,6 +139,6 @@ interfaces per component, and deterministic query ordering.
 - `@game/src/Common/NodeExtensions.cs` — Reference for extension method style
 - [CORE-001: Global Singleton](../001-global-scene/index.md)
 - [CORE-002: Configuration API](../002-configuration-api/index.md)
-- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [Player Character Control](../../ctrl/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)

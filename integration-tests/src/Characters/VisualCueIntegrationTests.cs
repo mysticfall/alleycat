@@ -1,10 +1,8 @@
 using AlleyCat.Character;
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Installer;
 using AlleyCat.Interaction.Hands;
-using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Scene;
@@ -362,14 +360,10 @@ public sealed class VisualCueIntegrationTests
     private static CharacterHub CreateAuthoredCharacter(VisualCue[] cues)
     {
         var character = new CharacterHub { Name = "CharacterRoot", AuthoredVisualCues = cues };
-        var locomotion = new CharacterLocomotion { Name = "Locomotion" };
-        var navigation = new DirectTransformNavigation { Name = "Navigation" };
         var eyes = new EyesBehaviour { Name = "Eyes" };
         var voice = new TestVoice { Name = "Voice", Id = "Voice" };
         var leftHand = new HandPoseBehaviour { Name = "LeftHand", Side = LimbSide.Left };
         var rightHand = new HandPoseBehaviour { Name = "RightHand", Side = LimbSide.Right };
-        character.AddChild(locomotion);
-        character.AddChild(navigation);
         character.AddChild(eyes);
         character.AddChild(voice);
         character.AddChild(leftHand);
@@ -382,8 +376,6 @@ public sealed class VisualCueIntegrationTests
             }
         }
 
-        character.Locomotion = locomotion;
-        character.Navigation = navigation;
         character.Eyes = eyes;
         character.Voice = voice;
         character.LeftHand = leftHand;

@@ -1355,8 +1355,8 @@ public sealed class HandGrabInputCoordinatorIntegrationTests
 
     /// <summary>
     /// Scenario 13: controller grab edges act in both committed hand-pose modes — a press begins a grab and a
-    /// release ends it even while the committed mode is Optical — while locomotion routing stays active in both
-    /// modes and the mode-change analogue-latch reset keeps pressed state from leaking edges across a switch
+    /// release ends it even while the committed mode is Optical — and the mode-change analogue-latch reset
+    /// keeps pressed state from leaking edges across a switch
     /// (CTRL-002 TR6, TR8).
     /// </summary>
     [Headless]
@@ -1380,11 +1380,7 @@ public sealed class HandGrabInputCoordinatorIntegrationTests
             fixture.XRManager.RightController.TriggerActionFloatInputChanged("grip", 0.1f);
             Assert.Equal(1, fixture.RightHand.ReleaseCallCount);
 
-            // Locomotion — a non-grab controller consumer — stays active in optical mode.
             Assert.True(IsControllerBound(fixture.Controller), "Expected PlayerController to bind to the fake XR runtime before grab input is emitted.");
-            int movesBefore = fixture.Locomotion.MoveCallCount;
-            fixture.XRManager.LeftController.TriggerActionVector2Changed("primary", Vector2.One);
-            Assert.Equal(movesBefore + 1, fixture.Locomotion.MoveCallCount);
 
             // An Optical-mode press engages the latch again before the next mode switch.
             fixture.XRManager.RightController.TriggerActionFloatInputChanged("grip", 0.85f);
@@ -1631,7 +1627,6 @@ public sealed class HandGrabInputCoordinatorIntegrationTests
         PlayerController controller = new()
         {
             Name = "PlayerController",
-            LocomotionNode = locomotion,
             HandHolderNode = hands,
         };
 

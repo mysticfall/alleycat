@@ -130,6 +130,10 @@ internal sealed class NavigationRequestLifecycle : INavigationOutcomeSource
     public bool TryFail(NavigationTerminalContext context, ulong terminalPhysicsTick)
         => TryCommitTerminal(NavigationTerminalOutcome.Failed, context, terminalPhysicsTick, null, null);
 
+    public bool TryFinishArrivalSequence(NavigationTerminalContext context, ulong terminalPhysicsTick)
+        => TryCommitTerminal(NavigationTerminalOutcome.Completed,
+            context.WithReason(NavigationTerminalReason.ArrivalSequenceCompleted), terminalPhysicsTick, null, null);
+
     public bool TryBlock(NavigationTerminalContext context, ulong terminalPhysicsTick)
     {
         ArgumentNullException.ThrowIfNull(context.Obstruction);

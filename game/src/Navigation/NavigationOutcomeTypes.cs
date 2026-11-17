@@ -63,6 +63,10 @@ public enum NavigationTerminalReason
     Cancellation,
     /// <summary>A successor request replaced this request.</summary>
     Replacement,
+    /// <summary>The generated arrival sequence ended; endpoint errors are diagnostics, not an arrival guarantee.</summary>
+    ArrivalSequenceCompleted,
+    /// <summary>Setup or inference is unavailable; no automatic retry or fallback motion is attempted.</summary>
+    MotionUnavailable,
 }
 
 /// <summary>Source that cancelled an accepted request.</summary>

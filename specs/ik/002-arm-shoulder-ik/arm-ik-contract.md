@@ -108,7 +108,7 @@ discontinuities or snapping, using resource-driven pole anchors.
 - AC-27: Editor bake workflow for anchor authoring.
 - AC-28: Explicit ownership mapping between authoring root and output resource.
 - AC-29: Symmetry without runtime mirror toggle.
-- AC-30: Visual verification with resource assets.
+- AC-30: Integration assertions with resource assets.
 - AC-31: C# integration tests for resource loading.
 - AC-35: `RealisedTarget` is physical target-actuator state, not skeletal attachment outcome.
   Direct terminal hand `BoneAttachment3D` residual is observable downstream; INTR-002 owns the

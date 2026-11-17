@@ -44,6 +44,27 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         AssertCharacterBaseTemplatesDoNotAuthorContextSources();
     }
 
+    [Headless]
+    [Fact]
+    public void AllyPlayerScene_UsesImportedModelAndRoleTemplate()
+    {
+        string sceneText = ReadResourceText(AllyPlayerScenePath);
+        Assert.Contains("res://assets/characters/reference/female/reference_female.blend", sceneText, StringComparison.Ordinal);
+        Assert.Contains("res://assets/characters/reference/ally_player_template.tscn", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleBaseScenePath, sceneText, StringComparison.Ordinal);
+    }
+
+    private static void AssertBoundResource(string sceneText, string uid, string path)
+    {
+        // Attribute order differs between editor saves (uid-first and type-first); the binding contract is
+        // that one ext_resource entry carries both this uid and this path together.
+        Assert.True(
+            System.Text.RegularExpressions.Regex.IsMatch(
+                sceneText,
+                $"\\[ext_resource[^\\]]*uid=\"{uid}\"[^\\]]*path=\"{path}\"|\\[ext_resource[^\\]]*path=\"{path}\"[^\\]]*uid=\"{uid}\""),
+            $"No ext_resource binds uid {uid} to {path}.");
+    }
+
     private static void AssertReferencePlayerSceneDoesNotSerialiseConversationNodes()
     {
         string sceneText = ReadResourceText(AllyPlayerScenePath);
@@ -70,14 +91,11 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private static void AssertReferenceFemalePlayerVoice()
     {
         string sceneText = ReadResourceText(ReferenceFemalePlayerScenePath);
-        Assert.Contains("uid=\"uid://dyffnsg0122vb\" path=\"res://src/Speech/Voice/PlayerVoice.cs\"", sceneText, StringComparison.Ordinal);
+        AssertBoundResource(sceneText, "uid://dyffnsg0122vb", "res://src/Speech/Voice/PlayerVoice.cs");
         Assert.Contains("Voice = NodePath(\"Female/GeneralSkeleton/Head/Voice\")", sceneText, StringComparison.Ordinal);
         Assert.Contains("[node name=\"Voice\" type=\"Node3D\" parent=\"Female/GeneralSkeleton/Head\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("Transcriber = NodePath(\"../../../../OpenAITranscriber\")", sceneText, StringComparison.Ordinal);
-        Assert.Contains(
-            "uid=\"uid://cmo0rjfoojh7u\" path=\"res://src/Speech/Transcription/OpenAITranscriber.cs\"",
-            sceneText,
-            StringComparison.Ordinal);
+        AssertBoundResource(sceneText, "uid://cmo0rjfoojh7u", "res://src/Speech/Transcription/OpenAITranscriber.cs");
         Assert.Contains("metadata/_custom_type_script = \"uid://cmo0rjfoojh7u\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("metadata/_custom_type_script = \"uid://dyffnsg0122vb\"", sceneText, StringComparison.Ordinal);
         // The transcriber node pins only local input behaviour: backend host, model, and hints stay config-file-owned.
@@ -107,15 +125,15 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sceneText = ReadResourceText(ReferenceFemaleNpcScenePath);
         string maleSceneText = ReadResourceText("res://assets/characters/templates/reference_male/reference_male_npc.tscn");
 
-        Assert.Contains("uid=\"uid://cwfjtq7oif2yk\" path=\"res://src/Speech/Voice/AIVoice.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://cs50pi5oc7ofn\" path=\"res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://cs50pi5oc7ofn\" path=\"res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs\"", maleSceneText, StringComparison.Ordinal);
+        AssertBoundResource(sceneText, "uid://cwfjtq7oif2yk", "res://src/Speech/Voice/AIVoice.cs");
+        AssertBoundResource(sceneText, "uid://cs50pi5oc7ofn", "res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs");
+        AssertBoundResource(maleSceneText, "uid://cs50pi5oc7ofn", "res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs");
         Assert.Contains("metadata/_custom_type_script = \"uid://cs50pi5oc7ofn\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("metadata/_custom_type_script = \"uid://cs50pi5oc7ofn\"", maleSceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://cjjllyn8qs4nk\" path=\"res://src/Speech/LipSync/A2FLipSyncPlayer.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://hadsjgek6b2p\" path=\"res://src/Mind/AI/AgenticMind.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", maleSceneText, StringComparison.Ordinal);
+        AssertBoundResource(sceneText, "uid://cjjllyn8qs4nk", "res://src/Speech/LipSync/A2FLipSyncPlayer.cs");
+        AssertBoundResource(sceneText, "uid://hadsjgek6b2p", "res://src/Mind/AI/AgenticMind.cs");
+        AssertBoundResource(sceneText, "uid://dvw63im28183y", "res://assets/characters/prompts/generic_npc_prompt_stack.tres");
+        AssertBoundResource(maleSceneText, "uid://dvw63im28183y", "res://assets/characters/prompts/generic_npc_prompt_stack.tres");
         Assert.Contains("SystemInstruction = ExtResource(\"9_beijb\")", sceneText, StringComparison.Ordinal);
         Assert.Contains(
             "path=\"res://assets/characters/prompts/current_scene.tres\"",

@@ -183,6 +183,6 @@ superior stability.
 - **Main Implementation**: `@game/src/Items/PhysicsChain.cs`
 - **Authored Scene**: `@game/assets/items/chain/physics_chain.tscn`
 - **Integration Tests**: `@integration-tests/src/Items/PhysicsChainIntegrationTests.cs`
-- **Visual Verification Test**:
+- **Visual Verification Runner** (manual debug aid, not a test):
   - Scene: `@game/tests/item/chain/physics_chain_visual_test.tscn`
   - Script: `@game/tests/item/chain/physics_chain_visual_test.gd`

@@ -25,6 +25,28 @@ public sealed class PoseStateMachineIntegrationTests
     private const string StandingToKneelingFixtureLeftFootPath = "Targets/LeftFoot";
     private const string StandingToKneelingFixtureRightFootPath = "Targets/RightFoot";
     private const string DriverPath = "PoseStateMachineDriver";
+
+    /// <summary>
+    /// Native-free endpoint for the fixture NPC's authored navigation worker; pose-state facts disable that
+    /// authority entirely, so it must never construct a real CUDA session during these runs.
+    /// </summary>
+    private sealed class AmbientPoseSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientPoseSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientPoseSession();
+        }
+    }
     private const string ScenarioMarkersRootPath = "Markers/PoseStateMachine/Scenarios";
     private const string HeadRestMarkerPath = "Markers/PoseStateMachine/RestHeadTarget";
     private const string LeftHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestLeft";
@@ -32,7 +54,8 @@ public sealed class PoseStateMachineIntegrationTests
     private const string SkeletonPath = "Subject/Female/Female/GeneralSkeleton";
     private const string AnimationTreePath = "Subject/Female/AnimationTree";
     private const string SubjectRootPath = "Subject/Female";
-    private const string NavigationPath = "Navigation";
+    // The authored navigation node was renamed when MotionBricksNavigation became the NPC binding (NAV-001 TR5).
+    private const string NavigationPath = "MotionBricksNavigation";
     private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
     private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
     private const string FootTargetSyncControllerPath = "Subject/Female/Female/GeneralSkeleton/FootTargetSyncController";
@@ -76,6 +99,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -195,6 +219,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(StandingToKneelingFixtureScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -336,6 +361,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -395,6 +421,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -492,6 +519,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -577,6 +605,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -672,6 +701,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -787,6 +817,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -957,6 +988,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -1022,6 +1054,7 @@ public sealed class PoseStateMachineIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
 
+        sceneTree.NodeAdded += BindAmbientPoseSession;
         Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
         Assert.Equal(Error.Ok, changeSceneError);
 
@@ -1124,6 +1157,7 @@ public sealed class PoseStateMachineIntegrationTests
 
         Node navigation = Assert.IsType<Node>(characterRoot.GetNodeOrNull(NavigationPath), exactMatch: false);
         navigation.ProcessMode = Node.ProcessModeEnum.Disabled;
+        sceneTree.NodeAdded -= BindAmbientPoseSession;
 
         Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
         AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);

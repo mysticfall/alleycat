@@ -1,6 +1,5 @@
 using System.Reflection;
 using AlleyCat.Control;
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
 using AlleyCat.Interaction.Hands;
@@ -315,7 +314,7 @@ public sealed partial class GameMenuIntegrationTests
     }
 
     /// <summary>
-    /// Verifies locomotion, grab, and transcription input does not leak while the paused menu is open, and that the
+    /// Verifies grab and transcription input does not leak while the paused menu is open, and that the
     /// same events act again once the menu has closed and unpaused the tree.
     /// </summary>
     [Fact]
@@ -329,25 +328,11 @@ public sealed partial class GameMenuIntegrationTests
             FakeXRHandController leftController = fixture.XRManager.LeftController;
             FakeXRHandController rightController = fixture.XRManager.RightController;
 
-            leftController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0f, 0.7f));
-            rightController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0.5f, 0f));
-            Assert.Equal(1, fixture.Locomotion.NonZeroMoveCallCount);
-            Assert.Equal(1, fixture.Locomotion.NonZeroRotateCallCount);
-
             leftController.TriggerActionButtonPressed(ToggleAction);
             Assert.True(fixture.Global.Paused);
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastMove);
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastRotate);
 
             // The mock controllers keep emitting during the pause, which mirrors the always-processing
             // XR runtime; the gameplay consumers must ignore those events.
-            leftController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0f, 1f));
-            rightController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(1f, 0f));
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastMove);
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastRotate);
-            Assert.Equal(1, fixture.Locomotion.NonZeroMoveCallCount);
-            Assert.Equal(1, fixture.Locomotion.NonZeroRotateCallCount);
-
             rightController.TriggerActionButtonPressed(GrabAction);
             Assert.Equal(0, fixture.RightHand.GrabCallCount);
 
@@ -359,13 +344,6 @@ public sealed partial class GameMenuIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
             Assert.False(fixture.Global.Paused);
 
-            leftController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0f, 0.9f));
-            rightController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0.9f, 0f));
-            Assert.Equal(new Vector2(0f, 0.9f), fixture.Locomotion.LastMove);
-            Assert.Equal(new Vector2(0.9f, 0f), fixture.Locomotion.LastRotate);
-            Assert.Equal(2, fixture.Locomotion.NonZeroMoveCallCount);
-            Assert.Equal(2, fixture.Locomotion.NonZeroRotateCallCount);
-
             rightController.TriggerActionButtonPressed(GrabAction);
             Assert.Equal(1, fixture.RightHand.GrabCallCount);
 
@@ -373,51 +351,6 @@ public sealed partial class GameMenuIntegrationTests
             Assert.True(fixture.Transcriber.IsRecording);
             leftController.TriggerActionButtonReleased(ConfirmAction);
             Assert.False(fixture.Transcriber.IsRecording);
-        }
-        finally
-        {
-            await DestroyFixtureAsync(sceneTree, fixture);
-        }
-    }
-
-    /// <summary>
-    /// Verifies a stick held deflected through the pause is zeroed at the pause boundary and does not leak stale
-    /// movement after unpause until a fresh axis event arrives.
-    /// </summary>
-    [Fact]
-    public async Task PlayerController_StickHeldThroughPause_DoesNotLeakMovementOnUnpause()
-    {
-        SceneTree sceneTree = GetSceneTree();
-        GameMenuRuntimeFixture fixture = await CreateFixtureAsync(sceneTree);
-
-        try
-        {
-            FakeXRHandController leftController = fixture.XRManager.LeftController;
-
-            leftController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0f, 0.8f));
-            Assert.Equal(new Vector2(0f, 0.8f), fixture.Locomotion.LastMove);
-            Assert.Equal(1, fixture.Locomotion.NonZeroMoveCallCount);
-
-            leftController.TriggerActionButtonPressed(ToggleAction);
-            Assert.True(fixture.Global.Paused);
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastMove);
-
-            // A held stick that keeps drifting while paused must not update movement input either.
-            leftController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0f, 0.95f));
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastMove);
-            Assert.Equal(1, fixture.Locomotion.NonZeroMoveCallCount);
-
-            leftController.TriggerActionButtonPressed(ToggleAction);
-            await WaitForFramesAsync(sceneTree, 2);
-            Assert.False(fixture.Global.Paused);
-
-            // No new axis event arrived, so the zeroed movement must not resurrect on its own.
-            await WaitForFramesAsync(sceneTree, 3);
-            Assert.Equal(Vector2.Zero, fixture.Locomotion.LastMove);
-
-            leftController.TriggerActionVector2InputChanged(NavigateAction, new Vector2(0f, 0.9f));
-            Assert.Equal(new Vector2(0f, 0.9f), fixture.Locomotion.LastMove);
-            Assert.Equal(2, fixture.Locomotion.NonZeroMoveCallCount);
         }
         finally
         {
@@ -688,11 +621,6 @@ public sealed partial class GameMenuIntegrationTests
             Name = "Player",
         };
 
-        RecordingLocomotion locomotion = new()
-        {
-            Name = "Locomotion",
-        };
-
         FakeHands hands = new()
         {
             Name = "Hands",
@@ -711,7 +639,6 @@ public sealed partial class GameMenuIntegrationTests
         PlayerController controller = new()
         {
             Name = "PlayerController",
-            LocomotionNode = locomotion,
             HandHolderNode = hands,
         };
 
@@ -724,7 +651,6 @@ public sealed partial class GameMenuIntegrationTests
 
         hands.AddChild(rightHand);
         hands.AddChild(leftHand);
-        player.AddChild(locomotion);
         player.AddChild(hands);
         player.AddChild(controller);
         subViewport.AddChild(overlay);
@@ -752,7 +678,6 @@ public sealed partial class GameMenuIntegrationTests
             overlay,
             menu,
             controller,
-            locomotion,
             rightHand,
             leftHand,
             transcriber);
@@ -789,7 +714,6 @@ public sealed partial class GameMenuIntegrationTests
         UIOverlay Overlay,
         GameMenu Menu,
         PlayerController Controller,
-        RecordingLocomotion Locomotion,
         FakeHand RightHand,
         FakeHand LeftHand,
         FakeTranscriber Transcriber)
@@ -803,51 +727,6 @@ public sealed partial class GameMenuIntegrationTests
 
         public override void RequestExit(int exitCode)
             => ExitRequests.Add(exitCode);
-    }
-
-    private sealed partial class RecordingLocomotion : Node, ILocomotion
-    {
-        public int NonZeroMoveCallCount
-        {
-            get;
-            private set;
-        }
-
-        public int NonZeroRotateCallCount
-        {
-            get;
-            private set;
-        }
-
-        public Vector2 LastMove
-        {
-            get;
-            private set;
-        }
-
-        public Vector2 LastRotate
-        {
-            get;
-            private set;
-        }
-
-        public void Move(Vector2 input)
-        {
-            LastMove = input;
-            if (input != Vector2.Zero)
-            {
-                NonZeroMoveCallCount++;
-            }
-        }
-
-        public void Rotate(Vector2 input)
-        {
-            LastRotate = input;
-            if (input != Vector2.Zero)
-            {
-                NonZeroRotateCallCount++;
-            }
-        }
     }
 
     private sealed partial class FakeHands : Node, IHasHands

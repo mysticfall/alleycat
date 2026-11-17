@@ -169,12 +169,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
         await rig.CentreAsync(rig.Anchor(0, 0, 6));
         await rig.ObserveAsync("animated_preassignment", 0.5);
         rig.CheckPreAssignmentAlignment();
-        rig.CaptureImage("framing-neutral");
-        if (System.Environment.GetEnvironmentVariable("ALLEYCAT_ANIMATED_EYES_FRAMING_ONLY") == "1")
-        {
-            rig.Finish();
-            return;
-        }
 
         Sample before = rig.Samples[^1];
         StaticVisualCue anchor = rig.Anchor(5, 2, 6);
@@ -182,21 +176,9 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
         FixationAcquisitionWindow window = rig.AssignLookTargetControlled(anchor);
         double assigned = rig.Assignment!.Value.Time;
         int first = rig.Samples.Count;
-        bool capturedAcquired = false, capturedFixed = false;
         do
         {
             await rig.FrameAsync("animated_fixed");
-            double elapsed = Fixture.Now - assigned;
-            if (!capturedAcquired && elapsed >= 0.5)
-            {
-                rig.CaptureImage("fixed-acquired");
-                capturedAcquired = true;
-            }
-            if (!capturedFixed && elapsed >= 2)
-            {
-                rig.CaptureImage("fixed-maintained");
-                capturedFixed = true;
-            }
         } while (Fixture.Now - assigned < 5);
 
         double movingStarted = Fixture.Now;
@@ -208,9 +190,7 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
             await rig.FrameAsync("animated_moving");
             rig.Check(rig.Eyes.LookTarget?.GetInstanceId() == identity, "same target identity throughout movement");
         } while (Fixture.Now - movingStarted < 5);
-        rig.CaptureImage("moving-end");
         await rig.ObserveAsync("animated_settled", 1);
-        rig.CaptureImage("settled-end");
 
         Sample[] samples = [.. rig.Samples.Skip(first)];
         FixationWindowResult result = window.Evaluate();
@@ -269,124 +249,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
         rig.Finish();
     }
 
-    /// <inheritdoc/>
-    [Fact]
-    public async Task Diagnostic_DownwardGaze_RecordsTorsoAndCervicalBaseline()
-    {
-        await using Fixture rig = await Fixture.CreateAsync("downward-baseline");
-        rig.ConfigureDownwardEvidence();
-        await rig.ObserveAsync("framing_sanity", 0.15);
-        if (System.Environment.GetEnvironmentVariable("ALLEYCAT_DOWNWARD_SANITY_ONLY") == "1")
-        {
-            rig.Finish();
-            return;
-        }
-
-        // Small demand sample, not a distance/proximity branch: eye-level, shallow, original deep.
-        // ALLEYCAT_DEMAND_SCENARIOS=1 appends the approved steeper/closer/combined scenarios in the
-        // SAME slant-radius metric from the neutral viewpoint; default discovery keeps the original
-        // three-scenario 1 m sample with unchanged phase labels.
-        List<(float Pitch, float Distance)> demands = [(0f, 1f), (-20f, 1f), (-40f, 1f)];
-        if (System.Environment.GetEnvironmentVariable("ALLEYCAT_DEMAND_SCENARIOS") == "1")
-        {
-            demands.AddRange([(-60f, 1f), (-40f, 0.5f), (-60f, 0.5f)]);
-        }
-
-        foreach ((float pitch, float distance) in demands)
-        {
-            string label = distance >= 1f ? $"p{pitch}" : $"p{pitch}_d{distance:0.0#}";
-            await rig.WarmUpAsync();
-            await rig.CentreAsync(rig.Anchor(0, 0, 1.4f));
-            await rig.ObserveAsync($"{label}_straight", 1);
-            rig.AssignDownwardTarget(rig.Anchor(0, pitch, distance));
-            await rig.ObserveAsync($"{label}_glance", 0.22);
-            await rig.ObserveAsync($"{label}_settle", 2.38);
-            await rig.ObserveAsync($"{label}_hold", 2.5);
-            await rig.ReleaseAsync();
-        }
-
-        // Diagnostic success means valid observations, NOT naturalness acceptance.
-        rig.Finish();
-    }
-
-    /// <summary>
-    /// ANIMATED INTEGRATED RUN (opt-in via ALLEYCAT_ANIMATED_FOLD=1; default discovery returns
-    /// immediately). Runs the NORMAL controller path with the REAL native Idle animation driving the
-    /// upstream — the animation-owned pose is consumed by the shared fold frame (PGI-B1) — through the
-    /// installed pipeline for the p0 control and the representative −60°/1 m demand using the original
-    /// glance 0.22 s / settle 2.38 s / hold 2.5 s / release 1.6 s windows (warm-up/centring adapted:
-    /// no WarmUpAsync, whose static-rest release contract the Idle animation legitimately violates;
-    /// release keeps only the influence-decay endpoint). Then a deep near-pitch yaw entry/exit
-    /// scenario sweeps the anchor from −6° to +6° at −60° pitch with complete arrival, sweep and hold
-    /// observation, asserting published-origin continuity across the former |yaw| gate (PGI-B2).
-    /// Evidence seals under game/temp/ai-009-design-review/animated-gaze-integration/&lt;label&gt; via
-    /// ALLEYCAT_ANIMATED_FOLD_EVIDENCE. Measured outcome only — naturalness is not claimed.
-    /// </summary>
-    [Fact]
-    public async Task Animated_DownwardFoldIntegratedPipeline_NativeIdleDemandAndYawCrossing()
-    {
-        if (System.Environment.GetEnvironmentVariable("ALLEYCAT_ANIMATED_FOLD") != "1")
-        {
-            return;
-        }
-
-        await using Fixture rig = await Fixture.CreateAsync("animated-fold-native-idle", new InputCaptureCharacterIK());
-        rig.StartNativeIdle();
-        rig.ConfigureDownwardEvidence();
-        string? stageDirectory = System.Environment.GetEnvironmentVariable("ALLEYCAT_MIXED_YAW_STAGE_EVIDENCE");
-        if (!string.IsNullOrWhiteSpace(stageDirectory))
-        {
-            rig.ConfigureFreshInputCapture(stageDirectory);
-        }
-        rig.ConfigureAnimatedEntryObservation();
-        await rig.ObserveAsync("framing_sanity", 0.15);
-
-        foreach ((float pitch, float distance) in new[] { (0f, 1f), (-60f, 1f) })
-        {
-            string label = distance >= 1f ? $"p{pitch}" : $"p{pitch}_d{distance:0.0#}";
-            await rig.AnimatedWarmUpAsync();
-            await rig.CentreAsync(rig.Anchor(0, 0, 1.4f));
-            await rig.ObserveAsync($"{label}_straight", 1);
-            rig.AssignDownwardTarget(rig.Anchor(0, pitch, distance));
-            await rig.ObserveAsync($"{label}_glance", 0.22);
-            await rig.ObserveAsync($"{label}_settle", 2.38);
-            await rig.ObserveAsync($"{label}_hold", 2.5);
-            rig.Eyes.ClearLookTarget();
-            await rig.ObserveAsync("release", 1.6);
-            rig.CheckAnimatedRelease();
-        }
-
-        // Deep near-pitch yaw entry/exit: complete arrival at −6°, a continuous sweep across the
-        // former gate to +6°, and a settled hold on the far side.
-        StaticVisualCue sweep = rig.Anchor(-6, -60, 1);
-        rig.AssignDownwardTarget(sweep);
-        await rig.ObserveAsync("yawcross_arrival", 2.5);
-        const double sweepSeconds = 4.8;
-        double sweepStart = Fixture.Now;
-        Vector3 previousRequested = rig.Controller.LastRequestedAimTargetGlobal;
-        double maxSweepStep = 0;
-        do
-        {
-            double progress = Math.Min((Fixture.Now - sweepStart) / sweepSeconds, 1d);
-            rig.MoveAnchor(sweep, (float)(-6d + (12d * progress)), -60, 1);
-            await rig.FrameAsync("yawcross_sweep");
-            Vector3 requested = rig.Controller.LastRequestedAimTargetGlobal;
-            maxSweepStep = Math.Max(maxSweepStep, (requested - previousRequested).Length() * 1000d);
-            previousRequested = requested;
-        } while (Fixture.Now - sweepStart < sweepSeconds);
-
-        await rig.ObserveAsync("yawcross_hold", 1);
-        rig.Eyes.ClearLookTarget();
-        await rig.ObserveAsync("release", 1.6);
-        rig.CheckAnimatedRelease();
-
-        rig.Check(maxSweepStep <= 5d,
-            $"animated yaw crossing: max published-origin step {maxSweepStep:F3} mm <=5 mm across the former " +
-            "|yaw| gate (old gate branch jumps 55.48/89.20 mm by independent arithmetic)");
-        rig.CheckDownwardFoldOutcome(["p0", "p-60", "yawcross"], animated: true);
-        rig.Finish();
-    }
-
     /// <summary>
     /// Measured native-upstream motion for the animated-domain fixture: the angle between the live
     /// upstream face basis and its authored rest face, in degrees.
@@ -441,55 +303,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
             $"{(evaluation.PublishedOriginWorld - evaluation.OrbitTargetWorld).Length() * 1000d:F3} mm)");
         rig.Check(rig.Controller.GetTargetIntent().DesiredInfluence > 0.99f,
             "the deep animated demand must be fully engaged");
-        rig.Finish();
-    }
-
-    /// <summary>
-    /// PRODUCTION INTEGRATED RUN (opt-in via ALLEYCAT_PRODUCTION_FOLD=1; default discovery returns
-    /// immediately so the capture never reruns in routine suites). Runs the NORMAL NPC controller
-    /// path — no prototype override, the fold-family construction integrated into production
-    /// prediction and publication — through the installed CharacterIK intent → body → HeadSolve →
-    /// CCDIK → Head copy → twist pipeline, over the unchanged demand schedule (warm-up, centring,
-    /// straight, glance 0.22 s, settle 2.38 s, hold 2.5 s, release 1.6 s) for the 0°/−20° controls,
-    /// the accepted −40°/1 m reference and the representative −60°/1 m probe. ALLEYCAT_PRODUCTION_
-    /// FOLD_DEMANDS=half selects the two half-metre demands instead. Coupled commands may differ
-    /// from the sealed prototype selections; both are reported, never retuned here. Evidence seals
-    /// under game/temp/ai-009-design-review/production-gaze-integration/&lt;label&gt; via
-    /// ALLEYCAT_PRODUCTION_FOLD_EVIDENCE. Measured outcome only — naturalness is not claimed.
-    /// </summary>
-    [Fact]
-    public async Task Production_DownwardFoldIntegratedPipeline_CapturesUnchangedDemandWindows()
-    {
-        if (System.Environment.GetEnvironmentVariable("ALLEYCAT_PRODUCTION_FOLD") != "1")
-        {
-            return;
-        }
-
-        bool halfMetre = System.Environment.GetEnvironmentVariable("ALLEYCAT_PRODUCTION_FOLD_DEMANDS") == "half";
-        (float Pitch, float Distance)[] demands = halfMetre
-            ? [(-40f, 0.5f), (-60f, 0.5f)]
-            : [(0f, 1f), (-20f, 1f), (-40f, 1f), (-60f, 1f)];
-
-        await using Fixture rig = await Fixture.CreateAsync(halfMetre ? "production-fold-halfmetre" : "production-fold-1m");
-        rig.ConfigureDownwardEvidence();
-        await rig.ObserveAsync("framing_sanity", 0.15);
-
-        List<string> labels = [];
-        foreach ((float pitch, float distance) in demands)
-        {
-            string label = distance >= 1f ? $"p{pitch}" : $"p{pitch}_d{distance:0.0#}";
-            labels.Add(label);
-            await rig.WarmUpAsync();
-            await rig.CentreAsync(rig.Anchor(0, 0, 1.4f));
-            await rig.ObserveAsync($"{label}_straight", 1);
-            rig.AssignDownwardTarget(rig.Anchor(0, pitch, distance));
-            await rig.ObserveAsync($"{label}_glance", 0.22);
-            await rig.ObserveAsync($"{label}_settle", 2.38);
-            await rig.ObserveAsync($"{label}_hold", 2.5);
-            await rig.ReleaseAsync();
-        }
-
-        rig.CheckDownwardFoldOutcome([.. labels]);
         rig.Finish();
     }
 
@@ -828,114 +641,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
         private int _nativeLoopCount;
         private Vector3? _firstNativeUpstreamForward;
         private double _maxNativeUpstreamMotionDegrees;
-        private string? _downwardDirectory;
-        private readonly List<string> _downwardTrace = [];
-        private readonly Dictionary<string, double> _downwardCaptures = [];
-        private int _downwardFrame;
-        private readonly Transform3D[] _downwardBones = new Transform3D[5];
-        private readonly Transform3D[] _downwardParentBones = new Transform3D[5];
-        private readonly List<string> _downwardEvents = [];
-        private readonly CharacterBody3D _headBody; private readonly List<DownwardFoldFrame> _prototypeFrames = [];
-        private readonly float[] _authoredHalfCaps = new float[4];
-        private bool _authoredHalfCapsRead;
-        private Vector3? _lastPublishedFoldOrigin;
-        private double _worstAlpha0ReconstructionMillimetres;
-
-        /// <summary>One observed frame of fold-construction installed measurements.</summary>
-        private sealed record DownwardFoldFrame(
-            string Phase,
-            double Time,
-            double Influence,
-            double FacePitch,
-            double TorsoPitch,
-            double HeadPositionErrorMillimetres,
-            double HeadRotationErrorDegrees,
-            double[] JointSwingsDegrees,
-            double[] JointHingeDeparturesDegrees,
-            bool FoldApplied,
-            int AlphaIndex,
-            double PublishedJumpMillimetres,
-            double CommandYaw,
-            double CommandPitch,
-            float[]? PredictedEyeOriginEnvelope,
-            float[]? PublishedOriginEnvelope,
-            float[] ViewpointOffsetEnvelope,
-            double? SolveYawDegrees,
-            double? SolvePitchDegrees,
-            double? SolveIterations,
-            double PublicationGridErrorMillimetres,
-            double FoldVsOrbitMillimetres);
-
-        public void AssignDownwardTarget(StaticVisualCue anchor, bool observeFixation = false)
-        {
-            FreshInputEvent("assignment", target: anchor);
-            _downwardEvents.Add(JsonSerializer.Serialize(new
-            {
-                Event = "assignment",
-                Time = Now,
-                Frame = Engine.GetProcessFrames(),
-                Identity = anchor.GetInstanceId(),
-                Target = Vector(anchor.GlobalPosition)
-            }));
-            if (observeFixation)
-            {
-                _ = AssignLookTargetControlled(anchor);
-            }
-            else
-            {
-                Eyes.SetLookTarget(anchor);
-            }
-        }
-
-        public void ConfigureDownwardEvidence()
-        {
-            // Demand-scenario evidence seals into its own tree; the original downward-stoop behaviour,
-            // including the timestamped default fallback, is unchanged. The production fold-integration
-            // and animated-integration captures seal into their own trees and never overwrite any
-            // sealed corpus.
-            string? animatedLabel = System.Environment.GetEnvironmentVariable("ALLEYCAT_ANIMATED_FOLD_EVIDENCE");
-            string? productionLabel = System.Environment.GetEnvironmentVariable("ALLEYCAT_PRODUCTION_FOLD_EVIDENCE");
-            string? prototypeLabel = System.Environment.GetEnvironmentVariable("ALLEYCAT_DOWNWARD_FOLD_EVIDENCE");
-            string? demandLabel = System.Environment.GetEnvironmentVariable("ALLEYCAT_DEMAND_EVIDENCE");
-            string label = animatedLabel
-                ?? productionLabel
-                ?? prototypeLabel
-                ?? demandLabel
-                ?? System.Environment.GetEnvironmentVariable("ALLEYCAT_DOWNWARD_EVIDENCE")
-                ?? (DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffffZ") + "-baseline");
-            string? eightDegreeLabel = System.Environment.GetEnvironmentVariable("ALLEYCAT_EIGHT_DEGREE_EVIDENCE");
-            string? restBoundedLabel = System.Environment.GetEnvironmentVariable("ALLEYCAT_REST_BOUNDED_EVIDENCE");
-            string tree = eightDegreeLabel is not null
-                ? "eight-degree-spine-chest/"
-                : restBoundedLabel is not null
-                ? "rest-bounded-gaze-integration/"
-                : animatedLabel is not null
-                ? "animated-gaze-integration/"
-                : productionLabel is not null
-                    ? "production-gaze-integration/"
-                    : prototypeLabel is not null
-                        ? "downward-policy-prototype/"
-                        : demandLabel is null ? "downward-stoop/" : "demand-scenarios/";
-            _downwardDirectory = System.Environment.GetEnvironmentVariable("ALLEYCAT_MIXED_YAW_STAGE_EVIDENCE")
-                ?? ProjectSettings.GlobalizePath("res://temp/ai-009-design-review/" + tree + (eightDegreeLabel ?? restBoundedLabel ?? label));
-            _ = Directory.CreateDirectory(_downwardDirectory);
-            Camera3D camera = _root.GetChildren().OfType<Camera3D>().Single();
-            camera.Projection = Camera3D.ProjectionType.Orthogonal;
-            camera.KeepAspect = Camera3D.KeepAspectEnum.Height;
-            camera.Size = 2.15f;
-            camera.Near = 0.01f;
-            File.WriteAllText(Path.Combine(_downwardDirectory, "renderer.json"), JsonSerializer.Serialize(new
-            {
-                GPU = RenderingServer.GetVideoAdapterName(),
-                Vendor = RenderingServer.GetVideoAdapterVendor(),
-                Method = RenderingServer.GetCurrentRenderingMethod(),
-                NeutralFace = Matrix(new Transform3D(_neutralFace, _neutralOrigin)),
-                Skeleton = Matrix(FixtureSkeleton.GlobalTransform),
-                Rest = _indices.Select(i => Matrix(FixtureSkeleton.GetBoneGlobalRest(i))).ToArray(),
-                Chain = _chain,
-                CameraSize = camera.Size
-            }));
-        }
 
         public void ConfigureAnimatedEvidence()
         {
@@ -996,23 +701,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
             float y = Mathf.DegToRad(yaw), p = Mathf.DegToRad(pitch);
             Vector3 direction = new(-Mathf.Sin(y) * Mathf.Cos(p), Mathf.Sin(p), -Mathf.Cos(y) * Mathf.Cos(p));
             anchor.GlobalPosition = _neutralOrigin + (_neutralFace * direction * distance);
-        }
-
-        public void CaptureImage(string name)
-        {
-            string directory = _animatedEvidenceDirectory ?? throw new InvalidOperationException("Animated evidence not configured.");
-            Camera3D camera = FixtureSkeleton.GetNode<Camera3D>("Head/TrackingCamera");
-            foreach (Node3D eye in new[] { _eye, _rightEye })
-            {
-                Vector2 pixel = camera.UnprojectPosition(eye.GlobalPosition);
-                Vector2 size = _tree.Root.GetVisibleRect().Size;
-                Assert.False(camera.IsPositionBehind(eye.GlobalPosition));
-                Assert.InRange(pixel.X, size.X * 0.1f, size.X * 0.9f);
-                Assert.InRange(pixel.Y, size.Y * 0.1f, size.Y * 0.9f);
-            }
-            using Image image = _tree.Root.GetTexture().GetImage();
-            Assert.Equal(Error.Ok, image.SavePng(Path.Combine(directory, name + ".png")));
-            File.WriteAllText(Path.Combine(directory, name + ".json"), _animatedTrace[^1]);
         }
 
         public void WriteAnimatedOutcome(FixationWindowResult result, double overshoot, double assigned,
@@ -1134,7 +822,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
             _ik.PhysicalRig = _physical;
             _ik.HeadTargetIntentProvider = Controller;
             _ik.HeadIKTarget = _root.GetNode<CharacterBody3D>("IKTargets/Head");
-            _headBody = _ik.HeadIKTarget;
             _ik.HeadIKSolveTarget = _root.GetNode<Marker3D>("IKTargets/HeadSolve");
             _ik.RightHandIKTarget = _root.GetNode<AnimatableBody3D>("IKTargets/RightHand");
             _ik.LeftHandIKTarget = _root.GetNode<AnimatableBody3D>("IKTargets/LeftHand");
@@ -1342,14 +1029,7 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
 
         public async Task CentreAsync(StaticVisualCue anchor)
         {
-            if (_downwardDirectory is not null || _freshInputDirectory is not null)
-            {
-                AssignDownwardTarget(anchor);
-            }
-            else
-            {
-                Eyes.SetLookTarget(anchor);
-            }
+            Eyes.SetLookTarget(anchor);
             await CentreCurrentAsync();
         }
 
@@ -1369,16 +1049,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
 
         public async Task ReleaseAsync()
         {
-            FreshInputEvent("clear", "release", 1.6);
-            if (_downwardDirectory is not null)
-            {
-                _downwardEvents.Add(JsonSerializer.Serialize(new
-                {
-                    Event = "clear",
-                    Time = Now,
-                    Frame = Engine.GetProcessFrames()
-                }));
-            }
             Eyes.ClearLookTarget();
             double start = Clock;
             do
@@ -1396,17 +1066,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
         public async Task ObserveAsync(string phase, double duration)
         {
             double start = Clock;
-            FreshInputEvent("phase_start", phase, duration);
-            if (_downwardDirectory is not null)
-            {
-                _downwardEvents.Add(JsonSerializer.Serialize(new
-                {
-                    Event = "phase_start",
-                    Phase = phase,
-                    Time = start,
-                    Duration = duration
-                }));
-            }
             do
             {
                 await FrameAsync(phase);
@@ -1415,15 +1074,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
 
         public async Task FrameAsync(string phase)
         {
-            _freshInputPhase = phase;
-            string view = (_downwardFrame++ % 2) == 0 ? "front" : "side";
-            if (_downwardDirectory is not null)
-            {
-                Camera3D camera = _root.GetChildren().OfType<Camera3D>().Single();
-                // Reference female faces world -Z. Include feet, pelvis, shoulders and head.
-                camera.GlobalPosition = view == "front" ? new Vector3(0, 1.05f, -3) : new Vector3(-3, 1.05f, 0);
-                camera.LookAt(new Vector3(0, 1.05f, 0), Vector3.Up);
-            }
             if (_manual)
             {
                 if (PerturbHostPacing && Samples.Count % 47 == 0)
@@ -1502,218 +1152,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
                 Degrees(gaze.AngleTo(anchorDirection)), Yaw(_neutralFace.Inverse() * anchorDirection),
                 FixtureViewpoint.GlobalPosition, leftEye, rightEye,
                 Mathf.RadToDeg((float)command.HorizontalRadians), Mathf.RadToDeg((float)command.VerticalRadians)));
-            if (_downwardDirectory is not null)
-            {
-                Camera3D camera = _root.GetChildren().OfType<Camera3D>().Single();
-                // Skeleton pose getters are restored upstream after modifier evaluation. Use the
-                // same final SkeletonUpdated snapshot as the contribution observer, not post-draw rest.
-                Basis torsoDelta = FixtureSkeleton.GlobalBasis * _downwardBones[2].Basis
-                    * FixtureSkeleton.GetBoneGlobalRest(_indices[2]).Basis.Inverse() * FixtureSkeleton.GlobalBasis.Inverse();
-                double torsoPitch = Pitch(_neutralFace.Inverse() * torsoDelta * -_neutralFace.Z);
-
-                // Requested (provider intent, head-bone frame) versus actual final solved head frame — the
-                // full-pose accuracy pair, measured independently of the pipeline's own debug state.
-                Transform3D intentTransform = Controller.GetTargetIntent().WorldTransform;
-                Transform3D actualHeadFrame = new(
-                    FixtureSkeleton.GlobalBasis.Orthonormalized() * _downwardBones[0].Basis.Orthonormalized(),
-                    FixtureSkeleton.GlobalTransform * _downwardBones[0].Origin);
-                double headPositionErrorMillimetres = (actualHeadFrame.Origin - intentTransform.Origin).Length() * 1000d;
-                double headRotationErrorDegrees = Degrees(intentTransform.Basis.Orthonormalized().GetRotationQuaternion()
-                    .AngleTo(actualHeadFrame.Basis.Orthonormalized().GetRotationQuaternion()));
-
-                // Independent final joint-legality measurement (local delta vs rest acting on the child's
-                // local rest translation direction), computed from solved bones — never the forward
-                // model. DFP-R1 repair: the parent basis comes from the SAME final SkeletonUpdated
-                // snapshot as the joint basis (_downwardParentBones, including the Spine parent Hips),
-                // never the live post-draw getter whose upstream-restored pose folded ancestor
-                // rotation into the local stage (the false Neck 17.188° reading).
-                ReadAuthoredHalfCaps();
-                double[] finalJointSwings = new double[4];
-                double[] finalJointHingeDepartures = new double[4];
-                double[] finalJointSignedLocalFolds = new double[4];
-                for (int joint = 0; joint < 4; joint++)
-                {
-                    // _chain is Head→Spine; joint runs root→head: Spine, Chest, UpperChest, Neck.
-                    // Final acceptance is REST-relative, including during animation. The native
-                    // solver's incoming-relative limits do not replace that user-selected reference.
-                    int bone = _indices[4 - joint];
-                    int child = _indices[3 - joint];
-                    Basis localDelta = DownwardFoldGeometry.SameStageLocalDelta(
-                        _downwardParentBones[4 - joint].Basis,
-                        _downwardBones[4 - joint].Basis,
-                        FixtureSkeleton.GetBoneRest(bone).Basis);
-                    Vector3 outgoing = FixtureSkeleton.GetBoneRest(child).Origin;
-                    finalJointSwings[joint] = DownwardFoldGeometry.SwingDegrees(localDelta, outgoing);
-                    finalJointSignedLocalFolds[joint] = DownwardFoldGeometry.SignedHingeDegrees(
-                        localDelta, outgoing, DownwardFoldGeometry.LocalFoldAxis);
-                    // Stable off-X content (rotation distance to the nearest pure local-X rotation),
-                    // defined at and near identity so complete windows stay judgeable without
-                    // discarding transit phases; an axis-direction reading is ill-conditioned there.
-                    finalJointHingeDepartures[joint] = DownwardFoldGeometry.OffXRotationDegrees(localDelta);
-                }
-
-                // Signed global pitch of every chain bone's final basis relative to its global rest
-                // (Head…Spine order, matching the Bones record): measured in each bone's global-rest
-                // frame about its rest X axis on its rest up axis — the trunk/skull line the
-                // front/side images expose, independent of joint-local frames.
-                double[] finalBoneSignedGlobalPitches = new double[5];
-                for (int i = 0; i < 5; i++)
-                {
-                    Basis restGlobal = FixtureSkeleton.GetBoneGlobalRest(_indices[i]).Basis.Orthonormalized();
-                    Basis globalDelta = restGlobal.Inverse() * _downwardBones[i].Basis.Orthonormalized();
-                    finalBoneSignedGlobalPitches[i] = DownwardFoldGeometry.SignedHingeDegrees(
-                        globalDelta, Vector3.Up, Vector3.Right);
-                }
-
-                // Production fold-construction diagnostics and per-frame observation for the outcome
-                // analysis: the controller's shared frame (prediction AND publication), the policy's
-                // last coupled solve, and the published selection record. Rows record whenever the
-                // downward evidence tree is active — including frames with NO fold evaluation — so
-                // attainment budgets stay engaged on the outside-domain fallback path too.
-                DownwardFoldEvaluation? foldEvaluation = Controller.LastFoldEvaluation;
-                DownwardFoldPredictionFrame? foldFrame = Controller.LastFoldFrame;
-                GazeSaturationResult? policySolve = Controller.LastPolicySolve;
-                if (foldEvaluation is { } evaluation)
-                {
-                    _worstAlpha0ReconstructionMillimetres = Math.Max(
-                        _worstAlpha0ReconstructionMillimetres, evaluation.Alpha0ReconstructionMillimetres);
-                }
-
-                double jump = foldEvaluation is { Applied: true } && _lastPublishedFoldOrigin is { } lastPublished
-                    ? (foldEvaluation.PublishedOriginWorld - lastPublished).Length() * 1000d
-                    : 0d;
-                if (foldEvaluation is { Applied: true })
-                {
-                    _lastPublishedFoldOrigin = foldEvaluation.PublishedOriginWorld;
-                }
-
-                OrientingAim aimCommand = Controller.LastPublishedAim;
-                // Independently multiply the captured evaluation's local transforms at its published
-                // alpha and compare with publication. This is wiring identity, not final safety.
-                double publicationGridError = double.NaN;
-                if (foldEvaluation is { Applied: true } && foldFrame is { } frame)
-                {
-                    _ = ReadFamilyMemberMillimetres(foldEvaluation.Alpha, out Vector3 memberWorld);
-                    publicationGridError = (memberWorld - foldEvaluation.PublishedOriginWorld).Length() * 1000d;
-                }
-                double foldVersusOrbit = foldEvaluation is { Applied: true }
-                    ? (foldEvaluation.PublishedOriginWorld - foldEvaluation.OrbitTargetWorld).Length() * 1000d
-                    : double.NaN;
-                _prototypeFrames.Add(new DownwardFoldFrame(
-                    phase,
-                    time,
-                    Samples[^1].Influence,
-                    Samples[^1].Pitch,
-                    torsoPitch,
-                    headPositionErrorMillimetres,
-                    headRotationErrorDegrees,
-                    [.. finalJointSwings],
-                    [.. finalJointHingeDepartures],
-                    foldEvaluation?.Applied ?? false,
-                    foldEvaluation?.AlphaIndex ?? 0,
-                    jump,
-                    aimCommand.HorizontalRadians * 180d / Math.PI,
-                    aimCommand.VerticalRadians * 180d / Math.PI,
-                    policySolve is null ? null : Vector(policySolve.PredictedEyeOrigin),
-                    Vector(foldFrame is { } liveFrame
-                        ? liveFrame.WorldFromEnvelope.AffineInverse() * Controller.LastRequestedAimTargetGlobal
-                        : Vector3.Zero),
-                    Vector(Controller.LastViewpointOffsetEnvelope),
-                    policySolve?.YawRadians * 180d / Math.PI,
-                    policySolve?.PitchRadians * 180d / Math.PI,
-                    policySolve?.Iterations,
-                    publicationGridError,
-                    foldVersusOrbit));
-
-                string captureKey = phase + "-" + view;
-                string? imageName = null;
-                if (!_downwardCaptures.TryGetValue(captureKey, out double previous) || time - previous >= 1)
-                {
-                    _downwardCaptures[captureKey] = time;
-                    imageName = $"{sequence:D6}-{phase}-{view}.png";
-                    using Image image = _tree.Root.GetTexture().GetImage();
-                    Assert.Equal(Error.Ok, image.SavePng(Path.Combine(_downwardDirectory, imageName)));
-                }
-                _downwardTrace.Add(JsonSerializer.Serialize(new
-                {
-                    Sample = Samples[^1],
-                    TorsoPitch = torsoPitch,
-                    TargetIdentity = anchor?.GetInstanceId(),
-                    Target = anchor is null ? null : Vector(anchor.GlobalPosition),
-                    TargetRelativeNeutral = anchor is null ? null : Vector(_neutralFace.Inverse() * (anchor.GlobalPosition - _neutralOrigin)),
-                    Viewpoint = Matrix(FixtureViewpoint.GlobalTransform),
-                    Bones = _downwardBones.Select(Matrix).ToArray(),
-                    ParentBones = _downwardParentBones.Select(Matrix).ToArray(),
-                    EntryEvaluation = _animatedFinalEvaluation,
-                    EntryLocalPosesHeadToSpine = _animatedFinalEntryLocals.Select(Matrix).ToArray(),
-                    EntryNativeHeadWorld = Matrix(_animatedFinalNativeHead),
-                    RequestedHeadOrigin = Vector(Controller.LastRequestedAimTargetGlobal),
-                    SolveTarget = Matrix(_root.GetNode<Marker3D>("IKTargets/HeadSolve").GlobalTransform),
-                    UpstreamHead = Controller.LastUpstreamSnapshot is { } upstream ? Vector(upstream.HeadOriginWorld) : null,
-                    UpstreamPivot = Controller.LastUpstreamSnapshot is { } pivot ? Vector(pivot.PivotPositionWorld) : null,
-                    LeftActual = leftEye is null ? null : Vector(leftEye.Actual),
-                    LeftExpected = leftEye is null ? null : Vector(leftEye.Expected),
-                    RightActual = rightEye is null ? null : Vector(rightEye.Actual),
-                    RightExpected = rightEye is null ? null : Vector(rightEye.Expected),
-                    TargetPitchInFace = Pitch(anchorInFace),
-                    EyeYawLimitDegrees = Eyes.MaxHorizontalAngleDegrees,
-                    EyePitchLimitDegrees = Eyes.MaxVerticalAngleDegrees,
-                    Camera = Matrix(camera.GlobalTransform),
-                    View = view,
-                    Image = imageName,
-                    PhysicsFrame = Engine.GetPhysicsFrames(),
-                    EyeHorizontal = Eyes.GetHorizontalLookSeekTime(),
-                    EyeVertical = Eyes.GetVerticalLookSeekTime(),
-                    IntentRequested = Matrix(Controller.GetTargetIntent().WorldTransform),
-                    HeadBody = Matrix(_headBody.GlobalTransform),
-                    PipelineSource = Vector(_ik.HeadTargetPipelineDebugState.SourceTarget.Origin),
-                    PipelineRequested = Vector(_ik.HeadTargetPipelineDebugState.RequestedTarget.Origin),
-                    PipelineRealised = Vector(_ik.HeadTargetPipelineDebugState.RealisedTarget.Origin),
-                    ActualHead = Matrix(new Transform3D(
-                        FixtureSkeleton.GlobalBasis.Orthonormalized() * _downwardBones[0].Basis.Orthonormalized(),
-                        FixtureSkeleton.GlobalTransform * _downwardBones[0].Origin)),
-                    HeadPositionErrorMm = headPositionErrorMillimetres,
-                    HeadRotationErrorDegrees = headRotationErrorDegrees,
-                    FinalJointSwingsDegrees = finalJointSwings,
-                    FinalJointHingeDeparturesDegrees = finalJointHingeDepartures,
-                    FinalJointSignedLocalFoldDegrees = finalJointSignedLocalFolds,
-                    FinalBoneSignedGlobalPitchDegrees = finalBoneSignedGlobalPitches,
-                    AuthoredHalfCapsDegrees = _authoredHalfCaps.Select(Mathf.RadToDeg).ToArray(),
-                    AuthoredHalfCapsRadians = _authoredHalfCaps.Select(v => (double)v).ToArray(),
-                    Fold = foldEvaluation is null ? null : new
-                    {
-                        foldEvaluation.Applied,
-                        foldEvaluation.Reason,
-                        foldEvaluation.AlphaIndex,
-                        foldEvaluation.Alpha,
-                        foldEvaluation.DirectionErrorDegrees,
-                        foldEvaluation.OrbitSpineRadiusMillimetres,
-                        foldEvaluation.FoldSpineRadiusMillimetres,
-                        foldEvaluation.Alpha0ReconstructionMillimetres,
-                        foldEvaluation.SaturatedAtMaxAlpha,
-                        foldEvaluation.DirectionOptimalIndex,
-                        foldEvaluation.DemandExtraSteps,
-                        OrbitTarget = Vector(foldEvaluation.OrbitTargetWorld),
-                        SpineOrigin = Vector(foldEvaluation.SpineOriginWorld),
-                        PublishedOrigin = Vector(foldEvaluation.PublishedOriginWorld),
-                        foldEvaluation.GridAnglesDegrees,
-                        Status = Controller.LastFoldStatus,
-                        Controller.FoldFrameBuilds,
-                        foldFrame?.SelectionScans,
-                        GridHeadOriginsEnvelope = foldFrame?.GridHeadOrigins.Select(Vector).ToArray(),
-                        WorldFromEnvelope = foldFrame is null ? null : Matrix(foldFrame.WorldFromEnvelope),
-                        PredictedEyeOriginEnvelope = policySolve is null
-                            ? null
-                            : Vector(policySolve.PredictedEyeOrigin),
-                        SolveMode = policySolve?.Mode.ToString(),
-                        SolveIterations = policySolve?.Iterations,
-                        SolveFeasible = policySolve?.IsFeasible,
-                        SolveResidualDegrees = (policySolve?.ResidualRadians) * 180d / Math.PI,
-                        SolveYawDegrees = (policySolve?.YawRadians) * 180d / Math.PI,
-                        SolvePitchDegrees = (policySolve?.PitchRadians) * 180d / Math.PI
-                    }
-                }));
-            }
             if (_animatedEvidenceDirectory is not null && _nativePlayer is not null)
             {
                 double clipTime = _nativePlayer.CurrentAnimationPosition;
@@ -1765,7 +1203,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
                     new EyeFixationSample(left.Actual, left.Expected),
                     new EyeFixationSample(right.Actual, right.Expected)));
             }
-            RecordFreshInputPresentation(phase);
         }
 
         /// <summary>
@@ -1848,9 +1285,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
 
         private void CaptureSolvedJoints()
         {
-            _animatedFinalEvaluation = _animatedEntryEvaluation;
-            _animatedFinalNativeHead = _animatedEntryHead;
-            Array.Copy(_animatedEntryLocals, _animatedFinalEntryLocals, 5);
             _passes++;
             _solvedFace = (FixtureSkeleton.GlobalBasis * FixtureSkeleton.GetBoneGlobalPose(_indices[0]).Basis * FixtureViewpoint.Basis).Orthonormalized();
             for (int i = 0; i < 5; i++)
@@ -1858,420 +1292,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
                 int bone = _indices[i];
                 Basis parent = FixtureSkeleton.GetBoneGlobalPose(FixtureSkeleton.GetBoneParent(bone)).Basis.Orthonormalized();
                 _solved[i] = parent.Inverse() * FixtureSkeleton.GetBoneGlobalPose(bone).Basis.Orthonormalized();
-                if (_downwardDirectory is not null || _freshInputDirectory is not null)
-                {
-                    // Same-stage capture (DFP-R1 repair): the final joint basis AND its parent's final
-                    // basis — including the Spine parent Hips — are read in this one SkeletonUpdated
-                    // callback, so the local measurements below never mix a final child with a
-                    // restored-upstream live parent getter.
-                    _downwardBones[i] = FixtureSkeleton.GetBoneGlobalPose(bone);
-                    _downwardParentBones[i] = FixtureSkeleton.GetBoneGlobalPose(FixtureSkeleton.GetBoneParent(bone));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Independently composes the captured evaluation's family inputs for wiring identity;
-        /// the live-pose fallback below remains for fixtures without a production frame.
-        /// </summary>
-        private bool ReadFamilyMemberMillimetres(double alpha, out Vector3 memberWorld)
-        {
-            if (Controller.LastFoldFrame is { } captured)
-            {
-                // Wiring identity only: multiply this evaluation's actual inputs, not poses
-                // fetched after animation has advanced. Safety has its separate final/rest oracle.
-                Transform3D head = captured.ChainParentEnvelope;
-                for (int i = 0; i < captured.LocalPoses.Count; i++)
-                {
-                    Transform3D local = captured.LocalPoses[i];
-                    if (i < captured.AvailableIncrements.Count)
-                    {
-                        local.Basis *= new Basis(Vector3.Right,
-                            captured.FoldSign * (float)alpha * captured.AvailableIncrements[i]);
-                    }
-                    head *= local;
-                }
-                // The current publication is NOT pure family FK: independently compose the
-                // pitch-only upstream orbit, engagement blend and whole-lever yaw. Do not call
-                // ResolveSelection/ResolveOrigin here (that would test the publisher against itself).
-                double pitch = Controller.LastPublishedAim.VerticalRadians;
-                double yaw = Controller.LastPublishedAim.HorizontalRadians;
-                Vector3 pivot = captured.PivotPosition;
-                Vector3 orbitLever = new Basis(Vector3.Right, (float)pitch)
-                    * (captured.UpstreamFaceBasis.Transposed() * (captured.UpstreamHeadOrigin - pivot));
-                double engagement = Math.Clamp(-pitch / (0.5d * Math.PI / 180d), 0d, 1d);
-                Vector3 unyawedLever = orbitLever.Lerp(head.Origin - pivot, (float)engagement);
-                Vector3 published = pivot + (new Basis(Vector3.Up, (float)yaw) * unyawedLever);
-                memberWorld = captured.WorldFromEnvelope * published;
-                return true;
-            }
-            memberWorld = Vector3.Zero;
-            SkeletonModifier3D modifier = FixtureSkeleton.GetNode<SkeletonModifier3D>("NeckSpineIK");
-            int jointCount = modifier.Get("settings/0/joint_count").AsInt32();
-            int headBone = FixtureSkeleton.FindBone("Head");
-            List<int> headToRoot = [headBone];
-            int walker = headBone;
-            while (FixtureSkeleton.GetBoneParent(walker) >= 0)
-            {
-                walker = FixtureSkeleton.GetBoneParent(walker);
-                headToRoot.Add(walker);
-            }
-
-            int[] bones = new int[jointCount];
-            var poses = new Transform3D[jointCount];
-            float[] caps = new float[jointCount - 1];
-            for (int i = 0; i < jointCount; i++)
-            {
-                bones[i] = headToRoot[jointCount - 1 - i];
-                poses[i] = FixtureSkeleton.GetBonePose(bones[i]);
-            }
-
-            for (int joint = 0; joint < jointCount - 1; joint++)
-            {
-                if (modifier.Get($"settings/0/joints/{joint}/limitation").AsGodotObject() is not Resource limitation)
-                {
-                    return false;
-                }
-
-                caps[joint] = limitation.Get("angle").AsSingle() * 0.5f;
-            }
-
-            Transform3D chainParentWorld = FixtureSkeleton.GlobalTransform
-                * FixtureSkeleton.GetBoneGlobalPose(FixtureSkeleton.GetBoneParent(bones[0]));
-            float foldSign = DownwardFoldGeometry.ResolveForwardFoldSign(chainParentWorld, poses, caps, out _);
-            float[] folds = new float[caps.Length];
-            for (int joint = 0; joint < caps.Length; joint++)
-            {
-                folds[joint] = foldSign * (float)alpha * caps[joint];
-            }
-
-            memberWorld = DownwardFoldGeometry.ComposePosedFoldedChain(
-                chainParentWorld, poses, folds, new Transform3D[jointCount]).Origin;
-            return true;
-        }
-
-        /// <summary>
-        /// Reads the authored cone half-caps (radians) of the four movable joints, root→head, straight
-        /// from the scene's NeckSpineIK modifier authoring — an independent read the final joint-legality
-        /// measurements are judged against, separate from the prototype generator's own discovery.
-        /// </summary>
-        private void ReadAuthoredHalfCaps()
-        {
-            if (_authoredHalfCapsRead)
-            {
-                return;
-            }
-
-            SkeletonModifier3D modifier = FixtureSkeleton.GetNode<SkeletonModifier3D>("NeckSpineIK");
-            for (int joint = 0; joint < 4; joint++)
-            {
-                if (modifier.Get($"settings/0/joints/{joint}/limitation").AsGodotObject() is not Resource limitation)
-                {
-                    throw new InvalidOperationException($"Authored NeckSpineIK joint {joint} has no limitation.");
-                }
-
-                _authoredHalfCaps[joint] = limitation.Get("angle").AsSingle() * 0.5f;
-            }
-
-            _authoredHalfCapsRead = true;
-        }
-
-        /// <summary>
-        /// Measured outcome of the production downward fold integration: full-window bookkeeping,
-        /// complete-demand (glance+settle+hold) final Head position/rotation budgets (5 mm / 0.25°),
-        /// final joint caps and off-X hinge content judged under the user-approved 0.1° angular
-        /// acceptance allowance (2026-10-18; larger excursions stay measured and red), FK sanity,
-        /// prediction/publication identity of the shared fold geometry (full transform and eye
-        /// geometry at equilibrium holds), publication grid membership, fold-versus-orbit separation
-        /// on applied deep demands, roll/optics bounds, release decay observations with endpoint
-        /// checks, and neutral preservation. Distribution numbers are recorded observations, never
-        /// pass criteria — no torso ratio is invented here. The labels parameter names the demand
-        /// phases checked; the first label's straight window carries the neutral-preservation check
-        /// and the last label's hold must have exercised the fold construction. The animated variant
-        /// relaxes only idle-adapted endpoints (static-rest face endpoint, straight neutrality and
-        /// equilibrium tolerance) to observations; every attainment, cap, roll and optics bound is
-        /// unchanged.
-        /// </summary>
-        public void CheckDownwardFoldOutcome(string[] labels, bool animated = false, bool requireFoldWitness = true)
-        {
-            double equilibriumToleranceDegrees = animated ? 0.05d : 0.01d;
-            // Wiring identity uses the captured evaluation's exact input transforms, independently
-            // multiplied by the observer. Animation advancement cannot justify a wider threshold.
-            double wiringToleranceMillimetres = 0.5d;
-            foreach (DownwardFoldFrame frame in _prototypeFrames.Where(f => f.FoldApplied))
-            {
-                Check(frame.PublicationGridErrorMillimetres <= wiringToleranceMillimetres,
-                    $"{frame.Phase} independent current publication identity " +
-                    $"{frame.PublicationGridErrorMillimetres:F6} mm <=0.5 mm (family/orbit engagement/yaw)");
-            }
-            Check(_worstAlpha0ReconstructionMillimetres <= 0.1,
-                $"fold FK alpha=0 reconstruction worst {_worstAlpha0ReconstructionMillimetres:F6} mm <=0.1 mm");
-
-            foreach (string label in labels)
-            {
-                DownwardFoldFrame[] hold = [.. _prototypeFrames.Where(f => f.Phase == $"{label}_hold" && f.Influence >= 0.99f)];
-                Check(hold.Length > 0, $"{label} hold has full-influence observations");
-                if (hold.Length == 0)
-                {
-                    continue;
-                }
-
-                // Coupled prediction/publication identity (shared geometry): on equilibrium hold
-                // frames — the published command equals the geometric solve's final candidate — the
-                // solve's predicted eye origin must equal the published fold head origin plus the
-                // commanded basis applied to the authored viewpoint offset, to sub-millimetre
-                // identity. Divergent geometries (orbit prediction with fold publication, or the
-                // reverse) land lever-arm millimetres away. Only fold-applied holds carry this
-                // contract; the neutral control's abstention is asserted separately below.
-                DownwardFoldFrame[] equilibrium = [.. hold.Where(f => f.FoldApplied
-                    && f.PredictedEyeOriginEnvelope is not null
-                    && f.SolveYawDegrees is { } solveYaw && Math.Abs(solveYaw - f.CommandYaw) <= equilibriumToleranceDegrees
-                    && f.SolvePitchDegrees is { } solvePitch && Math.Abs(solvePitch - f.CommandPitch) <= equilibriumToleranceDegrees)];
-                if (hold.Any(f => f.FoldApplied))
-                {
-                    Check(equilibrium.Length > 0,
-                        $"{label} hold has equilibrium frames carrying the coupled solve (found {equilibrium.Length} of " +
-                        $"{hold.Length}; solve candidates must settle onto the published command)");
-                }
-
-                foreach (DownwardFoldFrame frame in equilibrium)
-                {
-                    Basis commandBasis = GeometricGazeSaturation.ComposeCommandBasis(
-                        frame.CommandYaw * Math.PI / 180d, frame.CommandPitch * Math.PI / 180d);
-                    Vector3 publishedOriginEnvelope = new(
-                        frame.PublishedOriginEnvelope![0],
-                        frame.PublishedOriginEnvelope[1],
-                        frame.PublishedOriginEnvelope[2]);
-                    Vector3 viewpointOffsetEnvelope = new(
-                        frame.ViewpointOffsetEnvelope[0],
-                        frame.ViewpointOffsetEnvelope[1],
-                        frame.ViewpointOffsetEnvelope[2]);
-                    Vector3 expectedEye = publishedOriginEnvelope + (commandBasis * viewpointOffsetEnvelope);
-                    Vector3 predictedEye = new(
-                        frame.PredictedEyeOriginEnvelope![0],
-                        frame.PredictedEyeOriginEnvelope[1],
-                        frame.PredictedEyeOriginEnvelope[2]);
-                    Check((expectedEye - predictedEye).Length() < 0.001d,
-                        $"{label} hold prediction/publication identity: predicted eye {predictedEye} vs published-pose " +
-                        $"eye {expectedEye}, delta {(expectedEye - predictedEye).Length() * 1000d:F4} mm <1 mm");
-                    Check(frame.PublicationGridErrorMillimetres <= wiringToleranceMillimetres,
-                        $"{label} hold published origin matches independent family/orbit engagement and yaw composition " +
-                        $"({frame.PublicationGridErrorMillimetres:F6} mm <={wiringToleranceMillimetres} mm)");
-                    Check(double.IsNaN(frame.FoldVsOrbitMillimetres) || frame.FoldVsOrbitMillimetres > 5d,
-                        $"{label} hold published fold origin separates from the excluded orbit target by " +
-                        $"{frame.FoldVsOrbitMillimetres:F4} mm >5 mm");
-                }
-
-                // Keep every consecutive demand sample, including yaw arrival/sweep/hold.
-                // Release has a distinct animation-blend endpoint contract below.
-                string[] demandPhases = label == "yawcross"
-                    ? ["yawcross_arrival", "yawcross_sweep", "yawcross_hold"]
-                    : [$"{label}_glance", $"{label}_settle", $"{label}_hold"];
-                DownwardFoldFrame[] demand = [.. _prototypeFrames.Where(f => demandPhases.Contains(f.Phase))];
-                foreach (string phase in demandPhases)
-                {
-                    Check(demand.Count(f => f.Phase == phase) > 0, $"{label} {phase} recorded observations");
-                }
-
-                // Publication grid membership over the complete demand window (wiring, not just holds).
-                foreach (DownwardFoldFrame frame in demand.Where(f => f.FoldApplied))
-                {
-                    Check(frame.PublicationGridErrorMillimetres <= wiringToleranceMillimetres,
-                        $"{label} {frame.Phase} published origin matches independent family/orbit engagement and yaw composition " +
-                        $"({frame.PublicationGridErrorMillimetres:F6} mm <={wiringToleranceMillimetres} mm)");
-                }
-
-                double maxPositionError = demand.Max(f => f.HeadPositionErrorMillimetres);
-                double maxRotationError = demand.Max(f => f.HeadRotationErrorDegrees);
-                Check(demand.All(f => DownwardFoldPlaytestAcceptance.IsHeadPositionWithinBudget(f.HeadPositionErrorMillimetres)),
-                    $"{label} complete demand final Head position error " +
-                    $"{maxPositionError:F6} mm <={DownwardFoldPlaytestAcceptance.HeadPositionMillimetres} mm provisional playtest bound (n={demand.Length})");
-                Check(demand.All(f => DownwardFoldPlaytestAcceptance.IsHeadRotationWithinBudget(f.HeadRotationErrorDegrees)),
-                    $"{label} complete demand final Head rotation error {maxRotationError:F6} deg " +
-                    $"<={DownwardFoldPlaytestAcceptance.HeadRotationDegrees} deg provisional playtest bound");
-
-                for (int joint = 0; joint < 4; joint++)
-                {
-                    double cap = Mathf.RadToDeg(_authoredHalfCaps[joint]);
-                    double swing = demand.Max(f => f.JointSwingsDegrees[joint]);
-                    // Provisional acceptance only: authored caps and realised gameplay stay unchanged.
-                    Check(demand.All(f => DownwardFoldPlaytestAcceptance.IsSwingWithinAllowance(f.JointSwingsDegrees[joint], cap, joint)),
-                        $"{label} complete demand joint {_chain[4 - joint]} final swing {swing:F6} deg <= authored " +
-                    $"{DownwardFoldPlaytestAcceptance.SwingLimitDegrees(cap, joint):F3} deg observed limit " +
-                        "provisional playtest allowance");
-                }
-
-                // Rest-relative nearest-X distance over the COMPLETE demand window, including transit.
-                double spineOffX = demand.Max(f => f.JointHingeDeparturesDegrees[0]);
-                double chestOffX = demand.Max(f => f.JointHingeDeparturesDegrees[1]);
-                Check(demand.All(f => DownwardFoldPlaytestAcceptance.IsOffAxisWithinAllowance(f.JointHingeDeparturesDegrees[0])),
-                    $"{label} complete demand Spine off-X rotation content {spineOffX:F8} deg " +
-                    $"<={DownwardFoldPlaytestAcceptance.SpineChestOffXDegrees:0.###} deg " +
-                    "provisional playtest bound (authored X hinge)");
-                Check(demand.All(f => DownwardFoldPlaytestAcceptance.IsOffAxisWithinAllowance(f.JointHingeDeparturesDegrees[1])),
-                    $"{label} complete demand Chest off-X rotation content {chestOffX:F8} deg " +
-                    $"<={DownwardFoldPlaytestAcceptance.SpineChestOffXDegrees:0.###} deg " +
-                    "provisional playtest bound (authored X hinge)");
-
-                Sample[] holdSamples = [.. Samples.Where(s => s.Phase == $"{label}_hold")];
-                double rollTransient = holdSamples.Max(s => Math.Abs(s.Roll));
-                Check(rollTransient <= 3.5, $"{label} hold transient roll {rollTransient:F4} deg <=3.5 deg");
-                double maxEyeError = holdSamples.Where(s => s.LeftEye is not null && s.RightEye is not null)
-                    .Select(s => Math.Max(s.LeftEye!.ErrorDegrees, s.RightEye!.ErrorDegrees))
-                    .DefaultIfEmpty(0d)
-                    .Max();
-                Check(maxEyeError <= 0.5, $"{label} hold bilateral eye error {maxEyeError:F4} deg <=0.5 deg");
-
-                // Release is classified SEPARATELY: serial modifier influence decay blends the old
-                // command out, so request/actual divergence during decay is an observation here, never
-                // a demand attainment claim. Only the endpoint contract is asserted. All releases
-                // share the plain "release" phase name, so this label's decay window is attributed
-                // chronologically: the frames after this label's last hold observation, up to the
-                // next iteration's first non-release frame.
-                List<DownwardFoldFrame> releaseFrames = [];
-                int lastHoldIndex = -1;
-                for (int i = 0; i < _prototypeFrames.Count; i++)
-                {
-                    if (_prototypeFrames[i].Phase == $"{label}_hold")
-                    {
-                        lastHoldIndex = i;
-                    }
-                }
-
-                if (lastHoldIndex >= 0)
-                {
-                    for (int i = lastHoldIndex + 1;
-                        i < _prototypeFrames.Count && _prototypeFrames[i].Phase == "release";
-                        i++)
-                    {
-                        releaseFrames.Add(_prototypeFrames[i]);
-                    }
-                }
-
-                if (releaseFrames.Count > 0)
-                {
-                    int aboveMillimetre = releaseFrames.Count(f => f.HeadPositionErrorMillimetres > 1.0d);
-                    double releaseSpineOffX = releaseFrames.Max(f => f.JointHingeDeparturesDegrees[0]);
-                    double releaseChestOffX = releaseFrames.Max(f => f.JointHingeDeparturesDegrees[1]);
-                    Check(true,
-                        $"{label} release observation: {aboveMillimetre} of {releaseFrames.Count} decay samples above " +
-                        $"1 mm, max position {releaseFrames.Max(f => f.HeadPositionErrorMillimetres):F6} mm, max rotation " +
-                        $"{releaseFrames.Max(f => f.HeadRotationErrorDegrees):F6} deg, Spine/Chest off-X content " +
-                        $"{releaseSpineOffX:F6}/{releaseChestOffX:F6} deg (blending window, not an attainment claim)");
-                    DownwardFoldFrame endpoint = releaseFrames[^1];
-                    // Endpoint bounds mirror the accepted release contract (ReleaseAsync asserts
-                    // influence <0.01 and face restoring upstream rest within 0.3°); no stricter
-                    // invented bound here.
-                    Check(endpoint.Influence < 0.01,
-                        $"{label} release endpoint influence {endpoint.Influence:F6} <0.01 (accepted release contract)");
-                    if (animated)
-                    {
-                        Check(true,
-                            $"{label} animated release endpoint face pitch {endpoint.FacePitch:F4} deg (idle-adapted " +
-                            "observation: the static-rest endpoint contract does not apply under native animation)");
-                    }
-                    else
-                    {
-                        Check(Math.Abs(endpoint.FacePitch) <= 0.3,
-                            $"{label} release endpoint face pitch {endpoint.FacePitch:F4} deg within ±0.3 deg of neutral");
-                    }
-                }
-                else
-                {
-                    Check(false, $"{label} release recorded no decay observations after its hold");
-                }
-
-                // Recorded distribution and coupling observations (deliberately NOT pass criteria).
-                DownwardFoldFrame[] applicable = [.. _prototypeFrames.Where(f => f.Phase.StartsWith(label, StringComparison.Ordinal))];
-                DownwardFoldFrame[] folded = [.. applicable.Where(f => f.FoldApplied)];
-                double meanFacePitch = hold.Average(f => f.FacePitch);
-                double meanTorsoPitch = hold.Average(f => f.TorsoPitch);
-                double maxJump = applicable.Length == 0 ? 0d : applicable.Max(f => f.PublishedJumpMillimetres);
-                int maxAlpha = applicable.Length == 0 ? 0 : applicable.Max(f => f.AlphaIndex);
-                double holdCommandYaw = hold.Average(f => f.CommandYaw);
-                double holdCommandPitch = hold.Average(f => f.CommandPitch);
-                double holdSolveYaw = hold.Where(f => f.SolveYawDegrees is not null).Select(f => f.SolveYawDegrees!.Value).DefaultIfEmpty(double.NaN).Average();
-                double holdSolvePitch = hold.Where(f => f.SolvePitchDegrees is not null).Select(f => f.SolvePitchDegrees!.Value).DefaultIfEmpty(double.NaN).Average();
-                int maxSolveIterations = applicable.Where(f => f.SolveIterations is not null).Select(f => (int)f.SolveIterations!).DefaultIfEmpty(0).Max();
-                Check(true,
-                    $"{label} observation: hold face pitch {meanFacePitch:F4} deg, torso pitch {meanTorsoPitch:F4} deg, " +
-                    $"hold command yaw/pitch {holdCommandYaw:F4}/{holdCommandPitch:F4} deg, coupled solve candidate " +
-                    $"{holdSolveYaw:F4}/{holdSolvePitch:F4} deg, peak alpha index {maxAlpha}/32 " +
-                    $"({(folded.Length == 0 ? "fold never applied" : "fold applied")}), max published origin step " +
-                    $"{maxJump:F3} mm, max solve iterations {maxSolveIterations}, hold samples {hold.Length}");
-            }
-
-            // Neutral preservation: the first label's straight window stays neutral and the fold abstains.
-            DownwardFoldFrame[] straight = [.. _prototypeFrames.Where(f => f.Phase == $"{labels[0]}_straight")];
-            if (straight.Length > 0)
-            {
-                if (animated)
-                {
-                    Check(true,
-                        $"{labels[0]} animated straight mean face pitch {straight.Average(f => f.FacePitch):F4} deg " +
-                        "(idle-adapted observation; neutrality is not a static contract under native animation)");
-                }
-                else
-                {
-                    Check(Math.Abs(straight.Average(f => f.FacePitch)) <= 0.05,
-                        $"{labels[0]} straight mean face pitch {straight.Average(f => f.FacePitch):F4} deg within ±0.05 deg of neutral");
-                }
-
-                if (animated)
-                {
-                    // Animated neutral control: the idle's own pitch oscillation legitimately crosses
-                    // the engagement band, so the static "never applied" concept becomes a near-zero
-                    // engagement bound — the neutral control must never deeply fold.
-                    Check(straight.All(f => f.AlphaIndex <= 3),
-                        $"{labels[0]} animated straight stays near-neutral (max alpha index " +
-                        $"{straight.Max(f => f.AlphaIndex)}/32 <=3; deep engagement would be a defect)");
-                }
-                else
-                {
-                    Check(!straight.Any(f => f.FoldApplied),
-                        $"{labels[0]} straight evaluations abstain from the fold (neutral keeps the orbit path)");
-                }
-            }
-
-            if (requireFoldWitness)
-            {
-                Check(_prototypeFrames.Any(f => f.Phase == $"{labels[^1]}_hold" && f.FoldApplied),
-                    $"{labels[^1]} hold published fold-family origins (the representative probe exercised the production seam)");
-            }
-        }
-
-        public void CheckMatrixFixationAndRoll(string label, bool requireEyeMotion)
-        {
-            FixationWindowResult result = ActiveFixationWindow!.Evaluate();
-            // The neutral distance-only control is already fixated; it has no new directional
-            // demand and cannot require >0.5 degree optical movement merely to prove onset.
-            if (requireEyeMotion)
-            {
-                Check(result.IsOnsetWithinBound, $"{label} fixation onset {result.OnsetFrame} <=2 presented frames");
-            }
-            Check(result.IsCompletionWithinDeadline,
-                $"{label} fixation acquisition {result.CompletionSeconds ?? double.PositiveInfinity:F6}s <=0.4s");
-            Check(result.IsFixationMaintained,
-                $"{label} maintained bilateral fixation {result.MaxPostCompletionErrorDegrees:F6} deg <=0.5 deg");
-            Sample[] demand = [.. Samples.Where(s => s.Phase == $"{label}_glance"
-                || s.Phase == $"{label}_settle" || s.Phase == $"{label}_hold")];
-            Sample before = Samples.Last(s => s.Phase == $"{label}_straight");
-            double assigned = Assignment!.Value.Time;
-            double overshoot = demand.Where(s => s.Time - assigned <= 0.4).Max(s => Math.Max(
-                DirectFixationGeometry.AngleBetweenDegrees(before.LeftEye!.Actual, s.LeftEye!.Actual)
-                    - DirectFixationGeometry.AngleBetweenDegrees(before.LeftEye.Actual, s.LeftEye.Expected),
-                DirectFixationGeometry.AngleBetweenDegrees(before.RightEye!.Actual, s.RightEye!.Actual)
-                    - DirectFixationGeometry.AngleBetweenDegrees(before.RightEye.Actual, s.RightEye.Expected)));
-            Check(overshoot <= 4, $"{label} acquisition overshoot {Math.Max(0, overshoot):F6} deg <=4 deg");
-            Check(demand.Zip(demand.Skip(1)).All(p => p.Second.Frame == p.First.Frame + 1),
-                $"{label} complete consecutive presented demand frames");
-            Check(demand.All(s => double.IsFinite(s.Roll) && Math.Abs(s.Roll) <= 3.5),
-                $"{label} complete demand transient roll {demand.Max(s => Math.Abs(s.Roll)):F6} deg <=3.5 deg");
-            foreach (Sample end in demand.Where(s => s.Time - demand[0].Time >= 0.5))
-            {
-                Sample[] window = [.. demand.Where(s => s.Time > end.Time - 0.5 && s.Time <= end.Time)];
-                Check(Math.Abs(window.Average(s => s.Roll)) <= 2,
-                    $"{label} 0.5s sampled mean roll {window.Average(s => s.Roll):F6} deg within +/-2 deg");
             }
         }
 
@@ -2327,7 +1347,7 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
 
         private void WriteEvidence()
         {
-            string directory = _manualEvidenceDirectory ?? _freshInputDirectory ?? _downwardDirectory ?? _animatedEvidenceDirectory ?? ProjectSettings.GlobalizePath("res://temp/ai-009-isolated");
+            string directory = _manualEvidenceDirectory ?? _animatedEvidenceDirectory ?? ProjectSettings.GlobalizePath("res://temp/ai-009-isolated");
             _ = Directory.CreateDirectory(directory);
             if (_manual)
             {
@@ -2352,11 +1372,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
             }
 
             File.WriteAllLines(Path.Combine(directory, $"{_name}-checks.txt"), _checks);
-            if (_downwardDirectory is not null)
-            {
-                File.WriteAllLines(Path.Combine(directory, "downward-presentations.jsonl"), _downwardTrace);
-                File.WriteAllLines(Path.Combine(directory, "events.jsonl"), _downwardEvents);
-            }
             if (_animatedEvidenceDirectory is not null)
             {
                 File.WriteAllLines(Path.Combine(directory, "presentations.jsonl"), _animatedTrace);
@@ -2374,11 +1389,9 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
 
         public async ValueTask DisposeAsync()
         {
-            string? freshDirectory = _freshInputDirectory;
             ulong rootIdentity = _root.GetInstanceId();
             Exception? failure = null;
             Attempt(WriteEvidence);
-            Attempt(CompleteFreshInputCapture);
             Attempt(() => FixtureSkeleton.SkeletonUpdated -= CaptureSolvedJoints);
             Attempt(_root.QueueFree);
             Attempt(() => Engine.MaxFps = _oldFps);
@@ -2390,19 +1403,6 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
             catch (Exception error)
             {
                 failure ??= error;
-            }
-            if (freshDirectory is not null)
-            {
-                Attempt(() => File.WriteAllText(Path.Combine(freshDirectory, "cleanup.json"), JsonSerializer.Serialize(new
-                {
-                    RootIdentity = rootIdentity,
-                    RootStillValid = GodotObject.IsInstanceValid(_root),
-                    ExpectedMaxFps = _oldFps,
-                    ActualMaxFps = Engine.MaxFps,
-                    ExpectedPhysicsTicks = _oldPhysics,
-                    ActualPhysicsTicks = Engine.PhysicsTicksPerSecond,
-                    Failure = failure?.ToString()
-                })));
             }
             if (failure is not null)
             {

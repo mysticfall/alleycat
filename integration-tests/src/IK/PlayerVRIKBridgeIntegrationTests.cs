@@ -27,6 +27,29 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
 
     /// <summary>
+    /// Native-free endpoint for the authored NPC navigation worker. IK wiring facts never verify locomotion;
+    /// binding this before Ready keeps the unrelated MotionBricksNavigation from constructing a real CUDA
+    /// session (its worker is eager) while every wiring assertion keeps running on production nodes.
+    /// </summary>
+    private sealed class AmbientIkSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientIkSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientIkSession();
+        }
+    }
+
+    /// <summary>
     /// Verifies the actual player scene explicitly wires PlayerVRIK to the generated physical rig dependency.
     /// </summary>
     [Headless]
@@ -67,6 +90,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        sceneTree.NodeAdded += BindAmbientIkSession;
         sceneTree.Root.AddChild(npc);
         await WaitForFramesAsync(sceneTree, 6);
         EnsureRuntimeRoleInstalled(npc);
@@ -85,6 +109,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         }
         finally
         {
+            sceneTree.NodeAdded -= BindAmbientIkSession;
             npc.QueueFree();
             await WaitForNextFrameAsync(sceneTree);
         }
@@ -130,6 +155,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        sceneTree.NodeAdded += BindAmbientIkSession;
         sceneTree.Root.AddChild(npc);
         await WaitForFramesAsync(sceneTree, 8);
         await WaitForPhysicsFramesAsync(sceneTree, 2);
@@ -147,6 +173,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         }
         finally
         {
+            sceneTree.NodeAdded -= BindAmbientIkSession;
             npc.QueueFree();
             await WaitForNextFrameAsync(sceneTree);
         }
@@ -161,9 +188,11 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         Node fixture = LoadPackedScene(ReferencePlayerFixtureScenePath).Instantiate();
+        sceneTree.NodeAdded += BindAmbientIkSession;
         sceneTree.Root.AddChild(fixture);
         await WaitForFramesAsync(sceneTree, 10);
         await WaitForPhysicsFramesAsync(sceneTree, 2);
+        sceneTree.NodeAdded -= BindAmbientIkSession;
         EnsureRuntimeRoleInstalled(fixture.GetNode("Actors/Player"));
         EnsureRuntimeRoleInstalled(fixture.GetNode("Actors/Ally"));
 
@@ -236,6 +265,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        sceneTree.NodeAdded += BindAmbientIkSession;
         sceneTree.Root.AddChild(npc);
 
         try
@@ -259,6 +289,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         }
         finally
         {
+            sceneTree.NodeAdded -= BindAmbientIkSession;
             npc.QueueFree();
             await WaitForNextFrameAsync(sceneTree);
         }

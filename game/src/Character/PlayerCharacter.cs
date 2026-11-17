@@ -6,7 +6,7 @@ using Godot;
 namespace AlleyCat.Character;
 
 /// <summary>
-/// Character root for the player role and its independently composed locomotion capability.
+/// Character root for the player role.
 /// </summary>
 [GlobalClass]
 public partial class PlayerCharacter : Character, IPlayer
@@ -15,7 +15,6 @@ public partial class PlayerCharacter : Character, IPlayer
     protected override void ComposeComponents(List<IComponent> components)
     {
         components.Add(RequireComponentReference(Eyes, nameof(Eyes)));
-        components.Add(RequireComponentReference(Locomotion, nameof(Locomotion)));
         if (Navigation is not null)
         {
             components.Add(Navigation);

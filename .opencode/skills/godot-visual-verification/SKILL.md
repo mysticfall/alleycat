@@ -26,6 +26,13 @@ The project provides these reusable photobooth base scenes:
 Photobooths are optional evidence tools. Prefer the actual scene or harness when it reproduces the report more
 representatively. When a photobooth is appropriate, use the most specific scene that matches the verification need.
 
+## Debug Device, Not a Test
+
+Visual verification is an on-demand debug device for building features, especially when human verification is needed.
+Run photobooth scenes and GDScript capture runners directly; never write screenshot, capture or photobooth checks as
+xUnit/integration facts or anywhere a test run could discover them. All artefacts under `res://temp` are disposable.
+Citing an existing integration test's non-visual assertions as supporting evidence remains acceptable.
+
 ## Development Workflow
 
 1. **Define the Visible Claim and, For a Defect, Establish the Red Baseline**
@@ -38,8 +45,8 @@ representatively. When a photobooth is appropriate, use the most specific scene 
     - Prefer the existing runtime scene or test harness when it reproduces the defect.
     - Select the least-intrusive evidence method that proves the claim over its complete observation window. Temporal
       methods may be a representative playable observation, deterministic video, sampled frame sequence, or synchronised
-      trace. None requires new screenshot, GDScript, C#, or photobooth infrastructure unless that infrastructure is part
-      of the selected method.
+      trace. None requires new screenshot, GDScript runner or photobooth infrastructure unless that infrastructure is
+      part of the selected method.
     - Use a photobooth only when controlled views or static comparisons add relevant evidence; it is not a mandatory
       replacement for an actual reproducer.
     - When using a photobooth:
@@ -54,8 +61,8 @@ representatively. When a photobooth is appropriate, use the most specific scene 
 3. **Implement Against the Unchanged Regression**
     - Collect evidence through the selected representative method.
     - If that method uses a GDScript runner, keep its base name aligned with its scene and validate its scenario states.
-    - If that method uses a C# integration test, load the representative fixture and retain relevant non-visual anomaly
-      assertions as supporting evidence.
+    - If an existing integration test covers the scenario, its non-visual assertions may serve as supporting evidence.
+      Do not add capture or visual checks to the test suite.
     - Rerun the original regression after meaningful production changes and on the final candidate.
 
     > **Critical: Pre-Capture Directional Sanity Check**
@@ -114,7 +121,8 @@ godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- -
 - Final evidence over the same scenario, criterion, and observation window.
 - For screenshots, include camera and marker sanity, the directory under `@game/temp/`, independent `read` inspection,
   and the required observation tables.
-- For a selected runner or integration test, include its path, execution result, and relevant assertion summary.
+- For a selected runner or supporting integration test, include its path, execution result, and relevant assertion
+  summary.
 
 ### Gate Checks
 
@@ -133,8 +141,9 @@ godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- -
    loaded with the `read` tool, they must be shared with the user for manual verification before the gate can pass.
 8. When screenshot scenarios should differ, they produce visibly distinct results.
    > **Critical:** Verify that each scenario name matches the visible result. Stop and escalate when they disagree.
-9. If a test runner or integration test is selected, it executed successfully and its assertions support the same claim.
-10. For a selected IK/pose integration test, anomaly guards address the visual risk where practical.
+9. If a runner or supporting integration test is selected, it executed successfully and its assertions support the
+   same claim. No screenshot, capture or photobooth check was added to the test suite.
+10. For a supporting IK/pose integration test, its existing non-visual anomaly guards address the risk where practical.
 11. If the user reports a visual contradiction after a prior pass, reopen the gate as `FOLLOW-UP REQUIRED` until new
     evidence resolves the contradiction.
 12. **Scene-Setup Gate:** If a selected screenshot or scene setup is wrong, the gate is `FOLLOW-UP REQUIRED` even if
@@ -218,6 +227,6 @@ If vision tools produce unreliable or contradictory results:
 - Selected evidence method and why it is representative.
 - Evidence record or artefact paths for the complete observation window.
 - For screenshots, camera and marker verification notes and the artefact directory under `@game/temp/`.
-- For a selected runner or integration test, its path, execution result, and assertion summary.
+- For a selected runner or supporting integration test, its path, execution result, and assertion summary.
 - Final result against the unchanged regression and any unproved remainder.
 - Gate outcome.

@@ -1,29 +1,41 @@
 using System.Text;
+using AlleyCat.Core.Installer;
 using AlleyCat.IK;
-using AlleyCat.IntegrationTests.Navigation;
-using AlleyCat.Navigation;
-using AlleyCat.Rigging;
+using AlleyCat.Rigging.Installation;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
 namespace AlleyCat.IntegrationTests.IK;
 
-/// <summary>IK-003 TR26: independent metadata contacts and final, world-space foot-basis headings.</summary>
+/// <summary>Independent final world-space foot-basis heading and native target actuation checks.</summary>
 public sealed class IK003WorldFacingHoldRegressionIntegrationTests
 {
-    // Output-only redirect: runs may point evidence at a fresh tree via ALLEYCAT_IK003_YAW_EVIDENCE without
-    // touching the recorded baseline folder; the default remains the original baseline location.
-    private static readonly string _evidenceDirectory = OS.GetEnvironment("ALLEYCAT_IK003_YAW_EVIDENCE") is { Length: > 0 } path
-        ? $"res://temp/{path.TrimStart('/')}"
-        : "res://temp/nav001-robotic-pivot-ranking-order-fix/run-01/yaw";
-    // The fixed engineering bound is independently checked by Female_KnownFootTargets_NativeFinalWorldFacingPrecision:
-    // command -> final native foot heading was <= 0.000028 degrees on eight known reachable targets, with a
-    // <= 0.001-degree mathematical oracle and target-actuation check. The remaining > 1.2499 degrees is a
-    // deliberately conservative allowance for different poses and the new target policy, not an inferred angular
-    // allowance from ball-position tolerance. This is not a perceptual naturalness threshold or a universal bound.
     private const float MaximumHoldErrorDegrees = 1.25f;
     private const float MinimumAnatomicalLeverMetres = 0.08f;
+
+    /// <summary>
+    /// Native-free endpoint for the authored NPC navigation worker; the world-facing hold facts verify the
+    /// foot/leg modifier chain, never locomotion. Bound before Ready so the eager MotionBricksNavigation
+    /// worker cannot construct a real CUDA session during these runs.
+    /// </summary>
+    private sealed class AmbientIkSession : AlleyCat.Motion.SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])context[3].Clone())];
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static void BindAmbientIkSession(Node node)
+    {
+        if (node is Navigation.MotionBricksNavigation navigation)
+        {
+            navigation.SessionFactory = () => new AmbientIkSession();
+        }
+    }
 
     /// <inheritdoc/>
     [Fact]
@@ -51,27 +63,36 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
     [Fact]
     public async Task Female_KnownFootTargets_NativeFinalWorldFacingPrecision()
     {
-        // Output-only redirect: a run may point calibration evidence at a fresh tree; the recorded candidate
-        // calibration folder stays untouched.
+        // Output-only: every run owns a fresh evidence directory so the recorded candidate calibration under
+        // nav001-yaw-scale-candidate is never rewritten. An explicit override still selects a curated tree.
         string evidenceDirectory = OS.GetEnvironment("ALLEYCAT_IK003_CALIBRATION_EVIDENCE") is { Length: > 0 } calibrationPath
             ? $"res://temp/{calibrationPath.TrimStart('/')}"
-            : "res://temp/nav001-yaw-scale-candidate/run-01/calibration";
+            : $"res://temp/tests/ik003-calibration/{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}";
         SceneTree sceneTree = GetSceneTree();
         int previousLimit = Engine.MaxPhysicsStepsPerFrame;
         Engine.MaxPhysicsStepsPerFrame = 1;
-        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NavigationRigTestSupport.NavigationTestScenePath).Instantiate(), exactMatch: false);
+        Node3D root = Assert.IsType<Node3D>(LoadPackedScene("res://assets/characters/reference/ally_npc.tscn").Instantiate(), exactMatch: false);
+        sceneTree.NodeAdded += BindAmbientIkSession;
         KnownTargetProvider? leftProvider = null;
         KnownTargetProvider? rightProvider = null;
         try
         {
-            Node3D actor = root.GetNode<Node3D>(NavigationRigTestSupport.ActorNodeName);
-            NavigationRigTestSupport.PrepareActorBeforeTreeEntry(actor);
-            sceneTree.Root.AddChild(root);
-            _ = await NavigationRigTestSupport.WaitForReadyNavigationAsync(sceneTree, root, actor);
-            await WaitForPhysicsFramesAsync(sceneTree, NavigationRigTestSupport.WarmUpPhysicsTicks);
-
-            Skeleton3D skeleton = actor.GetNode<Skeleton3D>(NavigationRigTestSupport.SkeletonPath);
+            Node3D actor = root;
+            RigRoleTemplateSceneInstaller installer = actor.GetNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+            installer.AutoInstallOnReady = false;
+            SceneInstallationResult installation = installer.Install(new SceneInstallationContext(actor));
+            Assert.True(installation.Succeeded, string.Join('\n', installation.Errors));
             CharacterIK characterIK = actor.GetNode<CharacterIK>("CharacterIK");
+            characterIK.HeadTargetIntentProvider = null;
+            characterIK.HeadFallbackIntentProvider = null;
+            Node mind = actor.GetNode("Mind");
+            actor.RemoveChild(mind);
+            mind.Free();
+            actor.GetNode<AnimationTree>("AnimationTree").Active = false;
+            sceneTree.Root.AddChild(root);
+            await WaitForPhysicsFramesAsync(sceneTree, 30);
+
+            Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
             Node3D leftTarget = Assert.IsType<Node3D>(characterIK.LeftFootIKTarget, exactMatch: false);
             Node3D rightTarget = Assert.IsType<Node3D>(characterIK.RightFootIKTarget, exactMatch: false);
             int leftFoot = skeleton.FindBone("LeftFoot");
@@ -208,13 +229,14 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
             string directory = ProjectSettings.GlobalizePath(evidenceDirectory);
             _ = Directory.CreateDirectory(directory);
             File.WriteAllText(Path.Combine(directory, "native-foot-orientation.csv"), rows.ToString());
-            File.WriteAllText(Path.Combine(directory, "derivation.txt"), FormattableString.Invariant($"reference female; {samples} final post-IK foot observations; peak native target-to-output world-heading error={peak:R} deg; command-to-applied tolerance=0.001 deg (full basis within 0.00001 units); mathematical known-transform oracle tolerance=0.001 deg; unchanged TR26 regression bound={MaximumHoldErrorDegrees:R} deg; conservative remaining allowance={MaximumHoldErrorDegrees - peak:R} deg for uncalibrated poses and future target policy. Each provider was called once, command reached the stage on the same tick, both final skeleton poses were finite and reachable. Samples use neutral/turned/wrap world headings, tilt and heel roll with 60 mm radial inset from idle near-extension. This empirical margin supports the bound for the sampled conditions, not every pose or the new policy. The 1 mm positional target tolerance is not a rotational precision measurement; A6 still requires user judgement.\n"));
+            File.WriteAllText(Path.Combine(directory, "derivation.txt"), FormattableString.Invariant($"reference female; {samples} final post-IK foot observations; peak native target-to-output world-heading error={peak:R} deg; command-to-applied tolerance=0.001 deg (full basis within 0.00001 units); mathematical known-transform oracle tolerance=0.001 deg; native actuation bound={MaximumHoldErrorDegrees:R} deg. Each provider was called once, command reached the stage on the same tick, both final skeleton poses were finite and reachable. Samples use neutral/turned/wrap world headings, tilt and heel roll with 60 mm radial inset from near-extension. This is native IK actuation evidence, not locomotion or planting evidence.\n"));
             Assert.Equal(8, samples);
             Assert.True(peak <= MaximumHoldErrorDegrees, $"Native final orientation precision {peak:R}° exceeds fixed {MaximumHoldErrorDegrees:R}°; evidence {evidenceDirectory}.");
         }
         finally
         {
             Engine.MaxPhysicsStepsPerFrame = previousLimit;
+            sceneTree.NodeAdded -= BindAmbientIkSession;
             root.QueueFree();
             await WaitForFramesAsync(sceneTree, 1);
         }
@@ -263,237 +285,10 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
         }
     }
 
-    /// <inheritdoc/>
-    [Fact]
-    public Task S1_Oblique_WorldFacingHeld() => RunAsync("s1-oblique-2m-30deg", new Vector3(-1f, 0f, -Mathf.Sqrt(3f)), Mathf.DegToRad(30f));
-
-    /// <inheritdoc/>
-    [Fact]
-    public Task S3_Turn90_WorldFacingHeld() => RunAsync("s3-turn-90deg-left", Vector3.Zero, Mathf.Pi / 2f);
-
-    /// <inheritdoc/>
-    [Fact]
-    public Task S4_Turn180_WorldFacingHeld() => RunAsync("s4-turn-180deg", Vector3.Zero, Mathf.Pi);
-
-    /// <inheritdoc/>
-    [Fact]
-    public Task S6_UserShuffle_WorldFacingHeld() => RunAsync("s6-user-shuffle", new Vector3(-0.45992267f, 0f, -1.4639847f), 0.30439475f);
-
-    private static async Task RunAsync(string scenario, Vector3 destination, float yaw)
-    {
-        SceneTree sceneTree = GetSceneTree();
-        int previousLimit = Engine.MaxPhysicsStepsPerFrame;
-        Engine.MaxPhysicsStepsPerFrame = 1;
-        Node3D root = Assert.IsType<Node3D>(LoadPackedScene(NavigationRigTestSupport.NavigationTestScenePath).Instantiate(), exactMatch: false);
-        AnimationGraphPlantedStateRecorder? recorder = null;
-        FacingCapture? capture = null;
-        try
-        {
-            Node3D actor = root.GetNode<Node3D>(NavigationRigTestSupport.ActorNodeName);
-            NavigationRigTestSupport.PrepareActorBeforeTreeEntry(actor);
-            sceneTree.Root.AddChild(root);
-            INavigation navigation = await NavigationRigTestSupport.WaitForReadyNavigationAsync(sceneTree, root, actor);
-            recorder = NavigationRigTestSupport.BindRecorder(actor);
-            recorder.Attach();
-            Skeleton3D skeleton = actor.GetNode<Skeleton3D>(NavigationRigTestSupport.SkeletonPath);
-            capture = new FacingCapture(actor, skeleton);
-            await WaitForPhysicsFramesAsync(sceneTree, NavigationRigTestSupport.WarmUpPhysicsTicks);
-            NavigationRigTestSupport.AssertIdleWarmUp(recorder, actor);
-
-            NavigationRequestIdentity identity = NavigationRigTestSupport.IssueRequest(
-                navigation, new NavigationRigTestSupport.ArrivalRequest(destination, yaw), scenario, 0);
-            ulong issueTick = Engine.GetPhysicsFrames();
-            NavigationTerminalOutcomeRecord? outcome = null;
-            ulong completionTick = 0;
-            // A process-frame barrier follows each physics signal, never an Advance(0) or a pose read from the
-            // physics-await continuation. The SkeletonUpdated callback is the sole source of final headings.
-            await WaitForNextFrameAsync(sceneTree);
-            for (int tick = 0; tick < 1200 && outcome is null; tick++)
-            {
-                outcome = NavigationRigTestSupport.FindOutcome(navigation, identity);
-                if (outcome is not null)
-                {
-                    completionTick = Engine.GetPhysicsFrames();
-                    break;
-                }
-
-                await WaitForNextPhysicsFrameAsync(sceneTree);
-                await WaitForNextFrameAsync(sceneTree);
-            }
-
-            Assert.True(outcome is not null, $"SETUP: {scenario} never completed its navigation request.");
-            for (int tick = 0; tick < Engine.PhysicsTicksPerSecond; tick++)
-            {
-                await WaitForNextPhysicsFrameAsync(sceneTree);
-                await WaitForNextFrameAsync(sceneTree);
-            }
-
-            ulong lastTick = Engine.GetPhysicsFrames();
-            recorder.Detach();
-            capture.Detach();
-            Assert.Equal(0, recorder.UnpairedTicks);
-            Assert.Equal(0, recorder.RepeatedSkeletonUpdates);
-            Assert.Equal(0, capture.DuplicateTicks);
-            Assert.True(capture.Levers.Left >= MinimumAnatomicalLeverMetres && capture.Levers.Right >= MinimumAnatomicalLeverMetres,
-                $"SETUP: anatomical lever below {MinimumAnatomicalLeverMetres} m: {capture.Levers}.");
-
-            List<PlantedStateSample> samples = [.. recorder.Samples.Where(s => s.Tick >= issueTick && s.Tick <= lastTick)];
-            Assert.Equal((long)(lastTick - issueTick + 1), samples.Count);
-            StringBuilder csv = new("tick,clip,fading,planted_l,planted_r,actor_yaw_deg,world_heading_l_deg,world_heading_r_deg,ball_l_x,ball_l_z,ball_r_x,ball_r_z,reach_release_l,reach_release_r\n");
-            var runs = new List<string>();
-            float maximum = 0f;
-            int plantedRuns = 0;
-            foreach (bool left in new[] { true, false })
-            {
-                PlantedStateSample? previous = recorder.Samples.LastOrDefault(s => s.Tick < issueTick);
-                float anchor = 0f;
-                float maxYaw = 0f;
-                float maxBall = 0f;
-                ulong start = 0;
-                string startClip = string.Empty;
-                string endClip = string.Empty;
-                bool active = false;
-                foreach (PlantedStateSample sample in samples)
-                {
-                    Assert.True(capture.Headings.TryGetValue(sample.Tick, out HeadingPair headings), $"SETUP: no post-IK facing for tick {sample.Tick}.");
-                    float current = left ? headings.Left : headings.Right;
-                    Assert.True(float.IsFinite(current), $"SETUP: degenerate anatomical axis on tick {sample.Tick}.");
-                    bool planted = left ? sample.Planted.Left : sample.Planted.Right;
-                    if (planted && !active)
-                    {
-                        // A contact already active at issue is anchored by the immediately preceding final pose.
-                        bool inherited = previous is not null && (left ? previous.Planted.Left : previous.Planted.Right);
-                        Assert.True(!inherited || capture.Headings.TryGetValue(previous!.Tick, out _), "SETUP: missing preceding contact pose.");
-                        anchor = inherited ? (left ? capture.Headings[previous!.Tick].Left : capture.Headings[previous!.Tick].Right) : current;
-                        start = sample.Tick;
-                        startClip = sample.Graph.Current;
-                        maxYaw = 0f;
-                        maxBall = 0f;
-                        active = true;
-                    }
-
-                    if (planted)
-                    {
-                        maxYaw = Mathf.Max(maxYaw, Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(anchor, current))));
-                        Vector3 ball = left ? sample.LeftBall : sample.RightBall;
-                        Vector3 initial = left ? samples.First(s => s.Tick == start).LeftBall : samples.First(s => s.Tick == start).RightBall;
-                        maxBall = Mathf.Max(maxBall, new Vector2(ball.X - initial.X, ball.Z - initial.Z).Length());
-                        endClip = sample.Graph.Current;
-                    }
-
-                    if (active && (!planted || sample.Tick == lastTick))
-                    {
-                        ulong end = planted ? sample.Tick : sample.Tick - 1;
-                        runs.Add(FormattableString.Invariant($"{scenario},{(left ? "left" : "right")},{start},{end},{Mathf.RadToDeg(anchor):R},{maxYaw:R},{maxBall * 1000:R},{startClip},{endClip}"));
-                        maximum = Mathf.Max(maximum, maxYaw);
-                        plantedRuns++;
-                        active = false;
-                    }
-
-                    previous = sample;
-                }
-            }
-
-            foreach (PlantedStateSample sample in samples)
-            {
-                HeadingPair heading = capture.Headings[sample.Tick];
-                string clip = sample.Graph.Current;
-                _ = csv.AppendLine(FormattableString.Invariant($"{sample.Tick},{clip},{sample.Graph.Fading},{(sample.Planted.Left ? 1 : 0)},{(sample.Planted.Right ? 1 : 0)},{Mathf.RadToDeg(NavigationRigTestSupport.YawOf(sample.Actor)):R},{Mathf.RadToDeg(heading.Left):R},{Mathf.RadToDeg(heading.Right):R},{sample.LeftBall.X:R},{sample.LeftBall.Z:R},{sample.RightBall.X:R},{sample.RightBall.Z:R},{(capture.Releases.Left.Contains(sample.Tick) ? 1 : 0)},{(capture.Releases.Right.Contains(sample.Tick) ? 1 : 0)}"));
-            }
-
-            string directory = ProjectSettings.GlobalizePath(_evidenceDirectory);
-            _ = Directory.CreateDirectory(directory);
-            File.WriteAllText(Path.Combine(directory, $"{scenario}-ticks.csv"), csv.ToString());
-            File.WriteAllText(Path.Combine(directory, $"{scenario}-runs.csv"), "scenario,foot,start_tick,end_tick,anchor_world_deg,max_world_excursion_deg,max_planar_ball_mm,start_clip,end_clip\n" + string.Join('\n', runs) + "\n");
-            File.WriteAllText(Path.Combine(directory, $"{scenario}-summary.txt"), FormattableString.Invariant($"issue={issueTick} completion={completionTick} last={lastTick} ticks_per_second={Engine.PhysicsTicksPerSecond} runs={plantedRuns} max_world_yaw_deg={maximum:R} bound_deg={MaximumHoldErrorDegrees:R} lever_l_m={capture.Levers.Left:R} lever_r_m={capture.Levers.Right:R} duplicate={capture.DuplicateTicks} unpaired={recorder.UnpairedTicks}\n"));
-            Assert.True(plantedRuns > 0, $"SETUP: {scenario} produced no metadata-planted run.");
-            Assert.True(maximum <= MaximumHoldErrorDegrees,
-                $"IK-003 WORLD-FACING RED: {scenario} {maximum:R}° > {MaximumHoldErrorDegrees:R}°; {plantedRuns} runs, issue {issueTick} completion {completionTick} last {lastTick}; evidence {_evidenceDirectory}.");
-        }
-        finally
-        {
-            capture?.Detach();
-            recorder?.Detach();
-            Engine.MaxPhysicsStepsPerFrame = previousLimit;
-            root.QueueFree();
-            await WaitForFramesAsync(sceneTree, 1);
-        }
-    }
-
     private static float Heading(Vector3 direction)
     {
         direction.Y = 0f;
         return direction.LengthSquared() < 1e-10f ? float.NaN : Mathf.Atan2(-direction.X, -direction.Z);
     }
 
-    private readonly record struct HeadingPair(float Left, float Right);
-
-    private sealed class FacingCapture
-    {
-        private readonly Skeleton3D _skeleton;
-        private readonly int _left;
-        private readonly int _right;
-        private readonly Vector3 _leftAxis;
-        private readonly Vector3 _rightAxis;
-        private readonly FootPlantingTargetProvider _leftProvider;
-        private readonly FootPlantingTargetProvider _rightProvider;
-
-        public FacingCapture(Node3D actor, Skeleton3D skeleton)
-        {
-            _skeleton = skeleton;
-            _left = skeleton.FindBone("LeftFoot");
-            _right = skeleton.FindBone("RightFoot");
-            int leftToes = skeleton.FindBone("LeftToes");
-            int rightToes = skeleton.FindBone("RightToes");
-            Assert.True(_left >= 0 && _right >= 0 && leftToes >= 0 && rightToes >= 0, "SETUP: both anatomical foot/toe pairs required.");
-            // Bone-rest foot -> ball/toes vector, expressed in the foot bone's own frame; never assume local -Z.
-            _leftAxis = skeleton.GetBoneGlobalRest(_left).AffineInverse() * skeleton.GetBoneGlobalRest(leftToes).Origin;
-            _rightAxis = skeleton.GetBoneGlobalRest(_right).AffineInverse() * skeleton.GetBoneGlobalRest(rightToes).Origin;
-            Levers = (_leftAxis.Length(), _rightAxis.Length());
-            _leftProvider = actor.GetNode<FootPlantingTargetProvider>("CharacterIK/LeftFootPlanting");
-            _rightProvider = actor.GetNode<FootPlantingTargetProvider>("CharacterIK/RightFootPlanting");
-            _leftProvider.TickRecorded += OnDiagnostic;
-            _rightProvider.TickRecorded += OnDiagnostic;
-            skeleton.SkeletonUpdated += OnUpdated;
-        }
-
-        public Dictionary<ulong, HeadingPair> Headings { get; } = [];
-        public (float Left, float Right) Levers
-        {
-            get;
-        }
-        public (HashSet<ulong> Left, HashSet<ulong> Right) Releases { get; } = ([], []);
-        public int DuplicateTicks
-        {
-            get; private set;
-        }
-
-        public void Detach()
-        {
-            _skeleton.SkeletonUpdated -= OnUpdated;
-            _leftProvider.TickRecorded -= OnDiagnostic;
-            _rightProvider.TickRecorded -= OnDiagnostic;
-        }
-
-        private void OnDiagnostic(FootPlantingTickDiagnostic diagnostic)
-        {
-            if (diagnostic.ReachBlendOutStarted)
-            {
-                _ = (diagnostic.Side == LimbSide.Left ? Releases.Left : Releases.Right).Add(diagnostic.Tick);
-            }
-        }
-
-        private void OnUpdated()
-        {
-            ulong tick = Engine.GetPhysicsFrames();
-            Transform3D frame = _skeleton.GlobalTransform;
-            HeadingPair heading = new(
-                Heading((frame * _skeleton.GetBoneGlobalPose(_left)).Basis * _leftAxis),
-                Heading((frame * _skeleton.GetBoneGlobalPose(_right)).Basis * _rightAxis));
-            if (!Headings.TryAdd(tick, heading))
-            {
-                DuplicateTicks++;
-            }
-        }
-    }
 }

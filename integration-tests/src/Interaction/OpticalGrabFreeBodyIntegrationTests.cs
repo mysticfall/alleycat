@@ -17,7 +17,7 @@ namespace AlleyCat.IntegrationTests.Interaction;
 /// <summary>
 /// Free-body regression coverage for the pending-grab approach against a REAL unfrozen
 /// <c>test_ball.tscn</c> resting on an authored static table — the resting-item condition every existing
-/// photobooth fixture freezes. Verifies the pending-candidate collision protection contract (INTR-002
+/// grab fixture freezes. Verifies the pending-candidate collision protection contract (INTR-002
 /// pending approach protection): while a movable grab is pending, the authorised approach must not push the
 /// candidate (rig proxies exempted, hand IK target exempted, explicit interaction channel suppressed), the
 /// protection must fully revert on abandon, commit→release, and candidate switch, open hands must still push
@@ -26,7 +26,7 @@ namespace AlleyCat.IntegrationTests.Interaction;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The fixture reuses the real reference-player photobooth rig (production coordinator, modifier, hands,
+/// The fixture reuses the real reference-player grab fixture rig (production coordinator, modifier, hands,
 /// VRIK, physical proxy rig) with the frozen showcase items moved away, a static table authored in the
 /// fixture, and a freshly instanced unfrozen ball. The table sits on the item layer (layer 2) with an
 /// item-layer mask so the ball's layer 2 physically rests on it, while the hand IK target body (mask 5)
@@ -35,13 +35,13 @@ namespace AlleyCat.IntegrationTests.Interaction;
 /// </para>
 /// <para>
 /// Inputs are frozen authored optical samples (wrist trajectory plus flex ramp constants identical to the
-/// photobooth frozen-input trial); the wrist approaches with the authored side/cupping orientation rather
+/// fixture frozen-input trial); the wrist approaches with the authored side/cupping orientation rather
 /// than palm-down-from-above.
 /// </para>
 /// </remarks>
 public sealed class OpticalGrabFreeBodyIntegrationTests
 {
-    private const string PhotoboothScenePath = "res://tests/interaction/optical_grab_photobooth.tscn";
+    private const string FixtureScenePath = "res://assets/testing/optical_grab/optical_grab_fixture.tscn";
     private const string MockRuntimeScenePath = "res://assets/xr/mock_runtime.tscn";
     private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
 
@@ -77,7 +77,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
     /// <summary>Physics-tick budget within which the persistently moving candidate must abandon.</summary>
     private const int MovingCandidateBudgetTicks = 240;
 
-    private static readonly Vector3 _rightWristRest = new(0.25f, 1.08f, -0.43f);
+    private static readonly Vector3 _rightWristRest = new Vector3(0.25f, 1.08f, -0.43f) + OpticalGrabRestPoseRig.LayoutOffset;
 
     /// <summary>
     /// Authored rest wrist orientation: the wrist stays inside the ball's recognition reach (0.12 m), but the
@@ -88,22 +88,22 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
 
     /// <summary>
     /// Separately authored terminal wrist pose for the free-ball trial — the diagnosed side/cupping
-    /// orientation, identical to the photobooth frozen-input convention; frozen fixture input, never
+    /// orientation, identical to the fixture frozen-input convention; frozen fixture input, never
     /// recomputed from runtime state.
     /// </summary>
-    private static readonly Vector3 _rightWristHeld = new(0.26f, 1.02f, -0.28f);
+    private static readonly Vector3 _rightWristHeld = new Vector3(0.26f, 1.02f, -0.28f) + OpticalGrabRestPoseRig.LayoutOffset;
 
-    private static readonly Vector3 _leftWristRest = new(-0.25f, 1.08f, -0.43f);
+    private static readonly Vector3 _leftWristRest = new Vector3(-0.25f, 1.08f, -0.43f) + OpticalGrabRestPoseRig.LayoutOffset;
 
     /// <summary>Table-top surface height; the ball (radius 0.04 m) rests with its centre at 1.163 m.</summary>
-    private const float TableTopMetres = 1.123f;
+    private static readonly float _tableTopMetres = 1.123f + OpticalGrabRestPoseRig.LayoutOffset.Y;
 
-    private static readonly Vector3 _tableCentre = new(0.309f, TableTopMetres - 0.03f, -0.427f);
+    private static readonly Vector3 _tableCentre = new(0.309f, _tableTopMetres - 0.03f, -0.427f + OpticalGrabRestPoseRig.LayoutOffset.Z);
 
-    private static readonly Vector3 _freeBallRest = new(0.309f, TableTopMetres + 0.0405f, -0.427f);
+    private static readonly Vector3 _freeBallRest = new(0.309f, _tableTopMetres + 0.0405f, -0.427f + OpticalGrabRestPoseRig.LayoutOffset.Z);
 
     /// <summary>Rest placement of the replacement ball used by the candidate-switch lifecycle test.</summary>
-    private static readonly Vector3 _replacementBallRest = new(0.28f, TableTopMetres + 0.0405f, -0.36f);
+    private static readonly Vector3 _replacementBallRest = new(0.28f, _tableTopMetres + 0.0405f, -0.36f + OpticalGrabRestPoseRig.LayoutOffset.Z);
 
     /// <summary>
     /// (a) While a recognised closure drives the approach, the free resting ball is not pushed: its linear
@@ -241,7 +241,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             AssertBallUnprotectedAgainstHand(fixture, fixture.Ball);
 
             // Re-open the grip so a fresh closure can begin against the newly placed ball.
-            OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallOpenFlex);
+            OpticalGrabIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallOpenFlex);
             await WaitForPhysicsFramesAsync(sceneTree, 5);
             RigidBody3D replacementBall = fixture.AddFreeBall("FreeBallB", _replacementBallRest);
             await WaitForPhysicsFramesAsync(sceneTree, 30);
@@ -329,8 +329,8 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             {
                 float sweepAlpha = Mathf.Clamp(frame / (float)sweepFrames, 0.0f, 1.0f);
                 Vector3 wrist = _rightWristRest.Lerp(_freeBallRest, sweepAlpha);
-                OpticalGrabPhotoboothIntegrationTests.SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, new Transform3D(Basis.Identity, wrist));
-                OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredTrialOpenFlex);
+                OpticalGrabIntegrationTests.SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, new Transform3D(Basis.Identity, wrist));
+                OpticalGrabIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredTrialOpenFlex);
                 await WaitForPhysicsFramesAsync(sceneTree, 1);
                 await WaitForNextFrameAsync(sceneTree);
 
@@ -388,8 +388,8 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
                 fixture.Ball.Sleeping = false;
                 float direction = Engine.GetPhysicsFrames() % 2 == 0 ? 1.0f : -1.0f;
                 fixture.Ball.LinearVelocity = new Vector3(direction * ScriptedCandidateSpeedMetresPerSecond, 0.0f, 0.0f);
-                OpticalGrabPhotoboothIntegrationTests.SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, new Transform3D(_rightWristRestBasis, _rightWristRest));
-                OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallClosedFlex);
+                OpticalGrabIntegrationTests.SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, new Transform3D(_rightWristRestBasis, _rightWristRest));
+                OpticalGrabIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallClosedFlex);
                 await WaitForPhysicsFramesAsync(sceneTree, 1);
             }
 
@@ -412,7 +412,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
                     && trace.AttemptID is not null);
 
             // Stop the still-closed grip from immediately re-entering recognition before disposal.
-            OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallOpenFlex);
+            OpticalGrabIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallOpenFlex);
             await WaitForPhysicsFramesAsync(sceneTree, 5);
         }
         finally
@@ -426,8 +426,8 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         while (fixture.RightHand.GrabLifecycle == HandGrabLifecycleState.None && stopwatch.Elapsed.TotalSeconds < 5.0)
         {
-            OpticalGrabPhotoboothIntegrationTests.SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, new Transform3D(_rightWristRestBasis, _rightWristRest));
-            OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallClosedFlex);
+            OpticalGrabIntegrationTests.SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, new Transform3D(_rightWristRestBasis, _rightWristRest));
+            OpticalGrabIntegrationTests.InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, AuthoredBallClosedFlex);
             await WaitForPhysicsFramesAsync(sceneTree, 1);
         }
 
@@ -462,11 +462,11 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
                 0.0f,
                 1.0f);
             Basis wristBasis = _rightWristRestBasis.Slerp(Basis.Identity, wristAlpha).Orthonormalized();
-            OpticalGrabPhotoboothIntegrationTests.SetExactOpticalWristWorld(
+            OpticalGrabIntegrationTests.SetExactOpticalWristWorld(
                 fixture.Runtime,
                 LimbSide.Right,
                 new Transform3D(wristBasis, wristStart.Lerp(wristEnd, wristAlpha)));
-            OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(
+            OpticalGrabIntegrationTests.InjectTrackedHandPose(
                 fixture.Runtime,
                 LimbSide.Right,
                 Mathf.Lerp(calibration.OpenFlex, calibration.ClosedFlex, closureAlpha));
@@ -535,7 +535,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
         Vector3 ItemVelocity);
 
     /// <summary>
-    /// Real-rig fixture: the shared interaction photobooth scene with the installed player rig, the frozen
+    /// Real-rig fixture: the shared interaction fixture scene with the installed player rig, the frozen
     /// showcase items moved away, an authored static table, and a freshly instanced unfrozen test ball
     /// resting on it.
     /// </summary>
@@ -545,7 +545,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             TestGame root,
             TestXRManager xrManager,
             MockXRRuntimeNode runtime,
-            Node photobooth,
+            Node fixtureScene,
             Node playerRoot,
             RigidBody3D ball,
             AnimatableBody3D handTargetBody,
@@ -555,7 +555,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             Root = root;
             XRManager = xrManager;
             Runtime = runtime;
-            Photobooth = photobooth;
+            FixtureScene = fixtureScene;
             PlayerRoot = playerRoot;
             Ball = ball;
             HandTargetBody = handTargetBody;
@@ -578,7 +578,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             get;
         }
 
-        private Node Photobooth
+        private Node FixtureScene
         {
             get;
         }
@@ -639,10 +639,11 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             _ = runtime.Initialise(new SubViewport(), maximumRefreshRate: 90);
             xrManager.SetRuntime(runtime);
 
-            Node photobooth = LoadPackedScene(PhotoboothScenePath).Instantiate();
-            root.AddChild(photobooth);
+            Node fixtureScene = LoadPackedScene(FixtureScenePath).Instantiate();
+            root.AddChild(fixtureScene);
 
-            Node playerRoot = photobooth.GetNode("Subject/Player");
+            Node playerRoot = fixtureScene.GetNode("Subject/Player");
+            OpticalGrabRestPoseRig.Prepare(playerRoot);
             EnsureCharacterRuntimeInstalled(playerRoot);
 
             sceneTree.Root.AddChild(root);
@@ -652,7 +653,7 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             // controller anchors pin the hands at the authored rest positions.
             if (runtime.GetNodeOrNull<Camera3D>("MainCamera") is { } mainCamera)
             {
-                mainCamera.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0.0f, 1.62f, 0.0f));
+                mainCamera.GlobalTransform = OpticalGrabRestPoseRig.RestViewpoint(playerRoot);
             }
 
             runtime.RightHandController.HandPositionNode.GlobalTransform =
@@ -662,18 +663,13 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
 
             AnimationTree animationTree = playerRoot.GetNode<AnimationTree>("AnimationTree");
             animationTree.Active = true;
-            AnimationNodeStateMachinePlayback playback = animationTree
-                .Get(HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter())
-                .As<AnimationNodeStateMachinePlayback>()
-                ?? throw new InvalidOperationException("Fixture AnimationTree lacks the upstream playback.");
-            playback.Start(new StringName("StandingCrouching"), true);
 
             PlayerVRIK playerVrik = playerRoot.GetNode<PlayerVRIK>("VRIK");
             Assert.True(playerVrik.BindToXRServices(), "Expected the fixture player VRIK to bind to the mock runtime.");
 
             // Move the frozen showcase items far away: this fixture authors its own free-body world.
-            photobooth.GetNode<RigidBody3D>("Items/Ball").GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
-            photobooth.GetNode<RigidBody3D>("Items/Stick").GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
+            fixtureScene.GetNode<RigidBody3D>("Items/Ball").GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
+            fixtureScene.GetNode<RigidBody3D>("Items/Stick").GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
 
             // Authored static table: an item-layer body (layer 2, mask 2) so the free ball's layer 2
             // physically rests on it, while the hand IK target body (mask 5) never sweeps against it — the
@@ -690,18 +686,18 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
             {
                 Shape = new BoxShape3D { Size = new Vector3(0.4f, 0.06f, 0.4f) },
             });
-            photobooth.GetNode("Items").AddChild(table);
+            fixtureScene.GetNode("Items").AddChild(table);
 
             await WaitForFramesAsync(sceneTree, 40);
 
-            RigidBody3D ball = AddFreeBall(photobooth, "FreeBall", _freeBallRest);
+            RigidBody3D ball = AddFreeBall(fixtureScene, "FreeBall", _freeBallRest);
             await WaitForPhysicsFramesAsync(sceneTree, 45);
 
             return new FreeBodyFixture(
                 root,
                 xrManager,
                 runtime,
-                photobooth,
+                fixtureScene,
                 playerRoot,
                 ball,
                 playerRoot.GetNode<AnimatableBody3D>("IKTargets/RightHand"),
@@ -710,15 +706,15 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
         }
 
         public RigidBody3D AddFreeBall(string name, Vector3 restPosition)
-            => AddFreeBall(Photobooth, name, restPosition);
+            => AddFreeBall(FixtureScene, name, restPosition);
 
-        private static RigidBody3D AddFreeBall(Node photobooth, string name, Vector3 restPosition)
+        private static RigidBody3D AddFreeBall(Node fixtureScene, string name, Vector3 restPosition)
         {
             RigidBody3D ball = LoadPackedScene(TestBallScenePath).Instantiate<RigidBody3D>();
             ball.Name = name;
             ball.Freeze = false;
             ball.GlobalPosition = restPosition;
-            photobooth.GetNode("Items").AddChild(ball);
+            fixtureScene.GetNode("Items").AddChild(ball);
             ball.ForceUpdateTransform();
             return ball;
         }
@@ -738,10 +734,10 @@ public sealed class OpticalGrabFreeBodyIntegrationTests
         public async Task StartOpticalAtRestAsync(SceneTree sceneTree)
         {
             _ = Runtime.SetHandObservations(XRHandSourceObservation.Optical, XRHandSourceObservation.Optical);
-            OpticalGrabPhotoboothIntegrationTests.SetExactOpticalWristWorld(Runtime, LimbSide.Right, new Transform3D(_rightWristRestBasis, _rightWristRest));
-            OpticalGrabPhotoboothIntegrationTests.SetExactOpticalWristWorld(Runtime, LimbSide.Left, new Transform3D(Basis.Identity, _leftWristRest));
-            OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(Runtime, LimbSide.Right, AuthoredTrialOpenFlex);
-            OpticalGrabPhotoboothIntegrationTests.InjectTrackedHandPose(Runtime, LimbSide.Left, AuthoredTrialOpenFlex);
+            OpticalGrabIntegrationTests.SetExactOpticalWristWorld(Runtime, LimbSide.Right, new Transform3D(_rightWristRestBasis, _rightWristRest));
+            OpticalGrabIntegrationTests.SetExactOpticalWristWorld(Runtime, LimbSide.Left, new Transform3D(Basis.Identity, _leftWristRest));
+            OpticalGrabIntegrationTests.InjectTrackedHandPose(Runtime, LimbSide.Right, AuthoredTrialOpenFlex);
+            OpticalGrabIntegrationTests.InjectTrackedHandPose(Runtime, LimbSide.Left, AuthoredTrialOpenFlex);
             await WaitForPhysicsFramesAsync(sceneTree, 45);
 
             Assert.True(Modifier.IsOpticalSessionActive, "Expected the optical session to start for the fixture.");

@@ -40,7 +40,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     /// Verifies runtime setup builds generated proxy bodies that inherit generated attachment transforms directly.
     /// </summary>
     [Headless]
-    [Fact(Skip = "Pose override fixture must be reauthored after the template-only/actual runtime scene split.")]
+    [Fact]
     public async Task DynamicPhysicalRig_RuntimeSetup_BuildsExpectedInheritedProxyTopology()
     {
         SceneTree sceneTree = GetSceneTree();
@@ -52,6 +52,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             int generatedBodyCount = CountGeneratedProxyBodies(fixture.Rig);
             int generatedReceiverCount = CountGeneratedPhysicalInteractionReceivers(fixture.Rig);
 
+            Assert.True(sourceShapeCount > 0, "The reference female collider source must provide proxy shapes to generate.");
             Assert.Equal(sourceShapeCount, fixture.Rig.GeneratedProxyCount);
             Assert.Equal(sourceShapeCount, generatedBodyCount);
             Assert.Equal(generatedBodyCount, generatedReceiverCount);

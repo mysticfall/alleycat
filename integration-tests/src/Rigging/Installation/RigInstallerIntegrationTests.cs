@@ -659,14 +659,11 @@ public sealed class RigInstallerIntegrationTests
         Node hipModifier = skeleton.GetNode("HipReconciliationModifier");
         Assert.Contains(typeof(HipReconciliationModifier).FullName, GetTypeHierarchyNames(hipModifier.GetType()), StringComparer.Ordinal);
         AnimationTree animationTree = Assert.IsType<AnimationTree>(playerRoot.GetNode("AnimationTree"), exactMatch: false);
-        Node locomotion = playerRoot.GetNode("Locomotion");
-        Assert.Contains(typeof(LocomotionBase).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
+        Assert.False(playerRoot.HasNode("Locomotion"));
         AssertPlayerRuntimeBindings(playerRoot);
 
         Assert.Same(poseStateMachine, GetPropertyValue(playerVRIK, nameof(PlayerVRIK.PoseStateMachine)));
         Assert.Same(poseStateMachine, GetPropertyValue(hipModifier, nameof(HipReconciliationModifier.StateMachine)));
-        Node?[] permissionSourceNodes = Assert.IsType<Node?[]>(GetPropertyValue(locomotion, nameof(LocomotionBase.PermissionSourceNodes)));
-        Assert.Same(poseStateMachine, Assert.Single(permissionSourceNodes));
         AssertPlayerAnimationTreeRuntime(playerRoot, animationTree, expectPlaybackCurrentState: false);
 
         string[] providerPaths =
@@ -895,20 +892,20 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
-    /// Player rig installation fails fast when its required locomotion runtime dependency is missing.
+    /// Player rig installation remains independent of the deferred locomotion runtime.
     /// </summary>
     [Headless]
     [Fact]
-    public void PlayerRigInstaller_MissingLocomotion_FailsWithRequiredDependencyMessage()
+    public void PlayerRigInstaller_WithoutLocomotion_Succeeds()
     {
         using Node playerRoot = LoadPackedScene(PlayerScenePath).Instantiate();
         object initialResult = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller"), playerRoot);
         AssertLoadedInstallSucceeded(initialResult);
-        RemoveRequiredNode(playerRoot, "Locomotion");
+        Assert.False(playerRoot.HasNode("Locomotion"));
 
-        object result = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller/PlayerRigInstaller"), playerRoot);
+        object result = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller"), playerRoot);
 
-        AssertLoadedInstallFailedContaining(result, "Rig installer");
+        AssertLoadedInstallSucceeded(result);
     }
 
     /// <summary>
@@ -930,16 +927,13 @@ public sealed class RigInstallerIntegrationTests
         AssertPlayerRuntimeBindings(playerRoot);
         Node playerVRIK = playerRoot.GetNode("VRIK");
         Node poseStateMachine = playerRoot.GetNode("VRIK/PoseStateMachine");
-        Node locomotion = playerRoot.GetNode("Locomotion");
         Node hands = playerRoot.GetNode("Hands");
         Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
 
         Assert.Contains(typeof(PlayerVRIK).FullName, GetTypeHierarchyNames(playerVRIK.GetType()), StringComparer.Ordinal);
         Assert.Same(poseStateMachine, GetPropertyValue(playerVRIK, nameof(PlayerVRIK.PoseStateMachine)));
         Assert.Same(poseStateMachine, GetPropertyValue(skeleton.GetNode("HipReconciliationModifier"), nameof(HipReconciliationModifier.StateMachine)));
-        Node?[] permissionSourceNodes = Assert.IsType<Node?[]>(GetPropertyValue(locomotion, nameof(LocomotionBase.PermissionSourceNodes)));
-        Assert.Same(poseStateMachine, Assert.Single(permissionSourceNodes));
-        Assert.Same(locomotion, GetPropertyValue(playerRoot.GetNode("PlayerController"), "LocomotionNode"));
+        Assert.False(playerRoot.HasNode("Locomotion"));
         Assert.Same(hands, GetPropertyValue(playerRoot.GetNode("PlayerController"), "HandHolderNode"));
         AssertPlayerAnimationTreeRuntime(playerRoot, playerRoot.GetNode<AnimationTree>("AnimationTree"), expectPlaybackCurrentState: false);
     }
@@ -960,7 +954,7 @@ public sealed class RigInstallerIntegrationTests
         Node npcRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected ally scene to become current scene.");
 
-        AssertNPCRuntimeBindings(npcRoot, expectRuntimeBindingActive: true);
+        AssertNPCRuntimeBindings(npcRoot);
         Node characterIK = npcRoot.GetNode("CharacterIK");
         Skeleton3D skeleton = npcRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
 
@@ -1147,7 +1141,6 @@ public sealed class RigInstallerIntegrationTests
         Assert.DoesNotContain("FindDirectChild<AnimationTree>", runtimeInstallerSource, StringComparison.Ordinal);
         Assert.DoesNotContain("FindDirectChild<AnimationPlayer>", runtimeInstallerSource, StringComparison.Ordinal);
         Assert.DoesNotContain("FindDirectChild<EyesBehaviour>", runtimeInstallerSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("FindDirectChild<CharacterLocomotion>", runtimeInstallerSource, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1208,7 +1201,7 @@ public sealed class RigInstallerIntegrationTests
         Assert.True(skeleton.HasNode("DynamicPhysicalRig"));
         Assert.True(character.HasNode("AnimationTree"));
         Assert.True(character.HasNode("Eyes"));
-        AssertNPCRuntimeBindings(character, expectRuntimeBindingActive: false);
+        AssertNPCRuntimeBindings(character);
         Assert.True(character.HasNode("Hands/RightHand"));
         Assert.False(composite.HasNode("IKTargets"));
         Assert.False(composite.HasNode("AnimationTree"));
@@ -1219,7 +1212,7 @@ public sealed class RigInstallerIntegrationTests
         Assert.Equal(1, CountDirectChildren(character, "IKTargets"));
         Assert.Equal(1, CountDirectChildren(character, "AnimationTree"));
         Assert.Equal(1, CountDirectChildren(character, "Eyes"));
-        Assert.Equal(1, CountDirectChildren(character, "Navigation"));
+        Assert.Equal(0, CountDirectChildren(character, "Navigation"));
         Assert.Equal(1, CountDirectChildren(character, "Hands"));
         Assert.Equal(1, CountDirectChildren(skeleton, "Head"));
         Assert.Equal(1, CountDirectChildren(skeleton, "DynamicPhysicalRig"));
@@ -1368,34 +1361,22 @@ public sealed class RigInstallerIntegrationTests
     private static void AssertPlayerRuntimeBindings(Node character)
     {
         AssertSharedRuntimeBindings(character);
-        AnimationTree animationTree = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
-        Node locomotion = character.GetNode("Locomotion");
-
-        Assert.Contains(typeof(LocomotionBase).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
-        Assert.Same(animationTree, GetPropertyValue(locomotion, nameof(CharacterLocomotion.AnimationTree)));
+        Assert.False(character.HasNode("Locomotion"));
     }
 
-    private static void AssertNPCRuntimeBindings(Node character, bool expectRuntimeBindingActive)
+    private static void AssertNPCRuntimeBindings(Node character)
     {
         AssertSharedRuntimeBindings(character);
-        AnimationTree animationTree = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
-        NPCNavigation navigation = Assert.Single(character.GetChildren().OfType<NPCNavigation>());
-        NavigationBase movementAuthority = Assert.Single(character.GetChildren().OfType<NavigationBase>());
         ICharacter characterContract = Assert.IsAssignableFrom<ICharacter>(character);
-
-        Assert.Same(navigation, movementAuthority);
-        Assert.Same(navigation, characterContract.RequireNavigation());
-        Assert.Same(character, navigation.Actor);
-        Assert.Same(animationTree, navigation.AnimationTree);
-        Assert.Same(character.GetNode<Node3D>("Female"), navigation.RootMotionReference);
-        Assert.True(navigation.AwaitInstallerActivation);
-        Assert.Equal(expectRuntimeBindingActive, navigation.IsRuntimeBindingActive);
-        Assert.Equal(expectRuntimeBindingActive, navigation.IsPhysicsProcessing());
-        Assert.True(navigation.IsMovementAuthorityActive);
-        _ = Assert.Single(character.GetChildren().OfType<NavigationBase>(), candidate => candidate.IsMovementAuthorityActive);
+        // NAV-001 TR5: the template-authored MotionBricksNavigation is the normal NPC navigation binding;
+        // the retired pre-MotionBricks expectation of no navigation component no longer holds.
+        NavigationBase navigation = Assert.IsType<MotionBricksNavigation>(
+            Assert.Single(character.GetChildren().OfType<NavigationBase>()));
+        Assert.Same(navigation, Assert.IsAssignableFrom<AlleyCat.Character.Character>(character).Navigation);
+        Assert.True(characterContract.TryGetComponent(out INavigation? bound));
+        Assert.Same(navigation, bound);
         Assert.IsNotAssignableFrom<ILocomotive>(character);
         Assert.False(character.HasNode("Locomotion"));
-        Assert.Empty(character.GetChildren().OfType<CharacterLocomotion>());
         Assert.Empty(character.GetChildren().OfType<ILocomotion>());
         Assert.DoesNotContain(characterContract.Components, component => component is ILocomotion);
     }
@@ -1425,9 +1406,7 @@ public sealed class RigInstallerIntegrationTests
             Assert.Equal("StandingCrouching", playback.GetCurrentNode().ToString());
         }
 
-        Node locomotion = playerRoot.GetNode("Locomotion");
-        Assert.Contains(typeof(CharacterLocomotion).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
-        Assert.Equal("StandingCrouching", GetPropertyValue(locomotion, nameof(CharacterLocomotion.IdleAnimationStateName))?.ToString());
+        Assert.False(playerRoot.HasNode("Locomotion"));
     }
 
     private static string GetAuthoredTreeRootResourcePath(AnimationTree animationTree)

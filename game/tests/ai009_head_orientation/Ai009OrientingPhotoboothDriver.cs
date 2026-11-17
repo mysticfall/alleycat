@@ -4,7 +4,6 @@ using AlleyCat.Character;
 using AlleyCat.Common;
 using AlleyCat.IK;
 using AlleyCat.Mind.Attention;
-using AlleyCat.Navigation;
 using AlleyCat.Vision;
 using Godot;
 using CharacterHub = AlleyCat.Character.Character;
@@ -34,7 +33,7 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
     private const string VerticalSeekParameter = "parameters/EyesVerticalLookSeek/seek_request";
     private const string StatesPlaybackParameter = "parameters/States/playback";
     private const string CrouchClipPositionParameter = "parameters/States/StandingCrouching/CrouchAnimation/current_position";
-    private const string IdleClipPositionParameter = "parameters/States/NPCIdle/Clip/current_position";
+    private const string IdleClipPositionParameter = "parameters/States/FixtureIdle/current_position";
 
     private static readonly string[] _chainBoneNames = ["Head", "Neck", "UpperChest", "Chest", "Spine"];
 
@@ -91,12 +90,7 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
     }
 
     /// <summary>
-    /// Deactivates both photobooth animation trees before the first engine frame can evaluate them. The
-    /// production installer's deferred activation wins the startup race in a live scene tree; this runner's
-    /// pre-loop context cannot, so the trees are held inert until <see cref="ActivateProductionStartup"/> switches
-    /// them to the production manual processing and starts the NPC idle programme — preserving the
-    /// production-validated startup outcome (StandingCrouching clip frozen at zero) without ever evaluating the
-    /// unassigned crouch advance. Call immediately after tree entry, before waiting any frame.
+    /// Holds the trees before fixture setup so the unassigned crouch advance cannot contaminate the baseline.
     /// </summary>
     public void HoldAnimationTreesInert()
     {
@@ -104,24 +98,15 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
 
         foreach (CharacterRig rig in _characters.Values)
         {
-            RequireAnimationTree(rig, RequireNavigation(rig)).Active = false;
+            RequireAnimationTree(rig).Active = false;
         }
     }
 
     /// <summary>
-    /// Mirrors the production-validated NPC startup semantics on both photobooth rigs. The installer-composed
-    /// production NPC enters the tree with the navigation runtime binding active — the AnimationTree switched to
-    /// manual processing, the NPC idle programme started, and the StandingCrouching clip frozen at zero — while an
-    /// unactivated role template drifts into the unassigned StandingCrouching advance (the cold-start contamination
-    /// attributed in the B0/B1 startup parity investigation). This reproduces exactly the installer's
-    /// post-projection step, character component refresh followed by
-    /// <see cref="NPCNavigation.ActivateRuntimeBinding"/> — the same production method
-    /// <c>CharacterRuntimeSubsystemInstaller</c> invokes on installer-composed NPCs — without instantiating the
-    /// role installer or any other production system. Call once after tree entry once the scene tree is
-    /// iterating (the installer's deferred timing), so the crouch clip never meaningfully advances.
-    /// Returns whether both rigs activated the binding successfully.
+    /// Starts real authored idle clips through the retained eye/hand graph on both isolated rigs.
+    /// This is fixture scheduling, not replacement-runtime production-startup evidence.
     /// </summary>
-    public bool ActivateProductionStartup()
+    public bool ActivateFixtureIdle()
     {
         EnsureRigsCreated();
 
@@ -129,64 +114,40 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
         {
             rig.Character.RefreshComponents();
 
-            NPCNavigation navigation = RequireNavigation(rig);
-            AnimationTree tree = RequireAnimationTree(rig, navigation);
-            GD.Print(
-                $"AI009_STARTUP_PRE rig={rig.Name} active={tree.Active} processing={tree.CallbackModeProcess} " +
-                $"crouch_clip={tree.Get(CrouchClipPositionParameter).AsDouble():F4} physics_frames={Engine.GetPhysicsFrames()}");
-            navigation.ActivateRuntimeBinding();
-            GD.Print(
-                $"AI009_STARTUP_POST rig={rig.Name} binding={navigation.IsRuntimeBindingActive} " +
-                $"crouch_clip={tree.Get(CrouchClipPositionParameter).AsDouble():F4} physics_frames={Engine.GetPhysicsFrames()}");
-            if (!navigation.IsRuntimeBindingActive)
-            {
-                throw new InvalidOperationException(
-                    $"AI-009 photobooth rig '{rig.Name}' failed to activate the production navigation runtime "
-                    + "binding; the startup state is not production-equivalent (see the engine log for the "
-                    + "binding failure).");
-            }
+            AnimationTree tree = RequireAnimationTree(rig);
+            tree.TreeRoot = (AnimationRootNode)tree.TreeRoot.Duplicate(true);
+            var root = (AnimationNodeBlendTree)tree.TreeRoot;
+            var states = (AnimationNodeStateMachine)root.GetNode("States");
+            states.AddNode("FixtureIdle", new AnimationNodeAnimation { Animation = "idle/idle_sad" });
+            tree.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics;
+            tree.Active = true;
+            tree.Get(StatesPlaybackParameter).As<AnimationNodeStateMachinePlayback>().Start("FixtureIdle");
+            tree.Advance(0);
         }
 
         return true;
     }
 
     /// <summary>
-    /// Verifies the production startup state held through the driver activation settle: the navigation runtime
-    /// binding stays active, the AnimationTree processes manually, the state machine stays in the NPC idle state,
-    /// the StandingCrouching clip stays frozen at zero, and the idle clip has advanced (production idle animates
-    /// rather than holding a frozen pose). Call after the startup settle and before anchors or scenarios begin.
+    /// Checks fixture animation advancement and absence of crouch contamination before scenarios begin.
     /// </summary>
-    public bool VerifyProductionIdleStartup()
+    public bool VerifyFixtureIdle()
     {
         EnsureRigsCreated();
 
         foreach (CharacterRig rig in _characters.Values)
         {
-            NPCNavigation navigation = RequireNavigation(rig);
-            AnimationTree tree = RequireAnimationTree(rig, navigation);
-            if (!navigation.IsRuntimeBindingActive)
-            {
-                throw new InvalidOperationException(
-                    $"AI-009 photobooth rig '{rig.Name}' lost the production navigation runtime binding.");
-            }
-
-            if (tree.CallbackModeProcess != AnimationMixer.AnimationCallbackModeProcess.Manual)
-            {
-                throw new InvalidOperationException(
-                    $"AI-009 photobooth rig '{rig.Name}' AnimationTree must process manually under the production "
-                    + $"startup binding (found {tree.CallbackModeProcess}).");
-            }
+            AnimationTree tree = RequireAnimationTree(rig);
 
             AnimationNodeStateMachinePlayback playback =
                 tree.Get(StatesPlaybackParameter).As<AnimationNodeStateMachinePlayback>()
                     ?? throw new InvalidOperationException(
                         $"AI-009 photobooth rig '{rig.Name}' has no States playback for the startup verification.");
             using StringName currentState = playback.GetCurrentNode();
-            if (currentState != NPCAnimationProgramme.IdleState)
+            if (currentState != "FixtureIdle")
             {
                 throw new InvalidOperationException(
-                    $"AI-009 photobooth rig '{rig.Name}' must start in the production idle state "
-                    + $"'{NPCAnimationProgramme.IdleState}' (found '{currentState}').");
+                    $"AI-009 photobooth rig '{rig.Name}' must run FixtureIdle (found '{currentState}').");
             }
 
             double crouchClipPosition = tree.Get(CrouchClipPositionParameter).AsDouble();
@@ -194,20 +155,17 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
             {
                 throw new InvalidOperationException(
                     $"AI-009 photobooth rig '{rig.Name}' must hold the StandingCrouching clip frozen at zero under "
-                    + $"the production startup binding (found {crouchClipPosition:F4} s).");
+                    + $"fixture playback (found {crouchClipPosition:F4} s).");
             }
 
             double idleClipPosition = tree.Get(IdleClipPositionParameter).AsDouble();
             if (idleClipPosition <= 0d)
             {
                 throw new InvalidOperationException(
-                    $"AI-009 photobooth rig '{rig.Name}' must run the animating NPC idle programme (idle clip at "
+                    $"AI-009 photobooth rig '{rig.Name}' must run the authored idle clip (idle clip at "
                     + $"{idleClipPosition:F4} s).");
             }
 
-            GD.Print(
-                $"AI009_STARTUP_STATE rig={rig.Name} binding=true state={currentState} crouch_clip=" +
-                $"{crouchClipPosition:F4} idle_clip={idleClipPosition:F4} processing={tree.CallbackModeProcess}");
         }
 
         return true;
@@ -226,16 +184,10 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
         _characters[shortRig.Name] = shortRig;
     }
 
-    private static NPCNavigation RequireNavigation(CharacterRig rig)
-        => rig.Character.Navigation as NPCNavigation
+    private static AnimationTree RequireAnimationTree(CharacterRig rig)
+        => rig.Character.Eyes?.AnimationTree
             ?? throw new InvalidOperationException(
-                $"AI-009 photobooth character '{rig.Name}' must expose {nameof(NPCNavigation)} as its navigation "
-                + "component for the production startup mirror.");
-
-    private static AnimationTree RequireAnimationTree(CharacterRig rig, NPCNavigation navigation)
-        => navigation.AnimationTree
-            ?? throw new InvalidOperationException(
-                $"AI-009 photobooth navigation of '{rig.Name}' must bind an AnimationTree.");
+                $"AI-009 photobooth eyes of '{rig.Name}' must bind an AnimationTree.");
 
     /// <summary>
     /// Attaches one <see cref="BoneAttachment3D"/> per neck-spine chain bone so the chain probes read the
@@ -264,11 +216,11 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
     }
 
     /// <summary>
-    /// Returns the current NPCIdle clip position in seconds for the named character — the
+    /// Returns the current fixture idle clip position in seconds for the named character — the
     /// deterministic idle-sway phase source used by phase-controlled assertion sampling.
     /// </summary>
     public float GetIdleClipPositionSeconds(string characterId)
-        => RequireAnimationTree(Rig(characterId), RequireNavigation(Rig(characterId)))
+        => RequireAnimationTree(Rig(characterId))
             .Get(IdleClipPositionParameter)
             .AsSingle();
 

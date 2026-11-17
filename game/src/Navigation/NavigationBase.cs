@@ -17,9 +17,12 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     private readonly NavigationTravelProgress _travelProgress = new();
     private bool _hasInitialSample;
     private Vector3[] _acceptedPath = [];
+    private NavigationPathQuery? _routeQuery;
     private int _acceptedPathIndex;
-    private Vector3 _pathTraversalStart;
+    private int _nativeViaIndex;
+    private bool _nativeLegSampled;
     private Vector3[] _viaPoints = [];
+    private Vector3[] _nativeViaEnds = [];
     private bool[] _viaPointsPassed = [];
     private bool[] _viaPointsMissed = [];
     private float[] _viaRouteDistances = [];
@@ -135,6 +138,10 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     {
         get
         {
+            if (_viaPoints.Length > 0)
+            {
+                return [.. _acceptedPath];
+            }
             Vector3[] agentPath = GetCurrentNavigationPath();
             return agentPath.Length > 0 ? agentPath : [.. _acceptedPath];
         }
@@ -216,6 +223,15 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         get; private set;
     }
 
+    /// <summary>Current native agent result after its path update, not an independent geometric judgement.</summary>
+    protected bool NativeTargetUnreachable
+    {
+        get; private set;
+    }
+
+    /// <summary>Only the final native leg may supply requested-destination arrival animation.</summary>
+    protected bool NativeDestinationLeg => _nativeViaIndex >= _viaPoints.Length;
+
     /// <summary>
     /// Gets the immutable route sample produced by the latest valid poll, or <see langword="null" /> before one exists.
     /// </summary>
@@ -239,13 +255,13 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
 
         Vector3 navigationStartPosition = GetNavigationStartPosition();
         Vector3[] acceptedPath;
+        Vector3[] nativeViaEnds;
         float[] viaRouteDistances;
         if (viaPoints is { Count: > 0 } points)
         {
             // TR18: the route is the ordered chain start → via 1 → … → via N → destination, each segment
             // validated exactly like a plain destination's path. Any unreachable segment refuses the whole
             // request and leaves existing state unchanged.
-            float queryTolerance = Mathf.Max(DestinationReachedDistance, 0.0f);
             var segments = new Vector3[points.Count + 1];
             bool reachable = true;
             Vector3 cursor = navigationStartPosition;
@@ -254,7 +270,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
                 Vector3 target = index < points.Count ? points[index] : destination.Origin;
                 Vector3[] segment = NavigationServer3D.MapGetPath(
                     GetNavigationMap(), cursor, target, optimize: true, NavigationLayers);
-                if (segment.Length == 0 || segment[^1].DistanceSquaredTo(target) > queryTolerance * queryTolerance)
+                if (segment.Length == 0)
                 {
                     reachable = false;
                     break;
@@ -273,6 +289,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
                 points,
                 destination.Origin,
                 (from, to) => NavigationServer3D.MapGetPath(GetNavigationMap(), from, to, optimize: true, NavigationLayers));
+            nativeViaEnds = segments[..points.Count];
         }
         else
         {
@@ -282,6 +299,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             }
 
             viaRouteDistances = [];
+            nativeViaEnds = [];
         }
 
         NavigationDestinationResult accepted = AcceptDestination(destination, navigationStartPosition, acceptedPath);
@@ -291,9 +309,17 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         }
 
         _viaPoints = [.. viaPoints ?? []];
+        _nativeViaEnds = nativeViaEnds;
         _viaPointsPassed = new bool[_viaPoints.Length];
         _viaPointsMissed = new bool[_viaPoints.Length];
         _viaRouteDistances = viaRouteDistances;
+        _nativeViaIndex = 0;
+        _nativeLegSampled = false;
+        NativeTargetUnreachable = false;
+        if (_viaPoints.Length > 0)
+        {
+            TargetPosition = _viaPoints[0];
+        }
         return NavigationDestinationResult.Accepted;
     }
 
@@ -336,8 +362,8 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         UsedAcceptedPathFallbackForLastPoll = false;
         LastSampledPathIndex = 0;
         _acceptedPath = acceptedPath;
+        _routeQuery = new(destination, _destinationRequestGeneration, acceptedPath);
         _acceptedPathIndex = 0;
-        _pathTraversalStart = navigationStartPosition;
         _intent = PendingIntent(destination.Origin);
         OnDestinationAccepted(destination);
         return NavigationDestinationResult.Accepted;
@@ -361,8 +387,13 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         UsedAcceptedPathFallbackForLastPoll = false;
         LastSampledPathIndex = 0;
         _acceptedPath = [];
+        _routeQuery = null;
         _acceptedPathIndex = 0;
+        _nativeViaIndex = 0;
+        _nativeLegSampled = false;
+        NativeTargetUnreachable = false;
         _viaPoints = [];
+        _nativeViaEnds = [];
         _viaPointsPassed = [];
         _viaPointsMissed = [];
         _viaRouteDistances = [];
@@ -373,12 +404,9 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     }
 
     /// <summary>
-    /// Tracks via pass/miss state for one poll (TR18–19): a via counts as passed the moment the actor comes
-    /// within the configured planar pass radius, in order; a via whose chain position the cursor has moved
-    /// beyond without ever coming within the radius is recorded as MISSED and never revisited — no
-    /// backtracking, no stopping, no arrival semantics attach to any via.
+    /// Records realised via proximity. Native leg completion above owns progression and any missed-via report.
     /// </summary>
-    private void TrackViaPoints(Vector3 actorPosition, int pathIndex)
+    private void TrackViaPoints(Vector3 actorPosition)
     {
         float radius = Mathf.Max(ViaPointPassRadiusMetres, 0.0f);
         for (int index = 0; index < _viaPoints.Length; index++)
@@ -394,13 +422,6 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
                 continue;
             }
 
-            // Missed: the cursor has advanced beyond this via's position on the chain (with one index of
-            // grace for the desired-distance advance) while the actor never came within the radius.
-            int viaChainIndex = ChainIndexOf(_viaPoints[index]);
-            if (viaChainIndex >= 0 && pathIndex > viaChainIndex + 1)
-            {
-                _viaPointsMissed[index] = true;
-            }
         }
     }
 
@@ -408,7 +429,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     {
         for (int index = 0; index < _acceptedPath.Length; index++)
         {
-            if (PlanarDistanceTo(_acceptedPath[index], via) <= NavigationViaChain.JunctionToleranceMetres)
+            if (_acceptedPath[index] == via)
             {
                 return index;
             }
@@ -455,43 +476,62 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             return _intent;
         }
 
-        // This is intentionally the sole advancing path call in a poll.
-        Vector3 nextPathPosition = GetNextPathPosition();
+        // Vias are sequential native targets, not a second waypoint-progress controller. Native completion
+        // releases each leg without requesting an idle/arrival animation at an intermediate via.
+        if (_nativeLegSampled && _nativeViaIndex < _viaPoints.Length && IsTargetReached())
+        {
+            _viaPointsPassed[_nativeViaIndex] = PlanarDistanceTo(actorTransform.Origin, _viaPoints[_nativeViaIndex]) <= ViaPointPassRadiusMetres;
+            _viaPointsMissed[_nativeViaIndex] = !_viaPointsPassed[_nativeViaIndex];
+            _nativeViaIndex++;
+            TargetPosition = _nativeViaIndex < _viaPoints.Length ? _viaPoints[_nativeViaIndex] : _destination.Origin;
+            _nativeLegSampled = false;
+        }
+        // Update once per active physics poll; a completed native path is read without re-advancing it.
+        bool advanceNative = !_nativeLegSampled || !IsNavigationFinished();
+        Vector3 nextPathPosition = advanceNative ? GetNextPathPosition() : Vector3.Zero;
         Vector3[] path = GetCurrentNavigationPath();
         int pathIndex = GetCurrentNavigationPathIndex();
+        if (!advanceNative && path.Length > 0)
+        {
+            nextPathPosition = path[Math.Clamp(pathIndex, 0, path.Length - 1)];
+        }
+        NativeTargetUnreachable = path.Length > 0 && !IsTargetReachable();
         AdjustPathSample(ref nextPathPosition, ref path, ref pathIndex);
         UsedAcceptedPathFallbackForLastPoll = false;
-        // A via request's authoritative route is the ordered via chain itself (TR18): the agent's own
-        // re-queried path would shortcut the vias. The chain was validated at accept time exactly like any
-        // accepted path, so it drives the cursor and the snapshot until the request ends.
         bool viaChainedRoute = _viaPoints.Length > 0;
-        if (viaChainedRoute || (path.Length == 0 && _acceptedPath.Length > 0))
+        if (path.Length > 0)
         {
+            _nativeLegSampled = true;
+            // Keep the remaining ordered native-query legs available to distance-ahead animation sampling.
+            // Only this active leg's NavigationAgent3D cursor advances; no game-owned nearest/plane cursor.
+            if (_nativeViaIndex < _viaPoints.Length)
+            {
+                int junction = ChainIndexOf(_nativeViaEnds[_nativeViaIndex]);
+                if (junction >= 0)
+                {
+                    path = [.. path, .. _acceptedPath.Skip(junction + 1)];
+                }
+            }
+            if (!HasSamePath(_acceptedPath, path))
+            {
+                _acceptedPath = path;
+                _routeQuery = new(_destination, _destinationRequestGeneration, path);
+            }
+            _acceptedPathIndex = pathIndex;
+        }
+        else if (_acceptedPath.Length > 0)
+        {
+            // A native synchronous acceptance query may precede agent synchronisation. Hold its last native
+            // cursor until the agent supplies progress; do not invent progress while its path is unavailable.
             UsedAcceptedPathFallbackForLastPoll = true;
             path = _acceptedPath;
-            _acceptedPathIndex = AdvancePathIndex(
-                actorTransform.Origin,
-                path,
-                _acceptedPathIndex,
-                _pathTraversalStart,
-                Mathf.Max(PathDesiredDistance, 0.0f));
-            pathIndex = _acceptedPathIndex;
-            nextPathPosition = path[pathIndex];
-        }
-        else if (path.Length > 0)
-        {
-            pathIndex = AdvancePathIndex(
-                actorTransform.Origin,
-                path,
-                pathIndex,
-                _pathTraversalStart,
-                Mathf.Max(PathDesiredDistance, 0.0f));
+            pathIndex = Math.Clamp(_acceptedPathIndex, 0, path.Length - 1);
             nextPathPosition = path[pathIndex];
         }
 
         if (viaChainedRoute)
         {
-            TrackViaPoints(actorTransform.Origin, pathIndex);
+            TrackViaPoints(actorTransform.Origin);
         }
         LastSampledPathIndex = pathIndex;
         float destinationTolerance = Mathf.Max(DestinationReachedDistance, 0.0f);
@@ -563,11 +603,18 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             _destinationRequestGeneration,
             _routeRevision,
             UsedAcceptedPathFallbackForLastPoll,
-            geometryChanged);
+            geometryChanged,
+            _routeQuery);
         _intent = sampledIntent;
         LastPollProducedValidSample = true;
         return _intent;
     }
+
+    internal bool OwnsRoute(NavigationRouteSnapshot route) => HasDestination && ReferenceEquals(CurrentRouteSnapshot, route) &&
+        ReferenceEquals(_routeQuery, route.Query) && _routeQuery is { } query &&
+        query.Generation == _destinationRequestGeneration && route.DestinationRequestGeneration == query.Generation &&
+        route.Destination == _destination && query.Destination == _destination && route.RouteRevision == _routeRevision &&
+        HasSamePath(query.Points, route.PathPoints.ToArray());
 
     /// <summary>
     /// Allows concrete implementations to react to accepted destination intent without moving an actor.
@@ -586,6 +633,10 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     /// <summary>Commits measured successful terminal evidence through the shared exact-once lifecycle.</summary>
     protected bool TryCommitCompletedOutcome(NavigationTerminalContext context, ulong terminalPhysicsTick)
         => TryCommitAndClear(() => _requestLifecycle.TryComplete(context, terminalPhysicsTick));
+
+    /// <summary>Records sequence completion and measured errors without asserting destination convergence.</summary>
+    protected bool TryCommitArrivalSequenceOutcome(NavigationTerminalContext context, ulong terminalPhysicsTick)
+        => TryCommitAndClear(() => _requestLifecycle.TryFinishArrivalSequence(context, terminalPhysicsTick));
 
     /// <summary>Commits measured failed terminal evidence through the shared exact-once lifecycle.</summary>
     protected bool TryCommitFailedOutcome(NavigationTerminalContext context, ulong terminalPhysicsTick)
@@ -738,81 +789,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             destination,
             optimize: true,
             NavigationLayers);
-        if (path.Length == 0)
-        {
-            return false;
-        }
-
-        float tolerance = Mathf.Max(DestinationReachedDistance, 0.0f);
-        return path[^1].DistanceSquaredTo(destination) <= tolerance * tolerance;
-    }
-
-    private static int AdvancePathIndex(
-        Vector3 actorPosition,
-        IReadOnlyList<Vector3> path,
-        int currentIndex,
-        Vector3 pathTraversalStart,
-        float desiredDistance)
-    {
-        int index = Math.Clamp(currentIndex, 0, path.Count - 1);
-        float desiredDistanceSquared = desiredDistance * desiredDistance;
-        while (index < path.Count - 1
-            && HasReachedOrPassedPathPoint(
-                actorPosition,
-                path,
-                index,
-                pathTraversalStart,
-                desiredDistanceSquared))
-        {
-            index++;
-        }
-
-        return index;
-    }
-
-    private static bool HasReachedOrPassedPathPoint(
-        Vector3 actorPosition,
-        IReadOnlyList<Vector3> path,
-        int index,
-        Vector3 pathTraversalStart,
-        float desiredDistanceSquared)
-    {
-        Vector3 point = path[index];
-        if (!actorPosition.IsFinite() || !point.IsFinite())
-        {
-            return false;
-        }
-
-        if (actorPosition.DistanceSquaredTo(point) <= desiredDistanceSquared)
-        {
-            return true;
-        }
-
-        if (index == 0)
-        {
-            if (!pathTraversalStart.IsFinite())
-            {
-                return false;
-            }
-
-            if (pathTraversalStart.DistanceSquaredTo(point) <= desiredDistanceSquared)
-            {
-                return true;
-            }
-
-            Vector3 initialSegment = point - pathTraversalStart;
-            return initialSegment.LengthSquared() > 0.000001f
-                && (actorPosition - point).Dot(initialSegment) >= 0.0f;
-        }
-
-        if (!path[index - 1].IsFinite())
-        {
-            return false;
-        }
-
-        Vector3 incomingSegment = point - path[index - 1];
-        return incomingSegment.LengthSquared() > 0.000001f
-            && (actorPosition - point).Dot(incomingSegment) >= 0.0f;
+        return path.Length != 0;
     }
 
     private static NavigationMotionIntent PendingIntent(Vector3 destination)

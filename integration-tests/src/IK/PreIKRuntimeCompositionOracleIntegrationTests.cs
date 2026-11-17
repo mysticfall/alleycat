@@ -1,9 +1,7 @@
-using AlleyCat.IK;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
-using static AlleyCat.IntegrationTests.Support.TestUtils;
 
 #pragma warning disable CS1591
 
@@ -12,9 +10,6 @@ namespace AlleyCat.IntegrationTests.IK;
 /// <summary>Stage 2 pre-IK runtime-composition oracle coverage.</summary>
 public sealed class PreIKRuntimeCompositionOracleIntegrationTests
 {
-    private const string NpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
-    private const string PlayerScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
-
     private static readonly PreIKUnavailableChannelEvidence _unavailableGraphChannels = new(
         new Dictionary<PreIKContinuityDimension, string>
         {
@@ -200,135 +195,25 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
             "left contact admission evidence reference or immutable identity tuple does not match");
     }
 
-    /// <summary>Both player and NPC graph fixtures are sampled manually before every modifier and fail closed.</summary>
+    /// <summary>Unavailable channels cannot be replaced by post-IK output, independently of any production graph.</summary>
     [Headless]
     [Fact]
-    public async Task RuntimeCompositionOracle_NpcGraphSamplesBeforeModifiers_RemainsBlockedWithoutAdmittedChannels()
-        => await AssertGraphCaptureBlockedAsync(NpcScenePath, "NPCWalkF");
-
-    /// <summary>Both player and NPC graph fixtures are sampled manually before every modifier and fail closed.</summary>
-    [Headless]
-    [Fact]
-    public async Task RuntimeCompositionOracle_PlayerGraphSamplesBeforeModifiers_RemainsBlockedWithoutAdmittedChannels()
-        => await AssertGraphCaptureBlockedAsync(PlayerScenePath, "PlayerTravel");
-
-    private static async Task AssertGraphCaptureBlockedAsync(string scenePath, string stateName)
+    public void RuntimeCompositionOracle_UnavailableChannels_RejectsPostIKSubstitution()
     {
-        SceneTree sceneTree = GetSceneTree();
-        Node root = LoadPackedScene(scenePath).Instantiate();
-        List<SkeletonModifier3D> modifiers = DisableModifiersBeforeFixtureEntersSceneTree(root);
-        sceneTree.Root.AddChild(root);
-        try
-        {
-            await WaitForNextFrameAsync(sceneTree);
-            AssertModifiersInactive(modifiers, "after _Ready and scene entry");
-
-            AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
-            Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female/GeneralSkeleton");
-            tree.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual;
-            tree.SetProcess(false);
-            tree.SetPhysicsProcess(false);
-            tree.Active = true;
-            AnimationNodeStateMachinePlayback playback = tree.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
-                ?? throw new Xunit.Sdk.XunitException($"Expected '{scenePath}' to expose state-machine playback.");
-            playback.Start(stateName, reset: true);
-
-            AdvanceBeforeModifiers(tree, modifiers, 0d, "initial state evaluation");
-            int rootBone = RequireBone(skeleton, "Root");
-            int hipsBone = RequireBone(skeleton, "Hips");
-            int leftFootBone = RequireBone(skeleton, "LeftFoot");
-            int rightFootBone = RequireBone(skeleton, "RightFoot");
-            List<PreIKRuntimeCompositionSample> captured = CaptureGraphSamples(
-                tree,
-                skeleton,
-                rootBone,
-                hipsBone,
-                leftFootBone,
-                rightFootBone,
-                modifiers);
-
-            PreIKRuntimeCompositionResult result = PreIKRuntimeCompositionOracle.Evaluate(
-                captured,
-                PreIKContinuityLimitPopulation.AllApplicable);
-            PreIKRuntimeCompositionResult postIKSubstitutionResult = PreIKRuntimeCompositionOracle.Evaluate(
-                [.. captured.Select(sample => sample with { PostIK = new PostIKOutputEvidence(IsPresent: true, IsValid: true) })],
-                PreIKContinuityLimitPopulation.AllApplicable);
-
-            Assert.Equal(stateName, playback.GetCurrentNode().ToString());
-            AssertGraphChannelsWereCapturedHonestly(captured);
-            AssertModifiersInactive(modifiers, "after all manual AnimationTree.Advance calls");
-            AssertBlockedForUnavailableGraphChannels(result);
-            Assert.False(postIKSubstitutionResult.Passed);
-            Assert.Contains(
-                postIKSubstitutionResult.Rejections,
-                rejection => rejection.Reason.Contains("valid post-IK output cannot substitute for failed pre-IK evidence", StringComparison.Ordinal));
-        }
-        finally
-        {
-            root.QueueFree();
-            await WaitForNextFrameAsync(sceneTree);
-        }
-    }
-
-    private static List<PreIKRuntimeCompositionSample> CaptureGraphSamples(
-        AnimationTree tree,
-        Skeleton3D skeleton,
-        int rootBone,
-        int hipsBone,
-        int leftFootBone,
-        int rightFootBone,
-        IReadOnlyList<SkeletonModifier3D> modifiers)
-    {
-        const double tick = 1d / 60d;
-        List<PreIKRuntimeCompositionSample> captured = [];
-        for (int sampleIndex = 0; sampleIndex < 3; sampleIndex++)
-        {
-            AdvanceBeforeModifiers(tree, modifiers, tick, $"captured sample {sampleIndex}");
-            PreIKObservedAnimationRole observedRole = ObserveUnavailableRoleFromRuntimeState(tree);
-            captured.Add(new PreIKRuntimeCompositionSample(
-                $"manual-advance:{sampleIndex}",
-                null,
-                new PreIKBodyPose(
-                    BoneWorldPosition(skeleton, rootBone),
-                    BoneWorldPosition(skeleton, hipsBone),
-                    BoneWorldPosition(skeleton, leftFootBone),
-                    BoneWorldPosition(skeleton, rightFootBone)),
-                NormalisedPhase: null,
-                SeamHandoffIdentity: null,
-                RetimingPlaybackRateIdentity: null,
-                Contacts: null,
-                Continuity: null,
-                AdmittedAnimationEvidence: null,
-                ObservedAnimationRole: observedRole,
-                UnavailableChannels: _unavailableGraphChannels));
-        }
-
-        return captured;
-    }
-
-    private static void AssertGraphChannelsWereCapturedHonestly(IReadOnlyList<PreIKRuntimeCompositionSample> samples)
-    {
-        Assert.Equal(3, samples.Count);
-        Assert.All(samples, sample =>
-        {
-            Assert.StartsWith("manual-advance:", sample.SourceFrameIdentity);
-            Assert.Null(sample.MonotonicTimeSeconds);
-            _ = Assert.NotNull(sample.Pose?.RootWorld);
-            _ = Assert.NotNull(sample.Pose?.HipsWorld);
-            _ = Assert.NotNull(sample.Pose?.LeftFootWorld);
-            _ = Assert.NotNull(sample.Pose?.RightFootWorld);
-            Assert.Null(sample.NormalisedPhase);
-            Assert.Null(sample.SeamHandoffIdentity);
-            Assert.Null(sample.RetimingPlaybackRateIdentity);
-            Assert.Null(sample.Contacts);
-            Assert.Null(sample.Continuity);
-            Assert.Null(sample.AdmittedAnimationEvidence);
-            PreIKObservedAnimationRole observedRole = Assert.IsType<PreIKObservedAnimationRole>(sample.ObservedAnimationRole);
-            Assert.False(observedRole.IsAvailable);
-            Assert.Null(observedRole.SemanticRole);
-            Assert.Contains("parameters/States/playback", observedRole.SourceDescription, StringComparison.Ordinal);
-            Assert.Same(_unavailableGraphChannels, sample.UnavailableChannels);
-        });
+        var sample = new PreIKRuntimeCompositionSample("synthetic:missing-channels", null,
+            new PreIKBodyPose(Vector3.Zero, Vector3.Up, Vector3.Left, Vector3.Right),
+            NormalisedPhase: null, SeamHandoffIdentity: null, RetimingPlaybackRateIdentity: null,
+            Contacts: null, Continuity: null, AdmittedAnimationEvidence: null,
+            ObservedAnimationRole: PreIKObservedAnimationRole.Unavailable("No semantic role supplied"),
+            UnavailableChannels: _unavailableGraphChannels);
+        AssertBlockedForUnavailableGraphChannels(PreIKRuntimeCompositionOracle.Evaluate(
+            [sample, sample with { SourceFrameIdentity = "synthetic:next-missing-channels" }], PreIKContinuityLimitPopulation.AllApplicable));
+        PreIKRuntimeCompositionResult substituted = PreIKRuntimeCompositionOracle.Evaluate(
+            [sample with { PostIK = new PostIKOutputEvidence(IsPresent: true, IsValid: true) }],
+            PreIKContinuityLimitPopulation.AllApplicable);
+        Assert.False(substituted.Passed);
+        Assert.Contains(substituted.Rejections, rejection => rejection.Reason.Contains(
+            "valid post-IK output cannot substitute for failed pre-IK evidence", StringComparison.Ordinal));
     }
 
     private static void AssertBlockedForUnavailableGraphChannels(PreIKRuntimeCompositionResult result)
@@ -412,52 +297,6 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
                 PreIKAnimationSemanticRole.ForwardWalk,
                 "synthetic runtime graph selected the ForwardWalk leaf"));
 
-    private static List<SkeletonModifier3D> DisableModifiersBeforeFixtureEntersSceneTree(Node root)
-    {
-        Assert.False(root.IsInsideTree(), "Every SkeletonModifier3D must be disabled before fixture scene entry.");
-        List<SkeletonModifier3D> modifiers = [.. root.FindChildren("*", nameof(SkeletonModifier3D), recursive: true, owned: false)
-            .OfType<SkeletonModifier3D>()];
-        Assert.NotEmpty(modifiers);
-        foreach (SkeletonModifier3D modifier in modifiers)
-        {
-            modifier.Active = false;
-        }
-
-        // CharacterIK is the sole actuator of leg-modifier activity (IK-003 TR2) and re-activates the leg solve
-        // whenever a foot provider applies, as NPC foot planting does every tick; stop it so modifiers stay disabled.
-        foreach (CharacterIK characterIK in root.FindChildren("*", nameof(Node3D), recursive: true, owned: false).OfType<CharacterIK>())
-        {
-            characterIK.Active = false;
-        }
-
-        AssertModifiersInactive(modifiers, "before fixture scene entry");
-        return modifiers;
-    }
-
-    private static void AdvanceBeforeModifiers(
-        AnimationTree tree,
-        IReadOnlyList<SkeletonModifier3D> modifiers,
-        double delta,
-        string captureStep)
-    {
-        AssertModifiersInactive(modifiers, $"immediately before manual AnimationTree.Advance for {captureStep}");
-        tree.Advance(delta);
-        AssertModifiersInactive(modifiers, $"immediately after manual AnimationTree.Advance for {captureStep}");
-    }
-
-    private static PreIKObservedAnimationRole ObserveUnavailableRoleFromRuntimeState(AnimationTree tree)
-    {
-        AnimationNodeStateMachinePlayback playback = tree.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
-            ?? throw new Xunit.Sdk.XunitException("Expected evaluated AnimationTree to expose state-machine playback.");
-        string currentState = playback.GetCurrentNode().ToString();
-        return PreIKObservedAnimationRole.Unavailable(
-            $"AnimationTree property 'parameters/States/playback' reports current state '{currentState}' via " +
-            "AnimationNodeStateMachinePlayback.GetCurrentNode(); it exposes no public active leaf-role property.");
-    }
-
-    private static void AssertModifiersInactive(IReadOnlyList<SkeletonModifier3D> modifiers, string checkpoint)
-        => Assert.All(modifiers, modifier => Assert.False(modifier.Active, $"Skeleton modifier '{modifier.Name}' was active {checkpoint}."));
-
     private static List<PreIKRuntimeCompositionSample> AddObservedContinuity(IReadOnlyList<PreIKRuntimeCompositionSample> samples)
     {
         List<PreIKRuntimeCompositionSample> result = [samples[0]];
@@ -513,17 +352,6 @@ public sealed class PreIKRuntimeCompositionOracleIntegrationTests
         Assert.False(result.Passed, "Each mutation must reach the final aggregate result.");
         Assert.Contains(result.Rejections, rejection => rejection.Reason.Contains(reason, StringComparison.Ordinal));
     }
-
-    private static int RequireBone(Skeleton3D skeleton, string name)
-    {
-        int index = skeleton.FindBone(name);
-        return index >= 0
-            ? index
-            : throw new Xunit.Sdk.XunitException($"Expected pre-IK graph skeleton to expose '{name}'.");
-    }
-
-    private static Vector3 BoneWorldPosition(Skeleton3D skeleton, int bone)
-        => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(bone).Origin;
 
     private static string FormatRejections(PreIKRuntimeCompositionResult result)
         => string.Join("; ", result.Rejections.Select(rejection => $"{rejection.SampleIndex}: {rejection.Reason}"));

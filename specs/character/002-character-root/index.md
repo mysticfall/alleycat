@@ -55,6 +55,16 @@ or component path exists.
 
 ## Technical Requirements
 
+### Prototype Delivery Boundary
+
+The MotionBricks slice preserves the character roles and unrelated capability contracts below. Requirements and
+acceptance for player movement bindings are deferred with [player locomotion restoration](../../ctrl/index.md);
+they do not require retaining obsolete locomotion implementations. NPC motion follows
+[NAV-001](../../nav/001-npc-navigation/index.md).
+Shared eyes, voice, hands, senses, identity, and component projection contracts remain required.
+
+### Character Contracts
+
 1. `AlleyCat.Character.ICharacter` is the canonical interface for the current fully embodied humanoid character and
    remains an `INavigator`.
 2. `ICharacter` must follow the CORE-003 holder trait pattern and aggregate required holder traits for current humanoid
@@ -88,8 +98,8 @@ or component path exists.
     - NPC: Eyes, Navigation, Voice, Hearing, Left, Right.
     - Player: Eyes, Locomotion, Navigation, Voice, Left, Right.
 12. Final NPC role templates must author production `INavigation`. Final player role templates must author player
-    `ILocomotion` and `PlayerNavigation`, with `PlayerNavigation` disabled by default. Both roles must author the shared
-    Eyes, Voice, Left hand, and Right hand references before installation succeeds.
+    `ILocomotion` and optional `INavigation`, with optional navigation disabled by default. Both roles must author
+    shared Eyes, Voice, Left hand, and Right hand references before installation succeeds.
 13. Partial reusable base templates may omit role-specific capability references, such as `Voice`, only when they are
     consumed by final role templates that complete the required root-reference contract.
 14. `Character.RefreshComponents()` remains voice-required for installed and final characters; missing `Voice` on an
@@ -148,15 +158,14 @@ or component path exists.
 38. `AlleyCat.Character.IPlayer` extends `ICharacter` and `ILocomotive`.
     `AlleyCat.Character.PlayerCharacter : Character, IPlayer` is the required concrete player root and composes player
     `ILocomotion` plus optional `INavigation` that is disabled by default.
-39. Final NPC role templates compose `NPCNavigation` as production `INavigation` and contain no `ILocomotive`, player
-    `CharacterLocomotion`, or `ILocomotion`. NPC navigation owns its root-producing locomotion graph region and coherent
-    actor motor path.
-40. Player templates compose tracker/stick-driven `CharacterLocomotion` as `ILocomotion` by default. Their
-    `PlayerNavigation` activates only explicitly and yields to non-neutral manual movement as defined by CTRL-001.
+39. Final NPC role templates compose production `INavigation` without a player `ILocomotive` or `ILocomotion`
+    dependency. NAV-001 owns generated root motion and collision-safe actor movement.
+40. Player movement restoration is deferred; no concrete player locomotion or optional navigation implementation is
+    mandated by this prototype.
 41. NPC and player movement implementations remain separate. They may share only small, clearly neutral infrastructure;
     character composition must not introduce a shared scheduler or aggregate role-agnostic movement-response model.
-42. `DirectTransformNavigation` remains the deterministic test and diagnostic baseline, not the NPC production movement
-    implementation.
+42. Character composition and capability consumers must use the retained `INavigation`/`INavigator` boundary;
+    NAV-001 owns the concrete NPC movement implementation.
 43. `Character.Components` deliberately includes every configured `ISense` in deterministic holder order. A component
     that is both a required embodied capability and a configured sense appears once.
 44. Final NPC role templates configure Vision and Hearing senses under AI-006. Character and modality or delivery
@@ -263,7 +272,7 @@ or component path exists.
    production scenes retain a root type appropriate to their NPC or player role.
 4. Missing or invalid scene roots produce clear installer validation failures.
 5. Final role templates expose shared eyes, voice, and hand references plus NPC `INavigation` or player `ILocomotion`
-   and disabled-by-default `PlayerNavigation` on the template root for contributor inspection.
+   and disabled-by-default optional navigation on the template root for contributor inspection after player restoration.
 6. Missing, wrong, duplicate, or unrebasable required humanoid capabilities produce clear validation failures.
 7. Partial reusable base templates may omit role-specific `Voice` only when the final role templates that consume them
    author `Voice` before runtime installation.
@@ -346,9 +355,10 @@ or component path exists.
 26. Interface and root-type tests prove `IPlayer : ICharacter, ILocomotive` and
     `PlayerCharacter : Character, IPlayer`; production player composition uses `PlayerCharacter`, binds player
     `ILocomotion`, and keeps optional `INavigation` disabled until explicit activation.
-27. NPC composition tests prove production NPC roles use `NPCNavigation` as `INavigation` without an `ILocomotive`,
-    player `CharacterLocomotion`, or `ILocomotion` dependency, and that player roles do not install `NPCNavigation`.
-    Direct-consumer baseline tests remain valid.
+27. NPC composition tests prove production NPC roles expose `INavigation` without a player `ILocomotive` or
+    `ILocomotion` dependency. The single-NPC prototype does not install NPC motion as player locomotion.
+    Capability checks verify navigation resolves through the character's `INavigator` contract and component projection,
+    without coupling consumers to a concrete movement implementation (TR42).
 28. Source searches and composition tests prove no shared NPC/player scheduler, aggregate role-agnostic response model,
     or old compatibility path remains.
 29. Composition tests verify final NPC roles configure Vision and Hearing, every configured `ISense` appears exactly
@@ -379,10 +389,8 @@ or component path exists.
 
 ## Implementation Status
 
-The implementation conforms to the role-root architecture: production NPC roots use `Character`, while production
-player composition uses `PlayerCharacter : Character, IPlayer`, `CharacterLocomotion` through `ILocomotion`, and
-disabled-by-default `PlayerNavigation`. NPC composition uses `NPCNavigation` through `INavigation` and contains no
-player `CharacterLocomotion` or `ILocomotion`.
+MotionBricks composition and actual-rig validation remain delivery work under NAV-001. This page does not claim the
+replacement runtime or deferred player movement bindings are implemented.
 
 Character composition follows the three-layer convention: content characters such as 이만복 and 박소희 root in their own
 imports and install through per-character templates and installer configuration, with facing correction propagated from
@@ -403,10 +411,10 @@ convention: each roots in its gender blend and installs through a per-character 
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
-- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [Player Character Control](../../ctrl/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
-- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
+- [Shared Animation Contract](../../animation/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - `@game/content/the_price_of_dissent/characters/이만복/` — Canonical three-layer character exemplar (character scene,
   local template, installer configuration)
