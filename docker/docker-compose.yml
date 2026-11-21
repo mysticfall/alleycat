@@ -20,6 +20,8 @@ services:
     container_name: alleycat-audio2face-api
     build:
       context: ./audio2face-api-server
+      secrets:
+        - hf_token
     ports:
       - "8765:8765"
     volumes:
@@ -52,3 +54,7 @@ volumes:
     name: audio2face-data
   kev-decision-data:
     name: kev-decision-data
+secrets:
+  hf_token:
+    environment: HF_TOKEN
+
