@@ -44,14 +44,23 @@ solvers rewrite unrelated state or policy.
 9. Post-modification poses are observable only inside `Skeleton3D.SkeletonUpdated`. The engine applies modifier
    output to the skin and then restores canonical bone poses, so reads at physics-timer time cannot observe IK output.
    Diagnostics and test instruments capture post-IK output there, bound to the tick that produced it.
-10. Pole prediction derives its direction from current animation geometry and is resolved on every tick; a pole from
-    an earlier tick is never kept. When the knee plane is degenerate or ambiguous, a deterministic, smooth fallback
-    uses a forward reference projected perpendicular to the leg direction. The reference is the foot target's forward
-    direction, except that the avatar's forward direction is used when the leg reaches forward at full extension.
-    - **Degenerate plane** (the knee on the hip–foot line): the pole follows the projected reference. If the foot
-      target is tilted so that its forward direction is not usable, the pole follows the projected avatar forward.
-    - **Ambiguous plane:** the projected reference resolves the plane. If the foot target is tilted so that its
-      forward direction is not usable, the pole keeps the direction derived from the current animation geometry.
+10. **Knee-Pole Prediction:**
+     - Measure transverse animated bend off the animated hip-to-foot line, then resolve it perpendicular to the
+       hip-to-foot-target axis. Blend weak or poorly aligned cues continuously towards the reference instead of
+       using them raw. In the ordinary downward-leg region, reject cues on the rearward side of the plane
+       perpendicular to the selected reference, not a plane based on avatar forward alone.
+     - For an ordinary downward leg with a weak bend, use foot-target forward projected perpendicular to the
+       target axis. Weight its influence smoothly by the magnitude of alignment between the foot and body up axes.
+       When tilt makes the foot unusable, use projected avatar forward for a degenerate bend and retain a coherent
+       animated bend cue where available.
+     - Blend continuously over a tunable angular band away from straight down, at every azimuth, into an anatomical
+       knee plane independent of foot yaw. A raised, deeply folded knee opens towards its own side, while an
+       extended leg reaching forward bends upwards. Do not normalise a vanishing projection of avatar forward.
+     - At the straight-up singularity the reference is undefined. Hold the last valid pole and resume without
+       reversal when a reference is defined again.
+     - Rate-limit the pole's angular adjustment relative to the transported reference using elapsed time, not a
+       per-frame step. Keep the pole continuous when body-pose ownership passes from generated motion to tracked
+       idle under [CTRL-001 TR4](../../ctrl/001-locomotion/index.md#technical-requirements).
 
     A tunable rest-leg-derived minimum pole offset applies.
 11. The solver never writes a target's position, rotation, or scale.
@@ -75,6 +84,7 @@ solvers rewrite unrelated state or policy.
 ### User Requirement Acceptance
 
 1. Both reference rigs show stable knee direction and target following, including a degenerate-pole case.
+   Observe the player from release through settling into tracked idle; knees do not flip or snap at the handoff.
 2. Switching between synchronised, applicable-provider, and fallback targets is deterministic and conflict-free.
 3. A refusal or invalid result for one foot does not disturb the other foot.
 
@@ -86,7 +96,17 @@ solvers rewrite unrelated state or policy.
 3. Fixtures prove providers are value-only and `CharacterIK` is the sole actuator, with idempotent order repair.
 4. A real-NPC trace proves `Physics` callback mode, animation before modifiers, same-tick provider input, and post-IK
    capture inside `Skeleton3D.SkeletonUpdated`.
-5. Fixtures prove pole fallback, the minimum pole offset, and that the solver never writes its target.
+5. Verify pole prediction, the minimum pole offset and that the solver never writes its target.
+    - With target position fixed and the bend cue weak, yaw a usable foot target in ordinary downward reach and
+      verify that it redirects the pole. Vary foot tilt to verify smooth loss of yaw influence and the unusable-foot
+      fallback. At forward extension, verify the reference bends up and does not follow foot yaw.
+    - Check the reference before rate limiting across forward-parallel reach from sagittal and oblique approaches
+      over the supported reach envelope. Before rate limiting, verify that a raised, deeply folded knee opens
+      towards its own side. Verify continuity across the transition band and that straight up holds the last valid
+      pole and resumes without reversal.
+    - Verify the angular adjustment limit scales with elapsed time. Trace the pole from release through generated
+      settling and into settled tracked idle. Check for no snap, including at the ownership handoff, and no
+      rearward pole relative to the selected reference in the ordinary downward-leg region during that sequence.
 6. Per-foot checks prove target geometry and reach computation use the composed target transform in one consistent
    world frame, without duplicate scaling.
 7. An audit confirms no terrain probe, pelvis adjustment, or downstream target overwrite exists.
@@ -100,6 +120,12 @@ solvers rewrite unrelated state or policy.
 - Technical Requirements 10–11 → Technical Requirement Acceptance 5.
 - Technical Requirement 12 → Technical Requirement Acceptance 6.
 - Technical Requirement 13 → Technical Requirement Acceptance 7.
+
+## Implementation Status
+
+The pole rule has been independently reviewed for headset playtest. The user reports that the original knee flip
+appears gone in the headset; this does not resolve the settling pose snap or rule out rarer knee-flip variants.
+A foot-yaw crossing at ±180° while foot-reference weighting is partial has not been tested.
 
 ## References
 

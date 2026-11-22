@@ -12,12 +12,10 @@ namespace AlleyCat.IK;
 public partial class LegIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-6f;
-    private const float AmbiguousPlanePreferenceThreshold = 0.02f;
-    private const float AmbiguousPlaneOrientationBias = 1.0f;
-    private const float MinimumStableForwardPoleDot = 0.5f;
-    private const float MaximumStableSideToForwardPoleRatio = 0.5f;
-    private const float ForwardExtensionLegDot = 0.6f;
-    private const float ForwardExtensionDownDot = 0.3f;
+    private const float ReliableBendMetres = 0.025f;
+    private const float CueFollowRadiansPerSecond = 75f * Mathf.Pi / 180f;
+    private float _poleAngle;
+    private Vector3 _lastPoleLocal;
 
     /// <summary>
     /// The foot IK goal consumed by downstream solvers.
@@ -115,149 +113,109 @@ public partial class LegIKController : SkeletonModifier3D
         Vector3 currentFootPosition = BoneGlobalPosition(_footIdx);
         Vector3 lowerLegPosition = BoneGlobalPosition(_lowerLegIdx);
 
-        Vector3 o1 = (upperLegPosition + desiredFootPosition) * 0.5f;
-        Vector3 o2 = (upperLegPosition + currentFootPosition) * 0.5f;
-
-        Vector3 animationPoleDirectionRaw = lowerLegPosition - o2;
-        Vector3 legDirection = desiredFootPosition - upperLegPosition;
-        bool hasLegDirection = TryNormalise(legDirection, out Vector3 normalisedLegDirection);
-        bool useDesiredFootPoleOrigin = false;
-        if (!TryNormalise(animationPoleDirectionRaw, out Vector3 poleDirection))
+        Vector3 goal = desiredFootPosition - upperLegPosition;
+        if (!TryNormalise(goal, out Vector3 axis)
+            || !TryNormalise(currentFootPosition - upperLegPosition, out Vector3 animatedAxis))
         {
-            // Degenerate animation geometry (the knee on the hip-foot line): the pole must not keep whatever it held
-            // before, so it falls back deterministically to the same target-orientation frame the ambiguous-plane
-            // resolution converges to, keeping the degenerate and near-degenerate poles continuous.
-            if (!hasLegDirection || !TryResolveDegeneratePole(normalisedLegDirection, out poleDirection))
-            {
-                return;
-            }
-
-            useDesiredFootPoleOrigin = true;
-        }
-        else if (hasLegDirection)
-        {
-            useDesiredFootPoleOrigin = TryResolveAmbiguousPolePlane(
-                poleDirection,
-                normalisedLegDirection,
-                out poleDirection);
+            return;
         }
 
-        float currentLegLength = (o1 - upperLegPosition).Length() * 2.0f;
+        // Measure transverse bend, not the offset from the leg midpoint (which
+        // contains thigh/shin length asymmetry even on a perfectly straight leg).
+        Vector3 bend = (lowerLegPosition - upperLegPosition).Slide(animatedAxis);
+        float currentLegLength = goal.Length();
+        Basis frame = _skeleton.GlobalBasis.Orthonormalized();
+        Vector3 reference = ResolveReference(axis, currentLegLength / _restLegLength,
+            frame, FootTarget.GlobalBasis.Orthonormalized(), Side, bend,
+            out Vector3 transport);
+        if (reference.IsZeroApprox())
+        {
+            // No defined swing axis for a leg pointing straight up. Leave the target in place.
+            return;
+        }
+
+        float angle = transport.SignedAngleTo(reference, axis);
+        float maxStep = CueFollowRadiansPerSecond * (float)delta;
+        _poleAngle = Mathf.RotateToward(_poleAngle, angle, maxStep);
+        Vector3 poleDirection = transport.Rotated(axis, _poleAngle);
+        // Outside the supported envelope the swing chart can turn arbitrarily fast near
+        // its antipode. Carry the previous plane through re-entry instead of snapping.
+        if (axis.Dot(frame.Y) > 0.8660254f
+            && TryNormalise((frame * _lastPoleLocal).Slide(axis), out Vector3 previous))
+        {
+            float turn = previous.SignedAngleTo(poleDirection, axis);
+            poleDirection = previous.Rotated(axis, Mathf.Clamp(turn, -maxStep, maxStep));
+            _poleAngle = transport.SignedAngleTo(poleDirection, axis);
+        }
+
+        _lastPoleLocal = frame.Transposed() * poleDirection;
         float ratioBasedOffset = currentLegLength * PoleOffsetRatio;
         float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
 
         float restLegMinimumOffset = (_restLegLength * 0.5f) + RestLegHalfPoleOffsetMargin;
         float floorOffset = Mathf.Max(MinimumPoleOffset, restLegMinimumOffset);
         offset = Mathf.Max(offset, floorOffset);
-        Vector3 poleOrigin = useDesiredFootPoleOrigin ? o1 : o2;
-        PoleTarget.GlobalPosition = poleOrigin + (poleDirection * offset);
+        PoleTarget.GlobalPosition = upperLegPosition + (goal * 0.5f) + (poleDirection * offset);
     }
 
-    private bool TryResolveDegeneratePole(Vector3 legDirection, out Vector3 poleDirection)
+    internal static Vector3 ResolveReference(
+        Vector3 axis, float reach, Basis frame, Basis foot, LimbSide side, Vector3 bend, out Vector3 transport)
     {
-        // A zero candidate is never a stable pole and has no plane preference, so the ambiguous-plane resolution
-        // returns its preferred forward reference directly: avatar forward near forward extension, otherwise the foot
-        // target's forward. A foot target tilted off the skeleton's up axis falls back to projected avatar forward.
-        if (TryResolveAmbiguousPolePlane(Vector3.Zero, legDirection, out poleDirection))
+        Vector3 down = -frame.Y;
+        float cosine = Mathf.Clamp(down.Dot(axis), -1f, 1f);
+        transport = Vector3.Zero;
+        if (1f + cosine <= DegenerateThreshold)
         {
-            return true;
+            return Vector3.Zero;
         }
 
-        Vector3 avatarForward = (_skeleton!.GlobalTransform.Basis.Orthonormalized() * Vector3.Back).Normalized();
-        return TryProjectAndNormalise(avatarForward, legDirection, out poleDirection);
-    }
-
-    private bool TryResolveAmbiguousPolePlane(Vector3 poleDirection, Vector3 legDirection, out Vector3 resolvedPoleDirection)
-    {
-        resolvedPoleDirection = poleDirection;
-
-        Basis skeletonBasis = _skeleton!.GlobalTransform.Basis.Orthonormalized();
-        Vector3 avatarForward = (skeletonBasis * Vector3.Back).Normalized();
-        Vector3 skeletonUp = skeletonBasis.Column1.Normalized();
-        Vector3 avatarRight = skeletonUp.Cross(avatarForward).Normalized();
-        if (IsStableAvatarForwardPole(poleDirection, avatarForward, avatarRight, skeletonUp))
+        // Shortest-swing transport of a tangent to down. Unlike a projection of forward,
+        // this has no singularity at forward reach: on that meridian forward swings into up.
+        Vector3 swung = (frame.Z - ((down + axis) * (frame.Z.Dot(axis) / (1f + cosine)))).Normalized();
+        float ordinary = 1f - Mathf.SmoothStep(Mathf.DegToRad(35f), Mathf.Pi / 4f, Mathf.Acos(cosine));
+        float fold = 1f - Mathf.SmoothStep(0.45f, 0.7f, reach);
+        float raise = Mathf.SmoothStep(0.3f, 0.8f, axis.Dot(frame.Z));
+        float opening = (Mathf.Pi / 4f) + (Mathf.Pi / 2f * Mathf.SmoothStep(0f, 0.6f, axis.Dot(frame.Y)));
+        float outward = side == LimbSide.Left ? -1f : 1f;
+        transport = swung.Rotated(axis, outward * fold * raise * opening);
+        float footAngle = 0f;
+        float usable = Mathf.SmoothStep(0.8f, 0.9f, Mathf.Abs(frame.Y.Dot(foot.Y)));
+        if (ordinary > 0f)
         {
-            return false;
-        }
-
-        Basis footBasis = FootTarget!.GlobalTransform.Basis.Orthonormalized();
-        Vector3 footForward = footBasis.Column2;
-        Vector3 footUp = footBasis.Column1;
-        bool useStableAvatarForward = legDirection.Dot(avatarForward) >= ForwardExtensionLegDot
-            && legDirection.Dot(-skeletonUp) >= ForwardExtensionDownDot;
-        Vector3 forwardReference = useStableAvatarForward ? avatarForward : footForward;
-
-        if (!TryProjectAndNormalise(forwardReference, legDirection, out Vector3 forwardProjected))
-        {
-            return false;
-        }
-
-        if (!useStableAvatarForward && Mathf.Abs(footUp.Dot(skeletonUp)) < 0.9f)
-        {
-            return false;
-        }
-
-        Vector3 preferredForward = forwardProjected;
-        if (TryProjectAndNormalise(skeletonUp, legDirection, out Vector3 upProjected))
-        {
-            float planePreference = Mathf.Abs(poleDirection.Dot(forwardProjected))
-                - Mathf.Abs(poleDirection.Dot(upProjected));
-            if (useStableAvatarForward)
+            Vector3 projected = frame.Z.Slide(axis).Normalized();
+            transport = transport.Slerp(projected, ordinary);
+            if (usable > 0f)
             {
-                float forwardDot = poleDirection.Dot(forwardProjected);
-                bool stableForwardHemisphere = forwardDot >= MinimumStableForwardPoleDot;
-                bool stableSideOffset = true;
-
-                if (TryProjectAndNormalise(avatarRight, legDirection, out Vector3 sideProjected))
-                {
-                    stableSideOffset = Mathf.Abs(poleDirection.Dot(sideProjected))
-                        <= forwardDot * MaximumStableSideToForwardPoleRatio;
-                }
-
-                if (stableForwardHemisphere
-                    && stableSideOffset
-                    && planePreference >= AmbiguousPlanePreferenceThreshold)
-                {
-                    return false;
-                }
-            }
-            else if (planePreference >= AmbiguousPlanePreferenceThreshold)
-            {
-                return false;
-            }
-
-            if (!useStableAvatarForward)
-            {
-                Vector3 forwardWithoutUp = forwardProjected - (forwardProjected.Dot(upProjected) * upProjected);
-                if (TryNormalise(forwardWithoutUp, out Vector3 normalisedForwardWithoutUp))
-                {
-                    preferredForward = normalisedForwardWithoutUp;
-                }
+                // Unwrap the projected-foot angle about the actual foot heading, so
+                // changing the leg axis does not cross atan2's seam for a fixed foot.
+                float yaw = frame.Z.SignedAngleTo(foot.Z.Slide(down).Normalized(), down);
+                float projectedYaw = projected.SignedAngleTo(foot.Z.Slide(axis).Normalized(), axis);
+                footAngle = ordinary * usable * (yaw + Mathf.AngleDifference(yaw, projectedYaw));
             }
         }
 
-        Vector3 biasedForward = preferredForward;
-        Vector3 biasedDirection = poleDirection.Lerp(biasedForward, AmbiguousPlaneOrientationBias);
-
-        if (!TryNormalise(biasedDirection, out Vector3 normalisedBiasedDirection))
+        Vector3 weakReference = transport.Rotated(axis, footAngle);
+        Vector3 transverse = bend.Slide(axis);
+        float strength = transverse.Length();
+        if (strength == 0f)
         {
-            return false;
+            return weakReference;
         }
 
-        resolvedPoleDirection = normalisedBiasedDirection;
-        return true;
-    }
+        Vector3 cue = transverse / strength;
+        float confidence = Mathf.SmoothStep(0f, ReliableBendMetres, strength);
+        float alignment = cue.Dot(weakReference);
+        if (alignment <= 0f)
+        {
+            return weakReference;
+        }
 
-    private static bool IsStableAvatarForwardPole(
-        Vector3 poleDirection,
-        Vector3 avatarForward,
-        Vector3 avatarRight,
-        Vector3 skeletonUp)
-    {
-        float forwardDot = poleDirection.Dot(avatarForward);
-        return forwardDot >= MinimumStableForwardPoleDot
-            && Mathf.Abs(poleDirection.Dot(avatarRight)) <= forwardDot * MaximumStableSideToForwardPoleRatio
-            && Mathf.Abs(forwardDot) - Mathf.Abs(poleDirection.Dot(skeletonUp)) >= AmbiguousPlanePreferenceThreshold;
+        // On an unusably tilted foot the coherent animation plane owns the solution.
+        // Fade out its authority at the side plane too: a hard cut there swaps a
+        // sideways animated pole for the neutral reference in a single step.
+        float coherent = Mathf.SmoothStep(0f, 0.5f, alignment);
+        float authority = confidence * Mathf.Lerp(alignment, coherent, ordinary * (1f - usable));
+        return weakReference.Rotated(axis, weakReference.SignedAngleTo(cue, axis) * authority);
     }
 
     private bool TryResolveBones()
@@ -306,20 +264,6 @@ public partial class LegIKController : SkeletonModifier3D
         }
 
         normalised = value.Normalized();
-        return true;
-    }
-
-    private static bool TryProjectAndNormalise(Vector3 value, Vector3 normal, out Vector3 projected)
-    {
-        projected = value - (value.Dot(normal) * normal);
-
-        if (projected.LengthSquared() <= DegenerateThreshold)
-        {
-            projected = Vector3.Zero;
-            return false;
-        }
-
-        projected = projected.Normalized();
         return true;
     }
 }
