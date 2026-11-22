@@ -44,6 +44,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         AssertCharacterBaseTemplatesDoNotAuthorContextSources();
     }
 
+    /// <summary>The Ally player scene references the imported female model and player role template, not the female base scene.</summary>
     [Headless]
     [Fact]
     public void AllyPlayerScene_UsesImportedModelAndRoleTemplate()
