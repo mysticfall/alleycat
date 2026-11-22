@@ -1,7 +1,9 @@
 using AlleyCat.Core;
+using AlleyCat.Core.Installer;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
+using AlleyCat.Rigging.Installation;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
 using AlleyCat.Vision;
@@ -21,17 +23,47 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
     /// <inheritdoc />
     public override void _EnterTree()
     {
-        if (Engine.IsEditorHint() || MotionModel.Length == 0)
+        if (Engine.IsEditorHint())
         {
             return;
         }
 
-        bool player = HasNode("PlayerCharacterInstaller");
-        if (player || HasNode("NPCCharacterInstaller"))
+        RigRoleTemplateSceneInstaller? playerInstaller = GetNodeOrNull<RigRoleTemplateSceneInstaller>("PlayerCharacterInstaller");
+        RigRoleTemplateSceneInstaller? installer = playerInstaller ?? GetNodeOrNull<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+        if (installer is null)
+        {
+            return;
+        }
+
+        // The role copies exports after tree entry. Resolve its mount input before the imported children
+        // enter the tree, without instantiating a second role template or replacing an authored override.
+        if (MotionModel.Length == 0 && !TargetSceneOverrides.Discover(this).IsAuthored(this, nameof(MotionModel)))
+        {
+            MotionModel = ReadTemplateMotionModel(installer.Template);
+        }
+
+        if (MotionModel.Length != 0)
         {
             using GodotObject mount = GD.Load<GDScript>("res://src/Motion/native_soma_mount.gd").New().AsGodotObject();
-            _ = mount.Call("install", this, MotionModel, player);
+            _ = mount.Call("install", this, MotionModel, playerInstaller is not null);
         }
+    }
+
+    private static string ReadTemplateMotionModel(PackedScene? template)
+    {
+        // SceneState contains only its own layer's properties; the nearest root declaration wins.
+        for (SceneState? state = template?.GetState(); state is not null; state = state.GetBaseSceneState())
+        {
+            for (int i = 0; i < state.GetNodePropertyCount(0); i++)
+            {
+                if (state.GetNodePropertyName(0, i) == PropertyName.MotionModel)
+                {
+                    return state.GetNodePropertyValue(0, i).AsString();
+                }
+            }
+        }
+
+        return string.Empty;
     }
 
     private IComponent[] _components = [];

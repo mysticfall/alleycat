@@ -909,6 +909,34 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
+    /// The visible skeleton is mounted before its first tree entry and remains the same target after role installation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerMount_PreservesImportedTargetFromTreeEntryThroughRoleInstallation()
+    {
+        SceneTree tree = GetSceneTree();
+        Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        Skeleton3D original = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        const string nativePath = "Female/SOMA/Native/GeneralSkeleton";
+        Node? targetAtEntry = null;
+        original.TreeEntered += () => targetAtEntry = player.GetNodeOrNull(nativePath);
+        try
+        {
+            tree.Root.AddChild(player);
+            await WaitForFramesAsync(tree, 8);
+
+            Assert.Same(original, targetAtEntry);
+            Assert.Same(original, player.GetNodeOrNull(nativePath));
+            Assert.Same(original.GetNode("Head/Viewpoint"), GetPropertyValue(player.GetNode("VRIK"), "Viewpoint"));
+        }
+        finally
+        {
+            player.Free();
+        }
+    }
+
+    /// <summary>
     /// The shipped player scene resolves runtime and player-role bindings through the real auto-install path.
     /// </summary>
     [Headless]
@@ -1353,6 +1381,16 @@ public sealed class RigInstallerIntegrationTests
         Assert.Same(character.GetNode("IKTargets/RightHand"), GetPropertyValue(rightHand, "HandTargetNode"));
         Assert.Same(character.GetNode("IKTargets/LeftHand"), GetPropertyValue(leftHand, "HandTargetNode"));
         string skeletonPath = character.IsInsideTree() ? "Female/SOMA/Native/GeneralSkeleton" : "Female/GeneralSkeleton";
+        Skeleton3D skeleton = character.GetNode<Skeleton3D>(skeletonPath);
+        foreach (string side in new[] { "Right", "Left" })
+        {
+            TwoBoneIK3D solver = skeleton.GetNode<TwoBoneIK3D>($"{side}ArmTwoBoneIKController");
+            CopyTransformModifier3D rotation = skeleton.GetNode<CopyTransformModifier3D>($"{side}HandCopyRotation");
+            AnimatableBody3D handTarget = character.GetNode<AnimatableBody3D>($"IKTargets/{side}Hand");
+            Assert.Same(handTarget, solver.GetNodeOrNull(solver.GetTargetNode(0)));
+            Assert.Same(character.GetNode<Marker3D>($"IKTargets/{side}Elbow"), solver.GetNodeOrNull(solver.GetPoleNode(0)));
+            Assert.Same(handTarget, rotation.GetNodeOrNull(rotation.GetReferenceNode(0)));
+        }
         Assert.Same(character.GetNode(skeletonPath + "/RightHand"), GetPropertyValue(rightHand, "HandBoneAttachment"));
         Assert.Same(character.GetNode(skeletonPath + "/LeftHand"), GetPropertyValue(leftHand, "HandBoneAttachment"));
         Assert.Same(character.GetNode(skeletonPath + "/DynamicPhysicalRig"), GetPropertyValue(rightHand, "PhysicalRig"));

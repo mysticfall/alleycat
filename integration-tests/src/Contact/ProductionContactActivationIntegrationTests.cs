@@ -1,4 +1,5 @@
 using AlleyCat.Contact;
+using AlleyCat.IK;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using Godot;
@@ -215,8 +216,8 @@ public sealed class ProductionContactActivationIntegrationTests
 
         try
         {
-            AssertHostingTopology(fixture.NpcRoot, fixture.NpcController, NpcId);
-            AssertHostingTopology(fixture.PlayerRoot, fixture.PlayerController, PlayerId);
+            AssertHostingTopology(fixture.NpcRoot, fixture.NpcController, fixture.NpcRig, NpcId);
+            AssertHostingTopology(fixture.PlayerRoot, fixture.PlayerController, fixture.PlayerRig, PlayerId);
         }
         finally
         {
@@ -269,10 +270,13 @@ public sealed class ProductionContactActivationIntegrationTests
             // The frozen last-sweep receiver count proves no sweep runs while disabled: pushing further into
             // the head leaves it unchanged and delivers nothing.
             int receiverCountWhenDisabled = playerRightHand.LastSweepReceiverCountForTesting;
+            // Advance within the established head-only overlap. At the head centre the hand query also
+            // reaches the adjacent neck proxy, so that pose would exercise two distinct receiver pairs.
+            Vector3 deeperHeadContact = headProxy.ToLocal(fixture.PlayerRightHandTarget.GlobalPosition) * 0.5f;
             await ProductionContactFixture.MoveHandTowardsAsync(
                 sceneTree,
                 fixture.PlayerRightHandTarget,
-                () => headProxy.GlobalPosition,
+                () => headProxy.ToGlobal(deeperHeadContact),
                 stopWhenDiscovered: null,
                 maxStepMetres: 0.02f);
             await WaitForPhysicsFramesAsync(sceneTree, 4);
@@ -390,7 +394,8 @@ public sealed class ProductionContactActivationIntegrationTests
         }
     }
 
-    private static void AssertHostingTopology(CharacterRoot root, HandContactSweeperController controller, string ownerId)
+    private static void AssertHostingTopology(
+        CharacterRoot root, HandContactSweeperController controller, DynamicPhysicalRig rig, string ownerId)
     {
         Assert.Equal(2, controller.HandSweepers.Count);
 
@@ -408,7 +413,6 @@ public sealed class ProductionContactActivationIntegrationTests
             (controller.HandSweepers[1], "Left", "LeftHand", "LeftLowerArm"),
         ];
 
-        DynamicPhysicalRig rig = root.GetNode<DynamicPhysicalRig>("Female/GeneralSkeleton/DynamicPhysicalRig");
         foreach ((ContactSource sweeper, string side, string handBone, string lowerArmBone) in hosted)
         {
             Assert.Equal($"{side}HandContactSource", sweeper.Name.ToString());
@@ -530,8 +534,9 @@ public sealed class ProductionContactActivationIntegrationTests
                     $"{npcController.HandSweepers.Count} sweepers, player hosted {playerController.HandSweepers.Count}.");
             }
 
-            DynamicPhysicalRig npcRig = npcRoot.GetNode<DynamicPhysicalRig>("Female/GeneralSkeleton/DynamicPhysicalRig");
-            DynamicPhysicalRig playerRig = playerRoot.GetNode<DynamicPhysicalRig>("Female/GeneralSkeleton/DynamicPhysicalRig");
+            // Use each installed role's rig as the independent reference for the sweepers' proxy exclusions.
+            DynamicPhysicalRig npcRig = Assert.IsType<DynamicPhysicalRig>(npcRoot.GetNode<CharacterIK>("CharacterIK").PhysicalRig);
+            DynamicPhysicalRig playerRig = Assert.IsType<DynamicPhysicalRig>(playerRoot.GetNode<PlayerVRIK>("VRIK").PhysicalRig);
             Assert.True(npcRig.GeneratedProxyCount > 0, "The production NPC rig should generate receiver proxies.");
             Assert.True(playerRig.GeneratedProxyCount > 0, "The production player rig should generate receiver proxies.");
 
