@@ -17,8 +17,13 @@ namespace AlleyCat.Character;
 [GlobalClass]
 public partial class Character : CharacterBody3D, ICharacter, IComponentProjectionNotifier
 {
-    /// <summary>Model carrying the native MotionBricks source on installed reference actors.</summary>
+    /// <summary>Reference rest-pose asset key, independent of the installed actor's model node name.</summary>
     [Export] public string MotionModel { get; set; } = "";
+
+    private Skeleton3D? _motionTarget;
+
+    internal Skeleton3D RequireMotionTarget() => _motionTarget
+        ?? throw new InvalidOperationException($"Character '{Name}' has no installed MotionBricks target.");
 
     /// <inheritdoc />
     public override void _EnterTree()
@@ -44,8 +49,22 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
 
         if (MotionModel.Length != 0)
         {
+            Skeleton3D target = RigInstallationContext.ResolveSkeleton(this, installer.TargetSkeletonPath, "target");
+            if (!IsAncestorOf(target))
+            {
+                throw new InvalidOperationException($"MotionBricks target must belong to character '{Name}'.");
+            }
+            if (target == _motionTarget)
+            {
+                return; // Re-entering the tree with the same mounted rig.
+            }
             using GodotObject mount = GD.Load<GDScript>("res://src/Motion/native_soma_mount.gd").New().AsGodotObject();
-            _ = mount.Call("install", this, MotionModel, playerInstaller is not null);
+            if (!mount.Call("install", this, target, MotionModel, playerInstaller is not null).AsBool())
+            {
+                throw new InvalidOperationException($"Could not mount MotionBricks on character '{Name}'.");
+            }
+            installer.TargetSkeletonPath = GetPathTo(target);
+            _motionTarget = target;
         }
     }
 

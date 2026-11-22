@@ -210,8 +210,17 @@ public sealed class CharacterCompositionIntegrationTests
     [Headless]
     [Fact]
     public void ReferenceFemaleNPCTemplate_AuthorsMotionBricksNavigation()
+        => AssertNPCTemplateAuthorsNavigation(ReferenceFemaleNPCScenePath);
+
+    /// <summary>The reference male role exposes the same production driver as the female role.</summary>
+    [Headless]
+    [Fact]
+    public void ReferenceMaleNPCTemplate_AuthorsMotionBricksNavigation()
+        => AssertNPCTemplateAuthorsNavigation(ReferenceMaleNPCScenePath);
+
+    private static void AssertNPCTemplateAuthorsNavigation(string scenePath)
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>(ReferenceFemaleNPCScenePath);
+        PackedScene scene = ResourceLoader.Load<PackedScene>(scenePath);
         CharacterHub character = Assert.IsType<CharacterHub>(scene.Instantiate(), exactMatch: false);
         try
         {
@@ -220,33 +229,6 @@ public sealed class CharacterCompositionIntegrationTests
             Assert.Same(navigation, Assert.Single(character.GetChildren().OfType<NavigationBase>()));
             Assert.IsNotAssignableFrom<ILocomotive>(character);
             Assert.Empty(character.GetChildren().OfType<ILocomotion>());
-            Assert.NotNull(character.Eyes);
-            Assert.NotNull(character.LeftHand);
-            Assert.NotNull(character.RightHand);
-        }
-        finally
-        {
-            character.QueueFree();
-        }
-    }
-
-    /// <summary>
-    /// The reference male NPC leaves navigation absent while replacement integration is pending.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public void ReferenceMaleNPCTemplate_DefersNavigation()
-        => AssertNPCTemplateDefersNavigation(ReferenceMaleNPCScenePath);
-
-    private static void AssertNPCTemplateDefersNavigation(string scenePath)
-    {
-        PackedScene scene = ResourceLoader.Load<PackedScene>(scenePath);
-        CharacterHub character = Assert.IsType<CharacterHub>(scene.Instantiate(), exactMatch: false);
-        try
-        {
-            Assert.Null(character.Navigation);
-            Assert.IsNotAssignableFrom<ILocomotive>(character);
-            Assert.Empty(character.GetChildren().OfType<NavigationBase>());
             Assert.NotNull(character.Eyes);
             Assert.NotNull(character.LeftHand);
             Assert.NotNull(character.RightHand);

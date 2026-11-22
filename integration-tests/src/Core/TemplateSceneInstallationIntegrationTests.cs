@@ -870,6 +870,24 @@ public sealed class TemplateSceneInstallationIntegrationTests
         Assert.Equal("template-root-refresh", targetProbe.RefreshValue);
     }
 
+    /// <summary>
+    /// A child's local transform override must not become a root override when the root takes the child's name.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Discover_RootNamedAfterChild_IndexesTransformOnlyOnChild()
+    {
+        using PackedScene scene = ResourceLoader.Load<PackedScene>(LocalOverrideTargetPath);
+        using Node target = scene.Instantiate();
+        Node child = target.GetNode("Reused");
+        target.Name = child.Name;
+
+        var overrides = TargetSceneOverrides.Discover(target);
+
+        Assert.True(overrides.IsAuthored(child, Node3D.PropertyName.Transform));
+        Assert.False(overrides.IsAuthored(target, Node3D.PropertyName.Transform));
+    }
+
     private static PackedScene CreateTemplate()
     {
         var root = new Node { Name = "TemplateRoot" };

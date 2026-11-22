@@ -18,11 +18,13 @@
 [ext_resource type="Script" uid="uid://cg8pra7o1b3y7" path="res://src/Mind/AI/SceneStatus/AttendedCharacterSceneStatusProjector.cs" id="19_attended_status_projector"]
 [ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
 [ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
+[ext_resource type="Script" uid="uid://tcvnill3txtq" path="res://src/Navigation/MotionBricksNavigation.cs" id="19_k03b4"]
 
 [sub_resource type="Resource" id="Resource_p6sgf"]
 script = ExtResource("13_kop61")
 
-[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Voice", "Hearing") instance=ExtResource("1_p3faa")]
+[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Navigation", "Voice", "Hearing") instance=ExtResource("1_p3faa")]
+Navigation = NodePath("MotionBricksNavigation")
 Voice = NodePath("Male/GeneralSkeleton/Head/Voice")
 Hearing = NodePath("Hearing")
 
@@ -118,3 +120,11 @@ metadata/_custom_type_script = "uid://r0roprsf0efd"
 [node name="Hearing" type="Node" parent="." index="11" unique_id=1869850154]
 script = ExtResource("13_hearing")
 metadata/_custom_type_script = "uid://qs2mgtgqvri5"
+
+[node name="MotionBricksNavigation" type="NavigationAgent3D" parent="." index="12" unique_id=1747262378]
+script = ExtResource("19_k03b4")
+DestinationReachedDistance = 1.0
+AvoidanceRadius = 0.5
+AvoidanceHeight = 1.0
+AvoidanceMaxSpeed = 10.0
+metadata/_custom_type_script = "uid://tcvnill3txtq"

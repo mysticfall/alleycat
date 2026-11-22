@@ -46,7 +46,7 @@ public sealed class TargetSceneOverrides
             var properties = new HashSet<AuthoredProperty>();
             for (int nodeIndex = 0; nodeIndex < state.GetNodeCount(); nodeIndex++)
             {
-                string nodePath = NormaliseNodePath(state.GetNodePath(nodeIndex).ToString(), targetRoot.Name.ToString());
+                string nodePath = NormaliseNodePath(state.GetNodePath(nodeIndex).ToString());
                 for (int propertyIndex = 0; propertyIndex < state.GetNodePropertyCount(nodeIndex); propertyIndex++)
                 {
                     string propertyName = NormalisePropertyName(state.GetNodePropertyName(nodeIndex, propertyIndex).ToString());
@@ -79,30 +79,21 @@ public sealed class TargetSceneOverrides
 
         string relativePath = ReferenceEquals(_sceneRoot, node)
             ? string.Empty
-            : NormaliseNodePath(_sceneRoot.GetPathTo(node).ToString(), _sceneRoot.Name.ToString());
+            : NormaliseNodePath(_sceneRoot.GetPathTo(node).ToString());
         return _properties.Contains(new AuthoredProperty(relativePath, NormalisePropertyName(propertyName)));
     }
 
     private static TargetSceneOverrides Empty(Node targetRoot)
         => new(targetRoot, new HashSet<AuthoredProperty>());
 
-    private static string NormaliseNodePath(string path, string rootName)
+    private static string NormaliseNodePath(string path)
     {
-        string normalised = path.Trim().Replace('\\', '/').Trim('/');
-        while (normalised.StartsWith("./", StringComparison.Ordinal))
+        while (path.StartsWith("./", StringComparison.Ordinal))
         {
-            normalised = normalised[2..];
+            path = path[2..];
         }
 
-        if (normalised == "." || string.Equals(normalised, rootName, StringComparison.Ordinal))
-        {
-            return string.Empty;
-        }
-
-        string rootPrefix = rootName + "/";
-        return normalised.StartsWith(rootPrefix, StringComparison.Ordinal)
-            ? normalised[rootPrefix.Length..]
-            : normalised;
+        return path == "." ? string.Empty : path;
     }
 
     private static string NormalisePropertyName(string propertyName)

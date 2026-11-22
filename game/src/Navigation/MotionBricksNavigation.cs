@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using AlleyCat.Common;
 using AlleyCat.Core.Logging;
 using AlleyCat.Motion;
 using Godot;
@@ -129,7 +128,7 @@ public partial class MotionBricksNavigation : NavigationBase
         try
         {
             _actor = GetParent<Character.Character>();
-            _skeleton = _actor.RequireNode<Skeleton3D>(_actor.MotionModel + "/SOMA/Native/GeneralSkeleton");
+            _skeleton = _actor.RequireMotionTarget();
             _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
             _catalogue = new MotionCatalogue(ProjectSettings.GlobalizePath("res://data/motionbricks/catalogue.json"), _data);
             _reviewed = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), _data);

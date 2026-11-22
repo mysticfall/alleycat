@@ -1,10 +1,7 @@
 extends RefCounted
 ## Restructure before the model enters the tree, keeping authored node references on the visible rig.
-func install(actor: Node, model_name: String, player_role: bool) -> void:
-	var model := actor.get_node(model_name)
-	if model.has_node("SOMA/Native/GeneralSkeleton"):
-		return
-	var target := model.get_node("GeneralSkeleton") as Skeleton3D
+func install(actor: Node, target: Skeleton3D, rest_key: String, player_role: bool) -> bool:
+	var model := target.get_parent()
 	var references := []
 	for node in [actor] + actor.find_children("*", "", true, false):
 		for prop in node.get_property_list():
@@ -16,7 +13,7 @@ func install(actor: Node, model_name: String, player_role: bool) -> void:
 			var dest: Node = node.get_node_or_null(path)
 			if dest:
 				references.append([node, prop.name, dest])
-	var source: Skeleton3D = load("res://data/motionbricks/source-rest/%s.tscn" % model_name.to_lower()).instantiate()
+	var source: Skeleton3D = load("res://data/motionbricks/source-rest/%s.tscn" % rest_key.to_lower()).instantiate()
 	source.name = "SOMA"
 	model.add_child(source)
 	source.reset_bone_poses()
@@ -59,5 +56,4 @@ func install(actor: Node, model_name: String, player_role: bool) -> void:
 			library.add_animation(clip, animation)
 		player.remove_animation_library(lib_name)
 		player.add_animation_library(lib_name, library)
-	var installer := actor.get_node("PlayerCharacterInstaller" if player_role else "NPCCharacterInstaller")
-	installer.set("TargetSkeletonPath", actor.get_path_to(target))
+	return true

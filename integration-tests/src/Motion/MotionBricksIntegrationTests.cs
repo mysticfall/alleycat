@@ -133,9 +133,9 @@ public sealed class MotionBricksIntegrationTests
         Node actor = GD.Load<PackedScene>(player ? "res://assets/characters/reference/ally_player.tscn"
             : "res://assets/characters/reference/ally_npc.tscn").Instantiate();
         using GodotObject mount = GD.Load<GDScript>("res://src/Motion/native_soma_mount.gd").New().AsGodotObject();
-        _ = mount.Call("install", actor, "Female", player);
         Node3D model = actor.GetNode<Node3D>("Female");
-        skeleton = model.GetNode<Skeleton3D>("SOMA/Native/GeneralSkeleton");
+        skeleton = model.GetNode<Skeleton3D>("GeneralSkeleton");
+        Assert.True(mount.Call("install", actor, skeleton, "Female", player).AsBool());
         foreach (Node child in skeleton.GetChildren())
         {
             if (child is SkeletonModifier3D)
