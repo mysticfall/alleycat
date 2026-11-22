@@ -573,7 +573,8 @@ public sealed class VisualContextIntegrationTests
             fixture.Provider.EnqueueResponse(new ChatMessage(ChatRole.Assistant, "invalid prose"));
             fixture.Provider.EnqueueCall(DummyToolName);
             fixture.EnqueueHoldForever();
-            await fixture.StartAsync(sceneTree);
+            // Exercise rematerialisation, not the production wall-clock retry delay.
+            await fixture.StartAsync(sceneTree, invalidResponseRecoveryBackoffSeconds: [0f]);
             await WaitUntilAsync(sceneTree, () => fixture.Provider.Captures.Count >= 3);
 
             byte[] initialView = ImagePartsOf(fixture.Provider.Captures[0])[^1].Data.ToArray();
@@ -1015,12 +1016,17 @@ public sealed class VisualContextIntegrationTests
             }
         }
 
-        public async Task StartAsync(SceneTree sceneTree)
+        public async Task StartAsync(SceneTree sceneTree, float[]? invalidResponseRecoveryBackoffSeconds = null)
         {
             Assert.Null(_mind);
             AgenticMind mind = _embeddedMind is { } embedded
                 ? embedded
                 : new TestAgenticMind(_owner);
+            if (invalidResponseRecoveryBackoffSeconds is not null)
+            {
+                mind.InvalidResponseRecoveryBackoffSeconds = invalidResponseRecoveryBackoffSeconds;
+            }
+
             mind.SystemInstruction = new PromptStack
             {
                 Sections = [new TextPromptSection { Text = "Static session guidance.", Name = "Static" }],
