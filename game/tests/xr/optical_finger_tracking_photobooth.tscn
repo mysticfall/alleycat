@@ -9,9 +9,8 @@
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_p2trt")]
 
-[node name="Player" type="CharacterBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=619146847 node_paths=PackedStringArray("AuthoredVisualCues") groups=["Player"] instance=ExtResource("2_rx1gs")]
+[node name="Player" type="CharacterBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=619146847 groups=["Player"] instance=ExtResource("2_rx1gs")]
 Id = "reference_player"
-AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="RightHandCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("4_d7y36")]
 transform = Transform3D(-0.9922779, -0.026310403, 0.12121215, 0, 0.9772434, 0.2121212, -0.12403476, 0.2104832, -0.969697, 0.34, 1.16, -0.92)
