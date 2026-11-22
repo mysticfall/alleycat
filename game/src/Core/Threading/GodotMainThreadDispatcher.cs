@@ -316,7 +316,9 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
                     return;
                 }
 
-                _callerCancellationRegistration.Dispose();
+                // A cancellation callback already in flight may be waiting for this lock. It will
+                // observe the claimed state when it enters, so removal must not wait for it.
+                _ = _callerCancellationRegistration.Unregister();
                 if (_syncAction is not null)
                 {
                     synchronousAction = _syncAction;
@@ -382,7 +384,7 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
 
                 linkedCancellationSource = _linkedCancellationSource;
                 _linkedCancellationSource = null;
-                _callerCancellationRegistration.Dispose();
+                _ = _callerCancellationRegistration.Unregister();
             }
 
             linkedCancellationSource?.Cancel();
@@ -399,7 +401,7 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
                     return;
                 }
 
-                _callerCancellationRegistration.Dispose();
+                _ = _callerCancellationRegistration.Unregister();
             }
 
             _owner.StopTrackingAcceptedOperation(this);
