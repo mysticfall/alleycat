@@ -53,6 +53,9 @@ public sealed class NPCVisionCaptureVisualIntegrationTests
         root.AddChild(ground);
 
         CharacterBody3D observer = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate<CharacterBody3D>();
+        // Hold the authored standing input: without a posture driver the template's
+        // StandingCrouching clip would run forward into a crouch during the settle poll.
+        observer.GetNode<AnimationTree>("AnimationTree").Active = false;
         root.AddChild(observer);
 
         CharacterBody3D person = LoadPackedScene(ReferenceMaleNpcScenePath).Instantiate<CharacterBody3D>();
