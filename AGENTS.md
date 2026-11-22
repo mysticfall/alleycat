@@ -70,6 +70,14 @@ README.md                         # Repository overview and developer onboarding
 - For pre-handoff verification, also run `dotnet format --verify-no-changes AlleyCat.sln` and
   `dotnet build AlleyCat.sln -warnaserror`.
 
+## Temporary Artefacts
+
+- Write agent-created temporary project artefacts under a task-specific directory in the current checkout's
+  `game/temp/` (`res://temp/`). This includes logs, captures, probes, review copies, test overlays, and scratch data.
+- Do not use `/tmp`, `/tmp/opencode`, or other RAM-backed locations for these artefacts, even if a tool suggests them
+  as scratch space. Set the tool's output or scratch directory to `game/temp/`; if it cannot be redirected, do not
+  use it to create bulk artefacts there. Check the destination filesystem and free space before making large copies.
+
 ## Integration Testing
 
 - Load the `godot-integration-testing` skill before authoring, running, triaging, or reporting integration tests.
