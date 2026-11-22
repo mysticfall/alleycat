@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 using AlleyCat.Mind.AI.Decision;
-using AlleyCat.Mind.Attention;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.AI.Decision;
@@ -22,8 +21,7 @@ public sealed class DecisionWaitPolicyTests
     public async Task Evaluate_ComposesBothChoiceQuestionsInOneRequest()
     {
         ScriptedDecisionClient client = new();
-        DecisionWaitPolicy policy = new(client);
-        _ = await policy.EvaluateAsync(CreateInput(scenePremise: "A detention interview in a basement office."));
+        _ = await EvaluateAsync(client, CreateInput(scenePremise: "A detention interview in a basement office."));
 
         DecisionRequest request = Assert.Single(client.Requests);
         Assert.Equal(2, request.Questions.Count);
@@ -74,29 +72,27 @@ public sealed class DecisionWaitPolicyTests
     public async Task Evaluate_OmitsThePremiseCleanlyWhenAbsent(string? premise)
     {
         ScriptedDecisionClient client = new();
-        DecisionWaitPolicy policy = new(client);
-        _ = await policy.EvaluateAsync(CreateInput(scenePremise: premise));
+        _ = await EvaluateAsync(client, CreateInput(scenePremise: premise));
 
         DecisionRequest request = Assert.Single(client.Requests);
         Assert.All(
             request.Questions,
-            question => Assert.DoesNotContain(DecisionGazePolicy.ScenePremiseLabel, question.Instructions, StringComparison.Ordinal));
+            question => Assert.DoesNotContain("Scene premise:", question.Instructions, StringComparison.Ordinal));
         JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
         _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("premise"));
     }
 
     /// <summary>Evidence carries the premise, the lore roster, the owner-labelled recent history, own action,
-    /// cue-level gaze, and the trigger.</summary>
+    /// and cue-level gaze but no trigger.</summary>
     [Fact]
     public async Task Evaluate_ComposesTheLeanEvidenceShape()
     {
         ScriptedDecisionClient client = new();
-        DecisionWaitPolicy policy = new(client);
-        DecisionWaitEvaluationInput input = CreateInput(
+        SceneDecisionSnapshot input = CreateInput(
             sceneCharacters:
             [
-                new DecisionWaitSceneCharacter("char:bravo", "A sturdily built man."),
-                new DecisionWaitSceneCharacter("char:delta"),
+                new SceneDecisionCharacter("char:bravo", "A sturdily built man."),
+                new SceneDecisionCharacter("char:delta"),
             ],
             recentEvents: ["`char:bravo` said: hello"],
             ownAction: new DecisionWaitOwnAction(
@@ -105,7 +101,7 @@ public sealed class DecisionWaitPolicyTests
                 DecisionWaitAddresseeStatus.AddressedToMe),
             currentGazeCueValue: "char:bravo#face",
             currentGazeDwellSeconds: 3.24d);
-        _ = await policy.EvaluateAsync(input);
+        _ = await EvaluateAsync(client, input);
 
         JsonElement evidence = Assert.IsType<JsonElement>(Assert.Single(client.Requests).Evidence);
         JsonElement characters = evidence.GetProperty("characters");
@@ -126,9 +122,7 @@ public sealed class DecisionWaitPolicyTests
             evidence.GetProperty("own_action").GetString());
         Assert.Equal("char:bravo#face", evidence.GetProperty("current_gaze").GetProperty("cue").GetString());
         Assert.Equal(3.2d, evidence.GetProperty("current_gaze").GetProperty("dwell_seconds").GetDouble());
-        Assert.Equal(
-            "the player just said something",
-            evidence.GetProperty("trigger").GetString());
+        Assert.False(evidence.TryGetProperty("trigger", out _));
     }
 
     /// <summary>The approved verdict mapping over every answer pair: an arrived response or must_act starts the
@@ -151,7 +145,7 @@ public sealed class DecisionWaitPolicyTests
     {
         DecisionWaitArm? expectedArm = expectedArmName is null ? null : Enum.Parse<DecisionWaitArm>(expectedArmName);
         ScriptedDecisionClient client = new(response, initiative);
-        DecisionWaitEvaluationResult result = await new DecisionWaitPolicy(client).EvaluateAsync(CreateInput());
+        DecisionWaitEvaluationResult result = await EvaluateAsync(client, CreateInput());
 
         Assert.Equal(
             expectedArm is null ? DecisionWaitDecisionKind.ActNow : DecisionWaitDecisionKind.Defer,
@@ -166,7 +160,7 @@ public sealed class DecisionWaitPolicyTests
     public async Task Evaluate_CapturesBothAnswersForDiagnostics()
     {
         ScriptedDecisionClient client = new("expecting_pending", "may_act");
-        DecisionWaitEvaluationResult result = await new DecisionWaitPolicy(client).EvaluateAsync(CreateInput());
+        DecisionWaitEvaluationResult result = await EvaluateAsync(client, CreateInput());
 
         Assert.Equal(["response", "initiative"], result.Answers.Select(static answer => answer.Name));
         Assert.Equal(["expecting_pending", "may_act"], result.Answers.Select(static answer => answer.Choice));
@@ -199,7 +193,7 @@ public sealed class DecisionWaitPolicyTests
             BrokenQuestion = question,
             BrokenMode = mode,
         };
-        DecisionWaitEvaluationResult result = await new DecisionWaitPolicy(client).EvaluateAsync(CreateInput());
+        DecisionWaitEvaluationResult result = await EvaluateAsync(client, CreateInput());
 
         Assert.Equal(DecisionWaitDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal(expectedFailure, result.Decision.Failure);
@@ -218,8 +212,7 @@ public sealed class DecisionWaitPolicyTests
     public async Task Evaluate_TypedDecisionFailuresAreContainedWithTheFailureKind(DecisionFailure failure)
     {
         ScriptedDecisionClient client = new(decisionFailure: failure);
-        DecisionWaitPolicy policy = new(client);
-        DecisionWaitEvaluationResult result = await policy.EvaluateAsync(CreateInput());
+        DecisionWaitEvaluationResult result = await EvaluateAsync(client, CreateInput());
 
         Assert.Equal(DecisionWaitDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal($"decision failure {failure}", result.Decision.Failure);
@@ -233,8 +226,7 @@ public sealed class DecisionWaitPolicyTests
     public async Task Evaluate_UnexpectedExceptionIsContainedAsAFailure()
     {
         ScriptedDecisionClient client = new(throwUnexpected: true);
-        DecisionWaitPolicy policy = new(client);
-        DecisionWaitEvaluationResult result = await policy.EvaluateAsync(CreateInput());
+        DecisionWaitEvaluationResult result = await EvaluateAsync(client, CreateInput());
 
         Assert.Equal(DecisionWaitDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal("unexpected evaluation failure", result.Decision.Failure);
@@ -245,12 +237,11 @@ public sealed class DecisionWaitPolicyTests
     public async Task Evaluate_CallerCancellationPropagates()
     {
         ScriptedDecisionClient client = new();
-        DecisionWaitPolicy policy = new(client);
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
 
         _ = await Assert.ThrowsAsync<OperationCanceledException>(
-            () => policy.EvaluateAsync(CreateInput(), cancellation.Token));
+            () => EvaluateAsync(client, CreateInput(), cancellation.Token));
     }
 
     /// <summary>Own action renders exactly the two waiting variants with their addressee states.</summary>
@@ -281,35 +272,35 @@ public sealed class DecisionWaitPolicyTests
             new DecisionWaitOwnAction(DecisionWaitOwnActionKind.Hearing).Describe());
     }
 
-    /// <summary>Trigger tokens match the dump contract and every kind renders a one-line evidence phrase.</summary>
+    /// <summary>Trigger tokens match the dump contract.</summary>
     [Fact]
-    public void Triggers_RenderContractTokensAndEvidencePhrases()
+    public void Triggers_RenderContractTokens()
     {
         Assert.Equal(
             ["Cadence", "PlayerSpeech", "AttendedSpeakerStart", "AttendedSpeakerEnd", "MembershipChange"],
             Enum.GetValues<DecisionWaitTriggerKind>()
                 .Select(kind => new DecisionWaitTrigger(kind).Token));
-        Assert.All(
-            Enum.GetValues<DecisionWaitTriggerKind>(),
-            kind => Assert.False(string.IsNullOrWhiteSpace(new DecisionWaitTrigger(kind).DescribeEvidence())));
+
     }
 
-    private static DecisionWaitEvaluationInput CreateInput(
-        IReadOnlyList<DecisionWaitSceneCharacter>? sceneCharacters = null,
+    private static SceneDecisionSnapshot CreateInput(
+        IReadOnlyList<SceneDecisionCharacter>? sceneCharacters = null,
         IReadOnlyList<string>? recentEvents = null,
         DecisionWaitOwnAction? ownAction = null,
         string? currentGazeCueValue = null,
         double currentGazeDwellSeconds = 0d,
         string? scenePremise = null)
-        => new(
-            Owner,
-            sceneCharacters ?? [],
-            recentEvents ?? [],
-            ownAction ?? DecisionWaitOwnAction.WaitingAction,
-            currentGazeCueValue,
-            currentGazeDwellSeconds,
-            new DecisionWaitTrigger(DecisionWaitTriggerKind.PlayerSpeech),
-            scenePremise);
+        => new(Owner, scenePremise, sceneCharacters ?? [], recentEvents ?? [],
+            (ownAction ?? DecisionWaitOwnAction.WaitingAction).Describe(), currentGazeCueValue, currentGazeDwellSeconds);
+
+    private static async Task<DecisionWaitEvaluationResult> EvaluateAsync(IDecisionClient client, SceneDecisionSnapshot input,
+        CancellationToken token = default)
+    {
+        DecisionWaitEvaluationResult? result = null;
+        SceneDecisionRunner runner = new(client, () => input, [() => DecisionWaitPolicy.PrepareGroup(r => result = r)]);
+        await runner.EvaluateAsync(token);
+        return result!;
+    }
 
     /// <summary>How the scripted client breaks one question's answer.</summary>
     public enum ScriptedMode

@@ -259,8 +259,11 @@ plumbing that SCN-002's Out Of Scope deferred.
 16. `Diagnostics:AI:EnableDecisionPayloadLogging` is off by default and independent of transcript logging and visual
     context mode. Enabled dumps share the AI-011 run directory but separate producers:
     `user://logs/mind/<run>/<character>/decision-payloads/{gaze,wait}/`. Record one local JSON file per settled
-    evaluation with character identity, timestamp, trigger, composition and decision latency, evidence, question
-    instructions and criteria as dispatched, and the observed result or contained failure. Record no credentials.
+    gate evaluation with character identity, timestamp, trigger, composition and decision latency, shared evidence,
+    that gate's question instructions and criteria as dispatched, and its observed result or contained failure.
+    A combined request still yields separate gate records. Only a successful write supplies a relative payload link
+    for the [AI-011 character index](../011-mind-session-transcripts/index.md#scene-decisions-and-wakes).
+    Record no credentials.
 17. Wait dumps cover both explicit waits and automatic parking under [AI-002][runtime-wait]. Record both choice
     questions and any available parsed choices and distributions without inventing missing answers. Record the
     gate's immediate, armed, kept, or failed step, the proposed delay and remaining deadline where applicable,
@@ -397,7 +400,8 @@ plumbing that SCN-002's Out Of Scope deferred.
 16. Deterministic dump tests verify producer paths share the per-run root, disabled recording does no writes,
     failure is contained, and wait dumps preserve both questions, actual evidence and timings, parsed answers when
     supplied, and the gate's resolution and deadline source. Cover a failed decision proposing no-reason timing
-    without masquerading as a successful classifier answer (TR-16–TR-17).
+    without masquerading as a successful classifier answer. For a combined pass, verify identical common evidence,
+    gate-local questions and outcomes, and resolvable links when the index is enabled (TR-16–TR-17).
 
 ## References
 

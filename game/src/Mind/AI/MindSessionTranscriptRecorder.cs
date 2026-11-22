@@ -62,8 +62,14 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
 
     private static readonly Lock _stateLock = new();
     private static readonly Dictionary<string, int> _nextTurnNumbers = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, List<MindTranscriptIndexEntry>> _indexEntries = new(
+    private static readonly Dictionary<string, List<MindTranscriptIndexItem>> _indexEntries = new(
         StringComparer.Ordinal);
+    // The queue lock never covers rendering or disk I/O. A gaze completion can publish an index event
+    // without competing with a long turn-page write on the Godot frame thread.
+    private static readonly Lock _decisionQueueLock = new();
+    private static Task _decisionWrites = Task.CompletedTask;
+    private static long _indexOrder;
+    private static readonly Dictionary<(string Character, string Question), string> _selectedAnswers = [];
     private static readonly HashSet<MindSessionTranscriptRecorder> _activeRecorders = [];
     private static string? _runTimestamp;
     private static string? _rootPathOverride;
@@ -112,10 +118,10 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
                 return;
             }
 
+            (int turnNumber, long order) = ReserveTurn(_characterId);
             string rootPath = _rootPathOverride ?? _rootPathResolver();
             string directory = Path.Combine(GetRunDirectory(rootPath), _characterId);
             EnsureRunDirectory(directory);
-            int turnNumber = TakeNextTurnNumber(_characterId);
             string contents = MindSessionTranscriptFormatter.Render(cycle, turnNumber, _characterId);
             File.WriteAllText(Path.Combine(directory, CreateTurnFileName(turnNumber)), contents);
 
@@ -127,7 +133,7 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
             // separately, so the turn page stays available and the previously written index survives.
             try
             {
-                UpdateIndex(directory, turnNumber, cycle);
+                UpdateIndex(directory, turnNumber, order, cycle);
             }
             catch (Exception exception)
             {
@@ -148,29 +154,86 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
     /// happen under the state lock, so concurrent updates of one character are serialised and entries are neither
     /// lost nor reordered.
     /// </summary>
-    private void UpdateIndex(string characterDirectory, int turnNumber, MindSessionCycleTranscript cycle)
+    private void UpdateIndex(string characterDirectory, int turnNumber, long order, MindSessionCycleTranscript cycle)
     {
         lock (_stateLock)
         {
-            if (!_indexEntries.TryGetValue(_characterId, out List<MindTranscriptIndexEntry>? entries))
+            List<MindTranscriptIndexItem> entries = GetIndexEntries();
+            int next = entries.FindIndex(item => item.Order > order);
+            entries.Insert(next < 0 ? entries.Count : next, new MindTranscriptIndexEntry(turnNumber,
+                cycle.Outcome, [.. cycle.ToolInvocations])
             {
-                entries = [];
-                _indexEntries[_characterId] = entries;
-            }
-
-            entries.Add(new MindTranscriptIndexEntry(
-                turnNumber,
-                cycle.Outcome,
-                [.. cycle.ToolInvocations]));
-            // Turn numbers are monotonic per character, so ordering by turn number keeps the index chronological
-            // regardless of the interleaving of concurrent records. Rendering and writing stay inside the lock so
-            // an older render can never overwrite a newer index.
-            string indexContents = MindSessionTranscriptFormatter.RenderIndex(
-                _characterId,
-                [.. entries.OrderBy(static entry => entry.TurnNumber)]);
-            WriteReplacementSafe(Path.Combine(characterDirectory, IndexFileName), indexContents);
+                Order = order
+            });
+            WriteIndex(characterDirectory, entries);
         }
     }
+
+    internal void RecordSceneDecision(string? question, string value, string? payload)
+    {
+        lock (_decisionQueueLock)
+        {
+            long order = Interlocked.Increment(ref _indexOrder);
+            DateTimeOffset timestamp = DateTimeOffset.Now;
+            _decisionWrites = _decisionWrites.ContinueWith(_ => WriteSceneDecision(question, value, payload, order, timestamp),
+                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        }
+    }
+
+    internal static Task FlushDecisionWritesForTesting()
+    {
+        lock (_decisionQueueLock)
+        {
+            return _decisionWrites;
+        }
+    }
+
+    private void WriteSceneDecision(string? question, string value, string? payload, long order, DateTimeOffset timestamp)
+    {
+        try
+        {
+            lock (_stateLock)
+            {
+                if (_deactivated || (question is not null && _selectedAnswers.GetValueOrDefault((_characterId, question)) == value))
+                {
+                    return;
+                }
+
+                string directory = Path.Combine(GetRunDirectory(_rootPathOverride ?? _rootPathResolver()), _characterId);
+                EnsureRunDirectory(directory);
+                List<MindTranscriptIndexItem> entries = GetIndexEntries();
+                string message = question is null ? $"**Wake:** {value}" : $"**Decision:** `{question}` → `{value}`";
+                int next = entries.FindIndex(item => item.Order > order);
+                entries.Insert(next < 0 ? entries.Count : next, new MindTranscriptIndexNote($"{timestamp:HH:mm:ss.fff} — {message}"
+                    + (payload is null ? string.Empty : $" ([payload](<{payload}>))"))
+                {
+                    Order = order
+                });
+                WriteIndex(directory, entries);
+                if (question is not null)
+                {
+                    _selectedAnswers[(_characterId, question)] = value;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            TryLogContainedFailure(exception, "Failed to record a scene decision");
+        }
+    }
+
+    private List<MindTranscriptIndexItem> GetIndexEntries()
+    {
+        if (!_indexEntries.TryGetValue(_characterId, out List<MindTranscriptIndexItem>? entries))
+        {
+            _indexEntries[_characterId] = entries = [];
+        }
+
+        return entries;
+    }
+
+    private void WriteIndex(string directory, List<MindTranscriptIndexItem> entries)
+        => WriteReplacementSafe(Path.Combine(directory, IndexFileName), MindSessionTranscriptFormatter.RenderIndex(_characterId, entries));
 
     /// <summary>
     /// Writes one file replacement-safely (AI-011 TR-19): the content is written to a sibling temporary file first
@@ -336,6 +399,7 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
         {
             _nextTurnNumbers.Clear();
             _indexEntries.Clear();
+            _selectedAnswers.Clear();
             DeactivateAllRecordersLocked();
         }
     }
@@ -384,14 +448,14 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
         }
     }
 
-    private static int TakeNextTurnNumber(string characterId)
+    private static (int TurnNumber, long Order) ReserveTurn(string characterId)
     {
         lock (_stateLock)
         {
             int next = _nextTurnNumbers.TryGetValue(characterId, out int stored) ? stored : 0;
             next = next < 1 ? 1 : next;
             _nextTurnNumbers[characterId] = next + 1;
-            return next;
+            return (next, Interlocked.Increment(ref _indexOrder));
         }
     }
 

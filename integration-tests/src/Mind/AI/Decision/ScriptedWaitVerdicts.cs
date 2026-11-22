@@ -1,4 +1,5 @@
 using AlleyCat.Mind.AI.Decision;
+using AlleyCat.Mind.Attention;
 
 namespace AlleyCat.IntegrationTests.Mind.AI.Decision;
 
@@ -48,6 +49,7 @@ internal static class ScriptedWaitVerdicts
             {
                 DecisionWaitPolicy.ResponseQuestionName => verdict.Response,
                 DecisionWaitPolicy.InitiativeQuestionName => verdict.Initiative,
+                DecisionGazePolicy.QuestionName => DecisionGazePolicy.NoneOptionValue,
                 _ => throw new InvalidOperationException($"Unexpected wait question '{question.Name}'."),
             };
             byName[question.Name] = new ChoiceAnswer(question, value, null, null);

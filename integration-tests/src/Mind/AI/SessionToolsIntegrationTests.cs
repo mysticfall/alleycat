@@ -442,6 +442,27 @@ public sealed partial class SessionToolsIntegrationTests
         Assert.Contains("game clock", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Only a successfully started explicit wait marks its entry, exactly once.</summary>
+    [Fact]
+    public async Task Wait_MarksEntryOnceAndOnlyAfterSuccessfulAcquisition()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        int entries = 0;
+        fixture.Mind.SetSceneDecisionClientLoaderForTesting(() => throw new DecisionException(
+            DecisionFailure.Configuration, "Scripted acquisition failure."));
+        _ = await Assert.ThrowsAsync<DecisionException>(() =>
+            fixture.Mind.WaitForNextTurnAsync(CancellationToken.None, 30, () => entries++));
+        Assert.Equal(0, entries);
+
+        fixture.Mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+        MindBase.WaitOutcome outcome = await fixture.Mind.WaitForNextTurnAsync(CancellationToken.None, 30, () => entries++)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(MindBase.ObservationWaitWake.DecisionAct, outcome.Wake);
+        Assert.Equal(1, entries);
+    }
+
     /// <summary>
     /// A wait result is payload-free — only its wake reason, elapsed duration, and current game time; an immediate
     /// verdict renders as a chance to act, not a command.
@@ -451,7 +472,7 @@ public sealed partial class SessionToolsIntegrationTests
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        fixture.Mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         fixture.Mind.ObserveForTest(new TypedObservation("test.alpha", 1f));
 
         object? result = await fixture.InvokeWaitAsync(CancellationToken.None)
@@ -474,7 +495,7 @@ public sealed partial class SessionToolsIntegrationTests
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        fixture.Mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         fixture.Mind.ObserveForTest(new TypedObservation("test.before", 0.5f));
         fixture.Mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
         fixture.Mind.ObserveForTest(new TypedObservation("test.after", 0.5f));
@@ -501,7 +522,7 @@ public sealed partial class SessionToolsIntegrationTests
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
         ScriptedWaitDecisionClient client = new(WaitVerdict.NoReason);
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
@@ -534,7 +555,7 @@ public sealed partial class SessionToolsIntegrationTests
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
         ScriptedWaitDecisionClient client = new(WaitVerdict.MayAct);
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         fixture.Mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(30d, 0.3d, 30d, 0d));
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
@@ -559,7 +580,7 @@ public sealed partial class SessionToolsIntegrationTests
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.NoReason));
+        fixture.Mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.NoReason));
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
         object? result = await fixture.InvokeWaitAsync(seconds: 0.3f, CancellationToken.None)
@@ -580,7 +601,7 @@ public sealed partial class SessionToolsIntegrationTests
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.MayAct));
+        fixture.Mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.MayAct));
         fixture.Mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(30d, 0.2d, 30d, 0d));
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
@@ -603,7 +624,7 @@ public sealed partial class SessionToolsIntegrationTests
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        fixture.Mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
         object? result = await fixture.InvokeWaitAsync(seconds: 30f, CancellationToken.None)
@@ -624,7 +645,7 @@ public sealed partial class SessionToolsIntegrationTests
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
         ScriptedWaitDecisionClient client = new(WaitVerdict.ActNow, decisionFailure: DecisionFailure.Timeout);
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         // The failures' no-reason deadline must not expire inside the observation window.
         fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
@@ -652,7 +673,7 @@ public sealed partial class SessionToolsIntegrationTests
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
         ScriptedWaitDecisionClient client = new(WaitVerdict.ActNow, decisionFailure: DecisionFailure.Transport);
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         fixture.Mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(3600d, 3600d, 0.3d, 0d));
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
@@ -680,7 +701,7 @@ public sealed partial class SessionToolsIntegrationTests
         {
             Hang = true
         };
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
         object? result = await fixture.InvokeWaitAsync(seconds: 0.5f, CancellationToken.None)
@@ -692,7 +713,11 @@ public sealed partial class SessionToolsIntegrationTests
             Assert.IsType<string>(result),
             StringComparison.Ordinal);
         _ = Assert.Single(client.Requests);
+        client.Hang = false;
+        object? next = await fixture.InvokeWaitAsync(CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.StartsWith("Wait ended: circumstances may call for you to act.", Assert.IsType<string>(next), StringComparison.Ordinal);
         Assert.True(client.HungRequestCancelled, "The abandoned evaluation must observe cancellation.");
+        Assert.Equal(2, client.Requests.Count);
     }
 
     /// <summary>
@@ -706,7 +731,7 @@ public sealed partial class SessionToolsIntegrationTests
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
         ScriptedWaitDecisionClient client = new(WaitVerdict.NoReason);
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
         // The cadence boundary lies far outside every observation window below: only a nudge can evaluate.
         fixture.Mind.WaitEvaluationIntervalSeconds = MembershipTestCadenceSeconds;
@@ -722,7 +747,7 @@ public sealed partial class SessionToolsIntegrationTests
 
             fixture.Membership = [.. fullRoster.Take(fullRoster.Count - 1)];
             await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 1, _membershipObservationWindow);
-            Assert.Equal(MembershipChangeEvidence, Trigger(client.Requests[0]));
+            Assert.DoesNotContain("twin_second", ((JsonElement)client.Requests[0].Evidence).GetRawText());
 
             await WaitForQuietWindowAsync();
             _ = Assert.Single(client.Requests);
@@ -730,7 +755,7 @@ public sealed partial class SessionToolsIntegrationTests
 
             fixture.Membership = fullRoster;
             await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 2, _membershipObservationWindow);
-            Assert.Equal(MembershipChangeEvidence, Trigger(client.Requests[1]));
+            Assert.Contains("twin_second", ((JsonElement)client.Requests[1].Evidence).GetRawText());
             Assert.False(waitTask.IsCompleted);
         }
         finally
@@ -751,7 +776,7 @@ public sealed partial class SessionToolsIntegrationTests
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
         ScriptedWaitDecisionClient client = new(WaitVerdict.NoReason, decisionFailure: DecisionFailure.Timeout);
-        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetSceneDecisionClientForTesting(client);
         fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
         fixture.Mind.WaitEvaluationIntervalSeconds = MembershipTestCadenceSeconds;
         using CancellationTokenSource cancellation = new();
@@ -770,7 +795,7 @@ public sealed partial class SessionToolsIntegrationTests
 
             fixture.Membership = fullRoster;
             await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 2, _membershipObservationWindow);
-            Assert.Equal(MembershipChangeEvidence, Trigger(client.Requests[1]));
+            Assert.Contains("twin_second", ((JsonElement)client.Requests[1].Evidence).GetRawText());
             Assert.False(waitTask.IsCompleted);
         }
         finally
@@ -781,11 +806,7 @@ public sealed partial class SessionToolsIntegrationTests
     }
 
     private const float MembershipTestCadenceSeconds = 120f;
-    private const string MembershipChangeEvidence = "the characters present in the scene changed";
     private static readonly TimeSpan _membershipObservationWindow = TimeSpan.FromSeconds(5);
-
-    private static string? Trigger(DecisionRequest request)
-        => Assert.IsType<JsonElement>(request.Evidence).GetProperty("trigger").GetString();
 
     private static async Task WaitForActiveWaitAsync(ToolFixture fixture)
     {
@@ -854,7 +875,7 @@ public sealed partial class SessionToolsIntegrationTests
 
         public bool Hang
         {
-            get; init;
+            get; set;
         }
 
         public bool HungRequestCancelled

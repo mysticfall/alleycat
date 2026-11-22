@@ -63,6 +63,8 @@ transcripts or capturing provider-wire payloads.
    minimap and view-capture images — is written as an image file beside the turn page of the cycle that generated it
    (minimap PNG, view-capture JPEG), relatively linked from that turn page at the position of the exchange or
    message that carried it and listed per cycle. With the toggle disabled, no image files are written anywhere.
+10. In the character index, a developer can see when a scene decision changed and why the NPC actually woke, without
+    opening a payload dump or reading through repeated polls.
 
 ## Technical Requirements
 
@@ -230,6 +232,17 @@ transcripts or capturing provider-wire payloads.
     exactly like any recording failure (TR-7) — they warn without disturbing the session, and a failed image write
     never removes or alters a turn page already written. The TR-12 root-path seam applies to sibling image output.
 
+### Scene Decisions and Wakes
+
+29. Interleave timestamped decision and wait-wake notes with turns in the owning character's `index.md`, in
+    record-time order even when writes complete asynchronously. Record each question's first selected value and
+    subsequent value changes; do not repeat a poll because confidence or probabilities changed. Record selections,
+    not inferred effects: a gaze answer does not prove that its cue was still available at application time.
+30. Record exactly one cause for each actual wait wake, even with unchanged answers. Explain an immediate response
+    or need to act (and any deadline it pre-empted), explicit timer expiry, or expiry of the decision that armed or
+    shortened the deadline, including failure fallback. A poll that kept the deadline is not its cause. Link the
+    [corresponding dump][decision-dumps] relative to the index only when it was written. No dump is needed for a note.
+
 ## In Scope
 
 - The `Diagnostics:AI:EnableSessionTranscriptLogging` toggle with binding and fail-closed semantics.
@@ -249,6 +262,7 @@ transcripts or capturing provider-wire payloads.
   relative links at the carrying position with per-cycle listing, no image files when the toggle is disabled, and
   contained image writes (TR-26–TR-28).
 - Internal test seams and the unit and integration validation contracts.
+- Per-character decision changes and wake explanations, without additional turn pages.
 
 ## Out Of Scope
 
@@ -350,6 +364,11 @@ transcripts or capturing provider-wire payloads.
     path writing no image files, and contained image-write failures leaving an already-written turn page intact,
     with the root-path seam redirecting image output.
 
+11. Inspect an index across turns, repeat answers and changed answers. Verify first/change-only notes per character
+    and question, one explanation per actual wake (including repeated immediate verdicts, pre-emption, explicit,
+    shortened and failure-fallback expiry), and no invented selection on failure. With dumps enabled, follow links
+    to the causal file, including cue IDs containing `#`; without dumps, verify the same explanations without links.
+
 ## References
 
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md) — request-cycle loop, fresh-turn invalidation
@@ -371,3 +390,5 @@ transcripts or capturing provider-wire payloads.
 - `game/src/Mind/AI/AIDiagnosticsOptions.cs` — `Diagnostics:AI` binding and fail-closed pattern
 - `game/src/Common/PseudoXmlFormatter.cs` — pseudo-XML block format and tag-name sanitisation
 - `game/AlleyCat.yaml` — shipped diagnostics toggles
+
+[decision-dumps]: ../013-visual-context/index.md#decision-payload-diagnostics

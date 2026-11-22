@@ -1,8 +1,4 @@
-using AlleyCat.Character;
 using AlleyCat.Core.Threading;
-using AlleyCat.Mind.AI.Lore;
-using AlleyCat.Mind.AI.Prompting;
-using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using Godot;
@@ -42,10 +38,6 @@ namespace AlleyCat.Mind.AI.Decision;
 internal sealed class DecisionWaitController
 {
 
-    private const int RecentEventCount = 6;
-    private const int RecentEventCharacterBudget = 2000;
-    private const int MaximumSceneCharacters = 8;
-
     /// <summary>
     /// Interval between scene-membership checks while waiting: short enough that an entrant or departure reaches
     /// the gate well within a conversational beat, long enough that the snapshot costs nothing per frame.
@@ -56,7 +48,8 @@ internal sealed class DecisionWaitController
     private const string DumpCategory = "wait";
 
     private readonly MindBase _mind;
-    private readonly DecisionWaitPolicy _policy;
+    private SubjectSceneDecisions? _subject;
+    private SceneDecisionGroup? _pendingGroup;
     private readonly double _cadenceIntervalSeconds;
     private readonly DecisionWaitTimingSettings _timing;
     private readonly Func<double> _jitterSampler;
@@ -70,13 +63,15 @@ internal sealed class DecisionWaitController
     private DecisionWaitTrigger? _pendingNudgeTrigger;
     private HashSet<string>? _lastMembership;
     private string? _playerFullId;
-    private Task<string?>? _premiseResolution;
+    private SceneDecisionGroup? TakeGroup() => Interlocked.Exchange(ref _pendingGroup, null);
     private double _failureBackoffSeconds;
+    private string _deadlineExplanation = "the explicit wait deadline elapsed";
+    private string? _deadlinePayload;
+    private MindSessionTranscriptRecorder? _transcript;
     private int _nudgesSinceLastEvaluation;
 
     public DecisionWaitController(
         MindBase mind,
-        IDecisionClient client,
         double cadenceIntervalSeconds,
         DecisionWaitTimingSettings timing,
         Func<double> jitterSampler,
@@ -96,7 +91,6 @@ internal sealed class DecisionWaitController
         }
 
         _mind = mind;
-        _policy = new DecisionWaitPolicy(client);
         _cadenceIntervalSeconds = cadenceIntervalSeconds;
         _timing = timing;
         _jitterSampler = jitterSampler;
@@ -113,10 +107,12 @@ internal sealed class DecisionWaitController
     /// <param name="explicitSeconds">The agent's explicit <c>wait(seconds)</c> request, seeding the initial
     /// deadline; null starts with no deadline until a verdict arms one.</param>
     /// <param name="cancellationToken">Cancellation that abandons the wait.</param>
+    /// <param name="onGateEntered">Marks an explicit wait only after its registered gate is ready.</param>
     /// <returns>Why the wait ended.</returns>
     public async Task<MindBase.ObservationWaitWake> RunAsync(
         double? explicitSeconds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? onGateEntered)
     {
         DecisionWaitSchedule schedule = new(_timing, _jitterSampler);
         if (explicitSeconds is { } seconds)
@@ -132,8 +128,10 @@ internal sealed class DecisionWaitController
         try
         {
             await CaptureStartupStateAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            onGateEntered?.Invoke();
             membershipWatch = WatchMembershipAsync(_lastMembership!, membershipWatchCancellation.Token);
-            StartScenePremiseResolution();
+
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -144,29 +142,52 @@ internal sealed class DecisionWaitController
                     return DeadlineWake(schedule);
                 }
 
-                (DecisionWaitEvaluationInput Input, DecisionWaitEvaluationResult Result)? evaluation =
-                    await EvaluateBeforeDeadlineAsync(trigger, schedule, cancellationToken).ConfigureAwait(false);
-                if (evaluation is not { } completed)
+                DecisionWaitEvaluationResult? evaluation =
+                    await EvaluateBeforeDeadlineAsync(schedule, cancellationToken).ConfigureAwait(false);
+                if (evaluation is not { } completed || schedule.IsDue(_nowSeconds()))
                 {
                     return DeadlineWake(schedule);
                 }
 
                 int coalescedNudges = Interlocked.Exchange(ref _nudgesSinceLastEvaluation, 0);
-                DecisionWaitScheduleStep step = schedule.Apply(completed.Result.Decision, _nowSeconds());
-                RecordDump(completed.Input, completed.Result, coalescedNudges, step);
+                double? previous = schedule.DeadlineAt;
+                DecisionWaitScheduleStep step = schedule.Apply(completed.Decision, _nowSeconds());
+                string? payload = RecordDump(trigger, completed, coalescedNudges, step);
+                if (_transcript is { } transcript)
+                {
+                    foreach (DecisionPayloadAnswer answer in completed.Answers)
+                    {
+                        transcript.RecordSceneDecision(answer.Name, answer.Choice, payload);
+                    }
+
+                    if (schedule.DeadlineAt != previous)
+                    {
+                        string cause = step.Kind == DecisionWaitScheduleStepKind.Failure
+                            ? "evaluation failure; no-reason fallback" : DescribeArm(step.Arm!.Value);
+                        _deadlineExplanation = $"the {(previous is null ? "armed" : "shortened")} deadline elapsed ({cause})";
+                        _deadlinePayload = payload;
+                    }
+                }
                 switch (step.Kind)
                 {
                     case DecisionWaitScheduleStepKind.ActNow:
+                        if (_transcript is { } wakeTranscript)
+                        {
+                            bool arrived = completed.Answers.Any(a => a.Choice == DecisionWaitPolicy.ExpectingArrivedValue);
+                            string reason = arrived ? "a response arrived" : "the situation requires action";
+                            wakeTranscript.RecordSceneDecision(null, $"immediate decision: {reason}"
+                                + (previous.HasValue ? "; pre-empted the armed deadline" : string.Empty), payload);
+                        }
                         return MindBase.ObservationWaitWake.DecisionAct;
                     case DecisionWaitScheduleStepKind.Armed:
                     case DecisionWaitScheduleStepKind.Kept:
                         _failureBackoffSeconds = 0d;
                         break;
                     case DecisionWaitScheduleStepKind.Failure:
-                        _failureBackoffSeconds = GazeFailureBackoff.NextSeconds(
+                        _failureBackoffSeconds = DecisionFailureBackoff.NextSeconds(
                             _failureBackoffSeconds,
                             _cadenceIntervalSeconds);
-                        LogDecisionFailure(completed.Result.Decision.Failure, _failureBackoffSeconds);
+                        LogDecisionFailure(completed.Decision.Failure, _failureBackoffSeconds);
                         break;
                     default:
                         throw new InvalidOperationException($"Unknown wait schedule step '{step.Kind}'.");
@@ -181,6 +202,10 @@ internal sealed class DecisionWaitController
             // The membership watch lives exactly as long as this wait, on every exit path.
             membershipWatchCancellation.Cancel();
             await membershipWatch.ConfigureAwait(false);
+            if (_subject is { } subject)
+            {
+                await _dispatcher.InvokeAsync(() => subject.Unregister(TakeGroup), CancellationToken.None).ConfigureAwait(false);
+            }
         }
     }
 
@@ -233,15 +258,13 @@ internal sealed class DecisionWaitController
     /// armed deadline: when the deadline expires first, the in-flight evaluation is cancelled and null returned
     /// so the deadline starts the agent on time.
     /// </summary>
-    private async Task<(DecisionWaitEvaluationInput Input, DecisionWaitEvaluationResult Result)?>
+    private async Task<DecisionWaitEvaluationResult?>
         EvaluateBeforeDeadlineAsync(
-            DecisionWaitTrigger trigger,
             DecisionWaitSchedule schedule,
             CancellationToken cancellationToken)
     {
         using var evaluationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Task<(DecisionWaitEvaluationInput, DecisionWaitEvaluationResult)> evaluation =
-            EvaluateAsync(trigger, evaluationCancellation.Token);
+        Task<DecisionWaitEvaluationResult> evaluation = EvaluateAsync(evaluationCancellation.Token);
         if (schedule.RemainingSeconds(_nowSeconds()) is not { } remaining)
         {
             return await evaluation.ConfigureAwait(false);
@@ -270,22 +293,11 @@ internal sealed class DecisionWaitController
         return null;
     }
 
-    private async Task<(DecisionWaitEvaluationInput, DecisionWaitEvaluationResult)> EvaluateAsync(
-        DecisionWaitTrigger trigger,
-        CancellationToken cancellationToken)
+    private Task<DecisionWaitEvaluationResult> EvaluateAsync(CancellationToken cancellationToken)
     {
-        // The first evaluation waits for the once-per-wait premise resolution to settle — resolved text, cleanly
-        // absent, or contained failure (the gaze cold-start gate pattern); later evaluations observe the cached
-        // completed task.
-        string? premise = _premiseResolution is { } resolution
-            ? await resolution.WaitAsync(cancellationToken).ConfigureAwait(false)
-            : null;
-        DecisionWaitEvaluationInput input = await ComposeInputAsync(trigger, premise, cancellationToken)
-            .ConfigureAwait(false);
-        DecisionWaitEvaluationResult result = await _policy
-            .EvaluateAsync(input, cancellationToken)
-            .ConfigureAwait(false);
-        return (input, result);
+        TaskCompletionSource<DecisionWaitEvaluationResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = Interlocked.Exchange(ref _pendingGroup, DecisionWaitPolicy.PrepareGroup(result => completion.TrySetResult(result), cancellationToken));
+        return completion.Task.WaitAsync(cancellationToken);
     }
 
     private MindBase.ObservationWaitWake DeadlineWake(DecisionWaitSchedule schedule)
@@ -294,6 +306,7 @@ internal sealed class DecisionWaitController
             ? MindBase.ObservationWaitWake.TimerElapsed
             : MindBase.ObservationWaitWake.PauseElapsed;
         _logger?.LogDebug("Wait deadline expired ({DeadlineSource}); starting the agent.", schedule.Source);
+        _transcript?.RecordSceneDecision(null, _deadlineExplanation, _deadlinePayload);
         return wake;
     }
 
@@ -403,6 +416,9 @@ internal sealed class DecisionWaitController
 
     private (HashSet<string> Membership, string? PlayerFullId) CaptureStartupStateOnMainThread()
     {
+        _transcript = _mind.DecisionTranscript;
+        _subject = _mind.GetSceneDecisions();
+        _subject.Register(TakeGroup);
         ISceneContext scene = _mind.GetCurrentSceneContext();
         HashSet<string> membership = [.. scene.Characters.Select(static character => character.FullId)];
         string? player;
@@ -417,213 +433,6 @@ internal sealed class DecisionWaitController
         }
 
         return (membership, player);
-    }
-
-    /// <summary>
-    /// Resolves the authored scenario premise once per wait through the parent AgenticMind's scenario manager —
-    /// the gaze selector's pattern: inputs gathered on the Godot thread, only the manager call asynchronous, and
-    /// every failure contained as an absent premise.
-    /// </summary>
-    private void StartScenePremiseResolution()
-    {
-        if (_premiseResolution is not null)
-        {
-            return;
-        }
-
-        try
-        {
-            if (_mind is not AgenticMind { ScenarioManager: { } manager } || _mind.OwningCharacter is not { } character)
-            {
-                _premiseResolution = Task.FromResult<string?>(null);
-                return;
-            }
-
-            Dictionary<string, object?> coreContext = AgenticMind.CreateCoreRenderContext(
-                character,
-                _mind.GetCurrentSceneContext(),
-                _mind.GetContextEligibleAttentionIDs());
-            _premiseResolution = ResolveScenePremiseAsync(manager, coreContext);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            LogPremiseResolutionFailure(exception);
-            _premiseResolution = Task.FromResult<string?>(null);
-        }
-    }
-
-    private async Task<string?> ResolveScenePremiseAsync(
-        ScenarioManager manager,
-        IReadOnlyDictionary<string, object?> coreContext)
-    {
-        try
-        {
-            Scenario? scenario = await manager.GetCurrentScenario(coreContext).ConfigureAwait(false);
-            string? description = scenario?.Description.Trim();
-            return string.IsNullOrWhiteSpace(description) ? null : description;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            LogPremiseResolutionFailure(exception);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Composes one evaluation's input on the Godot thread: membership-change detection (overriding the nominal
-    /// trigger when the roster changed), the lore roster, recent events, the own-action speech state, and the
-    /// gaze selector's applied cue with its dwell.
-    /// </summary>
-    private async Task<DecisionWaitEvaluationInput> ComposeInputAsync(
-        DecisionWaitTrigger trigger,
-        string? premise,
-        CancellationToken cancellationToken)
-    {
-        DecisionWaitEvaluationInput composed = null!;
-        await _dispatcher.InvokeAsync(
-            () => composed = ComposeInputOnMainThread(trigger, premise),
-            cancellationToken).ConfigureAwait(false);
-        return composed;
-    }
-
-    private DecisionWaitEvaluationInput ComposeInputOnMainThread(DecisionWaitTrigger trigger, string? premise)
-    {
-        ISceneContext scene = _mind.GetCurrentSceneContext();
-        HashSet<string> membership = [.. scene.Characters.Select(static character => character.FullId)];
-        bool membershipChanged = _lastMembership is null || !membership.SetEquals(_lastMembership);
-        _lastMembership = membership;
-
-        DecisionWaitTrigger effectiveTrigger = membershipChanged
-            ? new DecisionWaitTrigger(DecisionWaitTriggerKind.MembershipChange)
-            : trigger;
-        return new DecisionWaitEvaluationInput(
-            _mind.OwningCharacter.FullId,
-            ComposeSceneCharacters(scene),
-            RenderRecentEvents(),
-            ComposeOwnAction(),
-            ResolveCurrentGaze(out double dwellSeconds),
-            dwellSeconds,
-            effectiveTrigger,
-            premise);
-    }
-
-    private IReadOnlyList<DecisionWaitSceneCharacter> ComposeSceneCharacters(ISceneContext scene)
-    {
-        ICharacter owner = _mind.OwningCharacter;
-        ILoreQueryService? queryService = ResolveLoreQueryService();
-        List<DecisionWaitSceneCharacter> roster = [];
-        foreach (ICharacter other in scene.Characters
-                     .Where(static candidate => candidate is not null)
-                     .OrderBy(static candidate => candidate.FullId, StringComparer.Ordinal))
-        {
-            if (ReferenceEquals(other, owner) || roster.Count >= MaximumSceneCharacters)
-            {
-                continue;
-            }
-
-            string? description = queryService is null
-                ? null
-                : CharacterLoreDescriptions.ResolveSynchronously(
-                    queryService,
-                    owner.FullId,
-                    scene.Content,
-                    other.FullId,
-                    _logger);
-            roster.Add(new DecisionWaitSceneCharacter(other.FullId, description));
-        }
-
-        return roster;
-    }
-
-    private static ILoreQueryService? ResolveLoreQueryService()
-    {
-        try
-        {
-            return Game.Instance.GetRequiredService<ILoreQueryService>();
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            return null;
-        }
-    }
-
-    private IReadOnlyList<string> RenderRecentEvents()
-    {
-        IReadOnlyList<AgentObservation> timeline = _mind.GetObservationTimelineSnapshot();
-        if (timeline.Count == 0)
-        {
-            return [];
-        }
-
-        List<AgentObservation> window = [.. timeline.Skip(Math.Max(0, timeline.Count - RecentEventCount))];
-        // The renderer is a deterministic CPU-only canonical-text projection: every overload completes
-        // synchronously, so the value is available without yielding off the Godot thread. Event times render
-        // relative to this evaluation's composition moment.
-        string rendered = new ObservationHistoryRenderer(_mind.OwningCharacter)
-            .RenderAsync(window, timeline, _mind.GameClock.NowSeconds)
-            .GetAwaiter()
-            .GetResult();
-        if (string.IsNullOrEmpty(rendered))
-        {
-            return [];
-        }
-
-        List<string> lines = [.. rendered.Split('\n')];
-        int totalCharacters = lines.Sum(static line => line.Length);
-        while (lines.Count > 1 && totalCharacters > RecentEventCharacterBudget)
-        {
-            totalCharacters -= lines[0].Length;
-            lines.RemoveAt(0);
-        }
-
-        return lines;
-    }
-
-    private DecisionWaitOwnAction ComposeOwnAction()
-        => _mind.TryGetAttendedSpeaker(out string? speakerFullId)
-            ? new DecisionWaitOwnAction(
-                DecisionWaitOwnActionKind.Hearing,
-                speakerFullId,
-                ResolveAddresseeStatus(speakerFullId))
-            : DecisionWaitOwnAction.WaitingAction;
-
-    /// <summary>
-    /// Determines how the attended speaker's latest observed speech is addressed: declared to this character, to
-    /// another, or undecided when no recipients were declared or no speech is retained.
-    /// </summary>
-    private DecisionWaitAddresseeStatus ResolveAddresseeStatus(string speakerFullId)
-    {
-        string ownerFullId = _mind.OwningCharacter.FullId;
-        foreach (AgentObservation observation in _mind.GetObservationTimelineSnapshot().Reverse())
-        {
-            if (observation is ObservedSpeech { ActorId: { } actor } speech
-                && string.Equals(actor, speakerFullId, StringComparison.Ordinal))
-            {
-                return speech.Addressees.Contains(ownerFullId, StringComparer.Ordinal)
-                    ? DecisionWaitAddresseeStatus.AddressedToMe
-                    : speech.Addressees.Count > 0
-                        ? DecisionWaitAddresseeStatus.AddressedToAnother
-                        : DecisionWaitAddresseeStatus.Undecided;
-            }
-        }
-
-        return DecisionWaitAddresseeStatus.Undecided;
-    }
-
-    /// <summary>Reads the gaze selector's applied cue value and dwell; no selector or clear gaze yields null.</summary>
-    private string? ResolveCurrentGaze(out double dwellSeconds)
-    {
-        dwellSeconds = 0d;
-        foreach (Node child in _mind.GetChildren())
-        {
-            if (child is AttentionGazeTargetSelector { HasAppliedTarget: true } selector)
-            {
-                dwellSeconds = selector.AppliedDwellSeconds;
-                return selector.AppliedCueValue;
-            }
-        }
-
-        return null;
     }
 
     private DecisionPayloadDumpRecorder? CreateDumpRecorderIfEnabled()
@@ -645,22 +454,16 @@ internal sealed class DecisionWaitController
         }
     }
 
-    private void RecordDump(
-        DecisionWaitEvaluationInput input,
+    private string? RecordDump(
+        DecisionWaitTrigger trigger,
         DecisionWaitEvaluationResult result,
         int coalescedNudges,
         DecisionWaitScheduleStep step)
     {
-        DecisionPayloadDumpRecorder? recorder = _dumpRecorder;
-        if (recorder is null)
-        {
-            return;
-        }
-
-        recorder.Record(new DecisionPayloadDump(
+        return _dumpRecorder?.Record(new DecisionPayloadDump(
             DateTimeOffset.Now,
-            input.OwnerFullId,
-            input.Trigger.Token,
+            _mind.OwningCharacter.FullId,
+            trigger.Token,
             step.Token,
             null,
             result.CompositionMilliseconds,
@@ -713,8 +516,4 @@ internal sealed class DecisionWaitController
             failure ?? "unknown failure",
             backoffSeconds);
 
-    private void LogPremiseResolutionFailure(Exception exception)
-        => _logger?.LogWarning(
-            exception,
-            "Resolving the scenario premise for the wait decision failed; questions compose without one.");
 }

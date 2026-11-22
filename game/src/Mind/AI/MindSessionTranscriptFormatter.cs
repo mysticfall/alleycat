@@ -97,7 +97,7 @@ internal static partial class MindSessionTranscriptFormatter
     /// </summary>
     /// <param name="characterId">The owning character's validated local identifier.</param>
     /// <param name="entries">The character's recorded entries, already ordered by turn number.</param>
-    internal static string RenderIndex(string characterId, IReadOnlyList<MindTranscriptIndexEntry> entries)
+    internal static string RenderIndex(string characterId, IReadOnlyList<MindTranscriptIndexItem> entries)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(characterId);
         ArgumentNullException.ThrowIfNull(entries);
@@ -112,8 +112,15 @@ internal static partial class MindSessionTranscriptFormatter
             .Append("links to its turn page.")
             .Append(LineFeed)
             .Append(LineFeed);
-        foreach (MindTranscriptIndexEntry entry in entries)
+        foreach (MindTranscriptIndexItem item in entries)
         {
+            if (item is MindTranscriptIndexNote note)
+            {
+                _ = document.Append(note.Text).Append(LineFeed).Append(LineFeed);
+                continue;
+            }
+
+            var entry = (MindTranscriptIndexEntry)item;
             string turnFileName = MindSessionTranscriptRecorder.CreateTurnFileName(entry.TurnNumber);
             _ = document
                 .Append("## [Turn ")

@@ -4,22 +4,18 @@ using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Decision;
-using AlleyCat.Mind.AI.Lore;
-using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
 using Godot;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Mind.Attention;
 
 /// <summary>
 /// Adapts this Mind's current attention snapshot into decision-driven, cue-owned gaze assignments for its owning
-/// character: each evaluation asks the decision model to choose one attended character (or nothing in particular)
-/// and applies the chosen subject's best cue.
+/// character: each evaluation asks the decision model to choose one attended cue (or nothing in particular)
+/// and revalidates that exact cue before applying it.
 /// </summary>
 /// <remarks>
 /// The periodic trigger is deliberately isolated from the policy evaluation path. Speech-adjacent nudges — speak
@@ -31,9 +27,6 @@ namespace AlleyCat.Mind.Attention;
 [GlobalClass]
 public partial class AttentionGazeTargetSelector : Node
 {
-    private const int RecentEventCount = 6;
-    private const int MaximumSceneCharacters = 8;
-    private const int RecentEventCharacterBudget = 2000;
     private const double SpeakIntentionExpirySeconds = 30d;
 
     /// <summary>The decision-payload dump category this gate files under: one directory per producer.</summary>
@@ -41,30 +34,22 @@ public partial class AttentionGazeTargetSelector : Node
 
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Lock _triggerLock = new();
-    private readonly Lock _evaluationStateLock = new();
-    private Func<ISceneContext> _sceneContextLoader = static ()
-        => Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-    private Func<IDecisionClient> _decisionClientLoader = static ()
-        => Game.Instance.GetRequiredService<IDecisionClient>();
-    private Func<ILoreQueryService?> _loreQueryServiceLoader = static () => Game.Instance.GetRequiredService<ILoreQueryService>();
     private Mind? _mind;
     private ICharacter? _character;
     private IComponentProjectionNotifier? _componentProjectionNotifier;
-    private DecisionGazePolicy? _policy;
+    private SubjectSceneDecisions? _subject;
+    private bool _due;
+    internal GazeOwnAction CurrentOwnAction => ComposeOwnAction(_mind!, _clock.Elapsed.TotalSeconds);
     private IVision? _vision;
     private ILogger<AttentionGazeTargetSelector>? _logger;
     private DecisionPayloadDumpRecorder? _dumpRecorder;
+    private MindSessionTranscriptRecorder? _transcript;
     private CancellationTokenSource? _evaluationCancellation;
     private GazeSpeakIntention? _speakIntention;
     private GazeEvaluationTrigger _pendingTrigger = GazeEvaluationTrigger.Cadence;
-    private GazeCompletedEvaluation? _completedEvaluation;
-    private Task _scenePremiseResolution = Task.CompletedTask;
     private HashSet<string>? _lastEvaluatedMembership;
-    private volatile string? _scenePremise;
-    private int _scenePremiseResolutionStarted;
     private string? _appliedSubjectFullId;
     private VisualCue? _appliedCue;
-    private double _appliedAtSeconds;
     private double _secondsSinceLastEvaluation;
     private double _failureBackoffSeconds;
     private int _coalescedNudges;
@@ -117,7 +102,7 @@ public partial class AttentionGazeTargetSelector : Node
     /// <inheritdoc />
     public override void _Process(double delta)
     {
-        if (!_isReady || _vision is null || _policy is null)
+        if (!_isReady || _vision is null || _subject is null)
         {
             return;
         }
@@ -130,40 +115,15 @@ public partial class AttentionGazeTargetSelector : Node
                 "Attention gaze selector process delta must be finite and non-negative.");
         }
 
-        TryApplyCompletedEvaluation();
-
-        if (_initialEvaluationPending)
-        {
-            if (_scenePremiseResolution is { IsCompleted: false })
-            {
-                // Cold-start gate (GZ2-B1): the first evaluation waits until the one-shot premise resolution
-                // settles — resolved text, cleanly absent, or contained failure — so no dispatched question can
-                // race the premise. Later evaluations are unaffected.
-                return;
-            }
-
-            _initialEvaluationPending = false;
-            _ = StartEvaluation();
-            TryApplyCompletedEvaluation();
-            return;
-        }
-
         _secondsSinceLastEvaluation += delta;
-        if (!_evaluationRequested && _secondsSinceLastEvaluation < EvaluationIntervalSeconds + _failureBackoffSeconds)
+        if (IsEvaluationDue())
+        {
+            _due = true;
+        }
+        else
         {
             PollAttentionMembershipChange();
-            return;
         }
-
-        if (!StartEvaluation())
-        {
-            // An evaluation is still in flight: the pending request flag stays set and coalesces into the next
-            // evaluation once the flight completes.
-            return;
-        }
-
-        _secondsSinceLastEvaluation = 0d;
-        TryApplyCompletedEvaluation();
     }
 
     /// <inheritdoc />
@@ -187,14 +147,18 @@ public partial class AttentionGazeTargetSelector : Node
         _evaluationCancellation?.Dispose();
         _evaluationCancellation = null;
         _evaluationInFlight = false;
-        _completedEvaluation = null;
+        _due = false;
         _speakIntention = null;
-        _scenePremise = null;
-        _scenePremiseResolution = Task.CompletedTask;
         _lastEvaluatedMembership = null;
         _vision = null;
-        _policy = null;
+        if (_subject is { } subject)
+        {
+            subject.Unregister(Prepare);
+            subject.Gaze = null;
+            _subject = null;
+        }
         _dumpRecorder = null;
+        _transcript = null;
         _character = null;
         _mind = null;
         _isReady = false;
@@ -231,30 +195,9 @@ public partial class AttentionGazeTargetSelector : Node
 
     /// <summary>Gets how long the currently applied gaze cue has been held, in seconds.</summary>
     internal double AppliedDwellSeconds
-        => AppliedCueValue is null ? 0d : Math.Max(0d, _clock.Elapsed.TotalSeconds - _appliedAtSeconds);
-
-    /// <summary>
-    /// Replaces scene-context resolution before activation for focused runtime coverage.</summary>
-    internal void SetSceneContextLoaderForTesting(Func<ISceneContext> sceneContextLoader)
     {
-        ArgumentNullException.ThrowIfNull(sceneContextLoader);
-        ThrowIfActivatedForTesting(nameof(SetSceneContextLoaderForTesting));
-        _sceneContextLoader = sceneContextLoader;
-    }
-
-    /// <summary>Replaces decision-client resolution before activation for focused runtime coverage.</summary>
-    internal void SetDecisionClientForTesting(IDecisionClient decisionClient)
-    {
-        ArgumentNullException.ThrowIfNull(decisionClient);
-        ThrowIfActivatedForTesting(nameof(SetDecisionClientForTesting));
-        _decisionClientLoader = () => decisionClient;
-    }
-
-    /// <summary>Replaces lore-query-service resolution before activation for focused runtime coverage.</summary>
-    internal void SetLoreQueryServiceForTesting(ILoreQueryService? loreQueryService)
-    {
-        ThrowIfActivatedForTesting(nameof(SetLoreQueryServiceForTesting));
-        _loreQueryServiceLoader = () => loreQueryService;
+        get => AppliedCueValue is null ? 0d : Math.Max(0d, _clock.Elapsed.TotalSeconds - field);
+        private set;
     }
 
     internal void RequestEvaluation(GazeEvaluationTrigger trigger)
@@ -268,9 +211,8 @@ public partial class AttentionGazeTargetSelector : Node
         lock (_triggerLock)
         {
             _pendingTrigger = trigger;
+            _evaluationRequested = true;
         }
-
-        _evaluationRequested = true;
         if (_evaluationInFlight)
         {
             _ = Interlocked.Increment(ref _coalescedNudges);
@@ -352,22 +294,32 @@ public partial class AttentionGazeTargetSelector : Node
         }
 
         _vision = vision;
-        _policy = new DecisionGazePolicy(_decisionClientLoader());
+        _evaluationCancellation?.Cancel();
+        _evaluationCancellation?.Dispose();
+        _evaluationCancellation = new();
+        _evaluationInFlight = false;
+        if (_subject is null)
+        {
+            _subject = _mind!.GetSceneDecisions();
+            _subject.Gaze = this;
+            _subject.Register(Prepare);
+            ProcessPriority = _mind.ProcessPriority - 1;
+        }
         _dumpRecorder = CreateDumpRecorderIfEnabled();
-        StartScenePremiseResolution();
+        _transcript = _mind!.DecisionTranscript;
         _initialEvaluationPending = true;
         _evaluationRequested = false;
         _secondsSinceLastEvaluation = 0d;
         _appliedSubjectFullId = null;
         AppliedCueValue = null;
         _appliedCue = null;
-        _appliedAtSeconds = 0d;
+        AppliedDwellSeconds = 0d;
         LogVisionBound(vision);
     }
 
     private DecisionPayloadDumpRecorder? CreateDumpRecorderIfEnabled()
     {
-        if (!AIDiagnosticsSettings.LoadOrDefault().EnableDecisionPayloadLogging)
+        if (!_mind!.WaitDiagnosticsSettings.EnableDecisionPayloadLogging)
         {
             return null;
         }
@@ -382,84 +334,24 @@ public partial class AttentionGazeTargetSelector : Node
             TryGetLogger() ?? NullLogger<AttentionGazeTargetSelector>.Instance);
     }
 
-    /// <summary>
-    /// Resolves the authored scenario premise once per selector lifetime (playtest R1): the parent
-    /// <see cref="AgenticMind"/> session's scenario manager renders its description against the same core render
-    /// context the session prompt uses, and the cached verbatim text then rides every gaze question after an
-    /// explicit framing label. All inputs are gathered on the Godot thread; only the manager call is asynchronous,
-    /// and its task is held so the first evaluation can gate on its settlement (GZ2-B1). Every failure — including
-    /// a plain Mind parent with no scenario manager — is contained: the premise stays absent and evaluations
-    /// proceed unchanged.
-    /// </summary>
-    private void StartScenePremiseResolution()
+    private SceneDecisionGroup? Prepare()
     {
-        if (Interlocked.Exchange(ref _scenePremiseResolutionStarted, 1) != 0)
+        // A slow request can settle after the frame noticed an overdue cadence. A failure moves that
+        // cadence boundary; an actual nudge remains pending independently and still bypasses backoff.
+        if (!_due || _evaluationInFlight || !IsEvaluationDue())
         {
-            return;
+            return null;
         }
 
-        try
-        {
-            if (_mind is not AgenticMind { ScenarioManager: { } manager } || _character is not { } character)
-            {
-                return;
-            }
-
-            Dictionary<string, object?> coreContext = AgenticMind.CreateCoreRenderContext(
-                character,
-                _sceneContextLoader(),
-                _mind.GetContextEligibleAttentionIDs());
-            _scenePremiseResolution = ResolveScenePremiseAsync(manager, coreContext);
-        }
-        catch (Exception exception)
-        {
-            LogScenePremiseResolutionFailure(exception);
-        }
-    }
-
-    private async Task ResolveScenePremiseAsync(
-        ScenarioManager manager,
-        IReadOnlyDictionary<string, object?> coreContext)
-    {
-        try
-        {
-            Scenario? scenario = await manager.GetCurrentScenario(coreContext).ConfigureAwait(false);
-            if (!_isReady)
-            {
-                return;
-            }
-
-            string? description = scenario?.Description.Trim();
-            _scenePremise = string.IsNullOrWhiteSpace(description) ? null : description;
-            if (_scenePremise is null)
-            {
-                LogScenePremiseAbsent();
-            }
-        }
-        catch (Exception exception)
-        {
-            LogScenePremiseResolutionFailure(exception);
-        }
-    }
-
-    /// <summary>
-    /// Starts one evaluation when none is in flight. Returns whether an evaluation boundary was consumed — either a
-    /// dispatched evaluation or the zero-candidate short-circuit — so the caller can reset its cadence timer.
-    /// </summary>
-    private bool StartEvaluation()
-    {
-        if (_evaluationInFlight)
-        {
-            return false;
-        }
-
-        _evaluationRequested = false;
+        _due = false;
+        _initialEvaluationPending = false;
+        _secondsSinceLastEvaluation = 0;
         GazeEvaluationTrigger trigger = ConsumePendingTrigger();
         int coalescedNudges = Interlocked.Exchange(ref _coalescedNudges, 0);
 
         Mind mind = _mind
             ?? throw new InvalidOperationException("Attention gaze selector has no Mind parent after activation.");
-        ISceneContext scene = _sceneContextLoader();
+        ISceneContext scene = mind.GetCurrentSceneContext();
         AttentionSnapshot snapshot = mind.GetAttentionSnapshot();
         RecordEvaluatedMembership(snapshot);
         List<AttentionGazeTargetCandidate<VisualCue>> cueCandidates = ResolveCandidates(snapshot, scene);
@@ -471,21 +363,30 @@ public partial class AttentionGazeTargetSelector : Node
             // deterministic, so no call is dispatched and the clear presentation fallback stays in effect.
             _failureBackoffSeconds = 0d;
             LogZeroCandidateShortCircuit();
-            return true;
+            return null;
         }
 
-        GazeEvaluationInput input = ComposeInput(trigger, composedCues, mind, scene);
-        _evaluationCancellation?.Dispose();
-        _evaluationCancellation = new CancellationTokenSource();
+        ICharacter owner = mind.OwningCharacter;
+        IReadOnlyList<GazeCueCandidate> candidates = [.. composedCues.Select(c => c with
+        {
+            CueDescription = DescribeCueSynchronously(c, scene, owner),
+        })];
         _evaluationInFlight = true;
-        _ = RunEvaluationAsync(input, coalescedNudges, _evaluationCancellation.Token);
-        return true;
+        return DecisionGazePolicy.PrepareGroup(candidates, CurrentOwnAction, trigger, result =>
+        {
+            _evaluationInFlight = false;
+            ApplyCompleted(new(trigger, coalescedNudges, result, DateTimeOffset.Now));
+        }, _evaluationCancellation!.Token);
     }
+
+    private bool IsEvaluationDue() => _initialEvaluationPending || _evaluationRequested
+        || _secondsSinceLastEvaluation >= EvaluationIntervalSeconds + _failureBackoffSeconds;
 
     private GazeEvaluationTrigger ConsumePendingTrigger()
     {
         lock (_triggerLock)
         {
+            _evaluationRequested = false;
             GazeEvaluationTrigger trigger = _pendingTrigger;
             _pendingTrigger = GazeEvaluationTrigger.Cadence;
             return trigger;
@@ -549,30 +450,6 @@ public partial class AttentionGazeTargetSelector : Node
     private void RecordEvaluatedMembership(AttentionSnapshot snapshot)
         => _lastEvaluatedMembership = [.. snapshot.Values.Keys];
 
-    private GazeEvaluationInput ComposeInput(
-        GazeEvaluationTrigger trigger,
-        IReadOnlyList<GazeCueCandidate> composedCues,
-        Mind mind,
-        ISceneContext scene)
-    {
-        ICharacter character = _character
-            ?? throw new InvalidOperationException("Attention gaze selector has no owning character at input composition.");
-        double elapsedSeconds = _clock.Elapsed.TotalSeconds;
-        return new GazeEvaluationInput(
-            character.FullId,
-            [.. composedCues.Select(candidate => candidate with
-            {
-                CueDescription = DescribeCueSynchronously(candidate, scene, character),
-            })],
-            ComposeOwnAction(mind, elapsedSeconds),
-            AppliedCueValue,
-            AppliedCueValue is null ? 0d : Math.Max(0d, elapsedSeconds - _appliedAtSeconds),
-            trigger,
-            RenderRecentEvents(mind, character),
-            ScenePremise: _scenePremise,
-            SceneCharacters: ComposeSceneCharacters(character, scene));
-    }
-
     /// <summary>
     /// Renders one cue's authored description on the Godot thread: the cue's own <see cref="VisualCue.Describe" />
     /// template completes synchronously (the established canonical-rendering precedent), and any failure or
@@ -611,52 +488,6 @@ public partial class AttentionGazeTargetSelector : Node
         return null;
     }
 
-    /// <summary>
-    /// Composes the bounded scene-character roster for the evidence summaries: every scene character other than
-    /// the owner, ordered by full ID, each summarised by their authored lore description through the shared cached
-    /// resolver — absent or asynchronous resolutions carry the bare identity honestly.
-    /// </summary>
-    private IReadOnlyList<GazeSceneCharacter> ComposeSceneCharacters(ICharacter character, ISceneContext scene)
-    {
-        ILoreQueryService? queryService = ResolveLoreQueryService();
-        List<GazeSceneCharacter> roster = [];
-        foreach (ICharacter other in scene.Characters
-                     .Where(static candidate => candidate is not null)
-                     .OrderBy(static candidate => candidate.FullId, StringComparer.Ordinal))
-        {
-            if (ReferenceEquals(other, character) || roster.Count >= MaximumSceneCharacters)
-            {
-                continue;
-            }
-
-            string? description = queryService is null
-                ? null
-                : CharacterLoreDescriptions.ResolveSynchronously(
-                    queryService,
-                    character.FullId,
-                    scene.Content,
-                    other.FullId,
-                    TryGetLogger());
-            roster.Add(new GazeSceneCharacter(other.FullId, description));
-        }
-
-        return roster;
-    }
-
-    /// <summary>Resolves the shared lore query service when game services are available; null keeps summaries bare.</summary>
-    private ILoreQueryService? ResolveLoreQueryService()
-    {
-        try
-        {
-            return _loreQueryServiceLoader();
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            LogLoreServiceUnavailable(exception);
-            return null;
-        }
-    }
-
     private GazeOwnAction ComposeOwnAction(Mind mind, double elapsedSeconds)
     {
         GazeSpeakIntention? intention = _speakIntention;
@@ -675,94 +506,9 @@ public partial class AttentionGazeTargetSelector : Node
                 : GazeOwnAction.IdleAction;
     }
 
-    /// <summary>Renders the bounded recent-event window through the canonical observation rendering path.</summary>
-    private static IReadOnlyList<string> RenderRecentEvents(Mind mind, ICharacter character)
+    private void ApplyCompleted(GazeCompletedEvaluation completion)
     {
-        IReadOnlyList<AgentObservation> timeline = mind.GetObservationTimelineSnapshot();
-        if (timeline.Count == 0)
-        {
-            return [];
-        }
-
-        List<AgentObservation> window = [.. timeline.Skip(Math.Max(0, timeline.Count - RecentEventCount))];
-        // The renderer is a deterministic CPU-only canonical-text projection: every overload completes
-        // synchronously, so the value is available without yielding off the Godot thread. Event times render
-        // relative to this evaluation's composition moment.
-        string rendered = new ObservationHistoryRenderer(character)
-            .RenderAsync(window, timeline, mind.GameClock.NowSeconds)
-            .GetAwaiter()
-            .GetResult();
-        if (string.IsNullOrEmpty(rendered))
-        {
-            return [];
-        }
-
-        List<string> lines = [.. rendered.Split('\n')];
-        int totalCharacters = lines.Sum(static line => line.Length);
-        while (lines.Count > 1 && totalCharacters > RecentEventCharacterBudget)
-        {
-            totalCharacters -= lines[0].Length;
-            lines.RemoveAt(0);
-        }
-
-        return lines;
-    }
-
-    private async Task RunEvaluationAsync(
-        GazeEvaluationInput input,
-        int coalescedNudges,
-        CancellationToken cancellationToken)
-    {
-        GazeEvaluationResult result;
-        try
-        {
-            result = await (_policy ?? throw new InvalidOperationException(
-                    "Attention gaze selector policy was not initialised."))
-                .EvaluateAsync(input, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            result = new GazeEvaluationResult(
-                GazeDecision.CancelledDecision(),
-                null,
-                0,
-                0,
-                0,
-                null,
-                []);
-        }
-        catch (Exception exception)
-        {
-            result = new GazeEvaluationResult(
-                GazeDecision.Failed("unexpected evaluation failure"),
-                null,
-                0,
-                0,
-                0,
-                null,
-                []);
-            LogUnexpectedEvaluationFailure(exception);
-        }
-
-        GazeCompletedEvaluation completion = new(input, coalescedNudges, result, DateTimeOffset.Now);
-        lock (_evaluationStateLock)
-        {
-            _evaluationInFlight = false;
-            _completedEvaluation = completion;
-        }
-    }
-
-    private void TryApplyCompletedEvaluation()
-    {
-        GazeCompletedEvaluation? completion;
-        lock (_evaluationStateLock)
-        {
-            completion = _completedEvaluation;
-            _completedEvaluation = null;
-        }
-
-        if (completion is null || !_isReady || _vision is null)
+        if (!_isReady || _vision is null)
         {
             return;
         }
@@ -775,7 +521,7 @@ public partial class AttentionGazeTargetSelector : Node
                 LogEvaluationCancelled();
                 return;
             case GazeDecisionKind.Failure:
-                _failureBackoffSeconds = GazeFailureBackoff.NextSeconds(_failureBackoffSeconds, EvaluationIntervalSeconds);
+                _failureBackoffSeconds = DecisionFailureBackoff.NextSeconds(_failureBackoffSeconds, EvaluationIntervalSeconds);
                 LogDecisionFailure(result.Decision.Failure);
                 RecordDump(completion, "failed", result.Decision.Failure);
                 return;
@@ -832,7 +578,7 @@ public partial class AttentionGazeTargetSelector : Node
         _appliedSubjectFullId = subjectFullId;
         AppliedCueValue = cueValue;
         _appliedCue = cue;
-        _appliedAtSeconds = _clock.Elapsed.TotalSeconds;
+        AppliedDwellSeconds = _clock.Elapsed.TotalSeconds;
     }
 
     private static List<AttentionGazeTargetCandidate<VisualCue>> ResolveCandidates(
@@ -876,7 +622,7 @@ public partial class AttentionGazeTargetSelector : Node
     /// </summary>
     private VisualCue? ResolveCue(string subjectFullId, string cueKey)
     {
-        if (_sceneContextLoader().Find(subjectFullId) is not IVisualSubject subject)
+        if (_mind!.GetCurrentSceneContext().Find(subjectFullId) is not IVisualSubject subject)
         {
             return null;
         }
@@ -919,16 +665,10 @@ public partial class AttentionGazeTargetSelector : Node
 
     private void RecordDump(GazeCompletedEvaluation completion, string verdict, string? failure)
     {
-        DecisionPayloadDumpRecorder? recorder = _dumpRecorder;
-        if (recorder is null)
-        {
-            return;
-        }
-
-        recorder.Record(new DecisionPayloadDump(
+        string? payload = _dumpRecorder?.Record(new DecisionPayloadDump(
             completion.SettledAt,
-            _character?.FullId ?? completion.Input.OwnerFullId,
-            completion.Input.Trigger.Token,
+            _character!.FullId,
+            completion.Trigger.Token,
             verdict,
             completion.Result.Confidence,
             completion.Result.CompositionMilliseconds,
@@ -938,13 +678,9 @@ public partial class AttentionGazeTargetSelector : Node
             failure,
             completion.Result.Evidence,
             completion.Result.Questions));
-    }
-
-    private void ThrowIfActivatedForTesting(string operation)
-    {
-        if (_isReady)
+        if (failure is null)
         {
-            throw new InvalidOperationException($"{operation} must be called before the attention gaze selector activates.");
+            _transcript?.RecordSceneDecision(DecisionGazePolicy.QuestionName, verdict, payload);
         }
     }
 
@@ -1026,40 +762,6 @@ public partial class AttentionGazeTargetSelector : Node
         }
     }
 
-    private void LogUnexpectedEvaluationFailure(Exception exception)
-    {
-        ILogger<AttentionGazeTargetSelector>? logger = TryGetLogger();
-        logger?.LogWarning(
-            exception,
-            "Attention gaze evaluation threw unexpectedly; keeping the current target and backing off.");
-    }
-
-    private void LogScenePremiseAbsent()
-    {
-        ILogger<AttentionGazeTargetSelector>? logger = TryGetLogger();
-        if (logger?.IsEnabled(LogLevel.Debug) == true)
-        {
-            logger.LogDebug("Attention gaze selector found no scenario premise; questions compose without one.");
-        }
-    }
-
-    private void LogScenePremiseResolutionFailure(Exception exception)
-    {
-        ILogger<AttentionGazeTargetSelector>? logger = TryGetLogger();
-        logger?.LogWarning(
-            exception,
-            "Resolving the scenario premise for attention gaze failed; questions compose without one.");
-    }
-
-    private void LogLoreServiceUnavailable(Exception exception)
-    {
-        ILogger<AttentionGazeTargetSelector>? logger = TryGetLogger();
-        logger?.LogWarning(
-            exception,
-            "Resolving the lore query service for attention gaze failed; evidence candidate summaries compose "
-            + "without lore descriptions.");
-    }
-
     private void LogSetDecision(VisualCue target)
     {
         ILogger<AttentionGazeTargetSelector>? logger = TryGetLogger();
@@ -1093,7 +795,7 @@ public partial class AttentionGazeTargetSelector : Node
 
     /// <summary>One finished evaluation awaiting application on the Godot thread.</summary>
     private sealed record GazeCompletedEvaluation(
-        GazeEvaluationInput Input,
+        GazeEvaluationTrigger Trigger,
         int CoalescedNudges,
         GazeEvaluationResult Result,
         DateTimeOffset SettledAt);

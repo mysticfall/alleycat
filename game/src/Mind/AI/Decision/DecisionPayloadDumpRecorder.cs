@@ -69,7 +69,7 @@ internal sealed class DecisionPayloadDumpRecorder
     }
 
     /// <summary>Writes one dump file; a failure is contained as a Warning and never propagates.</summary>
-    public void Record(DecisionPayloadDump dump)
+    public string? Record(DecisionPayloadDump dump)
     {
         try
         {
@@ -90,6 +90,7 @@ internal sealed class DecisionPayloadDumpRecorder
             File.WriteAllText(
                 Path.Combine(characterDumpDirectory, fileName),
                 JsonSerializer.Serialize(dump, _serialiserOptions));
+            return $"{DumpDirectoryName}/{SanitisePathComponent(_category)}/{Uri.EscapeDataString(fileName)}";
         }
         catch (Exception exception)
         {
@@ -98,6 +99,7 @@ internal sealed class DecisionPayloadDumpRecorder
                 "Writing a decision-payload dump for character '{CharacterId}' failed; the evaluation it observed "
                     + "is unaffected.",
                 _characterId);
+            return null;
         }
     }
 

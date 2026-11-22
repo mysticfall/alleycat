@@ -8,8 +8,7 @@ namespace AlleyCat.Tests.Mind.Attention;
 
 /// <summary>
 /// Deterministic coverage for the decision-driven gaze policy: subject-anchored candidate composition with
-/// deterministic best-cue selection, lean question and evidence shape, answer validation, containment per failure
-/// mode, and the failure backoff schedule.
+/// deterministic best-cue selection, lean question and evidence shape, answer validation and failure containment.
 /// </summary>
 public sealed class DecisionGazePolicyTests
 {
@@ -23,14 +22,13 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_ComposesCueLevelOptionsWithAFixedNoneOption()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         List<GazeCueCandidate> candidates =
         [
             Candidate("char:alpha", cueKey: "face", attention: 0.42d, prominence: 1d, description: "A kind face."),
             Candidate("char:bravo", cueKey: "body", attention: 0.9d, prominence: 2d),
             Candidate("char:bravo", cueKey: "hands", attention: 0.9d, prominence: 3d),
         ];
-        _ = await policy.EvaluateAsync(CreateInput(candidates));
+        _ = await EvaluateAsync(client, CreateInput(candidates));
 
         DecisionRequest request = Assert.Single(client.Requests);
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
@@ -53,14 +51,13 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_ComposesLeanInstructionsAndBoundedEvidence()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         GazeEvaluationInput input = CreateInput(
             [],
             ownAction: new GazeOwnAction(GazeOwnActionKind.SpeakingTo, ["char:tola"]),
             currentGazeCueValue: "char:tola#face",
             currentGazeDwellSeconds: 3.24d,
             recentEvents: ["`char:tola` said: hello"]);
-        _ = await policy.EvaluateAsync(input);
+        _ = await EvaluateAsync(client, input);
 
         DecisionRequest request = Assert.Single(client.Requests);
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
@@ -99,15 +96,14 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_ComposesTheSceneCharacterRosterAndCueLevelCurrentGaze()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         GazeEvaluationInput input = CreateInput(
             [],
             sceneCharacters:
             [
-                new GazeSceneCharacter("char:bravo", "A sturdily built man."),
-                new GazeSceneCharacter("char:delta"),
+                new SceneDecisionCharacter("char:bravo", "A sturdily built man."),
+                new SceneDecisionCharacter("char:delta"),
             ]);
-        _ = await policy.EvaluateAsync(input);
+        _ = await EvaluateAsync(client, input);
 
         JsonElement evidence = Assert.IsType<JsonElement>(Assert.Single(client.Requests).Evidence);
         JsonElement characters = evidence.GetProperty("characters");
@@ -126,12 +122,11 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_AppliesTriggerContextSentenceBeforeStandingOwnAction()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         GazeEvaluationInput input = CreateInput(
             [],
             ownAction: GazeOwnAction.IdleAction,
             trigger: new GazeEvaluationTrigger(GazeEvaluationTriggerKind.SpeakInvoked, ["char:tola"]));
-        _ = await policy.EvaluateAsync(input);
+        _ = await EvaluateAsync(client, input);
 
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(
             Assert.Single(Assert.Single(client.Requests).Questions),
@@ -144,8 +139,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_ValidChosenCueValueResolvesToChooseCue()
     {
         ScriptedDecisionClient client = new(answerValue: "char:alpha#body");
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(
+        GazeEvaluationResult result = await EvaluateAsync(client,
             CreateInput([Candidate("char:alpha", cueKey: "body", attention: 0.5d, prominence: 1d)]));
 
         Assert.Equal(GazeDecisionKind.ChooseCue, result.Decision.Kind);
@@ -159,8 +153,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_NoneAnswerResolvesToNone()
     {
         ScriptedDecisionClient client = new(answerValue: DecisionGazePolicy.NoneOptionValue);
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(
+        GazeEvaluationResult result = await EvaluateAsync(client,
             CreateInput([Candidate("char:alpha", cueKey: "body", attention: 0.5d, prominence: 1d)]));
 
         Assert.Equal(GazeDecisionKind.None, result.Decision.Kind);
@@ -171,8 +164,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_RefusalIsContainedAsAFailure()
     {
         ScriptedDecisionClient client = new(refusal: true);
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(CreateInput([]));
+        GazeEvaluationResult result = await EvaluateAsync(client, CreateInput([]));
 
         Assert.Equal(GazeDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal("refusal", result.Decision.Failure);
@@ -184,8 +176,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_MissingAnswerIsContainedAsAFailure()
     {
         ScriptedDecisionClient client = new(omitAnswer: true);
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(CreateInput([]));
+        GazeEvaluationResult result = await EvaluateAsync(client, CreateInput([]));
 
         Assert.Equal(GazeDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal("missing answer", result.Decision.Failure);
@@ -196,8 +187,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_UnknownChoiceValueIsContainedAsAFailure()
     {
         ScriptedDecisionClient client = new(answerValue: "char:hallucinated#face");
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(
+        GazeEvaluationResult result = await EvaluateAsync(client,
             CreateInput([Candidate("char:alpha", cueKey: "body", attention: 0.5d, prominence: 1d)]));
 
         Assert.Equal(GazeDecisionKind.Failure, result.Decision.Kind);
@@ -216,8 +206,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_TypedDecisionFailuresAreContainedWithTheFailureKind(DecisionFailure failure)
     {
         ScriptedDecisionClient client = new(decisionFailure: failure);
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(CreateInput([]));
+        GazeEvaluationResult result = await EvaluateAsync(client, CreateInput([]));
 
         Assert.Equal(GazeDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal($"decision failure {failure}", result.Decision.Failure);
@@ -230,8 +219,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_UnexpectedExceptionIsContainedAsAFailure()
     {
         ScriptedDecisionClient client = new(throwUnexpected: true);
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(CreateInput([]));
+        GazeEvaluationResult result = await EvaluateAsync(client, CreateInput([]));
 
         Assert.Equal(GazeDecisionKind.Failure, result.Decision.Kind);
         Assert.Equal("unexpected evaluation failure", result.Decision.Failure);
@@ -242,12 +230,11 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_CallerCancellationPropagates()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
 
         _ = await Assert.ThrowsAsync<OperationCanceledException>(
-            () => policy.EvaluateAsync(CreateInput([]), cancellation.Token));
+            () => EvaluateAsync(client, CreateInput([]), cancellation.Token));
     }
 
     /// <summary>
@@ -362,29 +349,6 @@ public sealed class DecisionGazePolicyTests
     public void CueValueEncoding_RejectsMalformedValues(string value)
         => Assert.False(GazePromptText.TryParseCueValue(value, out _, out _));
 
-    /// <summary>The first failure doubles the base interval; consecutive failures double up to the cap.</summary>
-    [Fact]
-    public void Backoff_FirstFailureDoublesTheIntervalThenDoublesUpToTheCap()
-    {
-        Assert.Equal(2d, GazeFailureBackoff.NextSeconds(0d, 1d));
-        Assert.Equal(4d, GazeFailureBackoff.NextSeconds(2d, 1d));
-        Assert.Equal(8d, GazeFailureBackoff.NextSeconds(4d, 1d));
-        Assert.Equal(GazeFailureBackoff.MaximumSeconds, GazeFailureBackoff.NextSeconds(16d, 1d));
-        Assert.Equal(GazeFailureBackoff.MaximumSeconds, GazeFailureBackoff.NextSeconds(30d, 1d));
-        Assert.Equal(1d, GazeFailureBackoff.NextSeconds(0d, 0.5d));
-    }
-
-    /// <summary>Invalid backoff arguments are rejected.</summary>
-    [Fact]
-    public void Backoff_RejectsInvalidArguments()
-    {
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() => GazeFailureBackoff.NextSeconds(0d, 0d));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() => GazeFailureBackoff.NextSeconds(0d, double.NaN));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() => GazeFailureBackoff.NextSeconds(-1d, 1d));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(
-            () => GazeFailureBackoff.NextSeconds(double.PositiveInfinity, 1d));
-    }
-
     /// <summary>The own-action phrase renders exactly the three model-facing forms.</summary>
     [Fact]
     public void OwnAction_RendersExactlyTheThreeModelFacingPhrases()
@@ -403,14 +367,13 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_ComposesTheScenePremiseIntoTheEvidence()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         const string premise = "A detention interview in the basement of the Charter Office of Compliance.";
-        _ = await policy.EvaluateAsync(CreateInput([], scenePremise: premise));
+        _ = await EvaluateAsync(client, CreateInput([], scenePremise: premise));
 
         DecisionRequest request = Assert.Single(client.Requests);
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
         Assert.DoesNotContain(premise, question.Instructions, StringComparison.Ordinal);
-        Assert.DoesNotContain(DecisionGazePolicy.ScenePremiseLabel, question.Instructions, StringComparison.Ordinal);
+        Assert.DoesNotContain("Scene premise:", question.Instructions, StringComparison.Ordinal);
         JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
         Assert.Equal(premise, evidence.GetProperty("premise").GetString());
     }
@@ -423,12 +386,11 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_OmitsThePremiseCleanlyWhenAbsentOrBlank(string? premise)
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
-        _ = await policy.EvaluateAsync(CreateInput([], scenePremise: premise));
+        _ = await EvaluateAsync(client, CreateInput([], scenePremise: premise));
 
         DecisionRequest request = Assert.Single(client.Requests);
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
-        Assert.DoesNotContain(DecisionGazePolicy.ScenePremiseLabel, question.Instructions, StringComparison.Ordinal);
+        Assert.DoesNotContain("Scene premise:", question.Instructions, StringComparison.Ordinal);
         JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
         _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("premise"));
     }
@@ -438,11 +400,10 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_TruncatesAnOverLongPremiseAtTheLastWhitespace()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
         string word = "premise";
         string longPremise = string.Join(' ', Enumerable.Repeat(word, 200));
 
-        _ = await policy.EvaluateAsync(CreateInput([], scenePremise: longPremise));
+        _ = await EvaluateAsync(client, CreateInput([], scenePremise: longPremise));
 
         DecisionRequest request = Assert.Single(client.Requests);
         JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
@@ -451,7 +412,7 @@ public sealed class DecisionGazePolicyTests
         Assert.True(ellipsisIndex > 0, "An over-long premise must be marked with an ellipsis.");
         Assert.Equal(ellipsisIndex, truncated.Length - 1);
         Assert.True(
-            truncated.Length - 1 <= DecisionGazePolicy.ScenePremiseCharacterBudget,
+            truncated.Length - 1 <= SceneDecisionSnapshot.PremiseCharacterBudget,
             $"The composed premise must respect the character budget; found {truncated.Length - 1}.");
         Assert.EndsWith("premise", truncated[..ellipsisIndex], StringComparison.Ordinal);
     }
@@ -461,8 +422,7 @@ public sealed class DecisionGazePolicyTests
     public async Task Evaluate_CarriesTheOfferedOptionsInTheDispatchMaterial()
     {
         ScriptedDecisionClient client = new();
-        DecisionGazePolicy policy = new(client);
-        GazeEvaluationResult result = await policy.EvaluateAsync(CreateInput(
+        GazeEvaluationResult result = await EvaluateAsync(client, CreateInput(
         [
             Candidate("char:bravo", cueKey: "body", attention: 0.9d, prominence: 2d),
             Candidate("char:alpha", cueKey: "face", attention: 0.42d, prominence: 1d),
@@ -486,17 +446,23 @@ public sealed class DecisionGazePolicyTests
         GazeEvaluationTrigger? trigger = null,
         IReadOnlyList<string>? recentEvents = null,
         string? scenePremise = null,
-        IReadOnlyList<GazeSceneCharacter>? sceneCharacters = null)
-        => new(
-            Owner,
-            candidates,
-            ownAction ?? GazeOwnAction.IdleAction,
-            currentGazeCueValue,
-            currentGazeDwellSeconds,
-            trigger ?? GazeEvaluationTrigger.Cadence,
-            recentEvents ?? [],
-            scenePremise,
-            sceneCharacters);
+        IReadOnlyList<SceneDecisionCharacter>? sceneCharacters = null)
+        => new(new(Owner, scenePremise, sceneCharacters ?? [], recentEvents ?? [],
+            (ownAction ?? GazeOwnAction.IdleAction).Describe(), currentGazeCueValue ?? "none", currentGazeDwellSeconds),
+            candidates, ownAction ?? GazeOwnAction.IdleAction, trigger ?? GazeEvaluationTrigger.Cadence);
+
+    private sealed record GazeEvaluationInput(SceneDecisionSnapshot Snapshot, IReadOnlyList<GazeCueCandidate> Candidates,
+        GazeOwnAction Action, GazeEvaluationTrigger Trigger);
+
+    private static async Task<GazeEvaluationResult> EvaluateAsync(IDecisionClient client, GazeEvaluationInput input,
+        CancellationToken token = default)
+    {
+        GazeEvaluationResult? result = null;
+        SceneDecisionRunner runner = new(client, () => input.Snapshot,
+            [() => DecisionGazePolicy.PrepareGroup(input.Candidates, input.Action, input.Trigger, r => result = r)]);
+        await runner.EvaluateAsync(token);
+        return result!;
+    }
 
     private static GazeCueCandidate Candidate(
         string subjectFullId,

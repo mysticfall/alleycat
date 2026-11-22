@@ -94,7 +94,7 @@ public abstract partial class Mind : Node
     private IComponentProjectionNotifier? _componentProjectionNotifier;
     private Func<ISceneContext> _sceneContextLoader = LoadCurrentSceneContext;
     private Func<IGameClock> _gameClockLoader = LoadDefaultGameClock;
-    private Func<IDecisionClient> _waitDecisionClientLoader = static ()
+    private Func<IDecisionClient> _sceneDecisionClientLoader = static ()
         => Game.Instance.GetRequiredService<IDecisionClient>();
     private Func<DecisionWaitTimingSettings> _waitTimingLoader = DecisionWaitTimingSettings.LoadOrDefault;
     private Func<double> _waitJitterSampler = static () => Random.Shared.NextDouble();
@@ -103,6 +103,16 @@ public abstract partial class Mind : Node
     /// a wait owns the window and a second concurrent wait is rejected.
     /// </summary>
     private object? _activeWait;
+    private SubjectSceneDecisions? _sceneDecisions;
+    internal SubjectSceneDecisions GetSceneDecisions() => _sceneDecisions ??= new(this, _sceneDecisionClientLoader(), _logger);
+    internal MindSessionTranscriptRecorder? DecisionTranscript
+    {
+        get => !WaitDiagnosticsSettings.EnableSessionTranscriptLogging
+        ? null : field ??= new(OwningCharacter.Id,
+            static () => ProjectSettings.GlobalizePath(MindSessionTranscriptRecorder.UserRootPath),
+            GameLoggerResolver.ResolveRequired<MindSessionTranscriptRecorder>());
+    }
+    internal void PumpSceneDecisions() => _sceneDecisions?.Pump(NodeLifetimeCancellationToken);
     private TaskCompletionSource _attendedSpeakerPulse = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private ICharacter? _cachedOwningCharacter;
     private bool _freshUrgencyPending;
@@ -256,6 +266,7 @@ public abstract partial class Mind : Node
         if (!IsNodeLifetimeEnded)
         {
             ProcessRetainedObservationExpiry();
+            PumpSceneDecisions();
         }
     }
 
@@ -1720,20 +1731,15 @@ public abstract partial class Mind : Node
 
         try
         {
-            // The client and the timing acquire here, fail-fast on a broken decision configuration exactly as the
-            // gaze selector's bind-time acquisition.
-            IDecisionClient client = _waitDecisionClientLoader();
             DecisionWaitTimingSettings timing = _waitTimingLoader();
             var controller = new DecisionWaitController(
                 this,
-                client,
                 WaitEvaluationIntervalSeconds,
                 timing,
                 _waitJitterSampler,
                 GetStopwatchSeconds,
                 _logger);
-            onGateEntered?.Invoke();
-            ObservationWaitWake wake = await controller.RunAsync(durationSeconds, waitToken).ConfigureAwait(false);
+            ObservationWaitWake wake = await controller.RunAsync(durationSeconds, waitToken, onGateEntered).ConfigureAwait(false);
             return new WaitOutcome(wake);
         }
         finally
@@ -1763,11 +1769,13 @@ public abstract partial class Mind : Node
             "A deliberate wait duration must be finite and positive.");
     }
 
+    internal void SetSceneDecisionClientLoaderForTesting(Func<IDecisionClient> loader) => _sceneDecisionClientLoader = loader;
+
     /// <summary>Replaces the wait decision client before a wait for focused runtime coverage.</summary>
-    internal void SetWaitDecisionClientForTesting(IDecisionClient decisionClient)
+    internal void SetSceneDecisionClientForTesting(IDecisionClient decisionClient)
     {
         ArgumentNullException.ThrowIfNull(decisionClient);
-        _waitDecisionClientLoader = () => decisionClient;
+        _sceneDecisionClientLoader = () => decisionClient;
     }
 
     /// <summary>

@@ -81,7 +81,7 @@ public sealed class ReadLoreFlowIntegrationTests
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, ally, vadim, player], content));
         // The speak batch's automatic park (§12) resolves immediately through the scripted always-act wait
         // client, keeping this fact's consecutive-turn flow as fast as before parking existed.
-        mind.SetWaitDecisionClientForTesting(new ScriptedActWaitDecisionClient());
+        mind.SetSceneDecisionClientForTesting(new ScriptedActWaitDecisionClient());
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
         // independent of a developer machine's `AI:VisualContextMode` override.
@@ -207,7 +207,7 @@ public sealed class ReadLoreFlowIntegrationTests
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
         // The wait completes through the decision poll's act verdict: a deterministic scripted client keeps the
         // batch-retention claim independent of decision timing (wait experiment §1).
-        mind.SetWaitDecisionClientForTesting(new ScriptedActWaitDecisionClient());
+        mind.SetSceneDecisionClientForTesting(new ScriptedActWaitDecisionClient());
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
         // independent of a developer machine's `AI:VisualContextMode` override.

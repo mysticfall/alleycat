@@ -115,16 +115,22 @@ internal sealed class MindTranscriptToolInvocation(
     }
 }
 
-/// <summary>
-/// One chronological index entry derived from a recorded cycle at record time (AI-011 TR-18): the entry holds only
-/// the data the index renders — the per-character turn number, the resolved outcome, and the terminal invocation
-/// objects whose blocks the index shares with the turn page. Full request/response graphs are never retained for
-/// the index.
-/// </summary>
+/// <summary>Record-time order is reserved before asynchronous index writes begin.</summary>
+internal abstract record MindTranscriptIndexItem
+{
+    public long Order
+    {
+        get; init;
+    }
+}
+
+internal sealed record MindTranscriptIndexNote(string Text) : MindTranscriptIndexItem;
+
+/// <summary>The bounded part of a settled turn needed to reproduce its invocation blocks in the index.</summary>
 internal sealed record MindTranscriptIndexEntry(
     int TurnNumber,
     MindTranscriptCycleOutcome Outcome,
-    IReadOnlyList<MindTranscriptToolInvocation> ToolInvocations);
+    IReadOnlyList<MindTranscriptToolInvocation> ToolInvocations) : MindTranscriptIndexItem;
 
 /// <summary>
 /// One AI-013 image carried by this cycle's fresh request-suffix messages — the fabricated auto-mode

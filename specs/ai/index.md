@@ -99,7 +99,7 @@ roleplay without breaking immersion or performance.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory Source Compilation,
-   AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Head Target Selection, AI-008: Scenario,
+   AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Gaze Target Selection, AI-008: Scenario,
    AI-009: Attention-Driven Head Orientation, AI-011: Mind Session Transcripts,
    AI-012: Character Dialogue Examples, AI-013: Visual AI Context, and AI-014: Decision Model API are identified
    as current normative child contracts for their respective scopes.

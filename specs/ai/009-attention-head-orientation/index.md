@@ -85,8 +85,7 @@ leaving eye presentation to VISION-001, which owns eye–head turn synchronisati
      geometry.
 6. Glance versus sustained is classified only from continuous same-anchor assignment duration measured on
    `LookTarget`; assignment of a different anchor or a clear resets the timing. There is no conversation or speech
-   detection: conversation partners produce sustained centring because they are sustained primary targets under
-   AI-007 dwell semantics.
+   detection: a conversation partner can engage sustained centring if the NPC keeps looking at the same anchor.
 7. Glance head-hold retains the pre-glance commanded orientation in the character-relative anatomical frame; smoothing
    continues towards that command. It neither freezes the realised pose nor follows the previous person's movement.
    During a brief out-of-cone glance, request only the necessary comfort correction under Technical Requirement 25.
@@ -119,9 +118,8 @@ leaving eye presentation to VISION-001, which owns eye–head turn synchronisati
 12. When `LookTarget` is cleared, ease towards the current upstream roll-free face pose while influence decays to 0.
     At zero influence native animation owns the pose, including authored roll. IVision's existing fallback gaze
     (1 metre ahead) stays eyes-only. Re-engagement uses explicit current state, not a prior episode's held command.
-13. The centring delay (default approximately 0.6 s) must exceed AI-007's configured secondary dwell so brief
-    secondary glances never trigger centring. This relationship is a tuning constraint, not an enforced contract:
-    both values remain independently tunable, and the defaults must keep a safe margin.
+13. A glance ending before the centring delay (default approximately 0.6 s) does not trigger centring. The head
+    controller owns that delay independently of how AI-007 chose the anchor.
 
 ### Reference Frame and Determinism
 
@@ -299,8 +297,7 @@ leaving eye presentation to VISION-001, which owns eye–head turn synchronisati
   `LookTarget` assignment timing, glance classification, and glance head-hold semantics.
 - Per-axis asymmetric comfort cone and orientation envelope with physiological defaults, best-effort edge strain,
   and release to neutral.
-- Reaction delay, rate-limited smoothed rotation, influence ramp, release hysteresis, and the centring-delay versus
-  AI-007 secondary-dwell tuning constraint.
+- Reaction delay, rate-limited smoothed rotation, influence ramp, release hysteresis, and the centring delay.
 - Independent upstream geometry, authored anatomical envelope, stable-frame command and delayed solved-face feedback.
 - Roll-free intent and non-recursive upstream origin geometry: the pivot-orbit construction with unset-pivot
   fallback, extended on the downward regime by the animation-anchored, rest-bounded fold family with continuous
@@ -381,8 +378,7 @@ original criteria, with any reclassification identified separately.
     classification from continuous assignment timing with reset on anchor change or clear, in-cone head-hold, minimal
     residual for brief out-of-cone glances, glance-end return, release hysteresis, envelope edge clamping, and
     clear-to-neutral with zero influence.
-11. Timing tests verify that the default centring delay exceeds the configured AI-007 secondary dwell and pin the
-    centring-delay boundary behaviour.
+11. Timing tests pin the centring-delay boundary, including a brief assignment ending before the delay elapses.
 12. Reference tests verify authored envelope independence from idle animation/solved output, root transport and actual
     solved-face-local comfort geometry, including coupled axes, constrained solves and partial influence. Stationary
     targets reached through different histories must not absorb solved pose into upstream references.

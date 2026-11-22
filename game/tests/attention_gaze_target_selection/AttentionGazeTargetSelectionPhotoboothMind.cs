@@ -23,8 +23,8 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothMind : MindBas
     {
         AttentionGazeTargetSelector selector = this.RequireNode<AttentionGazeTargetSelector>("AttentionGazeTargetSelector");
         selector.EvaluationIntervalSeconds = 0.01f;
-        selector.SetSceneContextLoaderForTesting(CreateSceneContext);
-        selector.SetDecisionClientForTesting(DominantSubjectDecisionClient.Instance);
+        SetSceneContextLoaderForTesting(CreateSceneContext);
+        SetSceneDecisionClientForTesting(DominantSubjectDecisionClient.Instance);
     }
 
     /// <inheritdoc />

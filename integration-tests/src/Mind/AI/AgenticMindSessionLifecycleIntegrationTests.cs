@@ -607,7 +607,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
         // The session's automatic post-speech park (§12) resolves immediately through the scripted always-act
         // wait client, so this fact's consecutive-turn flow stays as fast as before parking existed.
-        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         mind.AddChild(new SpeechPerception());
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
@@ -1847,7 +1847,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         clientProvider.EnqueueHoldForever();
         TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
         ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.NoReason);
-        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.SetSceneDecisionClientForTesting(waitDecision);
         // Deferred verdicts arm no deadline that could expire inside the observation window.
         mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
         // The cadence never elapses inside the observation window: every evaluation below is nudge-driven.
@@ -1862,8 +1862,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // The attended speaker's start nudges an immediate evaluation; the deferred verdict keeps the wait.
             source.BeginSpeechWindow();
             source.EmitSpeechStarted(new SpeechSegmentMetadata("reply-group", 0));
-            await WaitUntilAsync(sceneTree, () => waitDecision.Triggers.Count >= 1);
-            Assert.Equal(["a speaker this character attends to just started speaking"], waitDecision.Triggers);
+            await WaitUntilAsync(sceneTree, () => waitDecision.Requests.Count >= 1);
+            _ = Assert.Single(waitDecision.Requests);
             await TestUtils.WaitForFramesAsync(sceneTree, 3);
             Assert.True(mind.HasActiveObservationWait);
             _ = Assert.Single(clientProvider.Requests);
@@ -1879,10 +1879,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             source.EndSpeechWindow();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
 
-            Assert.Equal(2, waitDecision.Triggers.Count);
-            Assert.Equal(
-                "a speaker this character attends to just finished speaking",
-                waitDecision.Triggers[1]);
+            Assert.Equal(2, waitDecision.Requests.Count);
+            Assert.False(((JsonElement)waitDecision.Requests[1].Evidence).TryGetProperty("trigger", out _));
             Assert.False(mind.HasActiveObservationWait);
             Assert.Contains(
                 clientProvider.Requests[1].SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
@@ -1939,7 +1937,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 EnableReasoningLogging: true,
                 EnableSessionTranscriptLogging: false,
                 EnableDecisionPayloadLogging: true));
-            mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+            mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
             mind.WaitEvaluationIntervalSeconds = 0.05f;
             Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -1990,7 +1988,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             quietProvider.EnqueueCall("wait");
             quietProvider.EnqueueHoldForever();
             TestAgenticMind quietMind = CreateVoiceRoutedMind(quietOwner, quietSpeaker, quietPlayer, quietProvider);
-            quietMind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+            quietMind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
             quietMind.WaitEvaluationIntervalSeconds = 0.05f;
             Node quietRoot = AddVoiceRoute(sceneTree, quietHearing, quietOwnerVoice, quietSource, quietMind);
 
@@ -2051,14 +2049,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             EnableSessionTranscriptLogging: false,
             EnableDecisionPayloadLogging: true));
         ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.MayAct);
-        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.SetSceneDecisionClientForTesting(waitDecision);
         mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(3600d, 600d, 3600d, 0d));
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
         try
         {
-            await WaitUntilAsync(sceneTree, () => waitDecision.Triggers.Count >= 2);
+            await WaitUntilAsync(sceneTree, () => waitDecision.Requests.Count >= 2);
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             string[] files = [.. Directory.GetFiles(CategoryDumpDirectory(dumpRoot, "owner", "wait")).Order(StringComparer.Ordinal)];
@@ -2136,7 +2134,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             Failure = DecisionFailure.Timeout,
         };
-        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.SetSceneDecisionClientForTesting(waitDecision);
         // The failures' no-reason deadline must not expire inside the observation window.
         mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
         mind.WaitEvaluationIntervalSeconds = 0.05f;
@@ -2145,7 +2143,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             // Two failed evaluations prove the poll survived its first contained failure and dumped both.
-            await WaitUntilAsync(sceneTree, () => waitDecision.Triggers.Count >= 2);
+            await WaitUntilAsync(sceneTree, () => waitDecision.Requests.Count >= 2);
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             string waitDirectory = CategoryDumpDirectory(dumpRoot, "owner", "wait");
@@ -2214,7 +2212,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             new Dictionary<string, object?> { ["speech"] = "Hello there." }));
         clientProvider.EnqueueHoldForever();
         TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
-        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -2293,7 +2291,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         clientProvider.EnqueueHoldForever();
         TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
         ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.ActNow);
-        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.SetSceneDecisionClientForTesting(waitDecision);
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -2309,7 +2307,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.DoesNotContain(
                 nextRequest.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
                 static call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
-            Assert.Empty(waitDecision.Triggers);
+            Assert.Empty(waitDecision.Requests);
         }
         finally
         {
@@ -2327,7 +2325,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// fabricated park exchange after the batch.
     /// </summary>
     [Fact]
-    public async Task Speak_WithRejectedTrailingWait_StillParks()
+    public Task Speak_WithRejectedTrailingWait_StillParks() => VerifyRejectedWaitAsync(false);
+
+    /// <summary>A valid explicit wait whose client cannot be acquired must not suppress the committed speech's park.</summary>
+    [Fact]
+    public Task Speak_WithClientAcquisitionFailure_StillParks() => VerifyRejectedWaitAsync(true);
+
+    private static async Task VerifyRejectedWaitAsync(bool failAcquisition)
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         Hearing hearing = new();
@@ -2354,11 +2358,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             new FunctionCallContent(
                 "wait-call",
                 "wait",
-                new Dictionary<string, object?> { ["seconds"] = -1f }));
+                new Dictionary<string, object?> { ["seconds"] = failAcquisition ? 30f : -1f }));
         clientProvider.EnqueueHoldForever();
         TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
         ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.ActNow);
-        mind.SetWaitDecisionClientForTesting(waitDecision);
+        int acquisitions = 0;
+        mind.SetSceneDecisionClientLoaderForTesting(() => ++acquisitions == 1 && failAcquisition
+            ? throw new DecisionException(DecisionFailure.Configuration, "Scripted acquisition failure.") : waitDecision);
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -2386,7 +2392,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 nextRequest,
                 content => content is FunctionCallContent { CallId: { } callId } && callId == fabricatedCall.CallId);
             Assert.True(fabricatedCallIndex > waitResultIndex);
-            Assert.NotEmpty(waitDecision.Triggers);
+            Assert.NotEmpty(waitDecision.Requests);
         }
         finally
         {
@@ -2433,7 +2439,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 new Dictionary<string, object?> { ["speech"] = "Can I ask you something?" }));
         clientProvider.EnqueueHoldForever();
         TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
-        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -2967,7 +2973,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         // The session's automatic post-behaviour park (§12) resolves immediately for every voice-routed mind:
         // an always-act wait client on a fast cadence keeps consecutive-turn fixtures as fast as before parking
         // existed, while facts that configure their own wait clients or cadences override these afterwards.
-        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.SetSceneDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         mind.AddChild(new SpeechPerception());
         // Start and resume cues are gated by source-generic attention, so the routed speaker stays attended for
@@ -3215,15 +3221,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             set;
         }
 
-        public List<string> Triggers { get; } = [];
+        public List<DecisionRequest> Requests { get; } = [];
 
         public Task<DecisionResult> EvaluateAsync(
             DecisionRequest request,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string? trigger = Assert.IsType<JsonElement>(request.Evidence).GetProperty("trigger").GetString();
-            Triggers.Add(trigger ?? string.Empty);
+            Requests.Add(request);
             return Failure is { } failure
                 ? throw new DecisionException(failure, "Scripted wait decision failure.")
                 : Task.FromResult(ScriptedWaitVerdicts.Answer(request, Verdict));

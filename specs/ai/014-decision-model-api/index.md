@@ -8,7 +8,7 @@ title: Decision Model API
 ## Requirement
 
 Provide a C# API for typed decisions over shared evidence, independent of conversational LLM generation.
-This is the normative contract for implementing and reviewing the decision subsystem, not a gameplay integration.
+This page owns the client and transport; [AI-002][scene-decisions] owns per-subject gameplay dispatch.
 
 ## Goal
 
@@ -24,8 +24,8 @@ experiment provider, and documented compatibility does not establish live availa
    paired true/false guidance without losing either criterion when switching backends.
 2. Users can configure a decision backend separately from conversational AI through shipped/user YAML precedence.
    With no decision configuration, the default backend is the local unauthenticated SystemOne service, so a consumer
-   gets working typed decisions with zero configuration and no API key. Ordinary gameplay still starts without
-   sending decision requests automatically.
+   gets working typed decisions with zero configuration and no API key. Configuration alone sends no request;
+   a gameplay consumer calls the client when its gates have questions.
 3. Callers can cancel evaluation and distinguish refusal, configuration, transport and invalid-output failures from
    valid decisions. Missing optional metadata must not become invented confidence, probabilities or cost.
 
@@ -153,7 +153,7 @@ experiment provider, and documented compatibility does not establish live availa
 - The common C# decision boundary, independent configuration, all three wire adapters and managed transport
   lifecycle.
 - The zero-configuration SystemOne default targeting the shipped local Docker `kev-decision-api` service.
-- Deterministic fixtures, focused validation and a small explicit-client consumer example without gameplay changes.
+- Deterministic fixtures, focused validation and a small explicit-client consumer example.
 
 ## Out Of Scope
 
@@ -178,8 +178,8 @@ experiment provider, and documented compatibility does not establish live availa
 2. **UR-2; TR-9–11, 13:** Verify independent section binding, shipped/user precedence, base paths with/without
    trailing slash for every dialect, missing/invalid settings and finite positive timeout. Missing configuration
    allows ordinary startup and yields the SystemOne defaults; explicitly selected hosted kinds still fail on
-   missing required settings; examples are inactive, credentials remain user-owned and startup/tests send no
-   automatic requests.
+   missing required settings; examples are inactive, credentials remain user-owned and client setup sends no
+   request. Automated compatibility tests do not require a live provider.
 3. **UR-3; TR-2–6, 12–13:** Focused tests cover cancellation, timeout, non-success HTTP, bounded responses,
    malformed/mismatched answers, invalid options/probabilities, the single symmetric distribution-sum and
    score-consistency allowance (drift in both directions accepted, sums outside it rejected) and unsupported
@@ -203,6 +203,7 @@ experiment provider, and documented compatibility does not establish live availa
 - [OpenAI .NET SDK](https://github.com/openai/openai-dotnet): verify actual SDK support before relying on typed APIs.
 
 [core-options]: ../../core/002-configuration-api/index.md
+[scene-decisions]: ../002-agent-runtime/index.md#per-subject-scene-decisions
 [core-config]: ../../core/006-microsoft-configuration-integration/index.md
 [or]: https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request.md
 [openai]: https://developers.openai.com/api/docs/guides/decisions

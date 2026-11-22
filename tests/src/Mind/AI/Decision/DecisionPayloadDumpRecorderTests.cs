@@ -63,7 +63,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
                     ]),
             ]);
 
-        recorder.Record(dump);
+        _ = recorder.Record(dump);
 
         string file = Assert.Single(Directory.GetFiles(CategoryDirectory("gaze")));
         Assert.Equal(
@@ -129,7 +129,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             Evidence: evidence,
             Questions: [new DecisionPayloadQuestion("gaze_target", "Where should `char:rin` look?")]);
 
-        recorder.Record(dump);
+        _ = recorder.Record(dump);
 
         string contents = File.ReadAllText(Assert.Single(Directory.GetFiles(CategoryDirectory("gaze"))));
         Assert.Contains("저기요", contents, StringComparison.Ordinal);
@@ -155,7 +155,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             Evidence: null,
             Questions: [new DecisionPayloadQuestion("gaze_target", "Where should `char:rin` look?")]);
 
-        recorder.Record(dump);
+        _ = recorder.Record(dump);
 
         string failedFile = Assert.Single(Directory.GetFiles(CategoryDirectory("gaze")));
         Assert.EndsWith("_char-rin_GazeAttendedSpeakerEnded_failed.json", Path.GetFileName(failedFile));
@@ -184,7 +184,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             NullLogger.Instance);
         DecisionPayloadDump dump = CreateMinimalDump();
 
-        recorder.Record(dump);
+        _ = recorder.Record(dump);
 
         Assert.False(Directory.Exists(_root) && Directory.GetFiles(_root).Length > 0);
     }
@@ -200,9 +200,9 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
         DecisionPayloadDumpRecorder gaze = CreateRecorder();
         DecisionPayloadDumpRecorder wait = new("wait", "char:rin", "rin", () => "/unused-physical-root", NullLogger.Instance);
 
-        gaze.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now));
-        gaze.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now.AddMilliseconds(50)));
-        wait.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now));
+        _ = gaze.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now));
+        _ = gaze.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now.AddMilliseconds(50)));
+        _ = wait.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now));
 
         // One session directory, one character directory, shared by both log families' producers.
         string sessionDirectory = Assert.Single(Directory.GetDirectories(_root));
@@ -225,7 +225,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
             () => "/unused-physical-root",
             NullLogger.Instance);
 
-        recorder.Record(CreateMinimalDump());
+        _ = recorder.Record(CreateMinimalDump());
 
         string dumpRoot = Path.Combine(
             Assert.Single(Directory.GetDirectories(Assert.Single(Directory.GetDirectories(_root)))),

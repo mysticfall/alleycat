@@ -631,7 +631,7 @@ public sealed class PerceptionMindIntegrationTests
         using CancellationTokenSource cancellation = new();
         try
         {
-            mind.SetWaitDecisionClientForTesting(new NeverActWaitClient());
+            mind.SetSceneDecisionClientForTesting(new NeverActWaitClient());
             mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
             Task wait = mind.WaitForNextTurnForTestAsync(cancellation.Token);
             source.EmitSpeechResumed(new SpeechSegmentMetadata("automatic-group", 1));
@@ -693,7 +693,7 @@ public sealed class PerceptionMindIntegrationTests
         using CancellationTokenSource cancellation = new();
         try
         {
-            mind.SetWaitDecisionClientForTesting(new NeverActWaitClient());
+            mind.SetSceneDecisionClientForTesting(new NeverActWaitClient());
             mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
             Task wait = mind.WaitForNextTurnForTestAsync(cancellation.Token);
             source.EmitSpeechStarted(new SpeechSegmentMetadata("attended-group", 0));

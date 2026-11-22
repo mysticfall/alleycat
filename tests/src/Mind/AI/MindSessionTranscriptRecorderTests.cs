@@ -423,6 +423,45 @@ public sealed partial class MindSessionTranscriptRecorderTests : IDisposable
             => throw new InvalidOperationException("The logger failed.");
     }
 
+    /// <summary>A turn entered first stays before later decisions even when its file write finishes last.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Index_OrdersTurnAndDecisionByRecordEntry(bool delayTurn)
+    {
+        MindSessionTranscriptRecorder.SetRootPathOverrideForTesting(null);
+        using ManualResetEventSlim release = new(!delayTurn);
+        TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        MindSessionTranscriptRecorder turn = new("owner", () =>
+        {
+            _ = entered.TrySetResult();
+            return release.Wait(TimeSpan.FromSeconds(5)) ? _rootDirectory : throw new TimeoutException();
+        }, _logger);
+        MindSessionTranscriptRecorder decision = new("owner", () => _rootDirectory, _logger);
+        var write = Task.Run(() => turn.Record(CreateCycle()));
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (!delayTurn)
+            {
+                await write;
+            }
+
+            decision.RecordSceneDecision("response", "later", null);
+            await MindSessionTranscriptRecorder.FlushDecisionWritesForTesting();
+        }
+        finally
+        {
+            release.Set();
+            await write;
+        }
+
+        string index = ReadIndex("owner");
+        Assert.Contains("[Turn 0001]", index);
+        Assert.Contains("`response` → `later`", index);
+        Assert.True(index.IndexOf("[Turn 0001]", StringComparison.Ordinal) < index.IndexOf("`response`", StringComparison.Ordinal), index);
+    }
+
     private MindSessionTranscriptRecorder CreateRecorder(string characterId)
         => new(characterId, () => throw new InvalidOperationException(
             "The root-path override must keep unit-test writes away from user:// resolution."),

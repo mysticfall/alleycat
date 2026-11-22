@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Text.Json;
-using AlleyCat.Mind.Attention;
 
 namespace AlleyCat.Mind.AI.Decision;
 
@@ -40,16 +38,7 @@ internal sealed record DecisionWaitTrigger(DecisionWaitTriggerKind Kind)
         _ => Kind.ToString(),
     };
 
-    /// <summary>Gets the one-line model-facing evidence phrase naming what prompted this evaluation.</summary>
-    public string DescribeEvidence() => Kind switch
-    {
-        DecisionWaitTriggerKind.Cadence => "periodic check while waiting",
-        DecisionWaitTriggerKind.PlayerSpeech => "the player just said something",
-        DecisionWaitTriggerKind.AttendedSpeakerStart => "a speaker this character attends to just started speaking",
-        DecisionWaitTriggerKind.AttendedSpeakerEnd => "a speaker this character attends to just finished speaking",
-        DecisionWaitTriggerKind.MembershipChange => "the characters present in the scene changed",
-        _ => Kind.ToString(),
-    };
+
 }
 
 /// <summary>What the waiting character is currently doing, for the own-action evidence.</summary>
@@ -105,30 +94,6 @@ internal sealed record DecisionWaitOwnAction(
         _ => "addressee undecided",
     };
 }
-
-/// <summary>Everything one wait-decision evaluation needs, composed on the Godot thread before dispatch.</summary>
-/// <param name="OwnerFullId">The waiting character's canonical full ID.</param>
-/// <param name="SceneCharacters">The scene's other characters with their lore descriptions.</param>
-/// <param name="RecentEvents">Bounded canonical renderings of recent observations, oldest first.</param>
-/// <param name="OwnAction">What the waiting character is doing with speech.</param>
-/// <param name="CurrentGazeCueValue">The character's applied gaze cue value (<c>subject#cue</c>), or null when clear.</param>
-/// <param name="CurrentGazeDwellSeconds">Seconds the current gaze cue has been applied.</param>
-/// <param name="Trigger">Why this evaluation is running.</param>
-/// <param name="ScenePremise">The verbatim authored scenario premise, or null when none is available.</param>
-internal sealed record DecisionWaitEvaluationInput(
-    string OwnerFullId,
-    IReadOnlyList<DecisionWaitSceneCharacter> SceneCharacters,
-    IReadOnlyList<string> RecentEvents,
-    DecisionWaitOwnAction OwnAction,
-    string? CurrentGazeCueValue,
-    double CurrentGazeDwellSeconds,
-    DecisionWaitTrigger Trigger,
-    string? ScenePremise = null);
-
-/// <summary>One scene character in the wait evidence roster, summarised by lore.</summary>
-/// <param name="FullId">Canonical character identity.</param>
-/// <param name="Description">The character's authored lore description, or null when none is available.</param>
-internal sealed record DecisionWaitSceneCharacter(string FullId, string? Description = null);
 
 /// <summary>What one completed wait evaluation decided.</summary>
 internal enum DecisionWaitDecisionKind
@@ -187,7 +152,7 @@ internal sealed record DecisionWaitEvaluationResult(
 /// question — resolves to a <see cref="DecisionWaitDecisionKind.Failure" /> decision that keeps waiting; only
 /// caller cancellation propagates. The policy never throws for provider-side causes and never touches Godot state.
 /// </remarks>
-internal sealed class DecisionWaitPolicy
+internal static class DecisionWaitPolicy
 {
     /// <summary>Model-facing identity of the response-status choice question.</summary>
     internal const string ResponseQuestionName = "response";
@@ -212,14 +177,6 @@ internal sealed class DecisionWaitPolicy
 
     /// <summary>The subject has no particular reason to act.</summary>
     internal const string NoReasonValue = "no_reason";
-
-    private readonly IDecisionClient _client;
-
-    public DecisionWaitPolicy(IDecisionClient client)
-    {
-        ArgumentNullException.ThrowIfNull(client);
-        _client = client;
-    }
 
     /// <summary>
     /// Maps one validated answer pair to a decision: an arrived response or <c>must_act</c> starts the agent now
@@ -249,51 +206,18 @@ internal sealed class DecisionWaitPolicy
                     : DecisionWaitDecision.DeferDecision(DecisionWaitArm.NoReason);
     }
 
-    /// <summary>Evaluates one wait decision. Composition runs synchronously before the first await.</summary>
-    public async Task<DecisionWaitEvaluationResult> EvaluateAsync(
-        DecisionWaitEvaluationInput input,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-
-        long compositionStart = Stopwatch.GetTimestamp();
-        ChoiceQuestion response = ComposeResponseQuestion(input.OwnerFullId);
-        ChoiceQuestion initiative = ComposeInitiativeQuestion(input.OwnerFullId);
-        JsonElement evidence = ComposeEvidence(input);
-        IReadOnlyList<DecisionPayloadQuestion> dispatched = [Describe(response), Describe(initiative)];
-        long compositionEnd = Stopwatch.GetTimestamp();
-
-        long decisionStart = Stopwatch.GetTimestamp();
-        DecisionWaitDecision decision;
-        List<DecisionPayloadAnswer> answers = [];
-        try
+    internal static SceneDecisionGroup PrepareGroup(Action<DecisionWaitEvaluationResult> apply, CancellationToken lifetime = default) => new(
+        subject => [ComposeResponseQuestion(subject), ComposeInitiativeQuestion(subject)],
+        receipt =>
         {
-            DecisionResult result = await _client
-                .EvaluateAsync(new DecisionRequest(evidence, [response, initiative]), cancellationToken)
-                .ConfigureAwait(false);
-            decision = ResolveAnswers(result, answers);
-        }
-        catch (DecisionException exception)
-        {
-            decision = DecisionWaitDecision.Failed($"decision failure {exception.Failure}");
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            decision = DecisionWaitDecision.Failed("unexpected evaluation failure");
-        }
+            List<DecisionPayloadAnswer> answers = [];
+            DecisionWaitDecision decision = receipt.Failure is { } failure ? DecisionWaitDecision.Failed(failure)
+                : ResolveAnswers(receipt.Answers, answers);
+            apply(new(decision, answers, receipt.CompositionMs, receipt.DecisionMs,
+                receipt.Evidence?.GetRawText().Length ?? 0, receipt.Evidence, receipt.Questions));
+        }, lifetime);
 
-        long decisionEnd = Stopwatch.GetTimestamp();
-        return new DecisionWaitEvaluationResult(
-            decision,
-            answers,
-            ElapsedMilliseconds(compositionStart, compositionEnd),
-            ElapsedMilliseconds(decisionStart, decisionEnd),
-            evidence.GetRawText().Length,
-            evidence,
-            dispatched);
-    }
-
-    private static DecisionWaitDecision ResolveAnswers(DecisionResult result, List<DecisionPayloadAnswer> answers)
+    private static DecisionWaitDecision ResolveAnswers(IReadOnlyDictionary<string, DecisionAnswer> result, List<DecisionPayloadAnswer>? answers)
     {
         string? responseFailure = TryReadChoice(result, ResponseQuestionName, answers, out string? response);
         string? initiativeFailure = TryReadChoice(result, InitiativeQuestionName, answers, out string? initiative);
@@ -305,13 +229,13 @@ internal sealed class DecisionWaitPolicy
     }
 
     private static string? TryReadChoice(
-        DecisionResult result,
+        IReadOnlyDictionary<string, DecisionAnswer> result,
         string name,
-        List<DecisionPayloadAnswer> answers,
+        List<DecisionPayloadAnswer>? answers,
         out string? value)
     {
         value = null;
-        if (!result.ByName.TryGetValue(name, out DecisionAnswer? answer) || answer is null)
+        if (!result.TryGetValue(name, out DecisionAnswer? answer) || answer is null)
         {
             return "missing answer";
         }
@@ -326,19 +250,10 @@ internal sealed class DecisionWaitPolicy
             return "unexpected answer kind";
         }
 
-        answers.Add(new DecisionPayloadAnswer(name, choice.Value, choice.Probabilities, choice.Confidence));
+        answers?.Add(new DecisionPayloadAnswer(name, choice.Value, choice.Probabilities, choice.Confidence));
         value = choice.Value;
         return null;
     }
-
-    private static long ElapsedMilliseconds(long start, long end)
-        => (long)Stopwatch.GetElapsedTime(start, end).TotalMilliseconds;
-
-    private static DecisionPayloadQuestion Describe(ChoiceQuestion question)
-        => new(
-            question.Name,
-            question.Instructions,
-            [.. question.Options.Select(static option => new DecisionPayloadQuestionOption(option.Value, option.Criteria))]);
 
     /// <summary>
     /// Composes the response-status question. A response may be spoken or acted — after an order to sit down, the
@@ -390,68 +305,4 @@ internal sealed class DecisionWaitPolicy
                     + "staying quiet suits them."),
         ]);
 
-    /// <summary>
-    /// Renders the verbatim authored scene premise for the evidence's premise field, or nothing when absent: the
-    /// text up to the gaze character budget, cut at the last whitespace with an ellipsis when longer. The wait
-    /// questions carry no premise text — the context owns it.
-    /// </summary>
-    private static string? DescribeScenePremise(string? scenePremise)
-    {
-        if (string.IsNullOrWhiteSpace(scenePremise))
-        {
-            return null;
-        }
-
-        string premise = scenePremise.Trim();
-        if (premise.Length <= DecisionGazePolicy.ScenePremiseCharacterBudget)
-        {
-            return premise;
-        }
-
-        int cut = premise.LastIndexOf(' ', DecisionGazePolicy.ScenePremiseCharacterBudget);
-        if (cut <= 0)
-        {
-            cut = DecisionGazePolicy.ScenePremiseCharacterBudget;
-        }
-
-        return $"{premise[..cut]}…";
-    }
-
-    private static JsonElement ComposeEvidence(DecisionWaitEvaluationInput input)
-    {
-        Dictionary<string, object?> evidence = [];
-
-        // The premise field appears only when a premise exists; absence is an omitted field, never a null.
-        if (DescribeScenePremise(input.ScenePremise) is { } premise)
-        {
-            evidence.Add("premise", premise);
-        }
-
-        evidence.Add("characters", input.SceneCharacters
-                .Select(static character => character.Description is null
-                    ? new Dictionary<string, object?> { ["id"] = character.FullId }
-                    : new Dictionary<string, object?>
-                    {
-                        ["id"] = character.FullId,
-                        ["description"] = character.Description,
-                    })
-                .ToArray());
-        // The history lines are first-person renderings from the owner's perspective; the label states whose
-        // experiences they are so the "you" of the question and the "I" of the history can never diverge.
-        evidence.Add("recent_history", new Dictionary<string, object?>
-        {
-            ["perspective"] = input.OwnerFullId,
-            ["note"] = $"first-person lines are from `{input.OwnerFullId}`'s perspective, as they experienced them",
-            ["events"] = input.RecentEvents.ToArray(),
-        });
-        evidence.Add("own_action", input.OwnAction.Describe());
-        evidence.Add("current_gaze", new Dictionary<string, object?>
-        {
-            ["cue"] = input.CurrentGazeCueValue,
-            ["dwell_seconds"] = Math.Round(input.CurrentGazeDwellSeconds, 1),
-        });
-        evidence.Add("trigger", input.Trigger.DescribeEvidence());
-
-        return JsonSerializer.SerializeToElement(evidence);
-    }
 }

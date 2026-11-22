@@ -232,7 +232,7 @@ internal sealed partial class VadimInterrogationScenario
         mind.ClientProvider = clientProvider;
         // The scripted speak turn's automatic park (§12) resolves immediately through the always-act wait client,
         // so the scenario's request cadence stays deterministic without any decision-service dependency.
-        mind.SetWaitDecisionClientForTesting(new AlwaysActWaitDecisionClient());
+        mind.SetSceneDecisionClientForTesting(new AlwaysActWaitDecisionClient());
         mind.WaitEvaluationIntervalSeconds = 0.05f;
         mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
             EnableRequestResponseLogging: false,

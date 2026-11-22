@@ -28,7 +28,7 @@ persistent event timeline remains canonical memory; the provider transcript is d
    through some other channel the NPC must wait for.
 3. The NPC can choose a quiet period in real seconds. It gets another chance to act at the requested deadline or
    earlier if circumstances warrant it. A wake is an opportunity, not a command: the NPC may act, wait again, or
-   remain silent. Waiting never supplies observation text.
+   remain silent. A slow gaze decision cannot delay that opportunity. Waiting never supplies observation text.
 4. The NPC's model-facing session-tool guidance matches runtime behaviour: scene updates arrive automatically as
    tool results the NPC did not initiate, fresh scene status arrives with every logical request without waiting,
    `wait` chooses deliberate quiet time without promising observation text, and the NPC's own `speak` and `wait`
@@ -363,9 +363,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
     request. Use a distinct runtime call-ID sub-namespace and the collision and whole-exchange rules (TR-17–TR-20).
 40. While parked, evaluate at a tunable cadence (default two seconds) and on coalesced nudges from accepted player
     speech, attended-speaker onset or completion, and changes in scene membership. Nudges request evaluation, not
-    a wake. Send one [AI-014 decision request][decision-api] with both named choice questions about the same NPC
-    and shared bounded evidence: perspective-labelled recent history with addressees, scene premise when
-    available, character descriptions, own activity, and current gaze. The gate, not the model, owns timing.
+    a wake. Register for the wait's lifetime. When due, contribute both named choices to the
+    [subject's scene decisions](#per-subject-scene-decisions). The wait gate, not the model or gaze, owns timing.
     - `response`: whether the NPC's latest contribution called for a response and whether one arrived:
       `expecting_pending`, `expecting_arrived`, or `not_expecting`. Words, actions, and pointed refusal can
       all count as a response; neither instructions nor criteria may restrict this to spoken replies.
@@ -384,6 +383,24 @@ persistent event timeline remains canonical memory; the provider transcript is d
     [AI-013 dump contract][decision-dumps] for opt-in evaluation provenance; never expose the classifier output to
     the conversational model.
 
+### Per-Subject Scene Decisions
+
+43. Each Mind explicitly assembles its own list of gates for decisions that need the same scene perspective.
+    A registered gate contributes no work unless due; otherwise it supplies a group of uniquely named questions
+    and consumes only that group's answers or failure. Adding a gate must not require a subsystem switch, global
+    registry or dependency between wait and [gaze][gaze]. Decisions needing different evidence stay separate.
+44. On the Godot thread, gather due groups; if none are due, neither capture evidence nor call the client.
+    Otherwise capture once and send one [AI-014 request][decision-api]. The evidence is the same regardless of
+    which gates participate: the owner's canonical identity, bounded optional scenario premise, bounded roster of
+    other characters with owner-perspective descriptions when available, bounded perspective-labelled recent history
+    with addressees, own activity and current gaze cue with elapsed hold time. Never mix NPCs' private histories.
+    Gate-specific triggers and alternatives are not shared evidence.
+45. Allow at most one in-flight call per subject. Preserve a pending nudge for its own gate without making other
+    gates due. Route results by question identity on the Godot thread; each gate owns validation and effects.
+    Ignore results for an expired registration or wait, including after re-parking, without discarding a live
+    sibling's result. Cancel the flight when its subject stops or all contributing groups are abandoned.
+    Wait deadlines run independently of capture, dispatch and gaze completion (TR-41).
+
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, at-least-one-call response validation with tolerated
@@ -396,6 +413,7 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - Fresh per-request current-scene status rendered as each request's final user message.
 - Canonical observation-owned text for delivered scene updates.
 - Payload-free fresh-turn invalidation, decision-gated explicit waits and automatic parking, and retained wait records.
+- Shared per-NPC evaluation of due scene questions, with private perspective and gate-owned effects.
 - Accurate model-facing session-tool descriptions for automatic delivery, `wait`, and `speak`.
 - Continuation admission and confirmation settlement.
 - Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
@@ -597,6 +615,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
     armed deadline; and a due deadline wins over pending evaluation or re-poll backoff. Verify a fresh signal while
     parked leaves the wait in control and still rematerialises stale context, without altering continuation or
     playback hand-off guarantees (TR-7–TR-9, TR-41–TR-42).
+26. With wait and gaze both due, verify one capture, one request and independent application. With either alone,
+    verify the same perspective for the same scene; with neither, verify no capture or call. Register a third gate
+    without editing dispatch. Exercise two NPCs with distinct histories, coalesced nudges, failure, teardown, and
+    expiry and re-parking during a slow call: the old wait cannot wake the new one or cancel live gaze (TR-43–TR-45).
 
 ## References
 
@@ -617,4 +639,5 @@ persistent event timeline remains canonical memory; the provider transcript is d
   TR-34's testing obligations and the live validation of Acceptance Criteria
 
 [decision-dumps]: ../013-visual-context/index.md#decision-payload-diagnostics
+[gaze]: ../007-attention-gaze-target-selection/index.md
 [decision-api]: ../014-decision-model-api/index.md

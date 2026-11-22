@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using AlleyCat.Mind.AI.Decision;
 
@@ -201,37 +200,6 @@ internal sealed record GazeCueCandidate(
     public string Value => GazePromptText.EncodeCueValue(SubjectFullId, CueKey);
 }
 
-/// <summary>One scene character in the evidence roster, summarised by lore.</summary>
-/// <param name="FullId">Canonical character identity.</param>
-/// <param name="Description">The character's authored lore description, or null when none is available; the
-/// roster then carries the bare identity honestly.</param>
-internal sealed record GazeSceneCharacter(string FullId, string? Description = null);
-
-/// <summary>Everything one decision-gaze evaluation needs, gathered on the Godot thread before dispatch.</summary>
-/// <param name="OwnerFullId">The deciding character's canonical full ID.</param>
-/// <param name="Candidates">Cue-level candidates: subjects ordered attention descending then ID ordinal, each
-/// carrying its composed cues ordered prominence descending then cue order ascending.</param>
-/// <param name="OwnAction">What the owner is doing with speech at gathering time.</param>
-/// <param name="CurrentGazeCueValue">The currently applied gaze cue's encoded value (<c>subject#cue</c>), or null
-/// when the gaze is clear; evidence reports it with the dwell on that cue.</param>
-/// <param name="CurrentGazeDwellSeconds">Seconds the current gaze cue has been applied.</param>
-/// <param name="Trigger">Why this evaluation is running.</param>
-/// <param name="RecentEvents">Bounded canonical renderings of recent observations, oldest first.</param>
-/// <param name="ScenePremise">The verbatim authored scenario premise resolved once per selector lifetime, or
-/// null when none is available; instructions compose it after an explicit framing label.</param>
-/// <param name="SceneCharacters">The scene's other characters for the evidence roster, each summarised by their
-/// authored lore description when available.</param>
-internal sealed record GazeEvaluationInput(
-    string OwnerFullId,
-    IReadOnlyList<GazeCueCandidate> Candidates,
-    GazeOwnAction OwnAction,
-    string? CurrentGazeCueValue,
-    double CurrentGazeDwellSeconds,
-    GazeEvaluationTrigger Trigger,
-    IReadOnlyList<string> RecentEvents,
-    string? ScenePremise = null,
-    IReadOnlyList<GazeSceneCharacter>? SceneCharacters = null);
-
 /// <summary>What one completed evaluation decided.</summary>
 internal enum GazeDecisionKind
 {
@@ -380,42 +348,10 @@ internal static class GazeCueCandidates
             && candidate.Prominence > 0d;
 }
 
-/// <summary>Failure backoff schedule: 2× the base interval on first failure, doubling thereafter, capped.</summary>
-internal static class GazeFailureBackoff
-{
-    /// <summary>The maximum backoff delay in seconds.</summary>
-    public const double MaximumSeconds = 30d;
-
-    /// <summary>Computes the next backoff delay after one more consecutive failure.</summary>
-    /// <param name="currentSeconds">The backoff in effect for the failed evaluation; zero when none.</param>
-    /// <param name="baseIntervalSeconds">The evaluation cadence interval.</param>
-    public static double NextSeconds(double currentSeconds, double baseIntervalSeconds)
-    {
-        if (!double.IsFinite(baseIntervalSeconds) || baseIntervalSeconds <= 0d)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(baseIntervalSeconds),
-                baseIntervalSeconds,
-                "Base interval must be finite and positive.");
-        }
-
-        if (!double.IsFinite(currentSeconds) || currentSeconds < 0d)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(currentSeconds),
-                currentSeconds,
-                "Current backoff must be finite and non-negative.");
-        }
-
-        double next = currentSeconds <= 0d ? baseIntervalSeconds * 2d : currentSeconds * 2d;
-        return Math.Min(next, MaximumSeconds);
-    }
-}
-
 /// <summary>
 /// Decision-model-driven gaze policy: composes one lean choice question over character-anchored candidates,
-/// dispatches it through the shared decision client, and validates the answer into a contained decision. The model
-/// picks a subject or <c>none</c>; cue resolution stays deterministic and adapter-side.
+/// contributes it to the shared evaluation, and validates the answer into a contained decision. The model
+/// picks a cue or <c>none</c>; target revalidation stays adapter-side.
 /// </summary>
 /// <remarks>
 /// Every failure mode — typed decision failures, refusals, malformed, missing, or unknown answers — resolves to a
@@ -423,7 +359,7 @@ internal static class GazeFailureBackoff
 /// propagates. The policy never throws for provider-side causes and never touches Godot state, so callers may drive
 /// it from a Godot node's process callback.
 /// </remarks>
-internal sealed class DecisionGazePolicy
+internal static class DecisionGazePolicy
 {
     /// <summary>Model-facing identity of the gaze choice question.</summary>
     internal const string QuestionName = "gaze_target";
@@ -431,86 +367,24 @@ internal sealed class DecisionGazePolicy
     /// <summary>The fixed option value for looking at nothing in particular.</summary>
     internal const string NoneOptionValue = "none";
 
-    /// <summary>
-    /// The character budget for the composed scene premise (playtest R1): the verbatim premise text up to this
-    /// many characters, cut at the last whitespace and marked with an ellipsis when it is longer, keeping the
-    /// question lean while carrying the authored opening that states the setup.
-    /// </summary>
-    internal const int ScenePremiseCharacterBudget = 600;
-
-    /// <summary>The framing label introducing the scene premise inside the question instructions.</summary>
-    internal const string ScenePremiseLabel = "Scene premise:";
-
-    private readonly IDecisionClient _client;
-
-    public DecisionGazePolicy(IDecisionClient client)
-    {
-        ArgumentNullException.ThrowIfNull(client);
-        _client = client;
-    }
-
-    /// <summary>Evaluates one gaze decision. Composition runs synchronously before the first await.</summary>
-    public async Task<GazeEvaluationResult> EvaluateAsync(
-        GazeEvaluationInput input,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-
-        long compositionStart = Stopwatch.GetTimestamp();
-        ChoiceQuestion question = ComposeQuestion(input);
-        JsonElement evidence = ComposeEvidence(input);
-        IReadOnlyList<DecisionPayloadQuestion> questions =
-            [DescribeDispatchedQuestion(question)];
-        long compositionEnd = Stopwatch.GetTimestamp();
-
-        long decisionStart = Stopwatch.GetTimestamp();
-        try
+    internal static SceneDecisionGroup PrepareGroup(IReadOnlyList<GazeCueCandidate> candidates,
+        GazeOwnAction ownAction, GazeEvaluationTrigger trigger, Action<GazeEvaluationResult> apply, CancellationToken lifetime = default) => new(
+        subject => [ComposeQuestion(subject, candidates, ownAction, trigger)],
+        receipt =>
         {
-            DecisionResult result = await _client
-                .EvaluateAsync(new DecisionRequest(evidence, [question]), cancellationToken)
-                .ConfigureAwait(false);
-            long decisionEnd = Stopwatch.GetTimestamp();
-            return ResolveAnswer(input, result, evidence, questions, compositionStart, compositionEnd, decisionStart, decisionEnd);
-        }
-        catch (DecisionException exception)
-        {
-            long decisionEnd = Stopwatch.GetTimestamp();
-            return CreateFailure(
-                $"decision failure {exception.Failure}",
-                evidence,
-                questions,
-                compositionStart,
-                compositionEnd,
-                decisionStart,
-                decisionEnd);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            long decisionEnd = Stopwatch.GetTimestamp();
-            return CreateFailure(
-                "unexpected evaluation failure",
-                evidence,
-                questions,
-                compositionStart,
-                compositionEnd,
-                decisionStart,
-                decisionEnd);
-        }
-    }
+            double? confidence = null;
+            GazeDecision decision = receipt.Failure is { } failure ? GazeDecision.Failed(failure)
+                : ResolveDecision(candidates, receipt.Answers, out confidence);
+            apply(new(decision, confidence, receipt.CompositionMs, receipt.DecisionMs,
+                receipt.Evidence?.GetRawText().Length ?? 0, receipt.Evidence, receipt.Questions));
+        }, lifetime);
 
-    private static GazeEvaluationResult ResolveAnswer(
-        GazeEvaluationInput input,
-        DecisionResult result,
-        JsonElement evidence,
-        IReadOnlyList<DecisionPayloadQuestion> questions,
-        long compositionStart,
-        long compositionEnd,
-        long decisionStart,
-        long decisionEnd)
+    private static GazeDecision ResolveDecision(IReadOnlyList<GazeCueCandidate> candidates,
+        IReadOnlyDictionary<string, DecisionAnswer> answers, out double? confidence)
     {
         GazeDecision decision;
-        double? confidence = null;
-        if (!result.ByName.TryGetValue(QuestionName, out DecisionAnswer? answer) || answer is null)
+        confidence = null;
+        if (!answers.TryGetValue(QuestionName, out DecisionAnswer? answer) || answer is null)
         {
             decision = GazeDecision.Failed("missing answer");
         }
@@ -528,46 +402,20 @@ internal sealed class DecisionGazePolicy
             decision = choice.Value switch
             {
                 NoneOptionValue => GazeDecision.NoneDecision(),
-                var value when input.Candidates.Any(candidate => candidate.Value == value)
+                var value when candidates.Any(candidate => candidate.Value == value)
                     => GazeDecision.ChooseCue(choice.Value),
                 _ => GazeDecision.Failed("unknown choice value"),
             };
         }
 
-        return new GazeEvaluationResult(
-            decision,
-            confidence,
-            ElapsedMilliseconds(compositionStart, compositionEnd),
-            ElapsedMilliseconds(decisionStart, decisionEnd),
-            evidence.GetRawText().Length,
-            evidence,
-            questions);
+        return decision;
     }
 
-    private static GazeEvaluationResult CreateFailure(
-        string failure,
-        JsonElement evidence,
-        IReadOnlyList<DecisionPayloadQuestion> questions,
-        long compositionStart,
-        long compositionEnd,
-        long decisionStart,
-        long decisionEnd)
-        => new(
-            GazeDecision.Failed(failure),
-            null,
-            ElapsedMilliseconds(compositionStart, compositionEnd),
-            ElapsedMilliseconds(decisionStart, decisionEnd),
-            evidence.GetRawText().Length,
-            evidence,
-            questions);
-
-    private static long ElapsedMilliseconds(long start, long end)
-        => (long)Stopwatch.GetElapsedTime(start, end).TotalMilliseconds;
-
-    private static ChoiceQuestion ComposeQuestion(GazeEvaluationInput input)
+    private static ChoiceQuestion ComposeQuestion(string subject, IReadOnlyList<GazeCueCandidate> candidates,
+        GazeOwnAction ownAction, GazeEvaluationTrigger trigger)
     {
-        List<DecisionOption> options = new(input.Candidates.Count + 1);
-        foreach (GazeCueCandidate candidate in OrderCandidates(input.Candidates))
+        List<DecisionOption> options = new(candidates.Count + 1);
+        foreach (GazeCueCandidate candidate in OrderCandidates(candidates))
         {
             options.Add(new DecisionOption(candidate.Value, DescribeCueCandidate(candidate)));
         }
@@ -575,7 +423,7 @@ internal sealed class DecisionGazePolicy
         options.Add(new DecisionOption(
             NoneOptionValue,
             "nothing in particular — no one deserves attention right now."));
-        return new ChoiceQuestion(QuestionName, ComposeInstructions(input), options.AsReadOnly());
+        return new ChoiceQuestion(QuestionName, ComposeInstructions(subject, ownAction, trigger), options.AsReadOnly());
     }
 
     /// <summary>
@@ -603,129 +451,41 @@ internal sealed class DecisionGazePolicy
             + $"(attention {candidate.Attention:0.##}, prominence {candidate.Prominence:0.00})";
     }
 
-    /// <summary>
-    /// Captures one dispatched question's verbatim dump material: name, instructions, and — for a choice
-    /// question — every offered option's value and criteria, so dumps show the full candidate list.
-    /// </summary>
-    private static DecisionPayloadQuestion DescribeDispatchedQuestion(ChoiceQuestion question)
-        => new(
-            question.Name,
-            question.Instructions,
-            [.. question.Options.Select(
-                static option => new DecisionPayloadQuestionOption(option.Value, option.Criteria))]);
-
-    private static string ComposeInstructions(GazeEvaluationInput input)
+    private static string ComposeInstructions(string subject, GazeOwnAction ownAction, GazeEvaluationTrigger trigger)
     {
-        string context = DescribeContextSentence(input) ?? string.Empty;
-        return $"You are playing `{input.OwnerFullId}` in an interactive roleplay scene. "
-            + $"You are deciding where `{input.OwnerFullId}` should look. "
+        string context = DescribeContextSentence(ownAction, trigger) ?? string.Empty;
+        return $"You are playing `{subject}` in an interactive roleplay scene. "
+            + $"You are deciding where `{subject}` should look. "
             + context
-            + $"Choose the most natural place `{input.OwnerFullId}` would put their eyes right now — consider who "
+            + $"Choose the most natural place `{subject}` would put their eyes right now — consider who "
             + "is speaking or being addressed, what just happened, and the scene's premise in the context — from "
             + $"the offered character cues, or `{NoneOptionValue}`. Gazes naturally wander: resting on the face of "
             + "whoever is speaking or being addressed is usual, and holding one fixed spot for a long time is "
             + "unusual. The attention and prominence numbers are weak situational hints, never a ranking — "
-            + $"attention reflects how much `{input.OwnerFullId}` has noticed that character lately, prominence "
+            + $"attention reflects how much `{subject}` has noticed that character lately, prominence "
             + "how visually striking that detail is — so let the circumstances decide, not the numbers. "
             + $"`{NoneOptionValue}` — nothing in particular — is a valid, common choice; do not stare.";
     }
 
     /// <summary>
-    /// Renders the verbatim authored scene premise for the evidence's premise field, or null when absent: the
-    /// text up to <see cref="ScenePremiseCharacterBudget"/> characters, cut at the last whitespace with an
-    /// ellipsis when longer. The gaze question carries no premise — the context owns it.
-    /// </summary>
-    private static string? DescribeScenePremise(string? scenePremise)
-    {
-        if (string.IsNullOrWhiteSpace(scenePremise))
-        {
-            return null;
-        }
-
-        string premise = scenePremise.Trim();
-        if (premise.Length <= ScenePremiseCharacterBudget)
-        {
-            return premise;
-        }
-
-        int cut = premise.LastIndexOf(' ', ScenePremiseCharacterBudget);
-        if (cut <= 0)
-        {
-            cut = ScenePremiseCharacterBudget;
-        }
-
-        return $"{premise[..cut]}…";
-    }
-
-    /// <summary>
     /// The one lean context sentence: trigger-specific first (freshest signal), otherwise the standing own action.
     /// </summary>
-    private static string? DescribeContextSentence(GazeEvaluationInput input)
-    {
-        if (input.Trigger.Kind == GazeEvaluationTriggerKind.SpeakInvoked
-            && input.Trigger.ContextCharacterFullIds is { Count: > 0 } recipients)
+    private static string? DescribeContextSentence(GazeOwnAction ownAction, GazeEvaluationTrigger trigger)
+        => trigger switch
         {
-            return $"You are about to speak to {GazePromptText.JoinBackticked(recipients)}. ";
-        }
-
-        if (input.Trigger.Kind == GazeEvaluationTriggerKind.AttendedSpeakerEnded
-            && input.Trigger.ContextCharacterFullIds is { Count: > 0 } heard)
-        {
-            return $"You have just heard {GazePromptText.JoinBackticked(heard)} finish speaking. ";
-        }
-
-        if (input.Trigger.Kind == GazeEvaluationTriggerKind.OwnSpeechEnded)
-        {
-            return "You have just finished speaking. ";
-        }
-
-        GazeOwnAction ownAction = input.OwnAction;
-        return ownAction switch
-        {
-            { Kind: GazeOwnActionKind.SpeakingTo, CharacterFullIds: { Count: > 0 } addressed }
-                => $"You are currently speaking to {GazePromptText.JoinBackticked(addressed)}. ",
-            { Kind: GazeOwnActionKind.Hearing, CharacterFullIds: { Count: > 0 } speaker }
-                => $"You are currently listening to {GazePromptText.JoinBackticked(speaker)}, who is speaking. ",
-            _ => null,
+            { Kind: GazeEvaluationTriggerKind.SpeakInvoked, ContextCharacterFullIds: { Count: > 0 } recipients }
+                => $"You are about to speak to {GazePromptText.JoinBackticked(recipients)}. ",
+            { Kind: GazeEvaluationTriggerKind.AttendedSpeakerEnded, ContextCharacterFullIds: { Count: > 0 } heard }
+                => $"You have just heard {GazePromptText.JoinBackticked(heard)} finish speaking. ",
+            { Kind: GazeEvaluationTriggerKind.OwnSpeechEnded } => "You have just finished speaking. ",
+            _ => ownAction switch
+            {
+                { Kind: GazeOwnActionKind.SpeakingTo, CharacterFullIds: { Count: > 0 } addressed }
+                    => $"You are currently speaking to {GazePromptText.JoinBackticked(addressed)}. ",
+                { Kind: GazeOwnActionKind.Hearing, CharacterFullIds: { Count: > 0 } speaker }
+                    => $"You are currently listening to {GazePromptText.JoinBackticked(speaker)}, who is speaking. ",
+                _ => null,
+            },
         };
-    }
-
-    private static JsonElement ComposeEvidence(GazeEvaluationInput input)
-    {
-        Dictionary<string, object?> evidence = [];
-
-        // The premise field appears only when a premise exists; absence is an omitted field, never a null.
-        if (DescribeScenePremise(input.ScenePremise) is { } premise)
-        {
-            evidence.Add("premise", premise);
-        }
-
-        evidence.Add("owner", input.OwnerFullId);
-        evidence.Add("own_action", input.OwnAction.Describe());
-        evidence.Add("current_gaze", new Dictionary<string, object?>
-        {
-            ["cue"] = input.CurrentGazeCueValue ?? NoneOptionValue,
-            ["dwell_seconds"] = Math.Round(input.CurrentGazeDwellSeconds, 1),
-        });
-        evidence.Add("characters", (input.SceneCharacters ?? [])
-            .Select(static character => character.Description is null
-                ? new Dictionary<string, object?> { ["id"] = character.FullId }
-                : new Dictionary<string, object?>
-                {
-                    ["id"] = character.FullId,
-                    ["description"] = character.Description,
-                })
-            .ToArray());
-        // The history lines are first-person renderings from the owner's perspective; the label states whose
-        // experiences they are so the evidence's "I" can never be misread.
-        evidence.Add("recent_history", new Dictionary<string, object?>
-        {
-            ["perspective"] = input.OwnerFullId,
-            ["note"] = $"first-person lines are from `{input.OwnerFullId}`'s perspective, as they experienced them",
-            ["events"] = input.RecentEvents.ToArray(),
-        });
-
-        return JsonSerializer.SerializeToElement(evidence);
-    }
 
 }

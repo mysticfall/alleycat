@@ -7,149 +7,86 @@ title: Attention-Driven Gaze Target Selection
 
 ## Requirement
 
-NPCs must turn Mind-owned attention into stable, believable gaze anchors without giving sensing, surveys, or the eye
-presentation system responsibility for semantic gaze decisions.
+An NPC's model chooses where to look from the character cues available through its own attention, or at nothing
+in particular. Vision presents the resulting assignment; it does not decide what deserves attention.
 
 ## Goal
 
-Make an NPC's gaze reflect the subjects currently important to it while preserving deterministic attention semantics,
-existing EyeBehaviour presentation, and a clear boundary for future trigger strategies.
+Let an NPC look at the person it is addressing, notice a detail, or look away as the scene develops. Attention
+and cue prominence help bound the alternatives; neither determines which alternative wins.
 
 ## User Requirements
 
-1. An NPC looks at an attention-relevant character cue, holds that focus briefly, and may make a brief secondary glance
-   before returning or choosing a new focus.
-2. Gaze remains stable for its configured dwell even when attention rankings change, rather than twitching between
-   targets.
-3. When no valid attention-relevant cue exists, the NPC returns to the ordinary vision fallback rather than retaining a
-   stale target.
-4. Visual surveys, blinking, and saccades remain presentation-neutral: surveys do not choose gaze, while assigned
-   targets continue to anchor saccades and blinking continues normally.
-5. Player characters remain unaffected; only NPC role templates that compose the selector gain attention-driven gaze.
-6. A genuine focus transition may be perceived and described by the NPC without making the selector responsible for
-   visual interpretation.
+1. An NPC can hold, change or release its gaze in response to the scene as it experiences it.
+2. Looking at nothing in particular restores ordinary fallback gaze. A failed decision does not move the eyes.
+3. Assigned targets still anchor saccades; blinking and visual surveys work independently. Only NPC role templates
+   that compose the selector gain this behaviour; player gaze is unaffected.
 
 ## Technical Requirements
 
-### Ownership And Namespace
+### Ownership and Namespace
 
-1. The selector is a direct child of its owner `Mind` and lives under the dedicated `AlleyCat.Mind.Attention` namespace.
-   It is Mind-side policy, not `EyesBehaviour` or another Vision concern.
-2. The selector is not an `IComponent` and is not a member of `Character.Components`. NPC role templates compose it
-   below Mind; player and shared player-base templates do not compose it.
-3. Existing attention contracts, settings, snapshots, policies, and effects must move to
-   `AlleyCat.Mind.Attention`. `Mind.GetAttentionSnapshot()` remains the public read API for an immutable attention
-   snapshot.
-4. The selector consumes only its owner Mind's attention snapshot and invokes the owner character's
-    `IVision.SetLookTarget(VisualCue?)` or `IVision.ClearLookTarget`. It must not add a Mind dependency to Vision or
-    EyesBehaviour.
+1. The selector is a direct child of its owner `Mind` under `AlleyCat.Mind.Attention`, not an `IComponent` or a
+   member of `Character.Components`. Attention contracts, settings, policies and effects stay in that namespace;
+   `Mind.GetAttentionSnapshot()` remains the public immutable read API.
+2. Bind `IVision` after character component projection commits. Register the selector with the
+   [subject's scene decisions][scene-decisions] while bound; invalidate outstanding work on rebind or teardown.
+   Do not clear on teardown: the selector has no exclusive ownership token for Vision's current assignment.
 
-### Candidate Resolution And Ranking
+### Candidate Resolution and Model Choice
 
-5. Attention is authoritative and the selector is semantics-blind. It must not use speech, conversation, pointing, type,
-   distance, angle, occlusion, visibility, or a new visual scan to choose a target.
-6. At an evaluation boundary, the selector resolves every snapshot identity with `ISceneContext.Find(FullId)`. It skips
-   an unresolved subject and every cue that is disabled or has non-finite or non-positive prominence.
-7. Current resolution supports characters only, using their published `VisualCue` instances as candidate targets,
-   because
-   SCN-001 initially maps only `char` identities. This is a resolution boundary, not target-selection type logic.
-   Generic non-character subject resolution is deferred.
-8. Each valid cue score is its subject attention multiplied by its prominence. The primary candidate is the highest
-   score. Equal scores resolve deterministically by ordinal subject `FullId`, then by provider cue order.
+3. Resolve attended identities through `ISceneContext.Find(FullId)` and use the subject's published visual cues.
+   Skip unresolved subjects, invalid cues, non-finite or negative attention, non-finite or non-positive prominence,
+   and cue keys containing the `#` separator. No separate visibility scan selects gaze.
+4. Bound the offer per subject and overall. Prefer higher-attention subjects (ordinal ID breaks ties); within a
+   subject prefer more prominent cues (provider order breaks ties for inclusion). Supply a single `gaze_target`
+   choice: `FullId#cue` alternatives with descriptions or cue labels and weak attention/prominence hints, plus `none`.
+   Alternatives and trigger-specific guidance belong in the question, not in shared evidence. Elapsed time on the
+   current cue is context for the model, not a minimum hold or a timer that forces a switch.
+5. Re-resolve the chosen subject and cue by identity and check live cue validity before calling `IVision.SetLookTarget`.
+   An unavailable choice leaves the current assignment alone; an unchanged cue does not restart its elapsed time or
+   cause another assignment. `none` clears a previous assignment through `IVision.ClearLookTarget`. With no candidates
+   and no assignment, contribute no question; with an assignment but no candidates, offer only `none`.
+6. Vision owns publication of an effective `LookTargetChangedPercept`. Sensing may interpret the transition through
+   AI-006; the selector does not publish or interpret that percept, and sensing does not assign the target.
 
-### Transition Policy
+### Lifecycle, Triggering, and Testability
 
-9. The selector maintains primary and secondary dwell states. Primary and secondary dwell durations are configurable;
-   secondary dwell is configured as the shorter glance duration.
-10. A primary target remains assigned throughout its primary dwell despite candidate ranking changes. It may be
-    abandoned only at an evaluation boundary when it is invalid or no longer resolvable.
-11. At a primary evaluation boundary, the selector uses a configurable probability to decide whether to take a secondary
-    glance. A secondary candidate excludes the current primary and is selected score-weightedly from valid candidates.
-12. A secondary target remains assigned for its secondary dwell despite ranking changes. It may be abandoned only at an
-    evaluation boundary when invalid or unresolved. At its boundary, the selector returns to a still-valid primary
-    target or reselects from the current snapshot; it clears the look target when no valid candidate remains.
-13. When no valid candidate exists at an evaluation boundary, the selector calls `ClearLookTarget`, leaving IVision's
-    existing fallback gaze behaviour in effect. Current scope has no urgent or mid-dwell interruption.
-
-### Lifecycle, Triggering, And Testability
-
-14. Initial evaluation uses a configurable periodic cadence and performs no catch-up after a delayed frame. This is an
-    initial, replaceable trigger strategy: a future perception or attention subscription may request evaluation without
-    changing the ranking policy, dwell semantics, or permitting mid-dwell interruption.
-15. Target application is delta-driven and deterministic: unchanged assignments do not produce redundant Vision calls,
-    and a change or clear is applied exactly when the state transition requires it. Vision owns publication of the
-    resulting previous/current `LookTargetChangedPercept`; the selector does not publish or interpret that percept.
-16. Exported cadence and dwell settings must be finite and positive; secondary dwell must be shorter than primary dwell.
-    Secondary probability must be finite and within `0..1`. All settings validate before activation. Probability,
-    weighted selection, and any other randomness must use an injectable deterministic test seam.
-17. Mind lifecycle must wait for the owner Character's component projection to commit before resolving `IVision` for the
-    selector. Projection changes must not leave stale Vision bindings.
-18. Selector teardown must not call `ClearLookTarget`. Without a look-target ownership token, it cannot prove that the
-    currently assigned target remains its assignment.
+7. Evaluate initially and on a configurable finite positive cadence. Speech intention and own speech completion,
+   attended-speaker onset/resumption and completion, a newly attended subject, or loss of the applied subject from
+   attention can bring evaluation forward. Coalesce nudges; do not start an overlapping request.
+8. On refusal, invalid answer or request failure, retain the target and back off periodic evaluation within a bound.
+   A nudge need not wait for that backoff. Cancelled work cannot change the assignment.
 
 ## In Scope
 
-- A direct Mind-child, Mind-side attention-to-gaze selector under `AlleyCat.Mind.Attention`.
-- Migration of attention contracts, settings, snapshots, policies, and effects to that namespace while preserving
-  `Mind.GetAttentionSnapshot()` as the public read API.
-- Character-only SCN-001 identity resolution, published-cue validation, deterministic ranking, dwell policy, and
-  fallback clearing.
-- Initial periodic evaluation, a replaceable evaluation-request seam, delta-driven Vision application, and deterministic
-  randomness for tests.
-- NPC-only role-template composition, Mind/component-projection lifecycle integration, and no-clear teardown behaviour.
-- Preservation of Vision's assigned-target, saccade, blink, and survey responsibilities.
-- Compatibility with AI-006 transition-driven visual-description perception, without moving interpretation into the
-  selector.
+- NPC-only selector composition, valid character cue choices, delta-driven Vision assignment and release.
+- Registration, trigger coalescing and local failure handling under the shared scene-decision contract.
 
 ## Out Of Scope
 
-- Speech, conversation, pointing, relationship, type-based, distance, angle, occlusion, or visibility-based gaze policy.
-- Changes to `EyesBehaviour`, visual-survey acquisition, saccade behaviour, blinking, or Vision target fallback.
-- Visual-description interpretation, duplicate filtering, or event-history rendering, which are owned by AI-006,
-  AI-001, and AI-003 respectively.
-- Generic non-character scene-subject resolution beyond SCN-001's current character mapping.
-- Urgent target priority, mid-dwell interruption, or a final tuning value for cadence, dwell, probability, or weighting.
-- Replacing periodic evaluation now; future perception or attention subscriptions are an allowed trigger extension only.
-- Look-target ownership tokens or teardown clearing based on inferred ownership.
+- Changing sensing, visual interpretation, survey acquisition, head motion, saccades, blinking or Vision fallback.
+- Extending scene identity resolution beyond the current character mapping or adding look-target ownership tokens.
 
 ## Acceptance Criteria
 
-### User Requirements
-
-1. NPC play and integration coverage show an attention-relevant character cue held for a primary dwell, an optional
-   brief secondary glance, and a return or reselection without ranking-change jitter.
-2. Coverage shows that no valid candidate clears the assigned target and restores ordinary IVision fallback behaviour.
-3. Coverage confirms that surveys do not select gaze, assigned targets still anchor saccades, blinking continues, and
-   the player template remains free of the selector.
-4. Coverage confirms that effective NPC focus transitions may produce focused descriptions through AI-006 while gaze
-   ranking and visual interpretation remain separate.
-
-### Technical Requirements
-
-5. Contract and composition tests verify a direct Mind child under `AlleyCat.Mind.Attention`, no `IComponent` or
-   `Character.Components` membership, NPC-only template composition, and no Vision or EyesBehaviour ownership of policy.
-6. Migration tests verify attention contracts, settings, snapshots, policies, and effects live in
-   `AlleyCat.Mind.Attention`, while `Mind.GetAttentionSnapshot()` remains the public immutable read API.
-7. Candidate tests verify `ISceneContext.Find(FullId)` resolution, unresolved-subject skipping, character-only support,
-   published-cue order, disabled/non-finite/non-positive prominence rejection, and no semantic or visibility filtering.
-8. Ranking tests verify attention-times-prominence scoring, ordinal `FullId` primary tie resolution, and provider
-   cue-order tie resolution.
-9. State tests verify configurable primary and shorter secondary dwell, probability-controlled score-weighted
-   secondary selection excluding the primary, return/reselection, no-candidate clearing, dwell stability, and
-   boundary-only invalid abandonment with no urgent or mid-dwell interruption.
-10. Trigger tests verify configurable periodic evaluation without catch-up and establish that a future evaluation
-    request uses the same policy and dwell semantics rather than a special interruption path.
-11. Lifecycle and output tests verify component-projection-before-Vision resolution, projection-safe rebinding,
-    delta-driven `VisualCue?` target and clear calls, deterministic injected randomness, finite positive cadence and
-    dwell validation, shorter secondary dwell, valid probability, and no teardown clear.
-12. Boundary tests verify the selector neither publishes nor interprets look-target transition percepts and that
-    sensing and visual-description faculties do not select gaze.
+1. With scripted choices, an NPC can look at a valid lower-prominence cue instead of the first offer, hold it on a
+   repeat choice, switch to another cue, and release to fallback on `none`. Player gaze, blinking, surveys and
+   saccades retain their respective owners; an effective change can still produce a focused description.
+2. Verify deterministic bounded inclusion, unambiguous IDs, invalid-cue exclusion, both empty-candidate cases and
+   revalidation after a subject disappears or a cue becomes invalid. No stale or redundant Vision write occurs.
+3. Verify NPC-only Mind-child composition, projection-safe binding and no teardown clear. Exercise cadence, coalesced
+   nudges, refusal, failure backoff and cancellation with and without a due wait gate.
 
 ## References
 
 - [AI-001: Mind Component](../001-mind/index.md)
+- [AI-002: Per-Subject Scene Decisions][scene-decisions] — normative for dispatch, shared evidence and cancellation.
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
+- [AI-009: Attention-Driven Head Orientation](../009-attention-head-orientation/index.md)
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+
+[scene-decisions]: ../002-agent-runtime/index.md#per-subject-scene-decisions
