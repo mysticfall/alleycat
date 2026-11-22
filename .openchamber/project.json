@@ -5,6 +5,7 @@
     "ln -s $ROOT_PROJECT_PATH/game/content game/content",
     "cp -Rf $ROOT_PROJECT_PATH/game/.godot game/.godot",
     "cp -Rf $ROOT_PROJECT_PATH/graft .",
+    "ln -s $ROOT_PROJECT_PATH/game/models/motionbricks/onnx game/models/motionbricks",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/onnx game/models/supertonic-3",
     "ln -s $ROOT_PROJECT_PATH/game/models/supertonic-3/voice_styles game/models/supertonic-3",
     "ln -s \"$ROOT_PROJECT_PATH/game/models/motionbricks/onnx\" game/models/motionbricks/onnx",
