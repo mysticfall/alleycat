@@ -65,9 +65,11 @@ public sealed class DecisionGazePolicyTests
         DecisionRequest request = Assert.Single(client.Requests);
         ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
 
-        Assert.StartsWith("You are deciding where `char:observer` should look. ", question.Instructions);
+        Assert.StartsWith(
+            "You are playing `char:observer` in an interactive roleplay scene. You are deciding where `char:observer` should look. ",
+            question.Instructions);
         Assert.Contains("You are currently speaking to `char:tola`. ", question.Instructions);
-        Assert.Contains("most likely place `char:observer` would put their eyes right now", question.Instructions);
+        Assert.Contains("most natural place `char:observer` would put their eyes right now", question.Instructions);
         Assert.Contains("Gazes naturally wander", question.Instructions);
         Assert.Contains("weak situational hints, never a ranking", question.Instructions);
         Assert.Contains("or `none`", question.Instructions);
@@ -78,7 +80,14 @@ public sealed class DecisionGazePolicyTests
         Assert.Equal("speaking_to: `char:tola`", evidence.GetProperty("own_action").GetString());
         Assert.Equal("char:tola#face", evidence.GetProperty("current_gaze").GetProperty("cue").GetString());
         Assert.Equal(3.2d, evidence.GetProperty("current_gaze").GetProperty("dwell_seconds").GetDouble());
-        Assert.Equal("`char:tola` said: hello", evidence.GetProperty("recent_events")[0].GetString());
+        // The history states whose first-person perspective its lines are from.
+        JsonElement recentHistory = evidence.GetProperty("recent_history");
+        Assert.Equal(Owner, recentHistory.GetProperty("perspective").GetString());
+        Assert.Equal(
+            $"first-person lines are from `{Owner}`'s perspective, as they experienced them",
+            recentHistory.GetProperty("note").GetString());
+        Assert.Equal("`char:tola` said: hello", recentHistory.GetProperty("events")[0].GetString());
+        _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("recent_events"));
         _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("candidates"));
     }
 
@@ -389,24 +398,24 @@ public sealed class DecisionGazePolicyTests
             new GazeOwnAction(GazeOwnActionKind.Hearing, ["char:a"]).Describe());
     }
 
-    /// <summary>An available scene premise rides the instructions verbatim under its framing label.</summary>
+    /// <summary>An available scene premise rides the evidence verbatim; the question carries none of it.</summary>
     [Fact]
-    public async Task Evaluate_ComposesTheScenePremiseUnderItsFramingLabel()
+    public async Task Evaluate_ComposesTheScenePremiseIntoTheEvidence()
     {
         ScriptedDecisionClient client = new();
         DecisionGazePolicy policy = new(client);
         const string premise = "A detention interview in the basement of the Charter Office of Compliance.";
         _ = await policy.EvaluateAsync(CreateInput([], scenePremise: premise));
 
-        ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(
-            Assert.Single(Assert.Single(client.Requests).Questions),
-            exactMatch: false);
-        Assert.Contains($"Scene premise: {premise} ", question.Instructions);
-        int labelIndex = question.Instructions.IndexOf(DecisionGazePolicy.ScenePremiseLabel, StringComparison.Ordinal);
-        Assert.True(labelIndex > 0, "The premise must follow the identity sentence, not open the instructions.");
+        DecisionRequest request = Assert.Single(client.Requests);
+        ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
+        Assert.DoesNotContain(premise, question.Instructions, StringComparison.Ordinal);
+        Assert.DoesNotContain(DecisionGazePolicy.ScenePremiseLabel, question.Instructions, StringComparison.Ordinal);
+        JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
+        Assert.Equal(premise, evidence.GetProperty("premise").GetString());
     }
 
-    /// <summary>An absent or blank premise is omitted cleanly: no label, no sentence.</summary>
+    /// <summary>An absent or blank premise is omitted cleanly: no field, no label, no sentence.</summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -417,10 +426,11 @@ public sealed class DecisionGazePolicyTests
         DecisionGazePolicy policy = new(client);
         _ = await policy.EvaluateAsync(CreateInput([], scenePremise: premise));
 
-        ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(
-            Assert.Single(Assert.Single(client.Requests).Questions),
-            exactMatch: false);
+        DecisionRequest request = Assert.Single(client.Requests);
+        ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
         Assert.DoesNotContain(DecisionGazePolicy.ScenePremiseLabel, question.Instructions, StringComparison.Ordinal);
+        JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
+        _ = Assert.Throws<KeyNotFoundException>(() => evidence.GetProperty("premise"));
     }
 
     /// <summary>An over-long premise is cut at the budget's last whitespace and marked with an ellipsis.</summary>
@@ -434,18 +444,16 @@ public sealed class DecisionGazePolicyTests
 
         _ = await policy.EvaluateAsync(CreateInput([], scenePremise: longPremise));
 
-        ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(
-            Assert.Single(Assert.Single(client.Requests).Questions),
-            exactMatch: false);
-        string instructions = question.Instructions;
-        int labelIndex = instructions.IndexOf(DecisionGazePolicy.ScenePremiseLabel, StringComparison.Ordinal);
-        int ellipsisIndex = instructions.IndexOf('…', labelIndex);
-        Assert.True(ellipsisIndex > labelIndex, "An over-long premise must be marked with an ellipsis.");
-        string truncated = instructions[(labelIndex + DecisionGazePolicy.ScenePremiseLabel.Length + 1)..ellipsisIndex];
+        DecisionRequest request = Assert.Single(client.Requests);
+        JsonElement evidence = Assert.IsType<JsonElement>(request.Evidence);
+        string truncated = evidence.GetProperty("premise").GetString() ?? string.Empty;
+        int ellipsisIndex = truncated.IndexOf('…');
+        Assert.True(ellipsisIndex > 0, "An over-long premise must be marked with an ellipsis.");
+        Assert.Equal(ellipsisIndex, truncated.Length - 1);
         Assert.True(
-            truncated.Length <= DecisionGazePolicy.ScenePremiseCharacterBudget,
-            $"The composed premise must respect the character budget; found {truncated.Length}.");
-        Assert.EndsWith("premise", truncated, StringComparison.Ordinal);
+            truncated.Length - 1 <= DecisionGazePolicy.ScenePremiseCharacterBudget,
+            $"The composed premise must respect the character budget; found {truncated.Length - 1}.");
+        Assert.EndsWith("premise", truncated[..ellipsisIndex], StringComparison.Ordinal);
     }
 
     /// <summary>The dispatch dump material carries every offered cue option's value and criteria.</summary>

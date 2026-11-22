@@ -270,7 +270,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal(typeof(AttendedCharactersSceneStatus).FullName, projectionSection.RootTypeName);
         Assert.Contains("{{ attended.FullId }}", projectionSection.TemplateSource, StringComparison.Ordinal);
         Assert.Contains("attended.RelativePosition.Distance", projectionSection.TemplateSource, StringComparison.Ordinal);
-        Assert.Contains("attended.VisualDescription", projectionSection.TemplateSource, StringComparison.Ordinal);
+        Assert.Contains("attended.Description", projectionSection.TemplateSource, StringComparison.Ordinal);
 
         AttendedCharacterSceneStatusProjector projector = Assert.IsType<AttendedCharacterSceneStatusProjector>(
             npc.GetNodeOrNull("Mind/AttendedCharacterSceneStatusProjector"),

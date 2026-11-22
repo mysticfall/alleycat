@@ -69,6 +69,10 @@ internal sealed class AgentSessionRunner
     private readonly Lock _stateLock = new();
     private readonly List<ChatMessage> _acceptedTranscript = [];
     private readonly List<int> _runtimeAuthoredMessageIndexes = [];
+    private readonly Func<CancellationToken, Task<string>>? _parkUntilNextTurn;
+    private readonly HashSet<string> _parksByDefaultFunctions = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _parkRepresentingFunctions = new(StringComparer.Ordinal);
+    private long _fabricatedParkCallSequence;
     private long _invalidationEpoch;
     private ActivePhaseState? _activePhase;
     private int _freshInvalidation;
@@ -85,7 +89,8 @@ internal sealed class AgentSessionRunner
         IReadOnlyList<TimeSpan>? retryDelays = null,
         IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null,
         IAgentRequestContextSource? requestContextSource = null,
-        IAgentSessionTranscriptSink? transcriptSink = null)
+        IAgentSessionTranscriptSink? transcriptSink = null,
+        Func<CancellationToken, Task<string>>? parkUntilNextTurn = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _runInputMessages = runInputMessages ?? throw new ArgumentNullException(nameof(runInputMessages));
@@ -101,6 +106,27 @@ internal sealed class AgentSessionRunner
         // continuation can never reach the recorder after the session loop has exited (AI-011 TR-6/TR-7).
         _transcriptSink = new SessionScopedTranscriptSink(transcriptSink ?? NullAgentSessionTranscriptSink.Instance);
         _functions = ResolveFunctions(productionTools);
+        _parkUntilNextTurn = parkUntilNextTurn;
+        foreach ((string name, AIFunction function) in _functions)
+        {
+            // Default session parking (§11) is decided by the composition-registered parking policy bound to each
+            // composed function — resolved once here through arbitrary wrapper layers, never by tool identity.
+            AgentSessionParkingPolicy? parking = ResolveParkingPolicy(function);
+            if (parking is null)
+            {
+                continue;
+            }
+
+            if (parking.ParksSessionByDefault)
+            {
+                _ = _parksByDefaultFunctions.Add(name);
+            }
+
+            if (parking.RepresentsSessionParking)
+            {
+                _ = _parkRepresentingFunctions.Add(name);
+            }
+        }
         _instructions = instructions ?? throw new ArgumentNullException(nameof(instructions));
         _chatOptions = new ChatOptions
         {
@@ -601,6 +627,7 @@ internal sealed class AgentSessionRunner
 
                 List<AIContent> results = new(calls.Length);
                 List<VisualContextImage> exchangeImages = [];
+                List<(string Name, AgentSessionInvocationSignals Signals)> invocationSignals = new(calls.Length);
                 bool batchSkippedByInvalidation = false;
                 try
                 {
@@ -634,9 +661,13 @@ internal sealed class AgentSessionRunner
                         MindTranscriptToolInvocation invocation = new(call.Name, call.CallId, call.Arguments);
                         cycleTranscript.ToolInvocations.Add(invocation);
                         object? toolResult;
+                        // The invocation's typed boundary signals are attached before it starts, so a hand-off or
+                        // gate entry it reached still counts when the invocation is later interrupted.
+                        AIFunctionArguments arguments = new(call.Arguments);
+                        invocationSignals.Add((call.Name, AgentSessionInvocationSignals.AttachTo(arguments)));
                         try
                         {
-                            toolResult = await InvokeToolAsync(call, lifetimeToken);
+                            toolResult = await InvokeToolAsync(call, arguments, lifetimeToken);
                         }
                         catch (OperationCanceledException)
                         {
@@ -704,6 +735,14 @@ internal sealed class AgentSessionRunner
                 }
 
                 CompleteCycleTranscript(cycleTranscript, cycleStopwatch, MindTranscriptCycleOutcome.Accepted);
+
+                if (ShouldParkAfterBatch(invocationSignals))
+                {
+                    // Automatic session parking (§12): the settled batch committed an in-game action, so the
+                    // decision-wait gate — not an immediate follow-up request — decides when this character's
+                    // next turn begins.
+                    await ParkSessionAsync(lifetimeToken);
+                }
             }
 
             _logger.LogInformation("Agent session ended after {RequestCount} request(s).", requestCount);
@@ -927,6 +966,7 @@ internal sealed class AgentSessionRunner
 
     private async Task<object?> InvokeToolAsync(
         FunctionCallContent call,
+        AIFunctionArguments arguments,
         CancellationToken lifetimeToken)
     {
         AIFunction function = _functions[call.Name];
@@ -961,7 +1001,7 @@ internal sealed class AgentSessionRunner
         try
         {
             _logger.LogDebug("Agent session tool '{ToolName}' starting.", function.Name);
-            return await function.InvokeAsync(new AIFunctionArguments(call.Arguments), phaseCancellation.Token);
+            return await function.InvokeAsync(arguments, phaseCancellation.Token);
         }
         catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
@@ -1237,6 +1277,122 @@ internal sealed class AgentSessionRunner
         }
 
         return functions;
+    }
+
+    /// <summary>
+    /// Judges a settled, accepted tool batch for default session parking (§12) on the typed boundary signals its
+    /// invocations actually raised — never on the proposed calls, returned text, or how an invocation ended: a
+    /// behaviour-tool invocation that crossed its accepted playback hand-off parks the session through the
+    /// decision-wait gate, unconditionally, so the pause can never be opted out of or gamed; same-beat sequences are
+    /// expressed as multiple calls in one response, which this same rule performs together before the single pause.
+    /// Skipped calls, validation rejections, errors, and pre-hand-off cancellations committed no action and never
+    /// park, while a hand-off followed by interruption still parks. Only an explicit <c>wait</c> that actually
+    /// entered the gate already paused the session and suppresses the duplicate park. Non-behaviour tools never
+    /// park.
+    /// </summary>
+    private bool ShouldParkAfterBatch(IReadOnlyList<(string Name, AgentSessionInvocationSignals Signals)> invocations)
+    {
+        if (_parkUntilNextTurn is null)
+        {
+            return false;
+        }
+
+        bool parks = false;
+        foreach ((string name, AgentSessionInvocationSignals signals) in invocations)
+        {
+            if (signals.SessionParkEntered && _parkRepresentingFunctions.Contains(name))
+            {
+                return false;
+            }
+
+            if (signals.ActionCommitted && _parksByDefaultFunctions.Contains(name))
+            {
+                parks = true;
+            }
+        }
+
+        return parks;
+    }
+
+    /// <summary>
+    /// Parks the session between turns (§11): the decision-wait gate — cadence, nudges, containment, and payload
+    /// dumps exactly as an explicit wait — decides when the world gives this character a reason to act again, and
+    /// the park's wait exchange is then fabricated into the retained transcript so the model's own history reads
+    /// the pause as a <c>wait</c> call. Fresh invalidations arriving during the park persist in the stale latch
+    /// and drain at the next boundary; the park itself is not a cancellable phase.
+    /// </summary>
+    private async Task ParkSessionAsync(CancellationToken lifetimeToken)
+    {
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Agent session parking after a behaviour tool batch; the wait gate decides the next turn.");
+        }
+
+        string resultMessage = await _parkUntilNextTurn!(lifetimeToken);
+        AppendFabricatedSessionParkExchange(resultMessage);
+    }
+
+    /// <summary>
+    /// Appends the park's fabricated <c>wait</c> exchange to the retained transcript (§11): an assistant tool
+    /// call and its payload-free result in exactly the wire shape of a real wait invocation, registered in the
+    /// session-wide call-ID namespace under its own runtime prefix — a distinct sub-namespace exactly as the
+    /// scene-update and visual-context fabricated IDs — and marked runtime-authored like every other fabricated
+    /// exchange (AI-002 TR-17/TR-19). The next request carries it, so the model reads its own pause coherently.
+    /// </summary>
+    private void AppendFabricatedSessionParkExchange(string resultMessage)
+    {
+        string? parkFunction = _parkRepresentingFunctions.FirstOrDefault();
+        if (parkFunction is null)
+        {
+            // A composition that parks but composes no park-representing function has no model-facing name to
+            // fabricate; the park still happened, only its record stays absent.
+            _logger.LogDebug("Agent session park left no fabricated exchange: no park-representing function.");
+            return;
+        }
+
+        string recordedCallId;
+        lock (_stateLock)
+        {
+            // Reserve a session-unique ID before appending (AI-002 TR-18): the provider may already have consumed
+            // an ID in this prefix, so the sequence advances past every ID the session has registered.
+            do
+            {
+                recordedCallId = $"runtime-session-park-{++_fabricatedParkCallSequence}";
+            }
+            while (!_callIds.Add(recordedCallId));
+
+            var call = new FunctionCallContent(recordedCallId, parkFunction, new Dictionary<string, object?>());
+            var result = new FunctionResultContent(recordedCallId, resultMessage);
+            int assistantIndex = _acceptedTranscript.Count;
+            _acceptedTranscript.Add(new ChatMessage(ChatRole.Assistant, [call]));
+            _acceptedTranscript.Add(new ChatMessage(ChatRole.Tool, [result]));
+            _runtimeAuthoredMessageIndexes.Add(assistantIndex);
+            _runtimeAuthoredMessageIndexes.Add(assistantIndex + 1);
+        }
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Agent session park recorded as fabricated call '{CallId}'.", recordedCallId);
+        }
+    }
+
+    /// <summary>
+    /// Resolves the composition-registered parking policy of one composed function through its arbitrary
+    /// composition wrapper layers (§11) — the same inspection contract as the phase policy, never tool identity.
+    /// </summary>
+    private static AgentSessionParkingPolicy? ResolveParkingPolicy(AIFunction function)
+    {
+        for (AIFunction? current = function; current is not null;)
+        {
+            if (current is ParkingBoundFunction { Policy: { } parking })
+            {
+                return parking;
+            }
+
+            current = current as ComposedAIFunction is { } composed ? composed.ComposedFunction : null;
+        }
+
+        return null;
     }
 
     /// <summary>

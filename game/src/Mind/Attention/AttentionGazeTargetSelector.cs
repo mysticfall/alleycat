@@ -36,6 +36,9 @@ public partial class AttentionGazeTargetSelector : Node
     private const int RecentEventCharacterBudget = 2000;
     private const double SpeakIntentionExpirySeconds = 30d;
 
+    /// <summary>The decision-payload dump category this gate files under: one directory per producer.</summary>
+    private const string DumpCategory = "gaze";
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Lock _triggerLock = new();
     private readonly Lock _evaluationStateLock = new();
@@ -60,7 +63,6 @@ public partial class AttentionGazeTargetSelector : Node
     private volatile string? _scenePremise;
     private int _scenePremiseResolutionStarted;
     private string? _appliedSubjectFullId;
-    private string? _appliedCueValue;
     private VisualCue? _appliedCue;
     private double _appliedAtSeconds;
     private double _secondsSinceLastEvaluation;
@@ -202,7 +204,7 @@ public partial class AttentionGazeTargetSelector : Node
         _failureBackoffSeconds = 0d;
         _coalescedNudges = 0;
         _appliedSubjectFullId = null;
-        _appliedCueValue = null;
+        AppliedCueValue = null;
         _appliedCue = null;
     }
 
@@ -215,7 +217,24 @@ public partial class AttentionGazeTargetSelector : Node
     /// </summary>
     public void RequestEvaluation() => RequestEvaluation(GazeEvaluationTrigger.Cadence);
 
-    /// <summary>Replaces scene-context resolution before activation for focused runtime coverage.</summary>
+    /// <summary>
+    /// Gets the currently applied gaze cue's encoded value (<c>subject#cue</c>), or null when the gaze is clear —
+    /// the wait-decision evidence's cue-level current-gaze source.
+    /// </summary>
+    internal string? AppliedCueValue
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets whether the selector currently holds an applied gaze target.</summary>
+    internal bool HasAppliedTarget => AppliedCueValue is not null;
+
+    /// <summary>Gets how long the currently applied gaze cue has been held, in seconds.</summary>
+    internal double AppliedDwellSeconds
+        => AppliedCueValue is null ? 0d : Math.Max(0d, _clock.Elapsed.TotalSeconds - _appliedAtSeconds);
+
+    /// <summary>
+    /// Replaces scene-context resolution before activation for focused runtime coverage.</summary>
     internal void SetSceneContextLoaderForTesting(Func<ISceneContext> sceneContextLoader)
     {
         ArgumentNullException.ThrowIfNull(sceneContextLoader);
@@ -340,7 +359,7 @@ public partial class AttentionGazeTargetSelector : Node
         _evaluationRequested = false;
         _secondsSinceLastEvaluation = 0d;
         _appliedSubjectFullId = null;
-        _appliedCueValue = null;
+        AppliedCueValue = null;
         _appliedCue = null;
         _appliedAtSeconds = 0d;
         LogVisionBound(vision);
@@ -356,8 +375,10 @@ public partial class AttentionGazeTargetSelector : Node
         ICharacter character = _character
             ?? throw new InvalidOperationException("Attention gaze selector has no owning character at recorder creation.");
         return new DecisionPayloadDumpRecorder(
+            DumpCategory,
             character.FullId,
-            static () => ProjectSettings.GlobalizePath(DecisionPayloadDumpRecorder.UserRootPath),
+            character.Id,
+            static () => ProjectSettings.GlobalizePath(MindSessionTranscriptRecorder.UserRootPath),
             TryGetLogger() ?? NullLogger<AttentionGazeTargetSelector>.Instance);
     }
 
@@ -544,8 +565,8 @@ public partial class AttentionGazeTargetSelector : Node
                 CueDescription = DescribeCueSynchronously(candidate, scene, character),
             })],
             ComposeOwnAction(mind, elapsedSeconds),
-            _appliedCueValue,
-            _appliedCueValue is null ? 0d : Math.Max(0d, elapsedSeconds - _appliedAtSeconds),
+            AppliedCueValue,
+            AppliedCueValue is null ? 0d : Math.Max(0d, elapsedSeconds - _appliedAtSeconds),
             trigger,
             RenderRecentEvents(mind, character),
             ScenePremise: _scenePremise,
@@ -665,9 +686,10 @@ public partial class AttentionGazeTargetSelector : Node
 
         List<AgentObservation> window = [.. timeline.Skip(Math.Max(0, timeline.Count - RecentEventCount))];
         // The renderer is a deterministic CPU-only canonical-text projection: every overload completes
-        // synchronously, so the value is available without yielding off the Godot thread.
+        // synchronously, so the value is available without yielding off the Godot thread. Event times render
+        // relative to this evaluation's composition moment.
         string rendered = new ObservationHistoryRenderer(character)
-            .RenderAsync(window, timeline)
+            .RenderAsync(window, timeline, mind.GameClock.NowSeconds)
             .GetAwaiter()
             .GetResult();
         if (string.IsNullOrEmpty(rendered))
@@ -764,7 +786,7 @@ public partial class AttentionGazeTargetSelector : Node
                 {
                     ApplyDecision(vision, AttentionGazeTargetDecision<VisualCue>.Clear());
                     _appliedSubjectFullId = null;
-                    _appliedCueValue = null;
+                    AppliedCueValue = null;
                     _appliedCue = null;
                 }
 
@@ -808,7 +830,7 @@ public partial class AttentionGazeTargetSelector : Node
 
         ApplyDecision(vision, AttentionGazeTargetDecision<VisualCue>.Set(cue));
         _appliedSubjectFullId = subjectFullId;
-        _appliedCueValue = cueValue;
+        AppliedCueValue = cueValue;
         _appliedCue = cue;
         _appliedAtSeconds = _clock.Elapsed.TotalSeconds;
     }

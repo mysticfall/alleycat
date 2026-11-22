@@ -5,6 +5,8 @@ using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Time;
+using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
@@ -27,80 +29,46 @@ namespace AlleyCat.Mind;
 [GlobalClass]
 public abstract partial class Mind : Node
 {
-    /// <summary>Reason one observation wait completed (AI-002 TR-7).</summary>
+    /// <summary>
+    /// Reason one observation wait completed: the wait gate returned an immediate verdict, a deadline armed by a
+    /// deferred verdict expired, or the agent's explicitly chosen quiet time elapsed first. Every wake is a chance
+    /// for the agent to act, never a command.
+    /// </summary>
     internal enum ObservationWaitWake
     {
-        /// <summary>The requested wait duration elapsed without a qualifying wake.</summary>
-        QuietExpiry,
+        /// <summary>
+        /// The gate's immediate verdict: a response to the character arrived, or the circumstances call for them to
+        /// act.
+        /// </summary>
+        DecisionAct,
 
-        /// <summary>An attended speaker finished speaking (AI-002 TR-7).</summary>
-        AttendedSpeakerFinished,
-
-        /// <summary>Accumulated importance reached the configured threshold (AI-001 TR-7).</summary>
-        ThresholdCrossed,
+        /// <summary>A deadline armed by a deferred verdict expired: a pause gives the character an opening.</summary>
+        PauseElapsed,
 
         /// <summary>
-        /// A fresh observation upgraded the complete accumulation regardless of cumulative importance (AI-002 UR-5).
+        /// The agent's explicitly chosen quiet time elapsed before any verdict ended or shortened it.
         /// </summary>
-        FreshObservation,
+        TimerElapsed,
     }
 
-    /// <summary>Delivery urgency of one pending observation window (AI-001 TR-7).</summary>
+    /// <summary>
+    /// Delivery urgency of one pending fresh-turn window: a fresh observation invalidates stale reasoning at the
+    /// session's next request boundary. The deleted importance-threshold pressure had an ordinary tier below
+    /// this; fresh-turn urgency is the only remaining producer.
+    /// </summary>
     internal enum ObservationDeliveryUrgency
     {
-        /// <summary>Threshold-qualified ordinary delivery that never cancels session work.</summary>
-        Ordinary = 0,
-
-        /// <summary>Fresh-turn urgency that bypasses the importance threshold and replaces stale reasoning.</summary>
+        /// <summary>Fresh-turn urgency that replaces stale reasoning.</summary>
         Fresh = 1,
     }
 
     /// <summary>
-    /// Post-commit delivery signal (AI-001 TR-7): the pending window's delivery urgency and whether an active wait
-    /// owns the delivery instead of the signalled runtime.
+    /// Post-commit delivery signal: the pending window's delivery urgency and whether an active wait owns the
+    /// delivery instead of the signalled runtime.
     /// </summary>
-    /// <param name="Urgency">Delivery urgency of the newly deliverable window; fresh dominates ordinary.</param>
-    /// <param name="WaitOwned">Whether an active wait was woken to deliver the window through its own result.</param>
+    /// <param name="Urgency">Delivery urgency of the newly deliverable window.</param>
+    /// <param name="WaitOwned">Whether an active wait was parked when the window became deliverable.</param>
     internal readonly record struct ObservationDeliverySignal(ObservationDeliveryUrgency Urgency, bool WaitOwned);
-
-    /// <summary>
-    /// Registered active wait woken through its normal completion mechanism by attended-speaker-finished cues,
-    /// threshold crossings, or fresh observations — never by cancelling the wait's token.
-    /// </summary>
-    private sealed class ActiveWait
-    {
-        public ActiveWait()
-        {
-            Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
-
-        public TaskCompletionSource<ObservationWaitWake> Completion
-        {
-            get;
-        }
-
-        public bool Settled
-        {
-            get; private set;
-        }
-
-        public bool TryWake(ObservationWaitWake wake)
-        {
-            lock (this)
-            {
-                if (Settled)
-                {
-                    return false;
-                }
-
-                Settled = true;
-            }
-
-            return Completion.TrySetResult(wake);
-        }
-    }
-
-    private static readonly TimeSpan _defaultMaxObservationWait = TimeSpan.FromSeconds(10);
 
     private readonly Lock _observationStateLock = new();
     private readonly Lock _perceptionQueueLock = new();
@@ -112,7 +80,7 @@ public abstract partial class Mind : Node
     private readonly Dictionary<long, int> _acceptedObservationLogIndices = [];
     private readonly Dictionary<long, AcceptedObservationEntry> _activeRetainedEntries = [];
     private readonly Dictionary<long, AcceptedObservationEntry> _expiringRetainedEntries = [];
-    private readonly List<PendingObservation> _notableAccumulation = [];
+    private readonly List<long> _pendingFreshSequenceIDs = [];
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private readonly AttentionPolicy _attention = new(GetStopwatchSeconds);
     private readonly Queue<PerceptionWork> _perceptionQueue = [];
@@ -126,11 +94,17 @@ public abstract partial class Mind : Node
     private IComponentProjectionNotifier? _componentProjectionNotifier;
     private Func<ISceneContext> _sceneContextLoader = LoadCurrentSceneContext;
     private Func<IGameClock> _gameClockLoader = LoadDefaultGameClock;
-    private ActiveWait? _activeWait;
+    private Func<IDecisionClient> _waitDecisionClientLoader = static ()
+        => Game.Instance.GetRequiredService<IDecisionClient>();
+    private Func<DecisionWaitTimingSettings> _waitTimingLoader = DecisionWaitTimingSettings.LoadOrDefault;
+    private Func<double> _waitJitterSampler = static () => Random.Shared.NextDouble();
+    /// <summary>
+    /// Identity marker of the single active observation wait: set while a wait runs, so delivery signalling knows
+    /// a wait owns the window and a second concurrent wait is rejected.
+    /// </summary>
+    private object? _activeWait;
     private TaskCompletionSource _attendedSpeakerPulse = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private ICharacter? _cachedOwningCharacter;
-    private float _cumulativeNotableImportance;
-    private bool _notablePending;
     private bool _freshUrgencyPending;
     private bool _speechSubscriptionEvaluationQueued;
     private int _nodeLifetimeEnded;
@@ -144,11 +118,18 @@ public abstract partial class Mind : Node
     private bool _enabled = true;
 
     /// <summary>
-    /// Occurs after a committed batch raises the pending accumulation's delivery urgency (AI-001 TR-7): carries
-    /// delivery urgency — ordinary threshold-qualified delivery versus fresh-turn urgency — and whether an active
-    /// wait owns the delivery instead of the signalled runtime (AI-002 TR-9).
+    /// Occurs after a committed batch raises the pending fresh window's delivery urgency: carries the urgency and
+    /// whether an active wait was parked (AI-001 TR-7, AI-002 TR-7–9). The session runtime's fresh-turn
+    /// invalidation bridge is the production consumer; the wait decision poll is nudged separately.
     /// </summary>
     internal event Action<ObservationDeliverySignal>? ObservationDeliverySignalled;
+
+    /// <summary>
+    /// Occurs for every observation committed into this Mind's timeline, after ingestion processing: the generic,
+    /// modality-free committed-observation seam for same-assembly consumers — the wait decision's player-speech
+    /// nudge above all. Payload-bearing observation interpretation stays with the consumer, never here.
+    /// </summary>
+    internal event Action<AgentObservation>? ObservationCommitted;
 
     /// <summary>
     /// Occurs after an atomic accepted batch changes active retained evidence. Removals are retention maintenance only:
@@ -207,30 +188,17 @@ public abstract partial class Mind : Node
                 }
 
                 _enabled = value;
-                if (value && (_notablePending || _freshUrgencyPending))
-                {
-                    // Delivery resumes for the preserved accumulation — including any retained fresh urgency
-                    // (AI-001 TR-7): a held deliverable window wakes an active wait. When no wait is active the
-                    // window stays held for the next wait call or delivery claim.
-                    _ = _activeWait?.TryWake(
-                        _freshUrgencyPending ? ObservationWaitWake.FreshObservation : ObservationWaitWake.ThresholdCrossed);
-                }
             }
         }
     }
 
     /// <summary>
-    /// Maximum time a single <c>wait</c> call can stay below the importance threshold before quiet expiry.
+    /// Maximum interval between wait-decision evaluations while a <c>wait</c> runs, including the failure backoff
+    /// in effect. Event nudges may request an earlier evaluation.
     /// </summary>
     [ExportGroup("Runtime")]
     [Export(PropertyHint.Range, "0.05,120,0.05")]
-    public float MaxObservationWaitSeconds { get; set; } = (float)_defaultMaxObservationWait.TotalSeconds;
-
-    /// <summary>
-    /// Cumulative observation importance that makes the accumulation window notable.
-    /// </summary>
-    [Export(PropertyHint.Range, "0.01,100,0.01")]
-    public float ObservationImportanceThreshold { get; set; } = 1f;
+    public float WaitEvaluationIntervalSeconds { get; set; } = 2f;
 
     /// <summary>Maximum value of one attention entry.</summary>
     [ExportGroup("Attention")]
@@ -1056,13 +1024,9 @@ public abstract partial class Mind : Node
             return;
         }
 
-        // Attended-speaker-finished cue (AI-002 TR-7): wake an active wait and unblock a blocked speak. The wait
-        // itself decides whether anything notable is returned; sub-threshold observations are never promoted.
-        lock (_observationStateLock)
-        {
-            _ = _activeWait?.TryWake(ObservationWaitWake.AttendedSpeakerFinished);
-        }
-
+        // Attended-speaker-finished cue (AI-002 TR-7): unblock a blocked speak and pulse the idle guard. The
+        // wait decision poll is nudged through AttendedSpeakerEndedNotified — the reply-window trigger — and
+        // decides itself whether reacting is warranted (wait experiment §4).
         PulseAttendedSpeakerFinished();
         AttendedSpeakerEndedNotified?.Invoke(speaker.FullId);
     }
@@ -1314,9 +1278,9 @@ public abstract partial class Mind : Node
             throw new ArgumentException("Speech transport count must match observation count.", nameof(speechTransports));
         }
 
-        ObservationDeliveryUrgency? signalledUrgency = null;
         List<AgentObservation> stampedObservations = [];
         List<RetainedObservationChange> retentionChanges = [];
+        bool signalledFresh = false;
 
         lock (_observationStateLock)
         {
@@ -1454,29 +1418,22 @@ public abstract partial class Mind : Node
                 _committedObservationIdentities.UnionWith(stagedCommitIdentities);
             }
 
-            ObservationDeliveryUrgency? urgencyBefore = PendingDeliveryUrgencyLocked();
+            bool freshBefore = _freshUrgencyPending;
             foreach (AcceptedObservationEntry entry in committedEntries)
             {
-                _notableAccumulation.Add(new PendingObservation(
-                    entry.SequenceID,
-                    entry.Scheduling.Importance,
-                    entry.Scheduling.RequiresFreshTurn));
-                _cumulativeNotableImportance += entry.Scheduling.Importance;
                 stampedObservations.Add(entry.Payload);
 
-                // Freshness upgrades the complete current accumulation — including preceding sub-threshold
-                // observations — to deliverable regardless of cumulative importance (AI-002 UR-5).
-                _freshUrgencyPending |= entry.Scheduling.RequiresFreshTurn;
-                if (!_notablePending && _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
+                // Freshness upgrades the pending window to deliverable regardless of any other quality
+                // (AI-002 UR-5): only the fresh-turn latch survives the wait experiment's pressure deletion,
+                // because the session runtime's fresh invalidation bridge still consumes it.
+                if (entry.Scheduling.RequiresFreshTurn)
                 {
-                    _notablePending = true;
+                    _pendingFreshSequenceIDs.Add(entry.SequenceID);
+                    _freshUrgencyPending = true;
                 }
             }
 
-            ObservationDeliveryUrgency? urgencyAfter = PendingDeliveryUrgencyLocked();
-            signalledUrgency = urgencyAfter is { } urgency && (urgencyBefore is not { } before || urgency > before)
-                ? urgency
-                : null;
+            signalledFresh = !freshBefore && _freshUrgencyPending;
             retentionChanges.AddRange(removed.Select(static entry => new RetainedObservationChange(
                 RetainedObservationChangeKind.Removed,
                 entry)));
@@ -1493,13 +1450,14 @@ public abstract partial class Mind : Node
             }
 
             OnObservationIngested(observation);
+            ObservationCommitted?.Invoke(observation);
         }
 
         NotifyRetainedObservationChanges(retentionChanges);
 
-        if (signalledUrgency is { } deliveryUrgency)
+        if (signalledFresh)
         {
-            SignalObservationDelivery(deliveryUrgency);
+            SignalObservationDelivery();
         }
     }
 
@@ -1510,12 +1468,12 @@ public abstract partial class Mind : Node
             ?? (observation as IHasCommitIdentity)?.CommitIdentity;
 
     /// <summary>
-    /// Delivers one urgency upgrade after its committing batch has settled (AI-001 TR-7, AI-002 TR-7): an active wait is
-    /// woken through its normal completion mechanism — never by runner cancellation — with the wake reason matching
-    /// the urgency, and listeners receive delivery urgency plus wait ownership. Disabled minds retain the window
-    /// without waking or signalling (AI-001 TR-7).
+    /// Delivers one fresh-urgency upgrade after its committing batch has settled (AI-001 TR-7, AI-002 TR-7): the
+    /// session runtime's fresh-turn invalidation bridge receives the urgency and whether a wait is parked. The
+    /// wait decision poll is never woken here — it judges from the timeline on its own triggers (wait
+    /// experiment §4). Disabled minds retain the window without signalling.
     /// </summary>
-    private void SignalObservationDelivery(ObservationDeliveryUrgency urgency)
+    private void SignalObservationDelivery()
     {
         bool waitOwned;
         lock (_observationStateLock)
@@ -1526,16 +1484,28 @@ public abstract partial class Mind : Node
             }
 
             waitOwned = _activeWait is not null;
-            if (_activeWait is { } wait)
-            {
-                _ = wait.TryWake(
-                    urgency == ObservationDeliveryUrgency.Fresh
-                        ? ObservationWaitWake.FreshObservation
-                        : ObservationWaitWake.ThresholdCrossed);
-            }
         }
 
-        ObservationDeliverySignalled?.Invoke(new ObservationDeliverySignal(urgency, waitOwned));
+        ObservationDeliverySignalled?.Invoke(new ObservationDeliverySignal(ObservationDeliveryUrgency.Fresh, waitOwned));
+    }
+
+    /// <summary>
+    /// Consumes the pending fresh window through an accepted provider request's context watermark: fresh entries
+    /// at or below the watermark were presented by that request, so only newer fresh observations keep the window
+    /// deliverable.
+    /// </summary>
+    internal void ConfirmProviderRequestContext(long schedulingSequenceID)
+    {
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded || schedulingSequenceID <= 0 || _pendingFreshSequenceIDs.Count == 0)
+            {
+                return;
+            }
+
+            _ = _pendingFreshSequenceIDs.RemoveAll(sequenceID => sequenceID <= schedulingSequenceID);
+            _freshUrgencyPending = _pendingFreshSequenceIDs.Count > 0;
+        }
     }
 
     /// <summary>
@@ -1592,26 +1562,6 @@ public abstract partial class Mind : Node
         lock (_observationStateLock)
         {
             return new ReadOnlyCollection<AcceptedObservationEntry>([.. _persistentEventTimeline]);
-        }
-    }
-
-    /// <summary>
-    /// Confirms scheduling work represented by a successfully accepted provider request. Entries accepted after the
-    /// request's snapshot remain pending, so a racing observation is never silently consumed.
-    /// </summary>
-    internal void ConfirmProviderRequestContext(long schedulingSequenceID)
-    {
-        lock (_observationStateLock)
-        {
-            if (IsNodeLifetimeEnded || schedulingSequenceID <= 0 || _notableAccumulation.Count == 0)
-            {
-                return;
-            }
-
-            _ = _notableAccumulation.RemoveAll(entry => entry.SequenceID <= schedulingSequenceID);
-            _cumulativeNotableImportance = _notableAccumulation.Sum(static entry => entry.Importance);
-            _freshUrgencyPending = _notableAccumulation.Any(static entry => entry.RequiresFreshTurn);
-            _notablePending = _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold;
         }
     }
 
@@ -1725,25 +1675,34 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Waits for scheduling pressure, completing early when accumulated importance reaches the configured threshold,
-    /// when a fresh observation arrives regardless of importance, or when an attended speaker finishes speaking,
-    /// and otherwise after <paramref name="maxWait"/>. Waiting is never an event-delivery or cursor-advancement
-    /// channel; only a later accepted provider context clears pressure (AI-002 TR-7–9).
+    /// Waits until the two-question wait gate starts this character's next turn: a decision poll consults the
+    /// model on a cadence and on speech/scene event nudges while the wait runs; an immediate verdict completes the
+    /// wait at once, a deferred verdict arms its configured deadline under shorten-only rules, and an expired
+    /// deadline completes the wait. The <c>wait</c> tool then returns its payload-free result and the runner
+    /// proceeds exactly as after any tool. Waiting is never an event-delivery or cursor-advancement channel; scene
+    /// events reach the model through the request-context timeline.
     /// </summary>
-    /// <param name="maxWait">Maximum duration of one wait before quiet expiry.</param>
     /// <param name="cancellationToken">Cancellation that abandons the wait; node-lifetime cancellation is terminal
-    /// and never surfaces a normal wait result (AI-001 TR-11). A wait already woken through its normal completion
-    /// mechanism still delivers its window when this token is cancelled afterwards (AI-002 TR-9).</param>
-    /// <returns>The scheduling wake reason. Event text remains exclusively in the request-context timeline.</returns>
-    internal async Task<WaitOutcome> WaitForNotableObservationsAsync(TimeSpan maxWait, CancellationToken cancellationToken)
+    /// and never surfaces a normal wait result (AI-001 TR-11).</param>
+    /// <param name="durationSeconds">Optional explicitly chosen quiet time: it seeds the initial deadline, which
+    /// immediate verdicts pre-empt and sooner verdict deadlines replace, and which nothing extends. Null starts
+    /// with no deadline until a verdict arms one.</param>
+    /// <param name="onGateEntered">Invoked once when the wait actually enters the decision-wait gate — after every
+    /// validation and registration, immediately before the gate runs — and never when the wait is rejected first.</param>
+    /// <returns>The wake reason. Event text remains exclusively in the request-context timeline.</returns>
+    internal async Task<WaitOutcome> WaitForNextTurnAsync(
+        CancellationToken cancellationToken,
+        float? durationSeconds = null,
+        Action? onGateEntered = null)
     {
-        TimeSpan boundedWait = maxWait >= TimeSpan.Zero ? maxWait : MaxObservationWait;
+        ValidateWaitCadenceAuthoring();
+        ValidateWaitDuration(durationSeconds);
         using var waitCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             NodeLifetimeCancellationToken);
         CancellationToken waitToken = waitCancellation.Token;
 
-        ActiveWait wait;
+        object wait;
         lock (_observationStateLock)
         {
             if (IsNodeLifetimeEnded)
@@ -1756,37 +1715,26 @@ public abstract partial class Mind : Node
                 throw new InvalidOperationException($"Mind '{GetPath()}' supports exactly one active observation wait.");
             }
 
-            if (PendingDeliveryUrgencyLocked() is { } heldUrgency)
-            {
-                // Existing pressure wakes immediately but remains pending. The following provider request presents
-                // its context and only local response acceptance consumes it; a wait never advances that cursor.
-                return new WaitOutcome(
-                    heldUrgency == ObservationDeliveryUrgency.Fresh
-                        ? ObservationWaitWake.FreshObservation
-                        : ObservationWaitWake.ThresholdCrossed);
-            }
-
-            wait = _activeWait = new ActiveWait();
+            wait = _activeWait = new object();
         }
 
-        ObservationWaitWake wake = ObservationWaitWake.QuietExpiry;
-        bool wokenByCompletion = false;
         try
         {
-            Task wakeOrExpiry = await Task.WhenAny(
-                wait.Completion.Task,
-                Task.Delay(boundedWait, waitToken)).ConfigureAwait(false);
-            if (ReferenceEquals(wakeOrExpiry, wait.Completion.Task))
-            {
-                wokenByCompletion = true;
-                wake = await wait.Completion.Task.ConfigureAwait(false);
-            }
-            else
-            {
-                // Abandoned wait: cancellation — terminal node lifetime above all — must throw rather than surface a
-                // normal wait result (AI-001 TR-11).
-                waitToken.ThrowIfCancellationRequested();
-            }
+            // The client and the timing acquire here, fail-fast on a broken decision configuration exactly as the
+            // gaze selector's bind-time acquisition.
+            IDecisionClient client = _waitDecisionClientLoader();
+            DecisionWaitTimingSettings timing = _waitTimingLoader();
+            var controller = new DecisionWaitController(
+                this,
+                client,
+                WaitEvaluationIntervalSeconds,
+                timing,
+                _waitJitterSampler,
+                GetStopwatchSeconds,
+                _logger);
+            onGateEntered?.Invoke();
+            ObservationWaitWake wake = await controller.RunAsync(durationSeconds, waitToken).ConfigureAwait(false);
+            return new WaitOutcome(wake);
         }
         finally
         {
@@ -1796,35 +1744,62 @@ public abstract partial class Mind : Node
                 {
                     _activeWait = null;
                 }
-
-                if (wokenByCompletion || !waitToken.IsCancellationRequested)
-                {
-                    // Resolve the current highest-priority pressure at the completion boundary. This lets pressure
-                    // that arrived alongside an attended-speaker cue win over it without clearing any cursor.
-                    if (_freshUrgencyPending || _notablePending)
-                    {
-                        wake = _freshUrgencyPending
-                            ? ObservationWaitWake.FreshObservation
-                            : ObservationWaitWake.ThresholdCrossed;
-                    }
-                }
             }
         }
-
-        return new WaitOutcome(wake);
     }
 
-    /// <summary>Gets the current pending delivery urgency, or null while the accumulation is not deliverable.</summary>
-    private ObservationDeliveryUrgency? PendingDeliveryUrgencyLocked()
-        => _freshUrgencyPending ? ObservationDeliveryUrgency.Fresh
-            : _notablePending ? ObservationDeliveryUrgency.Ordinary
-            : null;
+    /// <summary>Validates an explicit wait duration: null parks on the decision gate alone; otherwise positive and
+    /// finite.</summary>
+    private static void ValidateWaitDuration(float? durationSeconds)
+    {
+        if (durationSeconds is not { } seconds || (float.IsFinite(seconds) && seconds > 0f))
+        {
+            return;
+        }
 
-    private TimeSpan MaxObservationWait
-        => TimeSpan.FromSeconds(Math.Max(MaxObservationWaitSeconds, 0.05f));
+        throw new ArgumentOutOfRangeException(
+            nameof(durationSeconds),
+            durationSeconds,
+            "A deliberate wait duration must be finite and positive.");
+    }
 
-    private float EffectiveObservationImportanceThreshold
-        => Math.Max(ObservationImportanceThreshold, 0.01f);
+    /// <summary>Replaces the wait decision client before a wait for focused runtime coverage.</summary>
+    internal void SetWaitDecisionClientForTesting(IDecisionClient decisionClient)
+    {
+        ArgumentNullException.ThrowIfNull(decisionClient);
+        _waitDecisionClientLoader = () => decisionClient;
+    }
+
+    /// <summary>
+    /// Replaces the wait gate's timing and, optionally, its jitter sampler (unit samples in [0, 1)) before a wait
+    /// for deterministic runtime coverage.
+    /// </summary>
+    internal void SetWaitTimingForTesting(DecisionWaitTimingSettings timing, Func<double>? jitterSampler = null)
+    {
+        ArgumentNullException.ThrowIfNull(timing);
+        _waitTimingLoader = () => timing;
+        if (jitterSampler is not null)
+        {
+            _waitJitterSampler = jitterSampler;
+        }
+    }
+
+    /// <summary>
+    /// The diagnostics settings the wait gate's decision-payload dump consults at wait start. The agentic session
+    /// overrides this with its own diagnostics-settings loader — the same seam its transcript gate uses — so one
+    /// injection point covers the session's diagnostics; the base default resolves production configuration.
+    /// </summary>
+    internal virtual AIDiagnosticsSettings WaitDiagnosticsSettings => AIDiagnosticsSettings.LoadOrDefault();
+
+    private void ValidateWaitCadenceAuthoring()
+    {
+        if (!float.IsFinite(WaitEvaluationIntervalSeconds) || WaitEvaluationIntervalSeconds <= 0f)
+        {
+            throw new InvalidOperationException(
+                $"Mind '{GetPath()}' requires {nameof(WaitEvaluationIntervalSeconds)} to be finite and positive, but "
+                + $"found '{WaitEvaluationIntervalSeconds}'.");
+        }
+    }
 
     private void RejectEndedLifetimeReentry()
     {
@@ -1847,12 +1822,6 @@ public abstract partial class Mind : Node
 
     private static double GetStopwatchSeconds() => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
-    /// <summary>One payload-free staged scheduling entry with once-evaluated importance and freshness.</summary>
-    internal readonly record struct PendingObservation(
-        long SequenceID,
-        float Importance,
-        bool RequiresFreshTurn);
-
     /// <summary>One policy-accepted entry staged until the complete batch can commit atomically.</summary>
     private readonly record struct StagedAcceptance(
         AcceptedObservationEntry Entry,
@@ -1872,7 +1841,7 @@ public abstract partial class Mind : Node
         Func<bool>? IsStillCurrent,
         SpeechObservationTransport? SpeechTransport) : PerceptionWork;
 
-    /// <summary>Outcome of one observation wait, carrying scheduling reason only.</summary>
-    /// <param name="Wake">Reason the wait completed: fresh event, threshold, attended-speaker cue, or timeout.</param>
+    /// <summary>Outcome of one observation wait, carrying its wake reason only.</summary>
+    /// <param name="Wake">Reason the wait completed.</param>
     internal readonly record struct WaitOutcome(ObservationWaitWake Wake);
 }

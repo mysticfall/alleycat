@@ -41,6 +41,13 @@ internal static class DecisionWire
             switch (question)
             {
                 case BooleanQuestion boolean:
+                    if ((boolean.CriteriaTrue is null) != (boolean.CriteriaFalse is null)
+                        || (boolean.CriteriaTrue is not null && string.IsNullOrWhiteSpace(boolean.CriteriaTrue))
+                        || (boolean.CriteriaFalse is not null && string.IsNullOrWhiteSpace(boolean.CriteriaFalse)))
+                    {
+                        throw new DecisionException(DecisionFailure.Input, "Decision boolean criteria must be supplied as both nonblank poles or neither.");
+                    }
+
                     questions.Add(boolean);
                     break;
                 case ChoiceQuestion choice:
@@ -129,7 +136,31 @@ internal static class DecisionWire
                 }
 
                 writer.WriteString("type", TypeName(question, kind));
-                writer.WriteString("instructions", question.Instructions);
+                // Boolean pole guidance rides the dialect's documented criteria shape where one exists — the
+                // noul criteria map — and appends to the instructions as plain text otherwise, so no guidance is
+                // ever silently discarded (AI-014 no-silent-loss).
+                if (question is BooleanQuestion { CriteriaTrue: { } criteriaTrue, CriteriaFalse: { } criteriaFalse })
+                {
+                    if (MapsByName(kind))
+                    {
+                        writer.WriteString("instructions", question.Instructions);
+                        writer.WriteStartObject("criteria");
+                        writer.WriteString("true", criteriaTrue);
+                        writer.WriteString("false", criteriaFalse);
+                        writer.WriteEndObject();
+                    }
+                    else
+                    {
+                        writer.WriteString(
+                            "instructions",
+                            $"{question.Instructions} Answer true when: {criteriaTrue} Answer false when: {criteriaFalse}");
+                    }
+                }
+                else
+                {
+                    writer.WriteString("instructions", question.Instructions);
+                }
+
                 if (question is ChoiceQuestion choice)
                 {
                     if (MapsByName(kind))
@@ -284,7 +315,10 @@ internal static class DecisionWire
         switch (question)
         {
             case BooleanQuestion boolean:
-                return new BooleanAnswer(boolean, Number(item.GetProperty(MapsByName(kind) ? "noul" : "probability"), 1), confidence);
+                return new BooleanAnswer(
+                    boolean,
+                    Number(item.GetProperty(MapsByName(kind) ? "noul" : "probability"), 1),
+                    confidence);
             case ChoiceQuestion choice:
                 {
                     string value = RequiredString(item, "choice");
@@ -384,6 +418,7 @@ internal static class DecisionWire
         double number = value.GetDouble();
         return double.IsFinite(number) && number >= 0 && number <= maximum ? number : throw Invalid();
     }
+
     private static long? Tokens(JsonElement item, string key)
     {
         if (!item.TryGetProperty(key, out JsonElement value))

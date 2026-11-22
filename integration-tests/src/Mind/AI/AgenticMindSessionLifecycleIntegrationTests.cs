@@ -1,8 +1,11 @@
 using System.Text;
+using System.Text.Json;
 using AlleyCat.Character;
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Mind.AI.Decision;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
@@ -50,7 +53,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -107,7 +109,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             Tools = [tool],
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -176,7 +177,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -599,12 +599,16 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, speaker, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
         // independent of a developer machine's `AI:VisualContextMode` override.
         mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
+
+        // The session's automatic post-speech park (§12) resolves immediately through the scripted always-act
+        // wait client, so this fact's consecutive-turn flow stays as fast as before parking existed.
+        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
         mind.AddChild(new SpeechPerception());
         Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
@@ -894,6 +898,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Equal(
                 [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Select(static message => message.Role));
+            // The speech never reached playback hand-off, so it committed no action and the batch never parked.
+            Assert.DoesNotContain(
+                replacement.SelectMany(static message => message.Contents.OfType<FunctionCallContent>()),
+                static call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
             Assert.Contains(
                 replacement.SelectMany(static message => message.Contents.OfType<FunctionCallContent>()),
                 call => call.CallId == "speak-call");
@@ -999,7 +1007,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // player's words.
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Select(static message => message.Role));
             FunctionCallContent retainedSpeak = Assert.Single(
                 replacement.SelectMany(static message => message.Contents.OfType<FunctionCallContent>()),
@@ -1108,6 +1116,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Equal(
                 [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Select(static message => message.Role));
+            // The speech never reached playback hand-off, so it committed no action and the batch never parked.
+            Assert.DoesNotContain(
+                replacement.SelectMany(static message => message.Contents.OfType<FunctionCallContent>()),
+                static call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
             Assert.Contains(
                 replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
                 result => result.CallId == "speak-call");
@@ -1189,6 +1201,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Equal(
                 [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Select(static message => message.Role));
+            // The speech never reached playback hand-off, so it committed no action and the batch never parked.
+            Assert.DoesNotContain(
+                replacement.SelectMany(static message => message.Contents.OfType<FunctionCallContent>()),
+                static call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
             Assert.Contains(
                 replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
                 result => result.CallId == "speak-call");
@@ -1268,7 +1284,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // The settled speak exchange stays retained, and the committed self-speech never arrives as a scene
             // update — it reaches the model through its own retained speak call (AI-002 TR-17/21).
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Select(static message => message.Role));
             Assert.True(ownerVoice.IsSpeaking, "The committed audible speech stays uncut after the cue settles.");
             FunctionCallContent retainedSpeak = Assert.Single(
@@ -1352,7 +1368,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // fresh ordinary observation is delivered by exactly one runtime-authored exchange before the
             // current-scene suffix (AI-002 TR-17/18/21).
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 replacement.Select(static message => message.Role));
             Assert.Equal(AgenticMind.SessionBootstrapInput, replacement[0].Text);
             FunctionCallContent retainedSpeak = Assert.Single(
@@ -1601,101 +1617,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// A resume cancels a still-active wait with the canonical result, and that settled wait exchange stays
-    /// retained: its later grouped completion is delivered exactly once through the runtime-authored
-    /// scene-update exchange, and the naturally-settled later wait is likewise retained rather than rewritten
-    /// (AI-002 TR-17/18).
-    /// </summary>
-    [Fact]
-    public async Task GroupedContinuation_ActiveAndAcceptedWaitsPreserveCanonicalOwnershipAndReconciliation()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        Hearing hearing = new();
-        TestVoice ownerVoice = new()
-        {
-            Id = "owner-voice",
-        };
-        TestVoice source = new()
-        {
-            Id = "external-voice",
-        };
-        TestCharacter owner = new(hearing, ownerVoice);
-        TestCharacter speaker = new(source)
-        {
-            Id = "speaker",
-        };
-        FixturePlayerCharacter player = new();
-        ScriptedSessionClientProvider clientProvider = new();
-        clientProvider.EnqueueCall("wait");
-        clientProvider.EnqueueCall("wait");
-        clientProvider.EnqueueHoldForever();
-        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
-        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
-
-        try
-        {
-            await WaitUntilAsync(sceneTree, () => mind.HasActiveObservationWait);
-            source.EmitSpeechResumed(new SpeechSegmentMetadata("wait-group", 1));
-            await TestUtils.WaitForFramesAsync(sceneTree, 3);
-            _ = Assert.Single(clientProvider.Requests);
-
-            source.PublishCompletedSpeech("wait prefix", new SpeechSegmentMetadata("wait-group", 0), [owner.FullId]);
-            source.PublishCompletedSpeech("wait continuation", new SpeechSegmentMetadata("wait-group", 1), [owner.FullId]);
-            await mind.DrainPerceptionsForTestAsync();
-            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
-
-            IReadOnlyList<ChatMessage> afterCancelledWait = clientProvider.Requests[1];
-            // The cancelled wait batch settled with its canonical cancellation result and stays retained, while
-            // the window is delivered through the runtime-authored scene-update exchange (AI-002 TR-17/18).
-            Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-                afterCancelledWait.Select(static message => message.Role));
-            Assert.Contains(
-                afterCancelledWait.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
-                result => result.Result?.ToString() == AgentSessionRunner.CancelledActionResult);
-            string delivered = GetDeliveredSceneUpdates(afterCancelledWait);
-            Assert.Contains("wait prefix … wait continuation", delivered, StringComparison.Ordinal);
-            Assert.Equal(1, CountOccurrences(delivered, "wait prefix … wait continuation"));
-
-            // The second wait consumes a prefix naturally. Its settled exchange stays retained, so the later
-            // projected utterance must arrive through a new scene-update delivery, never as a wait-result
-            // rewrite.
-            await WaitUntilAsync(sceneTree, () => mind.HasActiveObservationWait);
-            source.PublishCompletedSpeech("accepted wait prefix", new SpeechSegmentMetadata("accepted-wait", 0), [owner.FullId]);
-            await mind.DrainPerceptionsForTestAsync();
-            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 3);
-            source.EmitSpeechResumed(new SpeechSegmentMetadata("accepted-wait", 1));
-            source.PublishCompletedSpeech("accepted wait continuation", new SpeechSegmentMetadata("accepted-wait", 1), [owner.FullId]);
-            await mind.DrainPerceptionsForTestAsync();
-            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 4);
-
-            IReadOnlyList<ChatMessage> continuedRequest = clientProvider.Requests[3];
-            // Both settled wait exchanges stay retained, and the projected utterance arrives only through the
-            // scene-update delivery (AI-002 TR-17/18).
-            Assert.Equal(
-                2,
-                continuedRequest
-                    .SelectMany(static message => message.Contents.OfType<FunctionCallContent>())
-                    .Count(static call => call.Name == "wait"));
-            string deliveredContinuation = GetDeliveredSceneUpdates(continuedRequest);
-            Assert.Contains(
-                "accepted wait prefix … accepted wait continuation",
-                deliveredContinuation,
-                StringComparison.Ordinal);
-            Assert.Equal(
-                1,
-                CountOccurrences(deliveredContinuation, "accepted wait prefix … accepted wait continuation"));
-        }
-        finally
-        {
-            root.QueueFree();
-            clientProvider.Free();
-            player.Free();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-        }
-    }
-
-    /// <summary>
     /// Consecutively completed speak batches accumulate as retained exchanges: every settled speak call and
     /// result replays in the later request in chronological order, committed self-speech never arrives as a
     /// scene update, and the fresh external speech is delivered by one runtime-authored exchange (AI-002
@@ -1746,11 +1667,15 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             IReadOnlyList<ChatMessage> latest = clientProvider.Requests[4];
             // All three settled speak exchanges stay retained in chronological order between the bootstrap input
-            // and the fresh current-scene suffix, and the fresh external speech is delivered by exactly one
-            // runtime-authored scene-update exchange (AI-002 TR-17/18).
+            // and the fresh current-scene suffix, each followed by its automatic park's fabricated wait exchange
+            // (§12), and the fresh external speech is delivered by exactly one runtime-authored scene-update
+            // exchange (AI-002 TR-17/18).
             Assert.Equal(
                 [
                     ChatRole.User,
+                    ChatRole.Assistant, ChatRole.Tool,
+                    ChatRole.Assistant, ChatRole.Tool,
+                    ChatRole.Assistant, ChatRole.Tool,
                     ChatRole.Assistant, ChatRole.Tool,
                     ChatRole.Assistant, ChatRole.Tool,
                     ChatRole.Assistant, ChatRole.Tool,
@@ -1780,7 +1705,66 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
         }
     }
+    /// <summary>
+    /// An ordinary visual description at its provisional importance during held generation is delivered without
+    /// cancellation and rendered through its type-owned safe fallback in accumulation order at the next natural
+    /// boundary (AI-002 UR-5).
+    /// </summary>
+    [Fact]
+    public async Task NotableVisualDescription_DuringGeneration_UsesTypeOwnedFallbackChronologically()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        TaskCompletionSource firstRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CapturingTool tool = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueHoldUntilReleasedCall(firstRequestStarted, releaseGeneration, "capture_context");
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+            Tools = [tool],
+        };
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
+        // independent of a developer machine's `AI:VisualContextMode` override.
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
 
+        try
+        {
+            await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            mind.ObserveForTest(new RouteObservation("world.changed"));
+            mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
+            // The visual description crossed the threshold as an ordinary delivery: the generation still holds.
+            _ = Assert.Single(clientProvider.Requests);
+            _ = releaseGeneration.TrySetResult();
+
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+            string delivered = GetDeliveredSceneUpdates(clientProvider.Requests[1]);
+            Assert.Contains("((Received world.changed event.))", delivered, StringComparison.Ordinal);
+            Assert.DoesNotContain("weathered red coat", delivered, StringComparison.Ordinal);
+            Assert.DoesNotContain("vision.description", delivered, StringComparison.Ordinal);
+
+            (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
+            await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
+
+            IReadOnlyList<AgentObservation> timeline = mind.GetTimelineForTest();
+            Assert.Collection(
+                timeline,
+                observation => Assert.IsType<RouteObservation>(observation));
+        }
+        finally
+        {
+            mind.Free();
+            tool.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
     /// <summary>Ungrouped external speech retains ordinary fresh invalidation and delivery behaviour (AI-002 TR-4/5).</summary>
     [Fact]
     public async Task UngroupedExternalSpeech_StillInvalidatesAndDeliversWithoutContinuationHold()
@@ -1833,172 +1817,660 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// External non-self speech observed mid-wait fulfils the wait through its normal completion mechanism: the
-    /// wait's own tool result reports only its natural ending — never observation text or generic
-    /// action-interrupted wording — the fresh speech plus its preceding FIFO accumulation arrive through the
-    /// runtime-authored scene-update exchange, the batch's trailing call is skipped with the canonical
-    /// cancellation result, no duplicate observation text exists for the wait-owned window, and exactly one
-    /// replacement request follows (AI-002 UR-5, TR-4/5, TR-10, TR-15/18).
+    /// The anti-monopoly path: while the agent parks on <c>wait</c> with the decision poll idle between cadence
+    /// boundaries, an attended speaker's start nudges an out-of-cadence evaluation whose deferred verdict keeps
+    /// the agent parked, and the attended speaker's end — the reply window — nudges the evaluation whose immediate
+    /// verdict completes the wait through its normal payload-free result; the runner then continues to its next
+    /// provider request exactly as after any tool.
     /// </summary>
     [Fact]
-    public async Task ExternalSpeech_DuringActiveWait_DeliversWindowThroughNaturalWaitResultWithSingleReplacement()
+    public async Task AttendedSpeakerEnd_NudgesWaitDecisionToAct_CompletesWaitAndRunnerContinues()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        CapturingTool tool = new();
-        ScriptedSessionClientProvider clientProvider = new();
-        clientProvider.EnqueueCallBatch(
-            new FunctionCallContent("wait-call", "wait", new Dictionary<string, object?> { ["seconds"] = 5f }),
-            new FunctionCallContent("trailing-call", "capture_context", new Dictionary<string, object?>()));
-        clientProvider.EnqueueHoldForever();
-        TestAgenticMind mind = new(owner)
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
         {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            Tools = [tool],
-            ObservationImportanceThreshold = 1f,
+            Id = "owner-voice",
         };
-        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
-        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
-        // independent of a developer machine's `AI:VisualContextMode` override.
-        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCall("wait");
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.NoReason);
+        mind.SetWaitDecisionClientForTesting(waitDecision);
+        // Deferred verdicts arm no deadline that could expire inside the observation window.
+        mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+        // The cadence never elapses inside the observation window: every evaluation below is nudge-driven.
+        mind.WaitEvaluationIntervalSeconds = 120f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
         try
         {
-            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 1);
-            // The observation must land while the wait owns delivery, so synchronise on its registration.
             await WaitUntilAsync(sceneTree, () => mind.HasActiveObservationWait);
+            _ = Assert.Single(clientProvider.Requests);
 
-            // A sub-threshold ordinary observation accumulates without waking the wait, then external non-self
-            // speech upgrades the complete window to fresh urgency and wakes the wait through its normal
-            // completion mechanism.
-            mind.ObserveForTest(new RouteObservation("world.before-speech"));
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?", ["char:owner"]));
+            // The attended speaker's start nudges an immediate evaluation; the deferred verdict keeps the wait.
+            source.BeginSpeechWindow();
+            source.EmitSpeechStarted(new SpeechSegmentMetadata("reply-group", 0));
+            await WaitUntilAsync(sceneTree, () => waitDecision.Triggers.Count >= 1);
+            Assert.Equal(["a speaker this character attends to just started speaking"], waitDecision.Triggers);
+            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+            Assert.True(mind.HasActiveObservationWait);
+            _ = Assert.Single(clientProvider.Requests);
 
+            // The reply window: the attended speaker's end nudges the evaluation whose immediate verdict wakes
+            // the wait through its normal completion, and the runner continues to its next provider request.
+            source.PublishCompletedSpeech(
+                "Could you give me a hand over here?",
+                metadata: new SpeechSegmentMetadata("reply-group", 0),
+                declaredRecipients: [owner.FullId]);
+            await mind.DrainPerceptionsForTestAsync();
+            waitDecision.Verdict = WaitVerdict.ActNow;
+            source.EndSpeechWindow();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
-            await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
-            // Exactly one replacement request replays the complete exchange: bootstrap input, the validated
-            // batch's assistant calls, and one protocol-valid tool-result message — with no extra event message
-            // duplicating the wait-owned window.
-            IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
-            Assert.Equal(2, clientProvider.Requests.Count);
+            Assert.Equal(2, waitDecision.Triggers.Count);
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-                replacement.Select(message => message.Role));
-
-            FunctionResultContent waitResult = Assert.IsType<FunctionResultContent>(replacement[2].Contents[0]);
-            FunctionResultContent trailingResult = Assert.IsType<FunctionResultContent>(replacement[2].Contents[1]);
-            string waitText = waitResult.Result?.ToString() ?? string.Empty;
-
-            // The wait result reports scheduling metadata only; the runtime-authored scene-update exchange owns
-            // all model-visible event text in FIFO order (AI-002 TR-15/18).
-            Assert.Equal("wait-call", waitResult.CallId);
-            Assert.Contains("Wait ended: fresh event.", waitText, StringComparison.Ordinal);
-            Assert.DoesNotContain("world.before-speech", waitText, StringComparison.Ordinal);
-            Assert.DoesNotContain("You there?", waitText, StringComparison.Ordinal);
-            string delivered = GetDeliveredSceneUpdates(replacement);
-            int preceding = delivered.IndexOf("((Received world.before-speech event.))", StringComparison.Ordinal);
-            int speech = delivered.IndexOf("Heard `char:someone-else` say to me: You there?", StringComparison.Ordinal);
-            Assert.True(
-                preceding >= 0 && speech > preceding,
-                $"The scene-update delivery must order the accumulation before the speech: '{delivered}'");
-
-            // No generic action-interrupted wording anywhere in the exchange: the wait reports its natural
-            // delivery, and the canonical cancelled result appears exactly once — only for the never-started
-            // trailing call the stale batch required the runner to skip.
-            Assert.DoesNotContain("cancelled", waitText, StringComparison.Ordinal);
-            Assert.DoesNotContain("Nothing notable happened", waitText, StringComparison.Ordinal);
-            Assert.Empty(tool.CapturedContexts);
-            Assert.Equal("trailing-call", trailingResult.CallId);
-            Assert.Equal("The action was cancelled before it completed.", trailingResult.Result?.ToString());
-            Assert.Contains(
-                replacement.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
-                result => result.Result?.ToString()?.Contains("cancelled before it completed", StringComparison.Ordinal) == true
-                    && result.CallId == "trailing-call");
-
-            // The wait completed naturally and retains no payload-delivery state.
+                "a speaker this character attends to just finished speaking",
+                waitDecision.Triggers[1]);
             Assert.False(mind.HasActiveObservationWait);
-
-            // Node exit ends the held replacement request quietly without issuing another request.
-            (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
-            await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
-            Assert.Equal(2, clientProvider.Requests.Count);
+            Assert.Contains(
+                clientProvider.Requests[1].SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
+                result => (result.Result?.ToString() ?? string.Empty).Contains(
+                    "Wait ended: circumstances may call for you to act.",
+                    StringComparison.Ordinal));
         }
         finally
         {
-            mind.Free();
-            tool.Free();
+            root.QueueFree();
             clientProvider.Free();
             player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
         }
     }
 
     /// <summary>
-    /// An ordinary visual description at its provisional importance during held generation is delivered without
-    /// cancellation and rendered through its type-owned safe fallback in accumulation order at the next natural
-    /// boundary (AI-002 UR-5).
+    /// The wait gate's decision-payload dumps write through the real <c>Mind</c> wait path when
+    /// <c>Diagnostics:AI:EnableDecisionPayloadLogging</c> is on — one self-describing file per evaluation under the
+    /// <c>wait</c> question-category directory — and a mind leaving the toggle off writes nothing.
     /// </summary>
     [Fact]
-    public async Task NotableVisualDescription_DuringGeneration_UsesTypeOwnedFallbackChronologically()
+    public async Task WaitDecisionPayloadDumps_WriteThroughRealWaitPath_WhenToggleEnabled()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        TaskCompletionSource firstRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CapturingTool tool = new();
-        ScriptedSessionClientProvider clientProvider = new();
-        const float provisionalVisualDescriptionImportance = 0.1f;
-        // Keep the threshold strictly below the provisional importance so this remains a crossing if Mind uses
-        // strictly-greater threshold semantics.
-        float visualDescriptionDeliveryThreshold = provisionalVisualDescriptionImportance - 0.01f;
-        clientProvider.EnqueueHoldUntilReleasedCall(firstRequestStarted, releaseGeneration, "capture_context");
-        clientProvider.EnqueueHoldForever();
-        TestAgenticMind mind = new(owner)
+        string dumpRoot = Path.Combine(Path.GetTempPath(), "AlleyCat.WaitDumpTests", Guid.NewGuid().ToString("N"));
+        DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(dumpRoot);
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
         {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            Tools = [tool],
-            ObservationImportanceThreshold = visualDescriptionDeliveryThreshold,
+            Id = "owner-voice",
         };
-        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
-        // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
-        // independent of a developer machine's `AI:VisualContextMode` override.
-        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
 
         try
         {
-            await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.ObserveForTest(new RouteObservation("world.changed"));
-            mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
-            // The visual description crossed the threshold as an ordinary delivery: the generation still holds.
-            _ = Assert.Single(clientProvider.Requests);
-            _ = releaseGeneration.TrySetResult();
+            // Toggle on through the mind's diagnostics loader: the wait gate consults it exactly as the session
+            // transcript gate does, so the process-wide test clamp stays bypassed by injection, not by production.
+            ScriptedSessionClientProvider clientProvider = new();
+            clientProvider.EnqueueCall("wait");
+            clientProvider.EnqueueHoldForever();
+            TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+            mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
+                EnableRequestResponseLogging: false,
+                EnableReasoningLogging: true,
+                EnableSessionTranscriptLogging: false,
+                EnableDecisionPayloadLogging: true));
+            mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+            mind.WaitEvaluationIntervalSeconds = 0.05f;
+            Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
-            string delivered = GetDeliveredSceneUpdates(clientProvider.Requests[1]);
-            Assert.Contains("((Received world.changed event.))", delivered, StringComparison.Ordinal);
-            Assert.DoesNotContain("weathered red coat", delivered, StringComparison.Ordinal);
-            Assert.DoesNotContain("vision.description", delivered, StringComparison.Ordinal);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            root.QueueFree();
+            clientProvider.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
-            (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
-            await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
+            string waitDirectory = CategoryDumpDirectory(dumpRoot, "owner", "wait");
+            string dumpFile = Assert.Single(Directory.GetFiles(waitDirectory));
+            Assert.EndsWith("_char-owner_Cadence_now.json", Path.GetFileName(dumpFile), StringComparison.Ordinal);
+            using (var dump = JsonDocument.Parse(File.ReadAllText(dumpFile)))
+            {
+                JsonElement dumpRootElement = dump.RootElement;
+                Assert.Equal("now", dumpRootElement.GetProperty("verdict").GetString());
+                Assert.Equal(
+                    ["response", "initiative"],
+                    dumpRootElement.GetProperty("questions").EnumerateArray()
+                        .Select(static question => question.GetProperty("name").GetString()));
+                Assert.Equal(
+                    ["expecting_arrived", "must_act"],
+                    dumpRootElement.GetProperty("answers").EnumerateArray()
+                        .Select(static answer => answer.GetProperty("choice").GetString()));
+                Assert.Equal(
+                    "now",
+                    dumpRootElement.GetProperty("waitResolution").GetProperty("step").GetString());
+            }
 
-            IReadOnlyList<AgentObservation> timeline = mind.GetTimelineForTest();
-            Assert.Collection(
-                timeline,
-                observation => Assert.IsType<RouteObservation>(observation));
+            // Toggle off: an identical wait through a mind inheriting the default (test-clamped) settings writes
+            // no further dumps of any category.
+            Hearing quietHearing = new();
+            TestVoice quietOwnerVoice = new()
+            {
+                Id = "quiet-owner-voice",
+            };
+            TestVoice quietSource = new()
+            {
+                Id = "quiet-speaker-voice",
+            };
+            TestCharacter quietOwner = new(quietHearing, quietOwnerVoice);
+            TestCharacter quietSpeaker = new(quietSource)
+            {
+                Id = "quietspeaker",
+            };
+            FixturePlayerCharacter quietPlayer = new();
+            ScriptedSessionClientProvider quietProvider = new();
+            quietProvider.EnqueueCall("wait");
+            quietProvider.EnqueueHoldForever();
+            TestAgenticMind quietMind = CreateVoiceRoutedMind(quietOwner, quietSpeaker, quietPlayer, quietProvider);
+            quietMind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+            quietMind.WaitEvaluationIntervalSeconds = 0.05f;
+            Node quietRoot = AddVoiceRoute(sceneTree, quietHearing, quietOwnerVoice, quietSource, quietMind);
+
+            await WaitUntilAsync(sceneTree, () => quietProvider.Requests.Count >= 2);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            _ = Assert.Single(Directory.GetFiles(waitDirectory));
+            Assert.False(Directory.Exists(CategoryDumpDirectory(dumpRoot, "owner", "gaze")));
+            quietRoot.QueueFree();
+            quietProvider.Free();
+            quietPlayer.Free();
         }
         finally
         {
-            mind.Free();
-            tool.Free();
+            DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(null);
+            if (Directory.Exists(dumpRoot))
+            {
+                Directory.Delete(dumpRoot, recursive: true);
+            }
+
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// A deferred verdict's dump records both answers and the resolved deadline: the first deferral arms its
+    /// timeout (<c>arm-…s</c>) and a later, no-sooner deferral keeps it (<c>keep-…s</c>), never extending it.
+    /// </summary>
+    [Fact]
+    public async Task WaitDecisionPayloadDump_DeferredVerdict_DumpsArmedThenKeptDeadline()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        string dumpRoot = Path.Combine(Path.GetTempPath(), "AlleyCat.WaitDumpTests", Guid.NewGuid().ToString("N"));
+        DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(dumpRoot);
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCall("wait");
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
+            EnableRequestResponseLogging: false,
+            EnableReasoningLogging: true,
+            EnableSessionTranscriptLogging: false,
+            EnableDecisionPayloadLogging: true));
+        ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.MayAct);
+        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(3600d, 600d, 3600d, 0d));
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => waitDecision.Triggers.Count >= 2);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            string[] files = [.. Directory.GetFiles(CategoryDumpDirectory(dumpRoot, "owner", "wait")).Order(StringComparer.Ordinal)];
+            Assert.True(files.Length >= 2, $"Expected at least two wait dumps; found {files.Length}.");
+            Assert.EndsWith("_char-owner_Cadence_arm-600.0s.json", Path.GetFileName(files[0]), StringComparison.Ordinal);
+            Assert.Matches(@"_char-owner_Cadence_keep-\d+\.\ds\.json$", Path.GetFileName(files[1]));
+
+            using var armed = JsonDocument.Parse(File.ReadAllText(files[0]));
+            JsonElement resolution = armed.RootElement.GetProperty("waitResolution");
+            Assert.Equal("armed", resolution.GetProperty("step").GetString());
+            Assert.Equal("may_act", resolution.GetProperty("arm").GetString());
+            Assert.Equal(600d, resolution.GetProperty("requestedSeconds").GetDouble());
+            Assert.Equal("decision", resolution.GetProperty("deadlineSource").GetString());
+            Assert.Equal(
+                ["not_expecting", "may_act"],
+                armed.RootElement.GetProperty("answers").EnumerateArray()
+                    .Select(static answer => answer.GetProperty("choice").GetString()));
+
+            using var kept = JsonDocument.Parse(File.ReadAllText(files[1]));
+            JsonElement keptResolution = kept.RootElement.GetProperty("waitResolution");
+            Assert.Equal("kept", keptResolution.GetProperty("step").GetString());
+            Assert.True(keptResolution.GetProperty("deadlineInSeconds").GetDouble() < 600d);
+            Assert.True(mind.HasActiveObservationWait);
+        }
+        finally
+        {
+            DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(null);
+            if (Directory.Exists(dumpRoot))
+            {
+                Directory.Delete(dumpRoot, recursive: true);
+            }
+
+            root.QueueFree();
             clientProvider.Free();
             player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// A failed wait evaluation dumps its own <c>failed</c>-verdict file — the failure detail the monopoly
+    /// investigation needs — and the wait poll survives to evaluate again instead of the logging path killing it.
+    /// </summary>
+    [Fact]
+    public async Task WaitDecisionPayloadDump_FailureVerdict_DumpsFailedFileAndKeepsPollAlive()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        string dumpRoot = Path.Combine(Path.GetTempPath(), "AlleyCat.WaitDumpTests", Guid.NewGuid().ToString("N"));
+        DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(dumpRoot);
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCall("wait");
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
+            EnableRequestResponseLogging: false,
+            EnableReasoningLogging: true,
+            EnableSessionTranscriptLogging: false,
+            EnableDecisionPayloadLogging: true));
+        ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.ActNow)
+        {
+            Failure = DecisionFailure.Timeout,
+        };
+        mind.SetWaitDecisionClientForTesting(waitDecision);
+        // The failures' no-reason deadline must not expire inside the observation window.
+        mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            // Two failed evaluations prove the poll survived its first contained failure and dumped both.
+            await WaitUntilAsync(sceneTree, () => waitDecision.Triggers.Count >= 2);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            string waitDirectory = CategoryDumpDirectory(dumpRoot, "owner", "wait");
+            Assert.Contains(
+                Directory.GetFiles(waitDirectory),
+                file => file.EndsWith("_char-owner_Cadence_failed.json", StringComparison.Ordinal));
+            string firstFailedDump = Directory.GetFiles(waitDirectory).Order(StringComparer.Ordinal).First();
+            using (var failedDump = JsonDocument.Parse(File.ReadAllText(firstFailedDump)))
+            {
+                Assert.Equal("decision failure Timeout", failedDump.RootElement.GetProperty("failure").GetString());
+                // A failure arms the no-reason timeout for timing; the dump records it.
+                JsonElement failedResolution = failedDump.RootElement.GetProperty("waitResolution");
+                Assert.Equal("failed", failedResolution.GetProperty("step").GetString());
+                Assert.Equal("no_reason", failedResolution.GetProperty("arm").GetString());
+                Assert.Equal(3600d, failedResolution.GetProperty("requestedSeconds").GetDouble());
+                Assert.Equal("decision", failedResolution.GetProperty("deadlineSource").GetString());
+                Assert.True(failedResolution.GetProperty("deadlineInSeconds").GetDouble() > 3500d);
+            }
+            Assert.True(mind.HasActiveObservationWait);
+            _ = Assert.Single(clientProvider.Requests);
+        }
+        finally
+        {
+            DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(null);
+            if (Directory.Exists(dumpRoot))
+            {
+                Directory.Delete(dumpRoot, recursive: true);
+            }
+
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Default session parking (§12): a settled <c>speak</c> batch parks the session unconditionally through the
+    /// decision-wait gate — the next provider request issues only after the gate's act verdict — and the park
+    /// appears in the model's own history as a fabricated <c>wait</c> exchange in exactly the wire shape of a
+    /// real wait: an argument-less assistant call and its payload-free result.
+    /// </summary>
+    [Fact]
+    public async Task Speak_ParksSession_AndFabricatesWaitExchange()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(new FunctionCallContent(
+            "speak-call",
+            "speak",
+            new Dictionary<string, object?> { ["speech"] = "Hello there." }));
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            // The next request issues only after the wait gate's act verdict ends the park.
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+            Assert.False(mind.HasActiveObservationWait);
+
+            IReadOnlyList<ChatMessage> nextRequest = clientProvider.Requests[1];
+            FunctionCallContent fabricatedCall = Assert.Single(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
+            Assert.Equal("wait", fabricatedCall.Name);
+            FunctionResultContent fabricatedResult = Assert.Single(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                result => result.CallId == fabricatedCall.CallId);
+            Assert.Contains(
+                "Wait ended: circumstances may call for you to act.",
+                fabricatedResult.Result?.ToString() ?? string.Empty,
+                StringComparison.Ordinal);
+
+            // The fabricated exchange follows the speak exchange it represents, keeping the retained order
+            // speak → wait → next turn.
+            int speakResultIndex = FindContentMessageIndex(
+                nextRequest,
+                content => content is FunctionResultContent { CallId: "speak-call" });
+            int fabricatedCallIndex = FindContentMessageIndex(
+                nextRequest,
+                content => content is FunctionCallContent { CallId: { } callId }
+                    && callId == fabricatedCall.CallId);
+            Assert.True(fabricatedCallIndex > speakResultIndex);
+        }
+        finally
+        {
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Production speech boundary (TQ-B3): a <c>speak</c> call the real speech tool rejects in validation returns
+    /// normally but never reaches playback hand-off, so it committed no action — the batch never parks: the wait
+    /// gate is never entered and the next ordinary request carries no fabricated park exchange.
+    /// </summary>
+    [Fact]
+    public async Task Speak_RejectedBeforeHandOff_DoesNotPark()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(new FunctionCallContent(
+            "speak-call",
+            "speak",
+            new Dictionary<string, object?>
+            {
+                ["speech"] = "Hello there.",
+                ["recipients"] = new[] { "char:nobody" },
+            }));
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.ActNow);
+        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+
+            IReadOnlyList<ChatMessage> nextRequest = clientProvider.Requests[1];
+            FunctionResultContent speakResult = Assert.Single(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                static result => result.CallId == "speak-call");
+            Assert.StartsWith("Cannot speak:", speakResult.Result?.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                static call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
+            Assert.Empty(waitDecision.Triggers);
+        }
+        finally
+        {
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Production wait boundary (TQ-B3): a trailing explicit <c>wait</c> the real wait tool rejects before entering
+    /// the gate (an invalid duration) never paused the session, so it cannot suppress the park the handed-off
+    /// <c>speak</c> committed — the session parks through the gate and the next ordinary request carries the
+    /// fabricated park exchange after the batch.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithRejectedTrailingWait_StillParks()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(
+            new FunctionCallContent(
+                "speak-call",
+                "speak",
+                new Dictionary<string, object?> { ["speech"] = "Hello there." }),
+            new FunctionCallContent(
+                "wait-call",
+                "wait",
+                new Dictionary<string, object?> { ["seconds"] = -1f }));
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        ScriptedWaitDecisionClient waitDecision = new(WaitVerdict.ActNow);
+        mind.SetWaitDecisionClientForTesting(waitDecision);
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+
+            IReadOnlyList<ChatMessage> nextRequest = clientProvider.Requests[1];
+            List<FunctionResultContent> results =
+                [.. nextRequest.SelectMany(static message => message.Contents).OfType<FunctionResultContent>()];
+            Assert.Equal(
+                "Spoken through the configured voice.",
+                Assert.Single(results, static result => result.CallId == "speak-call").Result?.ToString());
+            Assert.StartsWith(
+                "The action failed:",
+                Assert.Single(results, static result => result.CallId == "wait-call").Result?.ToString(),
+                StringComparison.Ordinal);
+            FunctionCallContent fabricatedCall = Assert.Single(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                static call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
+            int waitResultIndex = FindContentMessageIndex(
+                nextRequest,
+                static content => content is FunctionResultContent { CallId: "wait-call" });
+            int fabricatedCallIndex = FindContentMessageIndex(
+                nextRequest,
+                content => content is FunctionCallContent { CallId: { } callId } && callId == fabricatedCall.CallId);
+            Assert.True(fabricatedCallIndex > waitResultIndex);
+            Assert.NotEmpty(waitDecision.Triggers);
+        }
+        finally
+        {
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// The batching contract (§12): a response carrying two <c>speak</c> invocations performs both together
+    /// without interruption — both results settle in one exchange — and exactly one automatic pause follows the
+    /// last of them, represented by a single fabricated <c>wait</c> exchange after the batch.
+    /// </summary>
+    [Fact]
+    public async Task Speak_Batch_PerformsTogetherAndParksOnceAfter()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Hearing hearing = new();
+        TestVoice ownerVoice = new()
+        {
+            Id = "owner-voice",
+        };
+        TestVoice source = new()
+        {
+            Id = "external-voice",
+        };
+        TestCharacter owner = new(hearing, ownerVoice);
+        TestCharacter speaker = new(source)
+        {
+            Id = "speaker",
+        };
+        FixturePlayerCharacter player = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueCallBatch(
+            new FunctionCallContent(
+                "speak-call-1",
+                "speak",
+                new Dictionary<string, object?> { ["speech"] = "Hello there." }),
+            new FunctionCallContent(
+                "speak-call-2",
+                "speak",
+                new Dictionary<string, object?> { ["speech"] = "Can I ask you something?" }));
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = CreateVoiceRoutedMind(owner, speaker, player, clientProvider);
+        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
+        Node root = AddVoiceRoute(sceneTree, hearing, ownerVoice, source, mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+
+            // Both calls of the batch executed together: one assistant exchange carries both calls and both
+            // results, with no pause between them.
+            IReadOnlyList<ChatMessage> nextRequest = clientProvider.Requests[1];
+            Assert.Contains(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                result => result.CallId == "speak-call-1");
+            Assert.Contains(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
+                result => result.CallId == "speak-call-2");
+
+            // Exactly one automatic pause followed the last call of the batch, recorded as one fabricated wait
+            // exchange after both speak results.
+            FunctionCallContent fabricatedCall = Assert.Single(
+                nextRequest.SelectMany(static message => message.Contents).OfType<FunctionCallContent>(),
+                call => call.CallId.StartsWith("runtime-session-park-", StringComparison.Ordinal));
+            Assert.Equal("wait", fabricatedCall.Name);
+            int lastSpeakResultIndex = FindContentMessageIndex(
+                nextRequest,
+                content => content is FunctionResultContent { CallId: "speak-call-2" });
+            int fabricatedCallIndex = FindContentMessageIndex(
+                nextRequest,
+                content => content is FunctionCallContent { CallId: { } callId } && callId == fabricatedCall.CallId);
+            Assert.True(fabricatedCallIndex > lastSpeakResultIndex);
+        }
+        finally
+        {
+            root.QueueFree();
+            clientProvider.Free();
+            player.Free();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
         }
     }
 
@@ -2021,7 +2493,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2074,7 +2545,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2128,7 +2598,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2184,7 +2653,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2245,7 +2713,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2296,7 +2763,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             Tools = [tool],
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2349,7 +2815,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             Tools = [tool],
-            ObservationImportanceThreshold = 1f,
             InvalidResponseRecoveryBudget = 2,
             InvalidResponseRecoveryBackoffSeconds = [0f],
         };
@@ -2409,7 +2874,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             Tools = [tool],
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
@@ -2496,11 +2960,15 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             Tools = [.. tools],
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(
             () => new SceneContext(extraSceneMember is null ? [owner, speaker, player] : [owner, speaker, player, extraSceneMember]));
         mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
+        // The session's automatic post-behaviour park (§12) resolves immediately for every voice-routed mind:
+        // an always-act wait client on a fast cadence keeps consecutive-turn fixtures as fast as before parking
+        // existed, while facts that configure their own wait clients or cadences override these afterwards.
+        mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
         mind.AddChild(new SpeechPerception());
         // Start and resume cues are gated by source-generic attention, so the routed speaker stays attended for
         // the whole session without relying on decay-sensitive defaults.
@@ -2656,6 +3124,34 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     private static IReadOnlyList<string> TimelineValues(TestAgenticMind mind)
         => [.. mind.GetTimelineForTest().Cast<TestObservation>().Select(static observation => observation.Value)];
 
+    /// <summary>Finds the first message index whose contents satisfy the predicate, failing when absent.</summary>
+    private static int FindContentMessageIndex(
+        IReadOnlyList<ChatMessage> messages,
+        Func<AIContent, bool> predicate)
+    {
+        for (int index = 0; index < messages.Count; index++)
+        {
+            if (messages[index].Contents.Any(predicate))
+            {
+                return index;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected a message carrying the described content.");
+    }
+
+    /// <summary>
+    /// Resolves a category's dump directory inside the transcript-log layout: the override root's single latched
+    /// session directory, then the named character's directory, then the dump directory and category — the same
+    /// convention as the per-character transcript logs, so both log families share one session directory.
+    /// </summary>
+    private static string CategoryDumpDirectory(string dumpRoot, string characterId, string category)
+        => Path.Combine(
+            Assert.Single(Directory.GetDirectories(dumpRoot)),
+            characterId,
+            DecisionPayloadDumpRecorder.DumpDirectoryName,
+            category);
+
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames = 300)
     {
         for (int frame = 0; frame < maxFrames && !predicate(); frame++)
@@ -2700,6 +3196,38 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
 
         protected override ICharacter ResolveOwningCharacter() => owner;
+    }
+
+    /// <summary>
+    /// Scripted wait decision client: answers both wait-gate questions with a reconfigurable verdict or a typed
+    /// failure, recording every evaluation's trigger evidence line.
+    /// </summary>
+    private sealed class ScriptedWaitDecisionClient(WaitVerdict verdict) : IDecisionClient
+    {
+        public WaitVerdict Verdict
+        {
+            get; set;
+        } = verdict;
+
+        public DecisionFailure? Failure
+        {
+            get;
+            set;
+        }
+
+        public List<string> Triggers { get; } = [];
+
+        public Task<DecisionResult> EvaluateAsync(
+            DecisionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string? trigger = Assert.IsType<JsonElement>(request.Evidence).GetProperty("trigger").GetString();
+            Triggers.Add(trigger ?? string.Empty);
+            return Failure is { } failure
+                ? throw new DecisionException(failure, "Scripted wait decision failure.")
+                : Task.FromResult(ScriptedWaitVerdicts.Answer(request, Verdict));
+        }
     }
 
     private partial class TestVoice : Voice

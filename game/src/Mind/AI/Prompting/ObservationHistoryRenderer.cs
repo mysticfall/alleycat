@@ -12,13 +12,17 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
 {
     /// <summary>Renders ordered observation records through their type-owned canonical text.</summary>
     /// <param name="observations">Observation records in timeline order.</param>
+    /// <param name="nowSeconds">The composition moment's game time, so every event time states how long ago it
+    /// happened relative to when the model reads it.</param>
     /// <returns>The rendered observation text for the supplied records.</returns>
-    public ValueTask<string> RenderAsync(IReadOnlyList<AgentObservation> observations)
-        => RenderAsync(observations, observations);
+    public ValueTask<string> RenderAsync(IReadOnlyList<AgentObservation> observations, double? nowSeconds = null)
+        => RenderAsync(observations, observations, nowSeconds);
 
     /// <summary>Renders accepted entries while preserving their private transport for projection only.</summary>
-    public ValueTask<string> RenderAsync(IReadOnlyList<AcceptedObservationEntry> observations)
-        => RenderAsync(observations, observations);
+    public ValueTask<string> RenderAsync(
+        IReadOnlyList<AcceptedObservationEntry> observations,
+        double? nowSeconds = null)
+        => RenderAsync(observations, observations, nowSeconds);
 
     /// <summary>
     /// Renders a selected window using the full timeline to expand any selected grouped speech into its complete,
@@ -26,17 +30,21 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
     /// </summary>
     public ValueTask<string> RenderAsync(
         IReadOnlyList<AgentObservation> observations,
-        IReadOnlyList<AgentObservation> timeline)
-        => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations));
+        IReadOnlyList<AgentObservation> timeline,
+        double? nowSeconds = null)
+        => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations), nowSeconds);
 
     /// <summary>Renders accepted entries while retaining their private transport for projection only.</summary>
     public ValueTask<string> RenderAsync(
         IReadOnlyList<AcceptedObservationEntry> observations,
-        IReadOnlyList<AcceptedObservationEntry> timeline)
-        => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations));
+        IReadOnlyList<AcceptedObservationEntry> timeline,
+        double? nowSeconds = null)
+        => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations), nowSeconds);
 
     /// <summary>Renders pre-projected model events through their type-owned canonical text.</summary>
-    internal ValueTask<string> RenderProjectedAsync(IReadOnlyList<ContinuationProjection.Event> events)
+    internal ValueTask<string> RenderProjectedAsync(
+        IReadOnlyList<ContinuationProjection.Event> events,
+        double? nowSeconds = null)
     {
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(character);
@@ -48,7 +56,7 @@ internal sealed class ObservationHistoryRenderer(ICharacter character)
         {
             AgentObservation observation = @event.Observation ?? throw new ArgumentException(
                 "Events contain a null observation.", nameof(events));
-            return observation.Render(character);
+            return observation.Render(character, nowSeconds);
         }
     }
 }

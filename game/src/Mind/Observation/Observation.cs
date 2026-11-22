@@ -1,5 +1,5 @@
-using System.Globalization;
 using AlleyCat.Character;
+using AlleyCat.Core.Time;
 using AlleyCat.Mind.Attention;
 
 namespace AlleyCat.Mind.Observation;
@@ -32,8 +32,8 @@ public abstract record Observation
 
     /// <summary>
     /// Game-time timestamp in seconds elapsed since the game began, stamped exactly once by the owning Mind at
-    /// ingestion, or null when the record was not ingested through a Mind. Used for authored time labels such as
-    /// "(at 30.5s game time)".
+    /// ingestion, or null when the record was not ingested through a Mind. Used for authored relative time labels
+    /// such as "(2 min 30 sec ago)".
     /// </summary>
     public double? ObservedAt
     {
@@ -44,16 +44,20 @@ public abstract record Observation
     /// <summary>
     /// Renders canonical model-facing text for this observation from the owning character's perspective.
     /// </summary>
+    /// <param name="character">Character whose subjective timeline owns the observation.</param>
+    /// <param name="nowSeconds">The composition moment's game time, so the event-time suffix states how long ago
+    /// the event happened relative to when the model reads it; null omits the suffix entirely rather than
+    /// rendering an absolute time the model would have to compare itself.</param>
     /// <remarks>
     /// The fallback intentionally uses only <see cref="TypeKey"/> so a future observation cannot accidentally
     /// disclose arbitrary payload data before it supplies its own rendering body.
     /// </remarks>
-    public string Render(ICharacter character)
+    public string Render(ICharacter character, double? nowSeconds = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         string body = RenderBody(character);
-        return ObservedAt is { } observedAt
-            ? $"{body} (at {observedAt.ToString("F1", CultureInfo.InvariantCulture)}s game time)"
+        return ObservedAt is { } observedAt && nowSeconds is { } now
+            ? $"{body} ({RelativeGameTime.FormatAgo(now - observedAt)})"
             : body;
     }
 

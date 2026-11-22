@@ -53,7 +53,6 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
                 ResourceLoader.Load(CurrentScenePromptPath),
                 exactMatch: false),
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
             // The attended player must survive the whole request cycle without decay-sensitive defaults.
             AttentionDecayPerSecond = 0f,
         };
@@ -97,6 +96,10 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             Assert.Equal(
                 "Heard `char:fixture_player` say to me: I am heading to the market now.",
                 ExtractObservedLine(delivery.Result?.ToString()));
+            // The delivered line's event time is relative to this request's composition moment: a fresh reply
+            // delivered immediately reads "just now", never an absolute game time.
+            Assert.Contains("(just now)", delivery.Result?.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("game time)", delivery.Result?.ToString(), StringComparison.Ordinal);
 
             // Fresh current-scene status renders last on the same request, stating its snapshot's
             // current game time unconditionally — including with an attended character present.
@@ -180,6 +183,59 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
             Assert.Contains("reply opportunity", choosingActions, StringComparison.Ordinal);
             Assert.Contains("addressed to other characters", choosingActions, StringComparison.Ordinal);
             Assert.Contains("overheard context", choosingActions, StringComparison.Ordinal);
+        }
+        finally
+        {
+            mind.QueueFree();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>
+    /// The delivered instruction anchors each time correctly (AI-003 TR-9, TR-14): the current scene time describes
+    /// the latest request's snapshot, while a retained event's age is relative to the scene update that first
+    /// delivered it and is never re-aged — so a retained "just now" is not presented as happening now.
+    /// </summary>
+    [Fact]
+    public async Task ProviderRequest_InstructionAnchorsEventAgesToTheirOwnSceneUpdate()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        CapturingSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack
+            {
+                Sections = [new FilePromptSection { FilePath = "res://prompts/mind.md", Name = "Instructions" }],
+            },
+            CurrentSceneStatus = Assert.IsType<PromptStack>(
+                ResourceLoader.Load(CurrentScenePromptPath),
+                exactMatch: false),
+            ClientProvider = clientProvider,
+        };
+        mind.AddChild(new AttendedCharacterSceneStatusProjector
+        {
+            ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
+        });
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await WaitUntilAsync(sceneTree, () => clientProvider.Captures.Count == 1);
+            string time = AuthoredSection(clientProvider.Captures[0].Instructions, "Time");
+
+            // Current scene time: the latest request's snapshot.
+            Assert.Contains("the moment the latest request was captured", time, StringComparison.Ordinal);
+            // Retained event age: relative to its own scene update, never re-aged, so not current.
+            Assert.Contains("relative to the scene update that first delivered it", time, StringComparison.Ordinal);
+            Assert.Contains("never updated afterwards", time, StringComparison.Ordinal);
+            Assert.Contains("not that it is happening now", time, StringComparison.Ordinal);
         }
         finally
         {
@@ -312,8 +368,9 @@ public sealed partial class SharedGuidanceDeliveryIntegrationTests
         Assert.NotNull(delivered);
         string line = delivered!.Split('\n').Single(
             static line => line.Contains("char:fixture_player", StringComparison.Ordinal));
-        // Canonical lines keep their observation time suffix (AI-001); strip it for the wording comparison.
-        int suffix = line.IndexOf(" (at ", StringComparison.Ordinal);
-        return suffix > 0 ? line[..suffix] : line;
+        // Canonical lines keep their relative observation-age suffix (for example " (just now)"); strip it for
+        // the wording comparison.
+        int suffix = line.LastIndexOf(" (", StringComparison.Ordinal);
+        return suffix > 0 && line.EndsWith(')') ? line[..suffix] : line;
     }
 }

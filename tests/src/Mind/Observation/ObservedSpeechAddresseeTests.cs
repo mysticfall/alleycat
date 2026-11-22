@@ -14,7 +14,6 @@ namespace AlleyCat.Tests.Mind.Observation;
 /// </summary>
 public sealed class ObservedSpeechAddresseeTests
 {
-    private const float DefaultObservationImportanceThreshold = 1f;
 
     /// <summary>The addressee state derives from actor identity and the observer-relative set exactly.</summary>
     [Fact]
@@ -71,10 +70,10 @@ public sealed class ObservedSpeechAddresseeTests
         Assert.Equal(1f, undecided);
         Assert.Equal(1f, undecidedUnknown);
         Assert.Equal(0.25f, toAnother);
-        // To-me is high; undecided is notable and crosses the default threshold; to-another accumulates below it.
-        Assert.True(toMe >= DefaultObservationImportanceThreshold);
-        Assert.True(undecided >= DefaultObservationImportanceThreshold);
-        Assert.True(toAnother < DefaultObservationImportanceThreshold);
+        // To-me is high; undecided is notable; to-another stays low — the tiering that fresh-turn urgency and
+        // any accumulation policy build on.
+        Assert.True(toMe > undecided);
+        Assert.True(undecided > toAnother);
     }
 
     /// <summary>Only addressed-to-me speech requires a fresh turn; every other state never claims the turn.</summary>

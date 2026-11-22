@@ -1899,18 +1899,32 @@ public sealed class AgentSessionRunnerTests
     /// Node-lifetime cancellation racing a fresh invalidation wins: the session
     /// ends quietly, and no replacement request is issued (AI-002 TR-14 versus TR-4/5).
     /// </summary>
+    /// <remarks>
+    /// The race is made deterministic with a barrier, not timing: the held request observes the fresh
+    /// invalidation's cancellation but cannot complete it until the lifetime cancellation has also been issued, so
+    /// the runner always sees both together. Without the barrier the runner could observe the fresh invalidation
+    /// alone and legitimately start its replacement before the lifetime cancellation arrived — the distinct
+    /// fresh-replacement behaviour covered by the fresh-turn invalidation tests.
+    /// </remarks>
     [Fact]
     public async Task RunAsync_WhenLifetimeCancelsRacingFreshInvalidation_EndsQuietlyWithoutReplacementRequest()
     {
         TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource freshCancellationObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource bothCancellationsIssued = new(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(HoldUntilCancelledStep(requestStarted));
+        ScriptedSessionClient client = new(HoldUntilCancelledStep(
+            requestStarted,
+            freshCancellationObserved,
+            bothCancellationsIssued.Task));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await requestStarted.Task;
         runner.InvalidateForFreshTurn();
+        await freshCancellationObserved.Task;
         lifetime.Cancel();
+        _ = bothCancellationsIssued.TrySetResult();
         await runTask;
 
         _ = Assert.Single(client.Requests);

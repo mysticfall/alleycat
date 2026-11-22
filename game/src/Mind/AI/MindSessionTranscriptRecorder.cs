@@ -36,6 +36,18 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
     /// <summary>The canonical transcript root under the Godot user-data tree (AI-011 TR-2).</summary>
     internal const string UserRootPath = "user://logs/mind";
 
+    /// <summary>
+    /// Composes the process-wide session directory beneath the supplied root: the latched game-run-start
+    /// timestamp (TR-2/TR-3) — the one directory every per-character mind-log family groups under. Session
+    /// transcripts and decision-payload dumps resolve their session directory through this single helper, so both
+    /// log families can never disagree about the session directory within one game run.
+    /// </summary>
+    internal static string GetRunDirectory(string rootPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
+        return Path.Combine(rootPath, EnsureRunTimestamp());
+    }
+
     private const string TurnFileNamePrefix = "turn-";
 
     private const string TurnFileNameExtension = ".md";
@@ -101,7 +113,7 @@ internal sealed class MindSessionTranscriptRecorder : IAgentSessionTranscriptSin
             }
 
             string rootPath = _rootPathOverride ?? _rootPathResolver();
-            string directory = Path.Combine(rootPath, EnsureRunTimestamp(), _characterId);
+            string directory = Path.Combine(GetRunDirectory(rootPath), _characterId);
             EnsureRunDirectory(directory);
             int turnNumber = TakeNextTurnNumber(_characterId);
             string contents = MindSessionTranscriptFormatter.Render(cycle, turnNumber, _characterId);

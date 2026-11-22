@@ -26,16 +26,18 @@ public partial class SpeechTool : AgentTool
     public SpeechTool()
     {
         ToolName = ProductionToolName;
+        ParksSessionByDefault = true;
         ToolDescription = "Speak the supplied text aloud through your voice. The text must contain only the spoken "
             + "words themselves — no emotes, stage directions, narration, or markup. Keep each utterance short, "
             + "around twenty words. When one contribution runs longer, split it into several short consecutive "
-            + "speak calls with no wait in between — this is strongly recommended, because shorter parts begin "
-            + "being spoken sooner and this allows later parts to be prepared while earlier speech plays. "
-            + "These calls deliver a single contribution: once it is finished, normally yield and give the other "
-            + "person room to reply as the situation warrants. This call remains in your context as the record of "
-            + "what you said. Speaking is optional and repeatable. Pass `recipients` as the array of characters "
-            + "you are addressing — the exact backticked character IDs appearing in your context, passed as bare "
-            + "ID strings without backticks, such as \"char:rin\" — whenever your speech is addressed to specific "
+            + "speak calls in the same response — this is strongly recommended, because shorter parts begin "
+            + "being spoken sooner and this allows later parts to be prepared while earlier speech plays, and "
+            + "calls made together in one response are performed together without interruption. Once your spoken "
+            + "contribution is finished the session pauses automatically to let others respond, so you never need "
+            + "to ask for room to reply. This call remains in your context as the record of what you said. "
+            + "Speaking is optional and repeatable. Pass `recipients` as the array of characters you are "
+            + "addressing — the exact backticked character IDs appearing in your context, passed as bare ID "
+            + "strings without backticks, such as \"char:rin\" — whenever your speech is addressed to specific "
             + "people; multiple recipients are allowed. Omit `recipients` or pass an empty array when the address "
             + "is unspecified; omitting does not mean everyone.";
     }
@@ -72,6 +74,7 @@ public partial class SpeechTool : AgentTool
             + "bare ID strings without backticks, such as \"char:rin\". Multiple recipients are allowed. "
             + "Omit or pass an empty array when the address is unspecified; omitting does not mean everyone.")]
         IReadOnlyList<string>? recipients = null,
+        AgentSessionInvocationSignals? signals = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -147,6 +150,11 @@ public partial class SpeechTool : AgentTool
             // Pre-hand-off withdrawal is silent (SPCH-005 TR-25): no observed speech, no failure broadcast.
             return new AgentToolResult(CutShortBeforeSpokenMessage);
         }
+
+        // Accepted playback hand-off reached: the typed action-commit signal for the session's default parking
+        // (AI-002 TR-14). Every earlier return — validation rejection, refused admission, pre-hand-off withdrawal —
+        // committed nothing and raises no signal.
+        signals?.MarkActionCommitted();
 
         // The self observation is pre-stamped with the owning character's canonical identity; Mind's ingest-side
         // owner stamping re-applies the same value idempotently. Declared recipients ride the observation so the

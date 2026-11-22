@@ -58,7 +58,8 @@ internal static class SyntheticSceneUpdateExchange
         IReadOnlyList<AcceptedObservationEntry> timeline,
         long deliveredSequenceID,
         ICharacter owner,
-        string callId)
+        string callId,
+        double nowSeconds)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentException.ThrowIfNullOrWhiteSpace(callId);
@@ -69,7 +70,7 @@ internal static class SyntheticSceneUpdateExchange
             return [];
         }
 
-        string rendered = await new ObservationHistoryRenderer(owner).RenderAsync(pending, timeline);
+        string rendered = await new ObservationHistoryRenderer(owner).RenderAsync(pending, timeline, nowSeconds);
         return
         [
             new ChatMessage(

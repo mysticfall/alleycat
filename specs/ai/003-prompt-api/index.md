@@ -27,10 +27,10 @@ act on information it has already been supplied.
 5. The shared instruction gives each NPC character-neutral guidance sufficient to interpret its supplied context —
    its own retained exchanges, automatic scene updates, and the fresh current-scene status — without any tool call.
 6. Shared guidance distinguishes acting on an available reply from waiting for a future one: an NPC is never told that
-   waiting is necessary to receive context. NPCs normally make room for replies after conversational contributions,
-   while initiative, silence, and waiting remain legitimate in-character choices rather than forced alternating turns.
-8. An NPC always sees the current game time in its current scene status — including when no character is attended — on
-    the same clock as its delivered event timestamps.
+   waiting is necessary to receive context. World actions automatically make room for others; parts submitted together
+   need no pause between them. Initiative, silence, and choosing quiet time remain valid in-character choices.
+8. An NPC always sees the current game time in its current scene status, even when no character is attended. Delivered
+   event ages state how long ago events happened when their scene update was composed, using the same game clock.
 9. An NPC keeps its automatic lore context and receives a stable, grouped catalogue of remaining available lore, with
    guidance to retrieve relevant entries before acting without making retrieval mandatory.
 10. Speech events may state whom the speaker addressed. Shared guidance teaches an NPC to use that wording — treating
@@ -53,9 +53,9 @@ act on information it has already been supplied.
 5. Initial current-scene projections include attended characters. Future projectors must use the same
    typed, immutable, stable-ID contract.
 6. `CurrentSceneStatus` renders the request snapshot's current game time unconditionally, including when the attended
-   list is empty. The rendered time uses the game clock's invariant one-decimal (`F1`) form — the same clock that
-   event-timestamp suffixes use (TR-9) — while rendered events keep their original observation times. The capture is
-   frozen with its request: exact transport retries keep it, and a rematerialised request captures afresh.
+   list is empty, as an absolute game-clock value in invariant one-decimal (`F1`) form. Event ages use the same
+   clock but refer to their own composition moment (TR-9). The scene-status capture is frozen with its request:
+   exact transport retries keep it, and a rematerialised request captures afresh.
 7. Static instruction rendering uses the session-fixed render context, including `ScenarioContext` and scenario. Fresh
    current-scene snapshots must not mutate, replace, or re-resolve either session-fixed value.
 
@@ -65,8 +65,11 @@ act on information it has already been supplied.
    invokes each observation's canonical renderer with owner context, and joins entries with exactly one newline for
    the tool result of AI-002's runtime-authored scene-update exchange (AI-002 TR-18).
 9. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
-   `TypeKey`-only base fallback, and shared timestamp suffix. No `event_history.md` asset, event-history parser,
-   fragment catalogue, `EventHistoryPath`, or authored `TypeKey` dispatch exists.
+   `TypeKey`-only base fallback, and shared event-age suffix. Derive the age when composing the exchange from the
+   original observation time and the current game time; omit the suffix if either is unavailable (AI-001 TR-12).
+   The retained exchange keeps that composed text, including its age suffix, without re-ageing in later requests.
+   No `event_history.md` asset, event-history parser, fragment catalogue, `EventHistoryPath`, or authored `TypeKey`
+   dispatch exists.
 10. Speech rendering remains actor-relative and must not render raw `VoiceId` or continuation transport metadata.
     `ContinuationProjection` remains responsible for speech-segment grouping, ordering, correlation, and latest-event
     placement for delivered observations: a projected speech group's segments join into one line at its latest
@@ -92,24 +95,19 @@ act on information it has already been supplied.
     addressee-annotated speech entries: wording may state that the speaker addressed the NPC or name other characters,
     and neutral entries make no addressee claim, leaving the addressee to be inferred from context.
 14. Current-scene guidance must present the per-request status as a fresh, evidence-limited view rather than an
-    exhaustive scene inventory: observation timestamps bound evidence freshness, absent evidence does not establish
-    absence, and historical events do not establish current positions. It must not contradict the common game clock or
-    the status's snapshot semantics (TR-6): the current time and every event timestamp read one clock, and the status
-    describes its request's captured moment rather than a live view.
-15. Action-selection guidance must direct the NPC to consider relevant available history — including an available
-    reply — before choosing an action, and to treat `wait` as intentionally yielding to future developments or
-    remaining silent, never as a precondition for receiving context (AI-002 UR-3/TR-8). It must preserve the NPC's
-    freedom to act, speak, or stay silent according to character and scenario. It must not contradict exchange
-    retention (AI-002 TR-17–TR-22): the NPC's own `speak`/`wait` exchanges remain in context as its action record,
-    scene events arrive through automatic scene updates, and completed actions also surface through fresh scene
-    status. Guidance must distinguish provider requests from human conversational turns: ending output alone does not
-    give another person time to reply. Normally yield after a conversational contribution unless a relevant unresolved
-    reply or a concrete in-character reason supports acting now. Use chronology and the NPC's own conversation record
-    — including speech addressee wording where present — to distinguish such replies from already-addressed speech,
-    and treat speech addressed to other characters as overheard context rather than a reply opportunity.
-    Startup, empty history, repeated requests, wait
-    expiry, or silence alone must not require speech or repeated prompting. Preserve initiative without fixed delays,
-    word caps, or forced turns.
+    exhaustive scene inventory: event ages reflect their composition moment, absent evidence does not establish
+    absence, and historical events do not establish current positions. Scene status describes its request's captured
+    moment rather than a live view (TR-6, TR-9).
+15. Action-selection guidance must tell the NPC to consider available history, including relevant unresolved replies,
+    before acting. Use chronology, the NPC's conversation record, and addressee wording to distinguish such replies
+    from already-addressed speech; treat speech to others as overheard context rather than a reply opportunity.
+    Explain that the runtime parks automatically after committed actions and allows same-contribution calls to run
+    together before that pause. Explicit `wait(seconds)` chooses quiet time that may end early; it is never needed
+    to receive context. [AI-002 TR-8][runtime-wait] and [TR-39][runtime-parking] are normative for these behaviours.
+    Preserve retained `speak`/`wait` records, automatic scene updates, and fresh status as action context under
+    AI-002 TR-17–TR-22. A provider request or wake is an opportunity, not a conversational turn or a command to act.
+    Startup, empty history, repeated requests, wait expiry, or silence alone require neither speech nor repeated
+    prompting. Initiative and silence remain valid according to character and scenario.
 17. The shared NPC static stack preserves essential-world bodies followed by scene-character bodies, then renders
     AI-004's grouped catalogue of all remaining eligible observer/content-scoped entries. AI-004 normatively owns
     metadata, shared selection/exclusion, ordering, canonical-ID presentation, empty output, formatting, and
@@ -155,14 +153,13 @@ act on information it has already been supplied.
 4. Acceptance shows the shared instruction explains how the scene reaches the NPC — its own retained exchanges,
    automatic scene updates, and the fresh evidence-limited current-scene status — and never
    states that waiting is necessary to receive supplied context.
-5. Acceptance shows action-selection guidance distinguishes engaging with an available reply from waiting for a future
-   one using chronology and the NPC's own conversation record rather than assumptions about already-addressed speech.
-   It distinguishes provider requests and output completion from making room for a human reply, normally directs
-   yielding after a contribution, and does not demand speech or repeated prompting merely because of startup, empty
-   history, repeated requests, wait expiry, or silence. Character-driven initiative and exceptions remain valid
-   without fixed delays, word caps, or forced alternating turns (UR-6, TR-13–TR-15).
-6. Acceptance shows the current scene status always presents the current game time — including with an empty attended
-   list — on the same clock as event timestamps, while event entries keep their original observation times.
+5. Acceptance shows guidance uses chronology and the NPC's conversation record to distinguish an available reply
+   from a future one. It explains automatic parking, same-batch pacing, and deliberate `wait(seconds)` without
+   teaching manual yielding or mandatory speech on waking. Character-driven initiative and silence remain valid
+   (UR-6; TR-13–TR-15).
+6. Acceptance shows current scene status always presents the current game time, including with an empty attended
+   list, and delivered events show their age as of composition without changing in later retained context
+   (UR-8; TR-6, TR-9).
 7. Acceptance shows the shared instruction never contradicts the common game clock, the snapshot capture of the
     current scene status, or completed actions surfacing through the NPC's own retained exchanges, automatic scene
     updates, and current scene status.
@@ -191,12 +188,13 @@ act on information it has already been supplied.
    and carries no model-facing newly-presented marking or confirmed-watermark derivation (AI-002 TR-3), while
    projected speech uses canonical observation-owned text.
 7. Tests verify the authored shared instruction contains guidance covering each required concept — how the scene
-    reaches the NPC, speech-addressee wording, current-scene evidence limits and timestamps, action selection,
-    and lore retrieval — and stays consistent with AI-002's automatic scene-update delivery, payload-free wait
-    semantics, and exchange retention.
-9. Tests verify the scene status renders its snapshot's current game time unconditionally — including with an empty
-   attended list — in the invariant one-decimal form on the same clock as event-timestamp suffixes, and that rendered
-   events keep their original observation times.
+   reaches the NPC, speech-addressee wording, current-scene evidence limits and time framing, action selection,
+   and lore retrieval. It teaches automatic parking, same-batch pacing, and deliberate waits without contradicting
+   AI-002's automatic delivery, payload-free wait results, or exchange retention (TR-12–TR-15).
+9. Tests verify scene status always renders absolute snapshot game time in invariant `F1` form, including with an
+   empty attended list. Event rendering derives age from the original observation time and composition time on
+   that clock, omits the suffix if either time is unavailable, and does not re-age a retained exchange when the
+   current-scene snapshot advances (TR-6, TR-9; AI-001 TR-12).
 10. Tests verify the current-time capture is frozen with its request — exact transport retries keep it while recovery
     and replacement recapture — and that the authored shared guidance does not contradict the common game clock, the
      snapshot capture, or completed actions surfacing through the NPC's own retained exchanges, automatic scene
@@ -215,3 +213,6 @@ act on information it has already been supplied.
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
+
+[runtime-wait]: ../002-agent-runtime/index.md#scheduling-and-wait
+[runtime-parking]: ../002-agent-runtime/index.md#decision-wait-gate-and-automatic-parking

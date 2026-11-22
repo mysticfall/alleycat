@@ -167,10 +167,10 @@ internal sealed class VadimNameEngagementEvaluator(string evidence, string outpu
         IReadOnlyList<VadimInterrogationRequest> window = [.. result.CompletedRequests
             .Skip(result.DeliveryRequestIndex)
             .Take(1 + VadimInterrogationBaseline.WindowFollowUpRequests)];
-        double? deliveredGameTime = VadimInterrogationScenario.TryReadDeliveredLineGameTimeSeconds(window[0].Messages);
+        double? deliveredGameTime = VadimInterrogationScenario.TryReadDeliveredLineAgeSeconds(window[0].Messages);
         return deliveredGameTime is not { } deliveredAt
             ? throw new InvalidOperationException(
-                "The delivery request does not carry the delivered line's game-time suffix, so delivery chronology cannot be anchored.")
+                "The delivery request does not carry the delivered line's relative event-time suffix, so delivery chronology cannot be anchored.")
             : JsonSerializer.Serialize(new
             {
                 groundTruth = "After Vadim's accepted and settled request for her full name, the subject told Vadim: "
@@ -188,8 +188,8 @@ internal sealed class VadimNameEngagementEvaluator(string evidence, string outpu
                     deliveredLine = new
                     {
                         text = VadimInterrogationBaseline.PlayerLine,
-                        deliveredGameTimeSeconds = Math.Round(deliveredAt, 1),
-                        gameTimeSource = "model-visible synthetic scene-update delivery text",
+                        deliveredAgeSeconds = Math.Round(deliveredAt, 1),
+                        ageSource = "model-visible relative event-time suffix of the synthetic scene-update delivery",
                         deliveredInRequestIndex = window[0].Index,
                         deliveryPrecedesWindowResponse1 = VadimInterrogationScenario.DeliversPlayerLine(
                         window[0].Messages),

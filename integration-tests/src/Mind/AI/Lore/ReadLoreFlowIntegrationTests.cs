@@ -1,8 +1,10 @@
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
+using AlleyCat.IntegrationTests.Mind.AI.Decision;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.SceneStatus;
@@ -58,7 +60,10 @@ public sealed class ReadLoreFlowIntegrationTests
         clientProvider.EnqueueCallBatch(new FunctionCallContent(
             "speak-call-1",
             "speak",
-            new Dictionary<string, object?> { ["speech"] = "You will find nothing down there but old questions." }));
+            new Dictionary<string, object?>
+            {
+                ["speech"] = "You will find nothing down there but old questions.",
+            }));
         clientProvider.EnqueueHoldForever();
         TestFlowMind mind = new(owner)
         {
@@ -67,7 +72,6 @@ public sealed class ReadLoreFlowIntegrationTests
                 ResourceLoader.Load(CurrentScenePromptPath),
                 exactMatch: false),
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
             AttentionDecayPerSecond = 0f,
         };
         mind.AddChild(new AttendedCharacterSceneStatusProjector
@@ -75,6 +79,10 @@ public sealed class ReadLoreFlowIntegrationTests
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, ally, vadim, player], content));
+        // The speak batch's automatic park (§12) resolves immediately through the scripted always-act wait
+        // client, keeping this fact's consecutive-turn flow as fast as before parking existed.
+        mind.SetWaitDecisionClientForTesting(new ScriptedActWaitDecisionClient());
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
         // independent of a developer machine's `AI:VisualContextMode` override.
         mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
@@ -134,12 +142,13 @@ public sealed class ReadLoreFlowIntegrationTests
             Assert.Equal(["You will find nothing down there but old questions."], ownerVoice.Submissions);
 
             // Both settled exchanges stay retained: the lore result and the spoken result replay in chronological
-            // order between the bootstrap input and the fresh scene-status suffix (AI-002 TR-17/20).
+            // order between the bootstrap input and the fresh scene-status suffix, with the speak batch's
+            // automatic park recorded as its fabricated wait exchange (AI-002 TR-17/20; §12).
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 3);
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
             CapturedFlowRequest afterAction = clientProvider.Requests[^1];
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
                 afterAction.Messages.Select(static message => message.Role));
             Assert.Contains(
                 afterAction.Messages.SelectMany(static message => message.Contents.OfType<FunctionResultContent>()),
@@ -174,7 +183,7 @@ public sealed class ReadLoreFlowIntegrationTests
             new FunctionCallContent(
                 "wait-call-1",
                 "wait",
-                new Dictionary<string, object?> { ["seconds"] = 0.05f }),
+                new Dictionary<string, object?>()),
             new FunctionCallContent(
                 "lore-call-2",
                 "read_lore",
@@ -190,13 +199,16 @@ public sealed class ReadLoreFlowIntegrationTests
                 ResourceLoader.Load(CurrentScenePromptPath),
                 exactMatch: false),
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.AddChild(new AttendedCharacterSceneStatusProjector
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
+        // The wait completes through the decision poll's act verdict: a deterministic scripted client keeps the
+        // batch-retention claim independent of decision timing (wait experiment §1).
+        mind.SetWaitDecisionClientForTesting(new ScriptedActWaitDecisionClient());
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
         // independent of a developer machine's `AI:VisualContextMode` override.
         mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
@@ -299,6 +311,21 @@ public sealed class ReadLoreFlowIntegrationTests
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
 
         protected override ICharacter ResolveOwningCharacter() => owner;
+    }
+
+    /// <summary>
+    /// Scripted wait decision client answering both wait-gate questions with an immediate verdict, so a batch's
+    /// wait tool completes through its natural result.
+    /// </summary>
+    private sealed class ScriptedActWaitDecisionClient : IDecisionClient
+    {
+        public Task<DecisionResult> EvaluateAsync(
+            DecisionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(ScriptedWaitVerdicts.Answer(request, WaitVerdict.ActNow));
+        }
     }
 
     /// <summary>Immutable snapshot of one provider request: messages, instructions, and tool metadata.</summary>

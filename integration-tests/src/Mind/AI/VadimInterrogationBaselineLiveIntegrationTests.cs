@@ -135,13 +135,13 @@ public sealed class VadimInterrogationBaselineLiveIntegrationTests
                 .Where(content => content.CallId == sceneUpdate.CallId)
                 .Select(static content => content.Result?.ToString() ?? string.Empty));
         Assert.Contains(VadimInterrogationBaseline.PlayerLineDeliveryPrefix, delivered, StringComparison.Ordinal);
-        double? deliveredAt = VadimInterrogationScenario.TryReadDeliveredLineGameTimeSeconds(delivery.Messages);
+        double? deliveredAge = VadimInterrogationScenario.TryReadDeliveredLineAgeSeconds(delivery.Messages);
         Assert.True(
-            deliveredAt is >= 43d and < 60d,
-            $"The delivered line must carry the baseline's ~43s game-time chronology (observed: {deliveredAt}).");
+            deliveredAge is >= 0d and < 60d,
+            $"The delivered line must carry a model-visible relative age under a minute (observed: {deliveredAge}).");
         Assert.True(
-            result.OpeningSettledGameTimeSeconds < deliveredAt,
-            "The settled opening question must precede the delivered line's game time.");
+            result.DeliveryRequestIndex > result.CompletedRequests[0].Index,
+            "The delivered line must arrive in a request after the opening question's request.");
         string joined = string.Join('\n', delivery.Messages.Select(static message => message.Text));
         Assert.DoesNotContain("<Event History>", joined, StringComparison.Ordinal);
         Assert.DoesNotContain("[new]", joined, StringComparison.Ordinal);

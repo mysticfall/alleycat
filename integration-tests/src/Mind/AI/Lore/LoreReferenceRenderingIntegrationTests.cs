@@ -61,7 +61,6 @@ public sealed class LoreReferenceRenderingIntegrationTests
                 ResourceLoader.Load(CurrentScenePromptPath),
                 exactMatch: false),
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
             AttentionDecayPerSecond = 0f,
         };
         mind.AddChild(new AttendedCharacterSceneStatusProjector

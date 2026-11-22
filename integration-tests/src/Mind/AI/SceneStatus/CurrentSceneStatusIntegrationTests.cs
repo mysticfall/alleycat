@@ -158,7 +158,8 @@ public sealed class CurrentSceneStatusIntegrationTests
 
             Assert.Contains("Current game time: 50.0s", rendered, StringComparison.Ordinal);
             Assert.Contains("- `char:attended`", rendered, StringComparison.Ordinal);
-            Assert.Contains("observed at 42", rendered, StringComparison.Ordinal);
+            Assert.Contains("observed 8 sec ago", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("observed at 42", rendered, StringComparison.Ordinal);
             Assert.DoesNotContain("A yellow coat.", rendered, StringComparison.Ordinal);
             Assert.DoesNotContain("described at", rendered, StringComparison.Ordinal);
         }

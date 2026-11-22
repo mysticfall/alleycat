@@ -359,7 +359,6 @@ public sealed partial class ScenarioIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             ScenarioManager = manager,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);

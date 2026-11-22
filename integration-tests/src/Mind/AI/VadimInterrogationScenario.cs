@@ -4,9 +4,11 @@ using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Time;
+using AlleyCat.IntegrationTests.Mind.AI.Decision;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.IntegrationTests.Support.AI;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Scene;
 using AlleyCat.Speech;
@@ -228,6 +230,10 @@ internal sealed partial class VadimInterrogationScenario
         };
 
         mind.ClientProvider = clientProvider;
+        // The scripted speak turn's automatic park (§12) resolves immediately through the always-act wait client,
+        // so the scenario's request cadence stays deterministic without any decision-service dependency.
+        mind.SetWaitDecisionClientForTesting(new AlwaysActWaitDecisionClient());
+        mind.WaitEvaluationIntervalSeconds = 0.05f;
         mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
             EnableRequestResponseLogging: false,
             EnableReasoningLogging: true,
@@ -400,10 +406,11 @@ internal sealed partial class VadimInterrogationScenario
     }
 
     /// <summary>
-    /// Reads the delivered line's model-visible game time — the <c>(at 43.4s game time)</c> suffix of the
-    /// synthetic scene-update delivery — from a request's messages.
+    /// Reads the delivered line's model-visible age — the relative <c>(2 sec ago)</c>-style suffix of the
+    /// synthetic scene-update delivery, stated against the delivery request's composition moment — from a
+    /// request's messages.
     /// </summary>
-    internal static double? TryReadDeliveredLineGameTimeSeconds(IReadOnlyList<ChatMessage> messages)
+    internal static double? TryReadDeliveredLineAgeSeconds(IReadOnlyList<ChatMessage> messages)
     {
         string? delivery = messages
             .SelectMany(static message => message.Contents)
@@ -417,15 +424,67 @@ internal sealed partial class VadimInterrogationScenario
             return null;
         }
 
-        Match match = DeliveredGameTimeSuffix().Match(delivery);
-        return match.Success
-            && double.TryParse(match.Groups[1].ValueSpan, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
-            ? seconds
-            : null;
+        Match match = DeliveredAgeSuffix().Match(delivery);
+        return match.Success ? ParseAgeSeconds(match.Groups[1].ValueSpan) : null;
     }
 
-    [GeneratedRegex(@"\(at (\d+(?:\.\d+)?)s game time\)", RegexOptions.CultureInvariant)]
-    private static partial Regex DeliveredGameTimeSuffix();
+    [GeneratedRegex(@"\((just now|\d+ sec ago|\d+ min(?: \d+ sec)? ago|\d+ hr(?: \d+ min)? ago)\)", RegexOptions.CultureInvariant)]
+    private static partial Regex DeliveredAgeSuffix();
+
+    /// <summary>Reverse-parses one relative-age phrase into seconds; null when the phrase is malformed.</summary>
+    private static double? ParseAgeSeconds(ReadOnlySpan<char> phrase)
+    {
+        if (phrase.SequenceEqual("just now"))
+        {
+            return 0d;
+        }
+
+        double total = 0d;
+        double multiplier = 0d;
+        foreach (System.Range partRange in phrase.Split(' '))
+        {
+            ReadOnlySpan<char> part = phrase[partRange];
+            if (part.IsEmpty)
+            {
+                continue;
+            }
+
+            char unit = part[^1];
+            if (part.SequenceEqual("ago"))
+            {
+                continue;
+            }
+
+            if (char.IsDigit(part[^1]))
+            {
+                // The numeric component: hold it until its unit follows.
+                if (!double.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out double value))
+                {
+                    return null;
+                }
+
+                multiplier = value;
+                continue;
+            }
+
+            multiplier *= unit switch
+            {
+                'r' => 3600d,
+                'n' => 60d,
+                'c' => 1d,
+                _ => 0d,
+            };
+            if (multiplier == 0d)
+            {
+                return null;
+            }
+
+            total += multiplier;
+            multiplier = 0d;
+        }
+
+        return multiplier == 0d ? total : null;
+    }
 
     /// <summary>
     /// Reads the opening settlement: the precondition holds only when the first turn was accepted AND its speak
@@ -797,4 +856,20 @@ internal sealed partial class VadimInterrogationScenario
             }
         }
     }
+
+    /// <summary>
+    /// Scripted wait decision client answering both wait-gate questions with an immediate verdict, so a scripted
+    /// speak turn's automatic park resolves immediately without any decision-service dependency.
+    /// </summary>
+    private sealed class AlwaysActWaitDecisionClient : IDecisionClient
+    {
+        public Task<DecisionResult> EvaluateAsync(
+            DecisionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(ScriptedWaitVerdicts.Answer(request, WaitVerdict.ActNow));
+        }
+    }
+
 }

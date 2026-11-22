@@ -26,7 +26,9 @@ public sealed class ObservationTests
         Assert.Equal("Hello", observation.Content);
     }
 
-    /// <summary>Canonical rendering is type-owned, actor-relative, and never exposes speech transport metadata.</summary>
+    /// <summary>Canonical rendering is type-owned, actor-relative, and never exposes speech transport metadata.
+    /// Event times render relative to the composition moment, and no composition moment omits the suffix rather
+    /// than rendering an absolute time.</summary>
     [Fact]
     public void Render_UsesSafeFallbackAndActorRelativeSpeech()
     {
@@ -42,7 +44,8 @@ public sealed class ObservationTests
         var recognised = new ObservedSpeech("char:other", "Hi");
         var unknown = new ObservedSpeech(null, "Who is there?");
 
-        Assert.Equal("((Received test.default event.)) (at 10.2s game time)", fallback.Render(owner));
+        Assert.Equal("((Received test.default event.)) (1 min 30 sec ago)", fallback.Render(owner, nowSeconds: 100d));
+        Assert.Equal("((Received test.default event.))", fallback.Render(owner));
         Assert.Equal("I said: Hello", self.Render(owner));
         Assert.Equal("Heard `char:other` say: Hi", recognised.Render(owner));
         string unknownText = unknown.Render(owner);

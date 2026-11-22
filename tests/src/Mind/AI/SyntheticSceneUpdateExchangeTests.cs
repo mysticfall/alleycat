@@ -78,7 +78,8 @@ public sealed class SyntheticSceneUpdateExchangeTests
             [Entry(1, Speech("char:other", "delivered already"))],
             deliveredSequenceID: 1,
             new FakeCharacter(),
-            SyntheticSceneUpdateExchange.FormatCallId(1));
+            SyntheticSceneUpdateExchange.FormatCallId(1),
+            nowSeconds: 100d);
 
         Assert.Empty(exchange);
     }
@@ -102,7 +103,8 @@ public sealed class SyntheticSceneUpdateExchangeTests
             timeline,
             deliveredSequenceID: 0,
             new FakeCharacter(),
-            callId);
+            callId,
+            nowSeconds: 100d);
 
         Assert.Equal(2, exchange.Count);
         Assert.Equal(ChatRole.Assistant, exchange[0].Role);

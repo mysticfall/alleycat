@@ -117,7 +117,7 @@ public sealed class VadimNameEngagementEvaluatorTests
         Assert.True(opening.GetProperty("settledGameTimeSeconds").GetDouble() < 43d);
         JsonElement delivered = chronology.GetProperty("deliveredLine");
         Assert.Equal("My name is Ellie Onyx", delivered.GetProperty("text").GetString());
-        Assert.Equal(43.4d, delivered.GetProperty("deliveredGameTimeSeconds").GetDouble());
+        Assert.Equal(1d, delivered.GetProperty("deliveredAgeSeconds").GetDouble());
         Assert.True(delivered.GetProperty("deliveryPrecedesWindowResponse1").GetBoolean());
         Assert.Equal(1, delivered.GetProperty("deliveredInRequestIndex").GetInt32());
 
@@ -363,7 +363,7 @@ public sealed class VadimNameEngagementEvaluatorTests
                 [
                     new FunctionResultContent(
                         sceneUpdate.CallId,
-                        VadimInterrogationBaseline.PlayerLineDeliveryPrefix + " (at 43.4s game time)"),
+                        VadimInterrogationBaseline.PlayerLineDeliveryPrefix + " (1 sec ago)"),
                 ]),
             new ChatMessage(ChatRole.User, "#### Attended Characters\n\nCurrent game time: 43.6s"),
         ];

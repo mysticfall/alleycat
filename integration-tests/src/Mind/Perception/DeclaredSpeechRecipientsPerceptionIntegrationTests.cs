@@ -69,8 +69,8 @@ public sealed class DeclaredSpeechRecipientsPerceptionIntegrationTests
     }
 
     /// <summary>
-    /// Speech published without declared recipients stays undecided for every observer: notable ordinary pressure
-    /// without fresh-turn urgency.
+    /// Speech published without declared recipients stays undecided for every observer: no fresh-turn urgency is
+    /// claimed, so no delivery signal fires (fresh-only signalling).
     /// </summary>
     [Fact]
     public async Task OmittedRecipients_StayUndecidedForEveryObserver()
@@ -92,8 +92,7 @@ public sealed class DeclaredSpeechRecipientsPerceptionIntegrationTests
             listenerSpeech.Render(fixture.Listener),
             StringComparison.Ordinal);
 
-        MindBase.ObservationDeliverySignal signal = Assert.Single(listenerSignals);
-        Assert.Equal(MindBase.ObservationDeliveryUrgency.Ordinary, signal.Urgency);
+        Assert.Empty(listenerSignals);
     }
 
     /// <summary>
@@ -305,7 +304,6 @@ public sealed class DeclaredSpeechRecipientsPerceptionIntegrationTests
             TestMind mind = new(owner)
             {
                 AttentionDecayPerSecond = 0f,
-                ObservationImportanceThreshold = 1f,
             };
             mind.SetSceneContextLoaderForTesting(() => new SceneContext(roster));
             mind.AddChild(new SpeechPerception());

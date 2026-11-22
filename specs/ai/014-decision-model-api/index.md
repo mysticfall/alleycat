@@ -20,7 +20,8 @@ experiment provider, and documented compatibility does not establish live availa
 ## User Requirements
 
 1. Developers can submit text or structured JSON evidence with named boolean, choice and ordered-score questions,
-   receiving typed answers whose question and option identities remain intact.
+   receiving typed answers whose question and option identities remain intact. Boolean questions can include
+   paired true/false guidance without losing either criterion when switching backends.
 2. Users can configure a decision backend separately from conversational AI through shipped/user YAML precedence.
    With no decision configuration, the default backend is the local unauthenticated SystemOne service, so a consumer
    gets working typed decisions with zero configuration and no API key. Ordinary gameplay still starts without
@@ -43,7 +44,7 @@ experiment provider, and documented compatibility does not establish live availa
 
    | Kind | Question | Answer |
    |---|---|---|
-   | Boolean | Instructions defining the condition | Probability that the condition is true, in `[0, 1]` |
+   | Boolean | Instructions with optional paired true/false criteria | True probability in `[0, 1]` |
    | Choice | Distinct string option values and textual criteria for each | One supplied option value |
    | Score | 2–10 ordered textual level criteria | Fractional score in `[0, level count - 1]` |
 
@@ -51,9 +52,12 @@ experiment provider, and documented compatibility does not establish live availa
    is the zero-based supplied level index; retain the original criteria and order. Scores mean the
    probability-weighted average of these indices, not a selected level or a normalised `[0, 1]` rating. Boolean
    results are probabilities, not thresholded `bool` values; threshold policy belongs to the consumer.
-4. Boolean guidance is instructions-only in the portable API. Do not accept richer true/false provider criteria
-   and then discard them on OpenAI. Choice and score criteria are plain text; no provider-specific structured
-   guidance is implied by support for JSON evidence.
+4. Boolean questions require nonblank instructions and accept either both nonblank text criteria (`true` and
+   `false`) or neither. Reject a single or blank pole as invalid input before dispatch. For OpenRouter and
+   SystemOne `noul` questions, send the pair in a `criteria` map keyed by `"true"` and `"false"`. For OpenAI
+   `predicate` questions, append both criteria to `instructions` as explicitly labelled true and false guidance
+   in that order, without a `criteria` field. When neither pole is supplied, leave instructions unchanged and
+   omit the map. No dialect silently discards guidance. Choice and score criteria remain plain text.
 5. Results are keyed by caller question identity and retain caller question/option ordering independently of response
    ordering. Expose typed answers or explicit typed refusals per question, preserving any provider-supplied refusal
    detail without turning it into a decision. Preserve the resolved model, request identifier when supplied, token
@@ -167,8 +171,10 @@ experiment provider, and documented compatibility does not establish live availa
 
 1. **UR-1; TR-1–8:** Deterministic documented request/response fixtures cover all three complete dialects for
    boolean, choice and score, text/JSON evidence, identity/order, fractional zero-based score semantics, optional
-   metadata and OpenAI refusal; SystemOne fixtures derive from retained real service captures. A consumer example
-   chooses the configured decision client without using the conversational client.
+   metadata and OpenAI refusal; SystemOne fixtures derive from retained real service captures. Verify both
+   boolean poles survive on all dialects, OpenAI carries them in text only, omitted poles leave instructions
+   unchanged, and partial or blank pairs fail locally. A consumer example chooses the configured decision client
+   without using the conversational client.
 2. **UR-2; TR-9–11, 13:** Verify independent section binding, shipped/user precedence, base paths with/without
    trailing slash for every dialect, missing/invalid settings and finite positive timeout. Missing configuration
    allows ordinary startup and yields the SystemOne defaults; explicitly selected hosted kinds still fail on

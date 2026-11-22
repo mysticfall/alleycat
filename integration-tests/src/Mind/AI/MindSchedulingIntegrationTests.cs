@@ -69,7 +69,6 @@ public sealed partial class MindSchedulingIntegrationTests
         TestMind mind = new()
         {
             Enabled = false,
-            ObservationImportanceThreshold = 1f,
         };
 
         mind.ObserveForTest(new TestObservation(1f, "first"));

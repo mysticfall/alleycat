@@ -1034,7 +1034,6 @@ public sealed class VisualContextIntegrationTests
             };
             mind.ClientProvider = Provider;
             mind.Tools = [_dummyTool];
-            mind.ObservationImportanceThreshold = 1f;
             mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
                 EnableRequestResponseLogging: false,
                 EnableReasoningLogging: true,

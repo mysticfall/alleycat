@@ -1102,7 +1102,6 @@ public sealed partial class MindSessionTranscriptIntegrationTests
             },
             ClientProvider = clientProvider,
             Tools = [.. tools],
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(
             EnableRequestResponseLogging: false,

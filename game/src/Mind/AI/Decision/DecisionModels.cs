@@ -48,8 +48,21 @@ public sealed record DecisionOption(string Value, string Criteria);
 /// <param name="Name">Unique caller identity.</param>
 /// <param name="Instructions">Plain-text question.</param>
 public abstract record DecisionQuestion(string Name, string Instructions);
-/// <summary>Instructions-only condition returning a probability, not a bool.</summary>
-public sealed record BooleanQuestion(string Name, string Instructions) : DecisionQuestion(Name, Instructions);
+/// <summary>
+/// Instructions-plus-optional-pole-guidance condition returning a probability, not a bool. The pole guidance —
+/// when supplied, both poles together — renders as the dialect's documented criteria shape where one exists
+/// (the <c>noul</c> criteria map) and appends to the instructions as plain text otherwise, so nothing is
+/// silently discarded.
+/// </summary>
+/// <param name="Name">Unique caller identity.</param>
+/// <param name="Instructions">Plain-text question.</param>
+/// <param name="CriteriaTrue">Textual guidance for the condition-true pole, or null when none is supplied.</param>
+/// <param name="CriteriaFalse">Textual guidance for the condition-false pole, or null when none is supplied.</param>
+public sealed record BooleanQuestion(
+    string Name,
+    string Instructions,
+    string? CriteriaTrue = null,
+    string? CriteriaFalse = null) : DecisionQuestion(Name, Instructions);
 /// <summary>Unordered categorical decision.</summary>
 /// <param name="Name">Unique caller identity.</param>
 /// <param name="Instructions">Plain-text question.</param>

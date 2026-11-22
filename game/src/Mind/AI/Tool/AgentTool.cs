@@ -41,6 +41,19 @@ public abstract partial class AgentTool : Resource
     public string ToolDescription { get; set; } = string.Empty;
 
     /// <summary>
+    /// Whether invoking this tool commits an in-game world action (§11): a settled session turn whose executed
+    /// batch contains such an invocation without <c>chain: true</c> parks the session through the decision-wait
+    /// gate before the next ordinary turn. Speech commits through the voice admission path; informational tools
+    /// and the wait tool — which parks by its own invocation — stay false. Authored on the tool and bound to the
+    /// composed function as a parking policy at the composition boundary.
+    /// </summary>
+    [Export]
+    public bool ParksSessionByDefault
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Session binding available to derived tools between
     /// <see cref="CreateFunction(ScenarioContext, MindBase, IMainThreadDispatcher)" /> and invocation.
     /// </summary>
@@ -125,7 +138,15 @@ public abstract partial class AgentTool : Resource
                     BindParameter = (_, _) => context,
                     ExcludeFromSchema = true,
                 }
-                : default,
+                : parameter.ParameterType == typeof(AgentSessionInvocationSignals)
+                    // The runner's per-invocation boundary signals bind from the invocation context, never from
+                    // the model: schema-excluded, so the model-facing tool surface is unchanged.
+                    ? new AIFunctionFactoryOptions.ParameterBindingOptions
+                    {
+                        BindParameter = static (_, arguments) => AgentSessionInvocationSignals.From(arguments),
+                        ExcludeFromSchema = true,
+                    }
+                    : default,
         });
         return new RuntimeBoundFunction(inner, context, mind, dispatcher);
     }

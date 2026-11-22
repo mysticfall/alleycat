@@ -188,7 +188,6 @@ public sealed class ProductionAIProviderBoundaryIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         // No ClientProvider is assigned: the mind runs the production default composition — exactly the path

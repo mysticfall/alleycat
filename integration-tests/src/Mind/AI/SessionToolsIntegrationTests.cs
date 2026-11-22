@@ -1,10 +1,13 @@
+using System.Text.Json;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
+using AlleyCat.IntegrationTests.Mind.AI.Decision;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
@@ -440,42 +443,46 @@ public sealed partial class SessionToolsIntegrationTests
     }
 
     /// <summary>
-    /// A wait result reports only its reason, elapsed duration, and current game time; event text remains in the
-    /// canonical provider-request context (AI-002 TR-8/10).
+    /// A wait result is payload-free — only its wake reason, elapsed duration, and current game time; an immediate
+    /// verdict renders as a chance to act, not a command.
     /// </summary>
     [Fact]
-    public async Task Wait_ComposesPayloadFreeReasonElapsedAndGameTime()
+    public async Task Wait_ImmediateVerdict_ComposesPayloadFreeReasonElapsedAndGameTime()
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
+        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         fixture.Mind.ObserveForTest(new TypedObservation("test.alpha", 1f));
 
-        object? result = await fixture.InvokeWaitAsync(null, CancellationToken.None)
+        object? result = await fixture.InvokeWaitAsync(CancellationToken.None)
             .AsTask()
-            .WaitAsync(TimeSpan.FromSeconds(2));
+            .WaitAsync(TimeSpan.FromSeconds(5));
 
         string message = Assert.IsType<string>(result);
         Assert.Equal(
-            "Wait ended: importance threshold. Elapsed game time: 0.0 seconds. Current game time: 100.0s.",
+            "Wait ended: circumstances may call for you to act. Elapsed game time: 0.0 seconds. "
+                + "Current game time: 100.0s.",
             message);
     }
 
     /// <summary>
-    /// Wait never renders observation text (AI-002 TR-10).
+    /// Wait never renders observation text: the decision model sees the evidence, the result never does
+    /// (AI-002 TR-10).
     /// </summary>
     [Fact]
-    public async Task Wait_RemainsPayloadFree()
+    public async Task Wait_ImmediateVerdict_RemainsPayloadFree()
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
+        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
         fixture.Mind.ObserveForTest(new TypedObservation("test.before", 0.5f));
         fixture.Mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
         fixture.Mind.ObserveForTest(new TypedObservation("test.after", 0.5f));
 
         string message = Assert.IsType<string>(
-            await fixture.InvokeWaitAsync(null, CancellationToken.None)
+            await fixture.InvokeWaitAsync(CancellationToken.None)
                 .AsTask()
-                .WaitAsync(TimeSpan.FromSeconds(2)));
+                .WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Contains("Wait ended:", message, StringComparison.Ordinal);
         Assert.DoesNotContain("weathered red coat", message, StringComparison.Ordinal);
@@ -484,45 +491,400 @@ public sealed partial class SessionToolsIntegrationTests
     }
 
     /// <summary>
-    /// A quiet wait reports its elapsed game-time duration and the game timestamp, and the omitted duration
-    /// falls back to the configured maximum.
+    /// One request carries both wait-gate choice questions; a deferred verdict keeps the wait parked while its
+    /// deadline has not expired, and an immediate verdict on a later evaluation completes it with the elapsed
+    /// game time.
     /// </summary>
     [Fact]
-    public async Task Wait_WithQuietExpiry_ReportsElapsedAndGameTimeUsingMindMaximum()
+    public async Task Wait_DeferredThenImmediateVerdicts_ParkThenCompleteWithElapsedGameTime()
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.Mind.MaxObservationWaitSeconds = 0.4f;
+        ScriptedWaitDecisionClient client = new(WaitVerdict.NoReason);
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
-        Task<object?> waitTask = fixture.InvokeWaitAsync(null, CancellationToken.None).AsTask();
-        await ToolFixture.WaitForFramesAsync(2);
+        Task<object?> waitTask = fixture.InvokeWaitAsync(CancellationToken.None).AsTask();
+        await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 2);
+        Assert.False(waitTask.IsCompleted);
+        Assert.Equal(
+            [DecisionWaitPolicy.ResponseQuestionName, DecisionWaitPolicy.InitiativeQuestionName],
+            client.Requests[0].Questions.Select(static question => question.Name));
+        Assert.All(client.Requests[0].Questions, question => Assert.IsType<ChoiceQuestion>(question));
+
+        client.Verdict = WaitVerdict.ActNow;
         fixture.Clock.NowSeconds = 102.5d;
-        object? result = await waitTask.WaitAsync(TimeSpan.FromSeconds(2));
+        object? result = await waitTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         string message = Assert.IsType<string>(result);
         Assert.Equal(
-            "Wait ended: timeout. Elapsed game time: 2.5 seconds. Current game time: 102.5s.",
+            "Wait ended: circumstances may call for you to act. Elapsed game time: 2.5 seconds. "
+                + "Current game time: 102.5s.",
             message);
     }
 
     /// <summary>
-    /// An attended speaker finishing during the wait surfaces the cue phrase in the wait result
-    /// (AI-002 TR-7).
+    /// A deferred verdict's armed deadline starts the agent when it expires, even though every later verdict
+    /// keeps deferring: the deadline is never extended by repeated deferrals.
     /// </summary>
     [Fact]
-    public async Task Wait_WhenAttendedSpeakerFinishes_ReportsCuePhrase()
+    public async Task Wait_DeferredVerdict_DeadlineExpiryCompletesThePause()
     {
         await using ToolFixture fixture = new();
         await fixture.ReadyAsync();
-        fixture.SpeakerVoice.BeginSpeech();
+        ScriptedWaitDecisionClient client = new(WaitVerdict.MayAct);
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(30d, 0.3d, 30d, 0d));
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
 
-        Task<object?> waitTask = fixture.InvokeWaitAsync(5f, CancellationToken.None).AsTask();
-        await ToolFixture.WaitForFramesAsync(2);
-        fixture.SpeakerVoice.EndSpeech();
-        object? result = await waitTask.WaitAsync(TimeSpan.FromSeconds(2));
+        object? result = await fixture.InvokeWaitAsync(CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.StartsWith(
+            "Wait ended: a pause gives you an opening to act.",
+            Assert.IsType<string>(result),
+            StringComparison.Ordinal);
+        // Several deferrals were served while the first armed deadline ran down unchanged.
+        Assert.True(client.Requests.Count >= 2, $"Expected repeated deferrals; served {client.Requests.Count}.");
+    }
+
+    /// <summary>
+    /// An explicit quiet time seeds the initial deadline: with the gate deferring to a later deadline, the
+    /// requested seconds elapse first and the wait completes through the timer wake reason.
+    /// </summary>
+    [Fact]
+    public async Task Wait_WithSeconds_TimerElapseCompletesTheQuietTime()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.NoReason));
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+
+        object? result = await fixture.InvokeWaitAsync(seconds: 0.3f, CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5));
 
         string message = Assert.IsType<string>(result);
-        Assert.Contains("Wait ended: attended speaker finished.", message, StringComparison.Ordinal);
+        Assert.StartsWith("Wait ended: the chosen quiet time elapsed.", message, StringComparison.Ordinal);
+        Assert.EndsWith("Current game time: 100.0s.", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A sooner deferred-verdict deadline replaces a longer explicit quiet time: the wait ends at the decision
+    /// deadline, never later than requested.
+    /// </summary>
+    [Fact]
+    public async Task Wait_WithSeconds_SoonerDecisionDeadlineReplacesTheQuietTime()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.MayAct));
+        fixture.Mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(30d, 0.2d, 30d, 0d));
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+
+        object? result = await fixture.InvokeWaitAsync(seconds: 30f, CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.StartsWith(
+            "Wait ended: a pause gives you an opening to act.",
+            Assert.IsType<string>(result),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Deliberate silence can be ended early by circumstances: while a long quiet-time deadline runs, an
+    /// immediate verdict wakes the wait before it elapses.
+    /// </summary>
+    [Fact]
+    public async Task Wait_WithSeconds_ImmediateVerdictEndsTheQuietTimeEarly()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        fixture.Mind.SetWaitDecisionClientForTesting(new ScriptedWaitDecisionClient(WaitVerdict.ActNow));
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+
+        object? result = await fixture.InvokeWaitAsync(seconds: 30f, CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        string message = Assert.IsType<string>(result);
+        Assert.StartsWith("Wait ended: circumstances may call for you to act.", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Decision failures keep the wait waiting with backoff — the tool call survives a failing service and
+    /// completes only on a later immediate verdict.
+    /// </summary>
+    [Fact]
+    public async Task Wait_FailureVerdict_KeepsWaitingUntilImmediateVerdict()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        ScriptedWaitDecisionClient client = new(WaitVerdict.ActNow, decisionFailure: DecisionFailure.Timeout);
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        // The failures' no-reason deadline must not expire inside the observation window.
+        fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+
+        Task<object?> waitTask = fixture.InvokeWaitAsync(CancellationToken.None).AsTask();
+        await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 2);
+        Assert.False(waitTask.IsCompleted);
+
+        client.DecisionFailure = null;
+        object? result = await waitTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Contains(
+            "Wait ended: circumstances may call for you to act.",
+            Assert.IsType<string>(result),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A parked wait never stalls on a failing decision service: with every evaluation failing and no explicit
+    /// quiet time, the failures arm the no-reason timeout and its expiry completes the wait as a pause.
+    /// </summary>
+    [Fact]
+    public async Task Wait_EveryEvaluationFailing_NoReasonDeadlineCompletesThePause()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        ScriptedWaitDecisionClient client = new(WaitVerdict.ActNow, decisionFailure: DecisionFailure.Transport);
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetWaitTimingForTesting(new DecisionWaitTimingSettings(3600d, 3600d, 0.3d, 0d));
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+
+        object? result = await fixture.InvokeWaitAsync(CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.StartsWith(
+            "Wait ended: a pause gives you an opening to act.",
+            Assert.IsType<string>(result),
+            StringComparison.Ordinal);
+        Assert.NotEmpty(client.Requests);
+    }
+
+    /// <summary>
+    /// An armed deadline still fires while the decision service hangs: the in-flight evaluation is abandoned and
+    /// the explicit quiet time completes on time instead of waiting for the request's own timeout.
+    /// </summary>
+    [Fact]
+    public async Task Wait_WithSeconds_DeadlineFiresWhileAnEvaluationHangs()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        ScriptedWaitDecisionClient client = new(WaitVerdict.ActNow)
+        {
+            Hang = true
+        };
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.WaitEvaluationIntervalSeconds = 0.05f;
+
+        object? result = await fixture.InvokeWaitAsync(seconds: 0.5f, CancellationToken.None)
+            .AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.StartsWith(
+            "Wait ended: the chosen quiet time elapsed.",
+            Assert.IsType<string>(result),
+            StringComparison.Ordinal);
+        _ = Assert.Single(client.Requests);
+        Assert.True(client.HungRequestCancelled, "The abandoned evaluation must observe cancellation.");
+    }
+
+    /// <summary>
+    /// A scene entrant or departure alone brings the next wait evaluation forward (TQ-B4): with the cadence far
+    /// outside the observation window and no speech, a departure triggers a membership-labelled evaluation within
+    /// the window, an unchanged roster then stays quiet (no wake, no spin), and an entrant triggers the next one.
+    /// </summary>
+    [Fact]
+    public async Task Wait_MembershipChangeAlone_BringsTheNextEvaluationForward()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        ScriptedWaitDecisionClient client = new(WaitVerdict.NoReason);
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+        // The cadence boundary lies far outside every observation window below: only a nudge can evaluate.
+        fixture.Mind.WaitEvaluationIntervalSeconds = MembershipTestCadenceSeconds;
+        using CancellationTokenSource cancellation = new();
+        IReadOnlyList<ICharacter> fullRoster = fixture.Membership;
+        Task<object?> waitTask = fixture.InvokeWaitAsync(cancellation.Token).AsTask();
+
+        try
+        {
+            await WaitForActiveWaitAsync(fixture);
+            await WaitForQuietWindowAsync();
+            Assert.Empty(client.Requests);
+
+            fixture.Membership = [.. fullRoster.Take(fullRoster.Count - 1)];
+            await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 1, _membershipObservationWindow);
+            Assert.Equal(MembershipChangeEvidence, Trigger(client.Requests[0]));
+
+            await WaitForQuietWindowAsync();
+            _ = Assert.Single(client.Requests);
+            Assert.False(waitTask.IsCompleted);
+
+            fixture.Membership = fullRoster;
+            await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 2, _membershipObservationWindow);
+            Assert.Equal(MembershipChangeEvidence, Trigger(client.Requests[1]));
+            Assert.False(waitTask.IsCompleted);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            _ = await Record.ExceptionAsync(() => waitTask);
+        }
+    }
+
+    /// <summary>
+    /// A membership change brings the next evaluation forward even while a failure backoff is in effect
+    /// (TQ-B4): after a failed membership-triggered evaluation doubles the backoff past the cadence, an entrant
+    /// still evaluates within the observation window, and an unchanged roster does not retry early.
+    /// </summary>
+    [Fact]
+    public async Task Wait_MembershipChangeDuringFailureBackoff_StillBringsTheEvaluationForward()
+    {
+        await using ToolFixture fixture = new();
+        await fixture.ReadyAsync();
+        ScriptedWaitDecisionClient client = new(WaitVerdict.NoReason, decisionFailure: DecisionFailure.Timeout);
+        fixture.Mind.SetWaitDecisionClientForTesting(client);
+        fixture.Mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+        fixture.Mind.WaitEvaluationIntervalSeconds = MembershipTestCadenceSeconds;
+        using CancellationTokenSource cancellation = new();
+        IReadOnlyList<ICharacter> fullRoster = fixture.Membership;
+        Task<object?> waitTask = fixture.InvokeWaitAsync(cancellation.Token).AsTask();
+
+        try
+        {
+            await WaitForActiveWaitAsync(fixture);
+            fixture.Membership = [.. fullRoster.Take(fullRoster.Count - 1)];
+            await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 1, _membershipObservationWindow);
+
+            // The failure doubled the backoff beyond the cadence; an unchanged roster must not retry early.
+            await WaitForQuietWindowAsync();
+            _ = Assert.Single(client.Requests);
+
+            fixture.Membership = fullRoster;
+            await WaitForWaitEvaluationsAsync(client, minimumEvaluations: 2, _membershipObservationWindow);
+            Assert.Equal(MembershipChangeEvidence, Trigger(client.Requests[1]));
+            Assert.False(waitTask.IsCompleted);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            _ = await Record.ExceptionAsync(() => waitTask);
+        }
+    }
+
+    private const float MembershipTestCadenceSeconds = 120f;
+    private const string MembershipChangeEvidence = "the characters present in the scene changed";
+    private static readonly TimeSpan _membershipObservationWindow = TimeSpan.FromSeconds(5);
+
+    private static string? Trigger(DecisionRequest request)
+        => Assert.IsType<JsonElement>(request.Evidence).GetProperty("trigger").GetString();
+
+    private static async Task WaitForActiveWaitAsync(ToolFixture fixture)
+    {
+        for (int attempt = 0; attempt < 600 && !fixture.Mind.HasActiveObservationWait; attempt++)
+        {
+            await ToolFixture.WaitForFramesAsync(1);
+        }
+
+        Assert.True(fixture.Mind.HasActiveObservationWait);
+    }
+
+    /// <summary>A one-second window with an unchanged roster: several membership checks, no cadence boundary.</summary>
+    private static Task WaitForQuietWindowAsync() => Task.Delay(TimeSpan.FromSeconds(1));
+
+    /// <summary>Waits up to the observation window for the scripted wait client's evaluation count.</summary>
+    private static async Task WaitForWaitEvaluationsAsync(
+        ScriptedWaitDecisionClient client,
+        int minimumEvaluations,
+        TimeSpan window)
+    {
+        DateTime deadline = DateTime.UtcNow + window;
+        while (client.Requests.Count < minimumEvaluations && DateTime.UtcNow < deadline)
+        {
+            await ToolFixture.WaitForFramesAsync(1);
+        }
+
+        Assert.True(
+            client.Requests.Count >= minimumEvaluations,
+            $"No membership-driven evaluation within {window.TotalSeconds:F0}s; served {client.Requests.Count}.");
+    }
+
+    /// <summary>Pumps frames until the scripted wait client has served the requested evaluation count.</summary>
+    private static async Task WaitForWaitEvaluationsAsync(
+        ScriptedWaitDecisionClient client,
+        int minimumEvaluations)
+    {
+        for (int attempt = 0; attempt < 600 && client.Requests.Count < minimumEvaluations; attempt++)
+        {
+            await ToolFixture.WaitForFramesAsync(2);
+        }
+
+        Assert.True(
+            client.Requests.Count >= minimumEvaluations,
+            $"The wait decision poll did not evaluate within the pump window; served {client.Requests.Count}.");
+    }
+
+    /// <summary>
+    /// Scripted wait decision client: answers both wait-gate questions with a reconfigurable verdict, a typed
+    /// failure, or a hang until cancelled, capturing every dispatched request.
+    /// </summary>
+    private sealed class ScriptedWaitDecisionClient(
+        WaitVerdict verdict,
+        DecisionFailure? decisionFailure = null) : IDecisionClient
+    {
+        public List<DecisionRequest> Requests { get; } = [];
+
+        public WaitVerdict Verdict
+        {
+            get; set;
+        } = verdict;
+
+        public DecisionFailure? DecisionFailure
+        {
+            get; set;
+        } = decisionFailure;
+
+        public bool Hang
+        {
+            get; init;
+        }
+
+        public bool HungRequestCancelled
+        {
+            get; private set;
+        }
+
+        public async Task<DecisionResult> EvaluateAsync(
+            DecisionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Requests.Add(request);
+            if (Hang)
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    HungRequestCancelled = true;
+                    throw;
+                }
+            }
+
+            return DecisionFailure is { } failure
+                ? throw new DecisionException(failure, "Scripted wait failure.")
+                : ScriptedWaitVerdicts.Answer(request, Verdict);
+        }
     }
 
     private sealed record TypedObservation(string Key, float Importance) : AgentObservation
@@ -564,7 +926,6 @@ public sealed partial class SessionToolsIntegrationTests
             Mind = new TestMind(Owner)
             {
                 AttentionDecayPerSecond = 0f,
-                ObservationImportanceThreshold = 1f,
             };
             Mind.SetSceneContextLoaderForTesting(() => new TestSceneContext(Membership));
             Mind.AttendForTest(Speaker.FullId);
@@ -603,6 +964,7 @@ public sealed partial class SessionToolsIntegrationTests
         public IReadOnlyList<ICharacter> Membership
         {
             get;
+            set;
         }
 
         private VoiceCharacter Speaker
@@ -662,16 +1024,15 @@ public sealed partial class SessionToolsIntegrationTests
             return InvokeAsync(_speakFunction!, arguments, cancellationToken);
         }
 
-        public ValueTask<object?> InvokeWaitAsync(float? seconds, CancellationToken cancellationToken)
-        {
-            Dictionary<string, object?> arguments = [];
-            if (seconds is { } value)
-            {
-                arguments["seconds"] = value;
-            }
+        public ValueTask<object?> InvokeWaitAsync(CancellationToken cancellationToken)
+            => InvokeAsync(_waitFunction!, new Dictionary<string, object?>(), cancellationToken);
 
-            return InvokeAsync(_waitFunction!, arguments, cancellationToken);
-        }
+        /// <summary>
+        /// Invokes the wait tool with an explicit <c>seconds</c> argument: the deliberate quiet-time duration
+        /// whose timer races the decision gate (§11).
+        /// </summary>
+        public ValueTask<object?> InvokeWaitAsync(float seconds, CancellationToken cancellationToken)
+            => InvokeAsync(_waitFunction!, new Dictionary<string, object?> { ["seconds"] = seconds }, cancellationToken);
 
         /// <summary>Invokes the wait tool without a tree fixture, for the missing-clock failure contract.</summary>
         public ValueTask<object?> InvokeWaitReadylessAsync(CancellationToken cancellationToken)

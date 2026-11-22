@@ -109,64 +109,6 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
     }
 
     /// <summary>
-    /// An attended speaker finishing wakes an active wait early with the cue flag and no promoted sub-threshold
-    /// observations (AI-002 TR-7).
-    /// </summary>
-    [Fact]
-    public async Task Wait_WhenAttendedSpeakerFinishes_WakesEarlyWithCueFlagAndNothingNotable()
-    {
-        SpeechScene scene = new();
-        TestMind mind = scene.CreateMind();
-        mind.AttendForTest(scene.Speaker.FullId);
-        await mind.WaitForReadyAsync();
-        try
-        {
-            scene.SpeakerVoice.BeginSpeech();
-            Task<MindBase.WaitOutcome> waitTask = mind.WaitForNotableForTestAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
-            await Task.Delay(50);
-            scene.SpeakerVoice.EndSpeech();
-
-            MindBase.WaitOutcome outcome = await waitTask.WaitAsync(TimeSpan.FromSeconds(2));
-
-            Assert.Equal(MindBase.ObservationWaitWake.AttendedSpeakerFinished, outcome.Wake);
-        }
-        finally
-        {
-            await mind.FreeAsync();
-        }
-    }
-
-    /// <summary>
-    /// Speech-end of an unattended speaker, an unattributable voice, or the owning character's own voice never
-    /// wakes the wait.
-    /// </summary>
-    [Fact]
-    public async Task Wait_WhenUnattendedUnattributableOrOwnVoiceFinishes_NeverWakes()
-    {
-        SpeechScene scene = new();
-        TestMind mind = scene.CreateMind();
-        mind.AttendForTest(scene.Speaker.FullId);
-        await mind.WaitForReadyAsync();
-        try
-        {
-            FakeVoice[] voices = [scene.OwnVoice, scene.BystanderVoice, scene.TwinVoice, scene.BlankVoice];
-            foreach (FakeVoice voice in voices)
-            {
-                Task<MindBase.WaitOutcome> waitTask = mind.WaitForNotableForTestAsync(TimeSpan.FromSeconds(0.3), CancellationToken.None);
-                await Task.Delay(50);
-                voice.BeginSpeech();
-                voice.EndSpeech();
-                MindBase.WaitOutcome outcome = await waitTask;
-                Assert.Equal(MindBase.ObservationWaitWake.QuietExpiry, outcome.Wake);
-            }
-        }
-        finally
-        {
-            await mind.FreeAsync();
-        }
-    }
-
-    /// <summary>
     /// The own-speech-end cue fires exactly for the owning character's voice, regardless of attention, and never
     /// fires for another character's voice.
     /// </summary>
@@ -352,10 +294,6 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
 
         public Task WaitUntilAttendedSpeakerIdleForTest(CancellationToken cancellationToken)
             => WaitUntilAttendedSpeakerIdleAsync(cancellationToken);
-
-        public Task<WaitOutcome> WaitForNotableForTestAsync(TimeSpan maxWait, CancellationToken cancellationToken)
-            => WaitForNotableObservationsAsync(maxWait, cancellationToken);
-
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
 
         public async Task WaitForReadyAsync()

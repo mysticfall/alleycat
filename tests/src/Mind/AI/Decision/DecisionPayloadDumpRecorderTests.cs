@@ -65,7 +65,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
 
         recorder.Record(dump);
 
-        string file = Assert.Single(Directory.GetFiles(_root));
+        string file = Assert.Single(Directory.GetFiles(CategoryDirectory("gaze")));
         Assert.Equal(
             "2026-11-12-15-30-45-123_char-rin_GazeCadence_char-tola.json",
             Path.GetFileName(file));
@@ -131,7 +131,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
 
         recorder.Record(dump);
 
-        string contents = File.ReadAllText(Assert.Single(Directory.GetFiles(_root)));
+        string contents = File.ReadAllText(Assert.Single(Directory.GetFiles(CategoryDirectory("gaze"))));
         Assert.Contains("저기요", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("\\u", contents, StringComparison.Ordinal);
     }
@@ -157,7 +157,7 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
 
         recorder.Record(dump);
 
-        string failedFile = Assert.Single(Directory.GetFiles(_root));
+        string failedFile = Assert.Single(Directory.GetFiles(CategoryDirectory("gaze")));
         Assert.EndsWith("_char-rin_GazeAttendedSpeakerEnded_failed.json", Path.GetFileName(failedFile));
         using var document = JsonDocument.Parse(File.ReadAllText(failedFile));
         Assert.Equal("failed", document.RootElement.GetProperty("verdict").GetString());
@@ -177,7 +177,9 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
         // failure is contained rather than masked by the shared test override.
         DecisionPayloadDumpRecorder.SetRootPathOverrideForTesting(null);
         DecisionPayloadDumpRecorder recorder = new(
+            "gaze",
             "char:rin",
+            "rin",
             () => throw new InvalidOperationException("The root resolver exploded."),
             NullLogger.Instance);
         DecisionPayloadDump dump = CreateMinimalDump();
@@ -187,11 +189,66 @@ public sealed class DecisionPayloadDumpRecorderTests : IDisposable
         Assert.False(Directory.Exists(_root) && Directory.GetFiles(_root).Length > 0);
     }
 
-    private static DecisionPayloadDumpRecorder CreateRecorder()
-        => new("char:rin", () => "/unused-physical-root", NullLogger.Instance);
+    /// <summary>
+    /// Dumps follow the session-transcript convention (AI-011 TR-2–TR-5): beneath one latched session directory,
+    /// inside the character's own directory — the same location the per-character transcript logs use — with each
+    /// producer's category filing into its own subdirectory beside them.
+    /// </summary>
+    [Fact]
+    public void Record_FilesIntoTheCharacterTranscriptLocation_CategoriesSeparated()
+    {
+        DecisionPayloadDumpRecorder gaze = CreateRecorder();
+        DecisionPayloadDumpRecorder wait = new("wait", "char:rin", "rin", () => "/unused-physical-root", NullLogger.Instance);
 
-    private static DecisionPayloadDump CreateMinimalDump() => new(
-            DateTimeOffset.Now,
+        gaze.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now));
+        gaze.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now.AddMilliseconds(50)));
+        wait.Record(CreateMinimalDump(timestamp: DateTimeOffset.Now));
+
+        // One session directory, one character directory, shared by both log families' producers.
+        string sessionDirectory = Assert.Single(Directory.GetDirectories(_root));
+        string characterDirectory = Assert.Single(Directory.GetDirectories(sessionDirectory));
+        Assert.Equal("rin", Path.GetFileName(characterDirectory), StringComparer.Ordinal);
+        string dumpRoot = Path.Combine(characterDirectory, DecisionPayloadDumpRecorder.DumpDirectoryName);
+        Assert.Equal(2, Directory.GetFiles(Path.Combine(dumpRoot, "gaze")).Length);
+        _ = Assert.Single(Directory.GetFiles(Path.Combine(dumpRoot, "wait")));
+        Assert.Empty(Directory.GetFiles(dumpRoot));
+    }
+
+    /// <summary>A category carrying path separators sanitises into a single safe directory name.</summary>
+    [Fact]
+    public void Record_CategoryWithPathSeparators_SanitisesIntoOneSafeDirectoryName()
+    {
+        DecisionPayloadDumpRecorder recorder = new(
+            "wait/poll:gate",
+            "char:rin",
+            "rin",
+            () => "/unused-physical-root",
+            NullLogger.Instance);
+
+        recorder.Record(CreateMinimalDump());
+
+        string dumpRoot = Path.Combine(
+            Assert.Single(Directory.GetDirectories(Assert.Single(Directory.GetDirectories(_root)))),
+            DecisionPayloadDumpRecorder.DumpDirectoryName);
+        _ = Assert.Single(Directory.GetFiles(Path.Combine(dumpRoot, "wait-poll-gate")));
+        Assert.False(Directory.Exists(Path.Combine(dumpRoot, "wait")));
+    }
+
+    /// <summary>
+    /// Resolves a category directory inside the transcript-log layout: the override root's single latched session
+    /// directory, then the single character directory, then the dump directory and category.
+    /// </summary>
+    private string CategoryDirectory(string category)
+        => Path.Combine(
+            Assert.Single(Directory.GetDirectories(Assert.Single(Directory.GetDirectories(_root)))),
+            DecisionPayloadDumpRecorder.DumpDirectoryName,
+            category);
+
+    private static DecisionPayloadDumpRecorder CreateRecorder()
+        => new("gaze", "char:rin", "rin", () => "/unused-physical-root", NullLogger.Instance);
+
+    private static DecisionPayloadDump CreateMinimalDump(DateTimeOffset? timestamp = null) => new(
+            timestamp ?? DateTimeOffset.Now,
             "char:rin",
             "GazeCadence",
             "none",

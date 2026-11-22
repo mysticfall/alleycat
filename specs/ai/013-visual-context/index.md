@@ -12,7 +12,7 @@ on-demand vision capture under one configuration key, `AI:VisualContextMode`: in
 calls two zero-argument tools (a self-centred minimap and a first-person view capture); in `auto` mode the same two
 tools remain callable and both images are additionally delivered automatically with every logical request through a
 runtime-fabricated tool exchange; `off` disables all of it. Generated images are model-visible for a bounded ephemeral
-lifetime — retained images are disposed to a textual placeholder at the next fresh scheduling turn, and automatically
+lifetime — retained images are disposed to a textual placeholder at fresh-turn replacement, and automatically
 delivered images never outlive the request cycle that created them — and, when AI-011 transcript logging is enabled,
 written as sibling image files beside the turn page.
 
@@ -20,8 +20,8 @@ written as sibling image files beside the turn page.
 
 Let players observe NPCs that reason about where they are and what they currently see: an NPC can read a top-down map
 of its surroundings with itself highlighted, inspect a fresh capture from its own eyes, or receive both automatically
-every turn. The images are live context, not memory — characters move, so pixels never linger past the action chain
-that created them. The two consumed capabilities stay unchanged: the renderer remains character-agnostic (SCN-002
+every turn. The images are live context, not memory — characters move, so fresh-turn replacement retires retained
+pixels. The two consumed capabilities stay unchanged: the renderer remains character-agnostic (SCN-002
 TR-4) and the vision rig keeps its one-shot capture contract (VISION-001 TR-53–TR-62). This spec delivers the AI
 plumbing that SCN-002's Out Of Scope deferred.
 
@@ -41,8 +41,7 @@ plumbing that SCN-002's Out Of Scope deferred.
 5. Visual requests never break the NPC: a character with no vision rig, a failed capture, or an unavailable renderer
    yields a contained error tool result in `tools` mode, and in `auto` mode the failed image is omitted with a
    warning while the turn proceeds.
-6. Images are fresh, never stale: image content never survives beyond the action chain that created it. After the
-   NPC's next fresh scheduling turn, an image from its own tool call is gone from its context — replaced by a short
+6. When a fresh-turn signal replaces a request, an image from the NPC's own tool call is replaced by a short
    textual record of what was captured and when, while the call that produced the image remains as a truthful action
    record — and an automatically delivered image is gone without a trace, never appearing in any later request. An
    NPC that needs current visuals asks again.
@@ -54,6 +53,9 @@ plumbing that SCN-002's Out Of Scope deferred.
    facing align, and a labelled list of the visible cues' own descriptions, honestly omitted when nothing is
    visible — while a delivered minimap text carries neither. What a delivered text of either kind says never
    depends on which mode delivered it.
+9. Developers can opt in to local decision dumps and distinguish gaze selection from wait scheduling for each
+   character in the same game run. A wait dump explains what the decision model considered and how the gate
+   resolved the next-turn deadline, even when the decision call failed.
 
 ## Technical Requirements
 
@@ -140,11 +142,10 @@ plumbing that SCN-002's Out Of Scope deferred.
 
 9. Generated image content is ephemeral in both modes:
    - Retained exchanges — a `tools`-mode tool result, or a model-initiated call under auto mode's TR-7: image
-     content within the retained tool-result exchange is presented as an image at its exchange position in every
-     request of the action chain that created it — continuations, exact transport retries, and recovery
-     rematerialisations included. At the materialisation of the next fresh scheduling turn — a new logical request
-     from the AI-002 TR-7 ladder, not a continuation or rematerialisation of the current chain — the image content
-     is disposed: the pixels are replaced by a textual placeholder recording the image kind (minimap or view), its
+      content within the retained tool-result exchange is presented as an image at its exchange position until
+      materialisation of a fresh replacement request under [AI-002 TR-7][runtime-wait]. Continuation, retry, recovery,
+      or ending a wait without fresh invalidation does not by itself dispose of pixels. At replacement, they are
+      replaced by a textual placeholder recording the image kind (minimap or view), its
      area or centre, and the game time of capture. The exchange, its tool call, and its arguments remain retained
      forever, keeping the action record truthful; the tool-result message remains, carrying the placeholder, so
      exchange unit integrity (AI-002 TR-20) is preserved — the placeholder replaces image content in place and
@@ -253,6 +254,19 @@ plumbing that SCN-002's Out Of Scope deferred.
     never degrades the others or the text carrying them, and the whole derivation is contained: a failure logs a
     warning and delivers the text without the block, never degrading the delivered result or exchange.
 
+### Decision Payload Diagnostics
+
+16. `Diagnostics:AI:EnableDecisionPayloadLogging` is off by default and independent of transcript logging and visual
+    context mode. Enabled dumps share the AI-011 run directory but separate producers:
+    `user://logs/mind/<run>/<character>/decision-payloads/{gaze,wait}/`. Record one local JSON file per settled
+    evaluation with character identity, timestamp, trigger, composition and decision latency, evidence, question
+    instructions and criteria as dispatched, and the observed result or contained failure. Record no credentials.
+17. Wait dumps cover both explicit waits and automatic parking under [AI-002][runtime-wait]. Record both choice
+    questions and any available parsed choices and distributions without inventing missing answers. Record the
+    gate's immediate, armed, kept, or failed step, the proposed delay and remaining deadline where applicable,
+    and whether the retained deadline came from an explicit wait or a decision. Keep the failure classification
+    distinct from its no-reason timing fallback. Dump failures do not affect the evaluation or scheduling.
+
 ## In Scope
 
 - The `AI:VisualContextMode` configuration key: binding, validation, shipped documentation, and the session-fixed
@@ -269,6 +283,7 @@ plumbing that SCN-002's Out Of Scope deferred.
 - Endpoint-aware image transport: in-result images on Responses-capable endpoints and the documented adjacent
   user-message fallback on Chat Completions and compatible backends.
 - Transcript sibling images under the AI-011 toggle, through AI-011's amended TR-26–TR-28.
+- Opt-in local decision payload dumps separated by producer, with wait-decision and deadline provenance.
 - `off`-mode inactivity.
 
 ## Out Of Scope
@@ -306,13 +321,15 @@ plumbing that SCN-002's Out Of Scope deferred.
    while the turn proceeds.
 4. Off-mode acceptance shows no visual tools, no captures, no fabricated visual-context exchange, and no image files
    (UR-4).
-5. Lifetime acceptance shows images present through their creating action chain — continuations, retries, and
-   recovery — then, for images from the NPC's own tool calls, a textual placeholder carrying kind, area or centre,
-   and capture game time in requests after the next fresh scheduling turn, with the original tool call and
-   arguments retained, and automatically delivered images never appearing in any later request (UR-6).
+5. Lifetime acceptance shows images from the NPC's own calls surviving continuations, retries, and recovery, then a
+   textual placeholder carrying kind, area or centre, and capture game time after fresh-turn replacement. Original
+   tool calls and arguments stay visible; automatically delivered images never appear in a later request (UR-6).
 6. Transcript acceptance shows, with logging enabled, sibling minimap PNGs and view JPEGs beside the generating turn
    pages with relative links and per-cycle listing, and, with logging disabled, no image files written anywhere
    (UR-7).
+7. With decision payload logging enabled, a developer can distinguish gaze from wait dumps and inspect why a wait
+   resumed or kept its deadline, independently of transcript image logging. No decision files are written when
+   decision payload logging is disabled (UR-9).
 
 ### Technical Requirements
 
@@ -338,8 +355,8 @@ plumbing that SCN-002's Out Of Scope deferred.
    a `scene_update` ID, suffix-only non-retention with reuse across that cycle's retries and recovery
    rematerialisations, rebuild at the next materialisation, no earlier-cycle image in any later request, and
    omission of failed captures with a cycle where nothing captured presenting no exchange (TR-8; AI-002 TR-18).
-8. Lifetime tests verify the disposal boundary is exactly the next fresh scheduling turn — a continuation of the
-   chain does not dispose — the placeholder's recorded kind, area or centre, and game time, retained tool calls and
+8. Lifetime tests verify the disposal boundary is fresh-turn replacement — a continuation alone does not dispose —
+    the placeholder's recorded kind, area or centre, and game time, retained tool calls and
    arguments, no orphaned or duplicated parts, and fabricated auto-mode exchanges never entering retained-transcript
    state (TR-9; AI-002 TR-17 as amended).
 9. Captured-request tests verify both endpoint paths of TR-10: on a Responses-kind client the fabricated tool
@@ -376,7 +393,11 @@ plumbing that SCN-002's Out Of Scope deferred.
     shared formatting path (TR-15): the `Visible details:` label with one `- ` owner-anchored line per surveyed
     visible cue, bounded and ordinal-ordered, honest omission delivering no block when nothing is visible or the
     survey is unknown, one cue's failed description not degrading the others, and a contained derivation failure
-    delivering the text without the block.
+     delivering the text without the block.
+16. Deterministic dump tests verify producer paths share the per-run root, disabled recording does no writes,
+    failure is contained, and wait dumps preserve both questions, actual evidence and timings, parsed answers when
+    supplied, and the gate's resolution and deadline source. Cover a failed decision proposing no-reason timing
+    without masquerading as a successful classifier answer (TR-16–TR-17).
 
 ## References
 
@@ -386,7 +407,8 @@ Normative dependencies:
   fabricated visual-context exchange slot (TR-2), the mode-dependent tool inventory (TR-13), description accuracy
   (TR-15–TR-16), the scoped image-disposal exception (TR-17), and the synthetic call-ID namespace covering
   fabricated visual calls (TR-18). Consumed unchanged: the session lifecycle (TR-1), materialisation (TR-4), the
-  scheduling ladder (TR-7), the synthetic-delivery precedent (TR-18), and the chat client kind binding (TR-35–TR-36).
+  fresh-turn invalidation, the [wait gate](../002-agent-runtime/index.md#decision-wait-gate-and-automatic-parking),
+  the synthetic-delivery precedent (TR-18), and the chat client kind binding (TR-35–TR-36).
 - [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — amended by this spec with the
   transcript-image contracts (TR-26–TR-28); the toggle, storage layout, and containment are consumed unchanged.
 - [SCN-002: Spatial Minimap](../../scene/002-spatial-minimap/index.md) — consumed unchanged: the character-agnostic
@@ -413,3 +435,5 @@ Implementation surfaces:
   `game/src/Mind/AI/MindSessionTranscriptRecorder.cs` — the image-carrying result, request replay with placeholder
   disposal, and sibling image writes extended by this feature.
 - `game/src/Scene/MiniMap/MiniMapRenderer.cs` and `game/src/Vision/EyesBehaviour.cs` — consumed services.
+
+[runtime-wait]: ../002-agent-runtime/index.md#scheduling-and-wait

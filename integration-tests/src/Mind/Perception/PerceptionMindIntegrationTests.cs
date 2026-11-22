@@ -2,8 +2,10 @@ using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Time;
+using AlleyCat.IntegrationTests.Mind.AI.Decision;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind;
+using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
@@ -150,7 +152,7 @@ public sealed class PerceptionMindIntegrationTests
         SceneTree tree = TestUtils.GetSceneTree();
         var sense = new TestSense(typeof(FirstPercept));
         var owner = new TestCharacter(sense);
-        var mind = new TestMind(owner) { ObservationImportanceThreshold = 100f };
+        var mind = new TestMind(owner);
         DelegatingFaculty<FirstPercept>? faculty = null;
         faculty = new DelegatingFaculty<FirstPercept>((percept, _, _) =>
         {
@@ -293,7 +295,7 @@ public sealed class PerceptionMindIntegrationTests
         SceneTree tree = TestUtils.GetSceneTree();
         var sense = new TestSense(typeof(FirstPercept));
         var owner = new TestCharacter(sense);
-        var mind = new TestMind(owner) { ObservationImportanceThreshold = 100f };
+        var mind = new TestMind(owner);
         var importanceCounter = new Counter();
         var faculty = new BatchFaculty();
         mind.AddChild(faculty);
@@ -395,14 +397,12 @@ public sealed class PerceptionMindIntegrationTests
         SceneTree tree = TestUtils.GetSceneTree();
         var sense = new TestSense(typeof(FirstPercept));
         var owner = new TestCharacter(sense);
-        var mind = new TestMind(owner) { ObservationImportanceThreshold = 1f };
+        var mind = new TestMind(owner);
         var faculty = new BatchFaculty();
         var importanceCounter = new Counter();
         var clock = new CountingGameClock { CurrentSeconds = 10d };
         string ownerFullId = ((ICharacter)owner).FullId;
-        int notableSignals = 0;
         mind.SetGameClockLoaderForTesting(() => clock);
-        mind.DeliverySignalForTest(_ => notableSignals++);
         mind.AddChild(faculty);
         var root = new Node();
         root.AddChild(mind);
@@ -420,7 +420,6 @@ public sealed class PerceptionMindIntegrationTests
 
             Assert.Equal(1, importanceCounter.Value);
             Assert.Equal(2, clock.ReadCount);
-            Assert.Equal(1, notableSignals);
             _ = Assert.Single(mind.Timeline);
             _ = Assert.Single(mind.Ingested);
 
@@ -434,7 +433,6 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(ownerFullId, toolObservation.ActorId);
             Assert.Equal(2, importanceCounter.Value);
             Assert.Equal(3, clock.ReadCount);
-            Assert.Equal(1, notableSignals);
             Assert.Equal(2, mind.Timeline.Count);
             Assert.Equal(2, mind.Ingested.Count);
 
@@ -448,7 +446,6 @@ public sealed class PerceptionMindIntegrationTests
 
             Assert.Equal(3, importanceCounter.Value);
             Assert.Equal(5, clock.ReadCount);
-            Assert.Equal(1, notableSignals);
             Assert.Equal(3, mind.Timeline.Count);
             Assert.Equal(3, mind.Ingested.Count);
             Assert.All(mind.Timeline, observation => Assert.Equal(10d, observation.ObservedAt));
@@ -510,8 +507,6 @@ public sealed class PerceptionMindIntegrationTests
         mind.SetGameClockLoaderForTesting(() => clock);
         mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker]));
         mind.AddChild(new SpeechPerception());
-        int deliveries = 0;
-        mind.DeliverySignalForTest(_ => deliveries++);
         var root = new Node();
         root.AddChild(hearing);
         root.AddChild(ownerVoice);
@@ -529,14 +524,12 @@ public sealed class PerceptionMindIntegrationTests
             ObservedSpeech grouped = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Timeline));
             Assert.Equal(10d, grouped.ObservedAt);
             Assert.Equal(1, clock.ReadCount);
-            Assert.Equal(1, deliveries);
 
             source.PublishCompletedSpeech("duplicate grouped segment", metadata);
             await mind.DrainPerceptionsForTestingAsync();
 
             _ = Assert.Single(mind.Timeline);
             Assert.Equal(1, clock.ReadCount);
-            Assert.Equal(1, deliveries);
 
             source.PublishCompletedSpeech("equal ungrouped segment");
             source.PublishCompletedSpeech("equal ungrouped segment");
@@ -545,9 +538,6 @@ public sealed class PerceptionMindIntegrationTests
             ObservedSpeech[] ungrouped = [.. mind.Timeline.OfType<ObservedSpeech>().Skip(1)];
             Assert.Equal(2, ungrouped.Length);
             Assert.Equal(3, clock.ReadCount);
-            // Scheduling pressure remains pending until a provider response confirms its request snapshot, so it
-            // does not signal another payload-free delivery merely because later speech was accepted.
-            Assert.Equal(1, deliveries);
         }
         finally
         {
@@ -624,8 +614,6 @@ public sealed class PerceptionMindIntegrationTests
         var mind = new TestMind(owner);
         mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker, stranger]));
         mind.AddChild(new SpeechPerception());
-        int deliveries = 0;
-        mind.DeliverySignalForTest(_ => deliveries++);
         List<SpeechPercept> percepts = [];
         hearing.Perceived += percept => percepts.Add(Assert.IsType<SpeechPercept>(percept));
         var root = new Node();
@@ -643,7 +631,9 @@ public sealed class PerceptionMindIntegrationTests
         using CancellationTokenSource cancellation = new();
         try
         {
-            Task<MindBase.WaitOutcome> wait = mind.WaitForNotableForTestAsync(TimeSpan.FromSeconds(5), cancellation.Token);
+            mind.SetWaitDecisionClientForTesting(new NeverActWaitClient());
+            mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+            Task wait = mind.WaitForNextTurnForTestAsync(cancellation.Token);
             source.EmitSpeechResumed(new SpeechSegmentMetadata("automatic-group", 1));
             strangerVoice.EmitSpeechResumed(new SpeechSegmentMetadata("stranger-group", 1));
             ownerVoice.EmitSpeechResumed(new SpeechSegmentMetadata("self-group", 1));
@@ -655,10 +645,10 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(1, notification.Metadata.SegmentIndex);
             Assert.Equal(SpeechSegmentLifecycleTransition.Resumed, notification.Transition);
             Assert.False(wait.IsCompleted);
+            Assert.True(mind.HasActiveObservationWait);
             Assert.Empty(percepts);
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
-            Assert.Equal(0, deliveries);
         }
         finally
         {
@@ -686,8 +676,6 @@ public sealed class PerceptionMindIntegrationTests
         var mind = new TestMind(owner);
         mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker, stranger]));
         mind.AddChild(new SpeechPerception());
-        int deliveries = 0;
-        mind.DeliverySignalForTest(_ => deliveries++);
         List<SpeechPercept> percepts = [];
         hearing.Perceived += percept => percepts.Add(Assert.IsType<SpeechPercept>(percept));
         var root = new Node();
@@ -705,7 +693,9 @@ public sealed class PerceptionMindIntegrationTests
         using CancellationTokenSource cancellation = new();
         try
         {
-            Task<MindBase.WaitOutcome> wait = mind.WaitForNotableForTestAsync(TimeSpan.FromSeconds(5), cancellation.Token);
+            mind.SetWaitDecisionClientForTesting(new NeverActWaitClient());
+            mind.SetWaitTimingForTesting(ScriptedWaitVerdicts.NoDeadlines);
+            Task wait = mind.WaitForNextTurnForTestAsync(cancellation.Token);
             source.EmitSpeechStarted(new SpeechSegmentMetadata("attended-group", 0));
             strangerVoice.EmitSpeechStarted(new SpeechSegmentMetadata("stranger-group", 0));
             ownerVoice.EmitSpeechStarted(new SpeechSegmentMetadata("self-group", 0));
@@ -717,10 +707,10 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(0, notification.Metadata.SegmentIndex);
             Assert.Equal(SpeechSegmentLifecycleTransition.Started, notification.Transition);
             Assert.False(wait.IsCompleted);
+            Assert.True(mind.HasActiveObservationWait);
             Assert.Empty(percepts);
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
-            Assert.Equal(0, deliveries);
 
             // Attention gained after an unattended cue never creates a retroactive hold: the stranger's earlier
             // group stays dropped while a fresh cue from the now-attended stranger forwards.
@@ -969,17 +959,27 @@ public sealed class PerceptionMindIntegrationTests
             [.. GetRetainedObservationSnapshot().Select(static entry => entry.Payload)];
         public void IngestToolObservationsForTest(IReadOnlyList<AgentObservation> observations)
             => IngestToolObservations(observations);
-        public void DeliverySignalForTest(Action<ObservationDeliverySignal> handler)
-            => ObservationDeliverySignalled += handler;
         public void ObserveForTest(AgentObservation observation) => Observe(observation);
-        public Task<WaitOutcome> WaitForNotableForTestAsync(TimeSpan maxWait, CancellationToken cancellationToken)
-            => WaitForNotableObservationsAsync(maxWait, cancellationToken);
+        public Task WaitForNextTurnForTestAsync(CancellationToken cancellationToken)
+            => WaitForNextTurnAsync(cancellationToken);
         public void ReinforceAttentionForTest(string fullId)
             => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
         protected override ICharacter ResolveOwningCharacter() => _owner;
         protected override IEnumerable<IObservationLifetimePolicy> CreateLifetimePolicies()
             => [.. base.CreateLifetimePolicies(), new EquivalentActionLifetimePolicy()];
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
+    }
+
+    /// <summary>
+    /// Scripted wait decision client that never starts the agent: it always defers, and the fixtures pair it with
+    /// timing whose deadlines outlast the test, so the wait stays parked for its whole lifetime.
+    /// </summary>
+    private sealed class NeverActWaitClient : IDecisionClient
+    {
+        public Task<DecisionResult> EvaluateAsync(
+            DecisionRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(ScriptedWaitVerdicts.Answer(request, WaitVerdict.NoReason, "scripted-never-act"));
     }
 
     private sealed partial class RecordingFaculty<TPercept>(string prefix) : Perception<TPercept>

@@ -142,13 +142,11 @@ public sealed class PerceptionStreamMindIntegrationTests
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var owner = new TestCharacter();
-        var mind = new TestMind(owner) { ObservationImportanceThreshold = 100f };
+        var mind = new TestMind(owner);
         mind.SetSceneContextLoaderForTesting(() => TestSceneContext.Instance);
         mind.SetAttentionClockForTesting(() => 0d);
         var clock = new CountingGameClock { CurrentSeconds = 10d };
         mind.SetGameClockLoaderForTesting(() => clock);
-        int notableSignals = 0;
-        mind.DeliverySignalForTest(_ => notableSignals++);
         var faculty = new EmittingFaculty();
         mind.AddChild(faculty);
         var root = new Node();
@@ -165,7 +163,6 @@ public sealed class PerceptionStreamMindIntegrationTests
             Assert.Null(presence.ObservedAt);
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
-            Assert.Equal(0, notableSignals);
             Assert.Equal(0, clock.ReadCount);
             KeyValuePair<string, float> attentionEntry = Assert.Single(mind.GetAttentionSnapshot().Values);
             Assert.Equal("char:subject", attentionEntry.Key);
@@ -192,7 +189,7 @@ public sealed class PerceptionStreamMindIntegrationTests
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var owner = new TestCharacter();
-        var mind = new TestMind(owner) { ObservationImportanceThreshold = 100f };
+        var mind = new TestMind(owner);
         mind.SetSceneContextLoaderForTesting(() => TestSceneContext.Instance);
         mind.SetAttentionClockForTesting(() => 0d);
         var faculty = new EmittingFaculty();
@@ -294,8 +291,6 @@ public sealed class PerceptionStreamMindIntegrationTests
     {
         public List<AgentObservation> Ingested { get; } = [];
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
-        public void DeliverySignalForTest(Action<ObservationDeliverySignal> handler)
-            => ObservationDeliverySignalled += handler;
         protected override ICharacter ResolveOwningCharacter() => owner;
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }

@@ -617,36 +617,35 @@ internal sealed class DecisionGazePolicy
     private static string ComposeInstructions(GazeEvaluationInput input)
     {
         string context = DescribeContextSentence(input) ?? string.Empty;
-        string premise = DescribeScenePremise(input.ScenePremise);
-        return $"You are deciding where `{input.OwnerFullId}` should look. "
+        return $"You are playing `{input.OwnerFullId}` in an interactive roleplay scene. "
+            + $"You are deciding where `{input.OwnerFullId}` should look. "
             + context
-            + premise
-            + $"Choose the most likely place `{input.OwnerFullId}` would put their eyes right now — consider who "
-            + $"is speaking or being addressed, what just happened, and the scene premise — from the offered "
-            + $"character cues, or `{NoneOptionValue}`. Gazes naturally wander: resting on the face of whoever is "
-            + "speaking or being addressed is usual, and holding one fixed spot for a long time is unusual. The "
-            + "attention and prominence numbers are weak situational hints, never a ranking — attention reflects "
-            + $"how much `{input.OwnerFullId}` has noticed that character lately, prominence how visually striking "
-            + "that detail is — so let the circumstances decide, not the numbers. "
+            + $"Choose the most natural place `{input.OwnerFullId}` would put their eyes right now — consider who "
+            + "is speaking or being addressed, what just happened, and the scene's premise in the context — from "
+            + $"the offered character cues, or `{NoneOptionValue}`. Gazes naturally wander: resting on the face of "
+            + "whoever is speaking or being addressed is usual, and holding one fixed spot for a long time is "
+            + "unusual. The attention and prominence numbers are weak situational hints, never a ranking — "
+            + $"attention reflects how much `{input.OwnerFullId}` has noticed that character lately, prominence "
+            + "how visually striking that detail is — so let the circumstances decide, not the numbers. "
             + $"`{NoneOptionValue}` — nothing in particular — is a valid, common choice; do not stare.";
     }
 
     /// <summary>
-    /// Renders the scene premise under its framing label, or nothing when absent: the verbatim authored text up
-    /// to <see cref="ScenePremiseCharacterBudget"/> characters, cut at the last whitespace with an ellipsis when
-    /// longer.
+    /// Renders the verbatim authored scene premise for the evidence's premise field, or null when absent: the
+    /// text up to <see cref="ScenePremiseCharacterBudget"/> characters, cut at the last whitespace with an
+    /// ellipsis when longer. The gaze question carries no premise — the context owns it.
     /// </summary>
-    private static string DescribeScenePremise(string? scenePremise)
+    private static string? DescribeScenePremise(string? scenePremise)
     {
         if (string.IsNullOrWhiteSpace(scenePremise))
         {
-            return string.Empty;
+            return null;
         }
 
         string premise = scenePremise.Trim();
         if (premise.Length <= ScenePremiseCharacterBudget)
         {
-            return $"{ScenePremiseLabel} {premise} ";
+            return premise;
         }
 
         int cut = premise.LastIndexOf(' ', ScenePremiseCharacterBudget);
@@ -655,7 +654,7 @@ internal sealed class DecisionGazePolicy
             cut = ScenePremiseCharacterBudget;
         }
 
-        return $"{ScenePremiseLabel} {premise[..cut]}… ";
+        return $"{premise[..cut]}…";
     }
 
     /// <summary>
@@ -693,26 +692,38 @@ internal sealed class DecisionGazePolicy
 
     private static JsonElement ComposeEvidence(GazeEvaluationInput input)
     {
-        Dictionary<string, object?> evidence = new()
+        Dictionary<string, object?> evidence = [];
+
+        // The premise field appears only when a premise exists; absence is an omitted field, never a null.
+        if (DescribeScenePremise(input.ScenePremise) is { } premise)
         {
-            ["owner"] = input.OwnerFullId,
-            ["own_action"] = input.OwnAction.Describe(),
-            ["current_gaze"] = new Dictionary<string, object?>
-            {
-                ["cue"] = input.CurrentGazeCueValue ?? NoneOptionValue,
-                ["dwell_seconds"] = Math.Round(input.CurrentGazeDwellSeconds, 1),
-            },
-            ["characters"] = (input.SceneCharacters ?? [])
-                .Select(static character => character.Description is null
-                    ? new Dictionary<string, object?> { ["id"] = character.FullId }
-                    : new Dictionary<string, object?>
-                    {
-                        ["id"] = character.FullId,
-                        ["description"] = character.Description,
-                    })
-                .ToArray(),
-            ["recent_events"] = input.RecentEvents.ToArray(),
-        };
+            evidence.Add("premise", premise);
+        }
+
+        evidence.Add("owner", input.OwnerFullId);
+        evidence.Add("own_action", input.OwnAction.Describe());
+        evidence.Add("current_gaze", new Dictionary<string, object?>
+        {
+            ["cue"] = input.CurrentGazeCueValue ?? NoneOptionValue,
+            ["dwell_seconds"] = Math.Round(input.CurrentGazeDwellSeconds, 1),
+        });
+        evidence.Add("characters", (input.SceneCharacters ?? [])
+            .Select(static character => character.Description is null
+                ? new Dictionary<string, object?> { ["id"] = character.FullId }
+                : new Dictionary<string, object?>
+                {
+                    ["id"] = character.FullId,
+                    ["description"] = character.Description,
+                })
+            .ToArray());
+        // The history lines are first-person renderings from the owner's perspective; the label states whose
+        // experiences they are so the evidence's "I" can never be misread.
+        evidence.Add("recent_history", new Dictionary<string, object?>
+        {
+            ["perspective"] = input.OwnerFullId,
+            ["note"] = $"first-person lines are from `{input.OwnerFullId}`'s perspective, as they experienced them",
+            ["events"] = input.RecentEvents.ToArray(),
+        });
 
         return JsonSerializer.SerializeToElement(evidence);
     }

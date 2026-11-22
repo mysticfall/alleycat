@@ -697,9 +697,11 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
             DecisionRequest request = Assert.Single(client.Requests);
             ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
-            Assert.Contains(
-                "Scene premise: A detention interview in the basement of the Charter Office of Compliance. ",
-                question.Instructions);
+            // The premise rides the evidence, never the question.
+            Assert.DoesNotContain("detention interview", question.Instructions, StringComparison.Ordinal);
+            Assert.Equal(
+                "A detention interview in the basement of the Charter Office of Compliance.",
+                Assert.IsType<JsonElement>(request.Evidence).GetProperty("premise").GetString());
             // The premise resolves exactly once per selector lifetime, never per evaluation.
             Assert.Equal(1, manager.Calls);
         }
@@ -803,7 +805,11 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
             DecisionRequest request = Assert.Single(client.Requests);
             ChoiceQuestion question = Assert.IsType<ChoiceQuestion>(Assert.Single(request.Questions), exactMatch: false);
-            Assert.Contains("Scene premise: A slowly rendered scenario premise. ", question.Instructions);
+            // The settled premise feeds the evidence's premise field, never the question.
+            Assert.DoesNotContain("slowly rendered", question.Instructions, StringComparison.Ordinal);
+            Assert.Equal(
+                "A slowly rendered scenario premise.",
+                Assert.IsType<JsonElement>(request.Evidence).GetProperty("premise").GetString());
         }
         finally
         {

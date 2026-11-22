@@ -44,15 +44,19 @@ public partial class AgenticMind : MindBase
 
     private readonly SpeechTurnContinuationCoordinator _speechContinuations;
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
+
+    /// <summary>
+    /// Routes the wait gate's decision-payload dump through this session's diagnostics-settings loader, so the
+    /// existing injection seam covers the transcript gate and the wait dump alike; the loader's default resolves
+    /// production configuration identically to the base property.
+    /// </summary>
+    internal override AIDiagnosticsSettings WaitDiagnosticsSettings => _diagnosticsSettingsLoader();
     private Func<VisualContextMode> _visualContextModeLoader = VisualContextModeSettings.LoadOrDefault;
     private Func<MiniMapRenderer?> _miniMapRendererLoader = TryResolveDefaultMiniMapRenderer;
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
     private volatile AgentSessionRunner? _activeRunner;
     private volatile MindRequestContextSource? _activeRequestContextSource;
     private volatile bool _sessionStarted;
-
-    /// <summary>Occurs after an observation has been committed to this Mind's timeline.</summary>
-    public event Action<AgentObservation>? ObservationCommitted;
 
     /// <summary>
     /// Creates the mind with its session-scoped speech-turn and continuation correlation coordinator
@@ -309,7 +313,8 @@ public partial class AgenticMind : MindBase
             session.EnableReasoningLogging,
             invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy,
             requestContextSource: requestContextSource,
-            transcriptSink: session.TranscriptSink);
+            transcriptSink: session.TranscriptSink,
+            parkUntilNextTurn: ParkSessionThroughWaitGateAsync);
         session.ToolAdmission.AttachRunner(runner);
         _activeRunner = runner;
         _activeRequestContextSource = requestContextSource;
@@ -322,6 +327,24 @@ public partial class AgenticMind : MindBase
             _activeRunner = null;
             _activeRequestContextSource = null;
         }
+    }
+
+    /// <summary>
+    /// Parks a session between turns through the same decision-wait gate an explicit <c>wait</c> invocation runs
+    /// (§11): the runner calls this after a settled batch committed an in-game action without a chain opt-out,
+    /// and the returned payload-free result message becomes the fabricated wait exchange's result — the exact
+    /// shape the wait tool composes, so the model's history reads the pause as its own wait.
+    /// </summary>
+    private async Task<string> ParkSessionThroughWaitGateAsync(CancellationToken cancellationToken)
+    {
+        IGameClock clock = GameClock;
+        double startedAtSeconds = clock.NowSeconds;
+        WaitOutcome outcome = await WaitForNextTurnAsync(cancellationToken).ConfigureAwait(false);
+        double finishedAtSeconds = clock.NowSeconds;
+        return WaitTool.ComposeResultMessage(
+            outcome,
+            Math.Max(0d, finishedAtSeconds - startedAtSeconds),
+            finishedAtSeconds);
     }
 
     /// <summary>
@@ -402,10 +425,12 @@ public partial class AgenticMind : MindBase
         // configuration (AI-002 TR-13); authored entries add extra or test tools alongside it.
         List<AITool> functions =
         [
-            AgentSessionPhasePolicy.AdmissionArbitration.Bind(
-                speechTool.CreateFunction(context, this, dispatcher, sessionServices)),
-            waitTool.CreateFunction(context, this, dispatcher, sessionServices),
-            readLoreTool.CreateFunction(context, this, dispatcher, sessionServices),
+            AgentSessionPhasePolicy.AdmissionArbitration.Bind(BindSessionParking(
+                speechTool,
+                speechTool.CreateFunction(context, this, dispatcher, sessionServices))),
+            AgentSessionParkingPolicy.SessionParkRepresentation.Bind(
+                waitTool.CreateFunction(context, this, dispatcher, sessionServices)),
+            BindSessionParking(readLoreTool, readLoreTool.CreateFunction(context, this, dispatcher, sessionServices)),
         ];
         if (visualContextMode != VisualContextMode.Off)
         {
@@ -416,20 +441,30 @@ public partial class AgenticMind : MindBase
             // (AI-013 TR-13).
             MinimapTool minimapTool = new(miniMapRenderer, GameLoggerResolver.ResolveRequired<MinimapTool>());
             CaptureViewTool captureViewTool = new(GameLoggerResolver.ResolveRequired<CaptureViewTool>());
-            functions.Add(minimapTool.CreateFunction(context, this, dispatcher, sessionServices));
-            functions.Add(captureViewTool.CreateFunction(context, this, dispatcher, sessionServices));
+            functions.Add(BindSessionParking(minimapTool, minimapTool.CreateFunction(context, this, dispatcher, sessionServices)));
+            functions.Add(BindSessionParking(captureViewTool, captureViewTool.CreateFunction(context, this, dispatcher, sessionServices)));
         }
 
         foreach (AgentTool? extra in Tools)
         {
             if (extra is not null)
             {
-                functions.Add(extra.CreateFunction(context, this, dispatcher, sessionServices));
+                functions.Add(BindSessionParking(extra, extra.CreateFunction(context, this, dispatcher, sessionServices)));
             }
         }
 
         return functions;
     }
+
+    /// <summary>
+    /// Binds an authored tool's session-parking policy to its composed function (§11): a tool authored with
+    /// <c>ParksSessionByDefault</c> — today the speech tool, whose invocation commits speech through the voice
+    /// admission path — parks the session through the decision-wait gate after a settled batch unless the
+    /// invocation opted out through <c>chain</c>. Informational tools bind no parking policy. The binding rides
+    /// inside the phase-policy wrapper so the runner's outermost phase inspection is unchanged.
+    /// </summary>
+    private static AIFunction BindSessionParking(AgentTool tool, AIFunction function)
+        => tool.ParksSessionByDefault ? AgentSessionParkingPolicy.SessionParking.Bind(function) : function;
 
     /// <summary>
     /// Creates the session's transcript sink (AI-011 TR-5): the filesystem recorder when session transcript logging
@@ -731,12 +766,14 @@ public partial class AgenticMind : MindBase
                 }
 
                 // Every pending observation consolidates into exactly one runtime-authored synthetic exchange
-                // (AI-002 TR-18); nothing pending creates no exchange.
+                // (AI-002 TR-18); nothing pending creates no exchange. Event times render relative to this
+                // request's composition moment.
                 IReadOnlyList<ChatMessage> delivery = await SyntheticSceneUpdateExchange.BuildAsync(
                     timeline,
                     delivered,
                     session.Context.Character,
-                    NextSyntheticCallId());
+                    NextSyntheticCallId(),
+                    mind.GameClock.NowSeconds);
 
                 // AI-013 TR-8: auto mode captures both images per logical request and fabricates exactly one
                 // synthetic visual-context exchange — reused across that request's transport retries and recovery
@@ -968,7 +1005,6 @@ public partial class AgenticMind : MindBase
     {
         base.OnObservationIngested(observation);
         _speechContinuations.NotifyObservationAccepted(observation);
-        ObservationCommitted?.Invoke(observation);
     }
 
     private static void LogSessionFailure(Exception exception)

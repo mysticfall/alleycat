@@ -23,13 +23,25 @@ public sealed class EventHistoryIntegrationTests
         using WaitTool waitTool = new();
         using SpeechTool speechTool = new();
 
-        // wait: fresh context arrives automatically; waiting is deliberate yielding whose exchange persists in
-        // context like any other exchange, and an answer already visible is distinguished from a reply not yet
-        // given (AI-002 TR-15/16).
+        // wait: fresh context arrives automatically; the call is deliberate quiet time only — pausing after
+        // actions is automatic — whose early end and persistent exchange the description states, with results
+        // that promise no observable feedback (AI-002 TR-15/16; §11).
         Assert.Contains("arrive automatically", waitTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("awaiting a reply that has not been given yet", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains(
+            "pausing after your own actions happens automatically and needs no call",
+            waitTool.ToolDescription,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "The quiet time can end early when circumstances give you an opening to act again",
+            waitTool.ToolDescription,
+            StringComparison.Ordinal);
+        // A wake is a chance to act, never a command: waiting again or staying silent remains valid.
+        Assert.Contains(
+            "that is a chance to act, not an instruction, and you may wait again or stay silent",
+            waitTool.ToolDescription,
+            StringComparison.Ordinal);
         Assert.Contains("remain in your context like any other exchange", waitTool.ToolDescription, StringComparison.Ordinal);
-        Assert.Contains("the record that you yielded", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("the record of your quiet time", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.Contains("never what was observed", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("leaves no record", waitTool.ToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("nothing new reaches you", waitTool.ToolDescription, StringComparison.Ordinal);
@@ -41,7 +53,8 @@ public sealed class EventHistoryIntegrationTests
         Assert.Contains("remains in your context as the record of what you said", speechTool.ToolDescription, StringComparison.Ordinal);
     }
 
-    /// <summary>History keeps chronology and joins type-owned entries with exactly one newline.</summary>
+    /// <summary>History keeps chronology and joins type-owned entries with exactly one newline; event times state
+    /// how long ago each event happened relative to the supplied composition moment.</summary>
     [Fact]
     public async Task RenderAsync_UsesCanonicalTextInChronologicalOrder()
     {
@@ -54,13 +67,13 @@ public sealed class EventHistoryIntegrationTests
             new TestObservation("world.changed_later") { ObservedAt = 900100d },
         ];
 
-        string output = await renderer.RenderAsync(observations);
+        string output = await renderer.RenderAsync(observations, nowSeconds: 900200d);
 
         Assert.Equal(
-            "I said: Self line. (at 100.2s game time)\n"
-                + "((Received world.changed event.)) (at 300.6s game time)\n"
-                + "Heard `char:rin` say: Known line. (at 7200.0s game time)\n"
-                + "((Received world.changed_later event.)) (at 900100.0s game time)",
+            "I said: Self line. (250 hr 1 min ago)\n"
+                + "((Received world.changed event.)) (249 hr 58 min ago)\n"
+                + "Heard `char:rin` say: Known line. (248 hr 3 min ago)\n"
+                + "((Received world.changed_later event.)) (1 min 40 sec ago)",
             output);
     }
 
@@ -140,7 +153,8 @@ public sealed class EventHistoryIntegrationTests
         Assert.DoesNotContain("[new]", output, StringComparison.Ordinal);
     }
 
-    /// <summary>Timestamp framing is invariant even when the active process culture is not.</summary>
+    /// <summary>Relative-time framing is invariant even when the active process culture is not; unstamped
+    /// observations keep no suffix.</summary>
     [Fact]
     public async Task RenderAsync_UsesInvariantTimestampFramingAndOmitsUnstampedSuffixes()
     {
@@ -149,10 +163,11 @@ public sealed class EventHistoryIntegrationTests
         try
         {
             string output = await CreateRenderer().RenderAsync(
-                [new TestObservation("world.changed") { ObservedAt = 1.25d }, new TestObservation("world.quiet")]);
+                [new TestObservation("world.changed") { ObservedAt = 1.25d }, new TestObservation("world.quiet")],
+                nowSeconds: 61.5d);
 
             Assert.Equal(
-                "((Received world.changed event.)) (at 1.2s game time)\n((Received world.quiet event.))",
+                "((Received world.changed event.)) (1 min ago)\n((Received world.quiet event.))",
                 output);
         }
         finally

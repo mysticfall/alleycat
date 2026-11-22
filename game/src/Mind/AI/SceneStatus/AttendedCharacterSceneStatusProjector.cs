@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using AlleyCat.Character;
 using AlleyCat.Core;
+using AlleyCat.Core.Time;
 using AlleyCat.Mind.Observation;
 using Godot;
 
@@ -154,6 +155,14 @@ public sealed record AttendedCharacterSceneStatus
     {
         get;
     }
+
+    /// <summary>
+    /// Model-facing relative phrasing of <see cref="RelativePositionAgeSeconds" /> — for example
+    /// <c>2 min 30 sec ago</c> — so the current-scene status states how long ago the position was observed
+    /// without leaving the model any arithmetic; null when no age is available.
+    /// </summary>
+    public string? RelativePositionObservedAgo
+        => RelativePositionAgeSeconds is { } ageSeconds ? RelativeGameTime.FormatAgo(ageSeconds) : null;
 }
 
 /// <summary>Immutable relative-position evidence retained for one attended character.</summary>

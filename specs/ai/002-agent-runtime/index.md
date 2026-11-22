@@ -26,14 +26,16 @@ persistent event timeline remains canonical memory; the provider transcript is d
 2. An NPC recognises incoming scene events as delivered information: a delivered reply — such as an answer to the
    NPC's question — reads as available to respond to within the conversation's chronology, not as pending arrival
    through some other channel the NPC must wait for.
-3. The NPC can wait for an appropriate reason; a wait outcome is bounded to a wake reason, elapsed game time, and
-   current game time, and `wait` is not an observation-text delivery channel.
+3. The NPC can choose a quiet period in real seconds. It gets another chance to act at the requested deadline or
+   earlier if circumstances warrant it. A wake is an opportunity, not a command: the NPC may act, wait again, or
+   remain silent. Waiting never supplies observation text.
 4. The NPC's model-facing session-tool guidance matches runtime behaviour: scene updates arrive automatically as
    tool results the NPC did not initiate, fresh scene status arrives with every logical request without waiting,
-   `wait` yields for future developments without promising observation text, and the NPC's own `speak` and `wait`
+   `wait` chooses deliberate quiet time without promising observation text, and the NPC's own `speak` and `wait`
    calls remain in its context as the record of what it said and did.
-5. A fresh event gets priority over importance pressure, an attended speaker completion, and timeout. Routine pressure
-   does not interrupt active reasoning.
+5. World actions automatically make room for other characters before the NPC's next ordinary turn, without forcing
+   gaps between parts of the same contribution submitted together. A verbal or non-verbal response to the NPC's
+   contribution, or a new situation that calls for a reaction, can give the parked NPC an immediate chance to act.
 6. A continued utterance cannot cause a response to incomplete text: its context is presented, then awaits confirmation
    before settling.
 7. Failed, cancelled, stale, or invalid provider work does not make an NPC forget or falsely confirm scene context.
@@ -102,14 +104,19 @@ persistent event timeline remains canonical memory; the provider transcript is d
 
 ### Scheduling And Wait
 
-7. Scheduling is payload-free and ordered: fresh event, threshold-qualified pressure, attended-speaker completion, then
-   timeout. It uses Mind's accepted metadata only.
-8. `wait` returns a reason, elapsed game time, and current game time only. It neither returns observation text nor
-   advances the delivered watermark or a timeline cursor.
-9. Completing or resetting a wait must not clear a timeline cursor. Scheduling pressure outside wait clears only when a
-   provider response has been accepted and confirms the corresponding request snapshot.
-10. Automatic delivery is payload-free: injected messages and `wait` results must contain no observation text.
-      Model-visible observation text appears only in the tool results of synthetic scene-update exchanges.
+7. AI-001's payload-free fresh-turn signal retains its role in invalidating stale conversational requests. While
+   parked, freshness remains latched for the next request; neither freshness nor speech lifecycle signals cancel
+   or complete the wait. Existing conversational request cancellation, continuation, and playback hand-off
+   arbitration are otherwise unchanged.
+8. One Mind can run at most one active wait. A supplied `wait(seconds)` duration must be finite and positive and seeds
+   an unjittered deadline on a monotonic wall clock; omitting it leaves the deadline unarmed until a decision.
+   Explicit and automatic waits both report only why the wait ended, elapsed game time, and current game time.
+9. Waiting, waking, and resetting the wait do not move a delivery watermark or timeline cursor. Only acceptance
+   of a valid provider response confirms the request snapshot (TR-5); delivery marking remains distinct (TR-19).
+10. Scheduling signals, wait results, and injected scheduling messages carry no observation text. Observation
+    text reaches the conversational model through synthetic scene-update results, not the wait gate's decisions.
+
+    The [decision wait gate and automatic parking](#decision-wait-gate-and-automatic-parking) extend these rules.
 
 ### Continuation And Failure
 
@@ -146,17 +153,17 @@ persistent event timeline remains canonical memory; the provider transcript is d
       exchange persists in context like any other exchange. The AI-013 visual-context tool descriptions obey the
       same accuracy rule under AI-013 TR-6: zero-argument shape, subject binding, returned image, contained
       failure, and ephemeral image lifetime are described exactly as the runtime behaves.
-16. `wait` must be described as intentionally yielding until future developments or remaining silent, and `speak` as
-      taking effect in the world with its call remaining in context as the record of the speech; timing is carried by
-      current scene status. Shared-instruction guidance follows AI-003's Shared Context Interpretation Guidance
-      (TR-12–TR-15). Visual-context tool
-      descriptions follow AI-013's model-facing guidance (AI-013 TR-6).
+16. Describe `wait` as explicitly choosing quiet time that can end early, not as a call needed after each action.
+    Guidance explains automatic parking and batching parts of one contribution (TR-39), and distinguishes a wake
+    from an instruction to act: staying silent or waiting again is valid. Describe `speak` as taking effect in the
+    world with its call remaining in context as the speech record. Follow AI-003's Shared Context Interpretation
+    Guidance for context delivery and interpretation, and AI-013 TR-6 for visual-context descriptions.
 
 ### Exchange Retention And Scene Delivery
 
 17. Every accepted tool exchange is retained in the provider transcript for the whole session: there is no disposal
     policy and no removal path. One deliberate, scoped exception exists: generated image content carried by a
-    retained exchange under AI-013 is disposed of at the materialisation of the next fresh scheduling turn — the
+    retained exchange under AI-013 is disposed of at materialisation of a fresh replacement request — the
     pixels are replaced by a textual placeholder recording the image kind, its area or centre, and the capture game
     time — while the exchange, its tool call, and its arguments remain retained forever; AI-013 TR-9 owns the
     disposal boundary and mechanism, and the exception replaces image content in place without removing any part of
@@ -176,10 +183,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
     distinct namespace, and session-wide duplicate-call-ID validation spans real and synthetic exchanges: a consumed
     call ID stays consumed for the whole session. The namespace also supplies the fabricated visual-context call IDs
     of AI-013's auto mode, which must never collide with a real tool call ID or a `scene_update` ID (AI-013 TR-8).
-19. Delivery is marked when the synthetic exchange is appended to the retained transcript and is irrevocable: exact
-    transport retries, invalid-response recovery, and fresh replacement requests never redeliver an already-delivered
-    observation. Rematerialisation after recovery or replacement consolidates only observations that became pending
-    after the previous materialisation, appended as a new synthetic exchange in chronological position.
+19. Scene delivery is marked irrevocably when the synthetic scene-update exchange is appended to the retained
+    transcript. Exact transport retries, invalid-response recovery, and fresh replacement requests never redeliver
+    an already-delivered observation. Rematerialisation after recovery or replacement consolidates only observations
+    that became pending after the previous materialisation, in a new synthetic exchange in chronological position.
 20. The retained exchange unit is the accepted assistant message's tool calls together with any reasoning content,
     plus the tool-result message; accompanying text content is stripped and recorded (TR-12). Retention is
     whole-exchange, leaving no orphaned tool call or result and no partial removal. The transcript always begins
@@ -344,6 +351,39 @@ persistent event timeline remains canonical memory; the provider transcript is d
     the field, and that the slot value follows the subject character automatically: authors enable the switch
     once per provider and never assign slot numbers.
 
+### Decision Wait Gate And Automatic Parking
+
+39. After a batch settles, park automatically through the `wait` decision gate if a behaviour tool actually committed
+    a world action and the batch did not already enter the gate through an explicit `wait`. Composition declares tool
+    roles; the runner uses actual outcomes, not tool names or proposed calls. Speech counts at playback hand-off
+    (TR-14), even if later interrupted. Skipped or rejected speech and speech interrupted before hand-off do not
+    count. A proposed, started, or rejected `wait` that never enters the gate does not suppress automatic parking.
+    Run same-contribution calls in one batch serially before automatic parking; individual calls cannot bypass it.
+    After automatic parking, retain a runtime-authored, argument-free `wait` call and its result before the next
+    request. Use a distinct runtime call-ID sub-namespace and the collision and whole-exchange rules (TR-17–TR-20).
+40. While parked, evaluate at a tunable cadence (default two seconds) and on coalesced nudges from accepted player
+    speech, attended-speaker onset or completion, and changes in scene membership. Nudges request evaluation, not
+    a wake. Send one [AI-014 decision request][decision-api] with both named choice questions about the same NPC
+    and shared bounded evidence: perspective-labelled recent history with addressees, scene premise when
+    available, character descriptions, own activity, and current gaze. The gate, not the model, owns timing.
+    - `response`: whether the NPC's latest contribution called for a response and whether one arrived:
+      `expecting_pending`, `expecting_arrived`, or `not_expecting`. Words, actions, and pointed refusal can
+      all count as a response; neither instructions nor criteria may restrict this to spoken replies.
+    - `initiative`: how strongly the situation calls for action: `must_act`, `may_act`, or `no_reason`.
+      The instructions remind the decision model that most moments in a group scene give no particular reason to act.
+41. Read both answers. `expecting_arrived` or `must_act` wakes immediately, even if a timer is armed or the other
+    answer is `expecting_pending`. Otherwise propose a deadline from `ResponsePendingTimeout` for `expecting_pending`,
+    `MayActTimeout` for `not_expecting` + `may_act`, or `NoReasonTimeout` for `not_expecting` + `no_reason`.
+    These `DecisionWait` settings in `AlleyCat.yaml` default to 5, 3, and 10 real seconds respectively;
+    `TimeoutJitter` defaults to ±20% of the configured delay. Use CORE-006 override precedence.
+    A proposed deadline arms the timer only if none is armed or the proposal is earlier. Never extend or reset an
+    armed deadline. Expiry lets the NPC proceed even if a decision evaluation is still pending. Clear the timer
+    when the gate ends.
+42. An evaluation failure proposes the same jittered `NoReasonTimeout` deadline, keeps any sooner armed deadline,
+    and preserves bounded backoff on periodic re-polling. It does not invalidate conversational work. Use the
+    [AI-013 dump contract][decision-dumps] for opt-in evaluation provenance; never expose the classifier output to
+    the conversational model.
+
 ## In Scope
 
 - One-session lifecycle, stateless provider requests, at-least-one-call response validation with tolerated
@@ -355,7 +395,7 @@ persistent event timeline remains canonical memory; the provider transcript is d
   tool inventory.
 - Fresh per-request current-scene status rendered as each request's final user message.
 - Canonical observation-owned text for delivered scene updates.
-- Payload-free scheduling and wait semantics.
+- Payload-free fresh-turn invalidation, decision-gated explicit waits and automatic parking, and retained wait records.
 - Accurate model-facing session-tool descriptions for automatic delivery, `wait`, and `speak`.
 - Continuation admission and confirmation settlement.
 - Composition-time trusted binding of AI-004's read-only lore tool and retained retrieval exchanges.
@@ -393,7 +433,7 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - Background-task infrastructure for delivery or summarisation, repetition-case capture, multi-model live-LLM
   sweeps, and production merge of this revision.
 - A separate lore working-memory subsystem, and new retry subsystems.
-- Final timeout, threshold, and retry tuning values.
+- Final wait cadence, timeout, jitter, and retry tuning values.
 - Hot reload, in-game configuration UI, and model switching for these settings; configured values apply at provider
   construction and remain fixed for the client's lifetime.
 - Runtime slot-availability negotiation, per-session dynamic slot assignment, any configuration-file key for slot
@@ -416,8 +456,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
    consolidated automatic scene-update exchange for pending observations, and exactly one fresh current-scene
    message rendered last. Selected events use observation-owned canonical text, and automatic delivery supplies no
    observation text through `wait`, injected, or scheduling messages.
-2. Acceptance shows fresh events win over pressure, attended-speaker completion, and timeout, while routine pressure
-   does not interrupt an active request.
+2. Acceptance shows an NPC can choose quiet time, resume on or before its deadline, and choose not to act on waking.
+   In a multi-character scene, verify that parking makes room for other characters, relevant developments can prompt
+   a timely response, and a contribution submitted in one batch has no forced pause between its parts (UR-3, UR-5).
 3. Acceptance shows incomplete continuation context is never falsely settled by a failed, blank, abandoned, or invalid
    provider interaction.
 4. Acceptance shows each session-tool description accurately distinguishes automatic delivery from deliberate
@@ -430,8 +471,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
 6. Acceptance shows committed speech is remembered exactly once as the NPC's own event, appears to the model through
    its retained `speak` call, and neither cancelled nor failed speech leaves a fabricated memory or
    character-visible trace.
-7. Acceptance shows the NPC can always read the current game time from its current scene status, on the same clock as
-     its event timestamps.
+7. Acceptance shows the NPC can always read current game time from its scene status, on the same clock used to
+   derive each delivered event's age at composition (UR-10; AI-003 TR-6, TR-9).
 8. A deterministic provider fixture requests lore, consumes its returned bodies on the next reasoning request, and then
     chooses an action without lore retrieval producing remembered events (UR-11).
 9. Acceptance shows configured reasoning-effort and reasoning-summary settings govern the session's provider
@@ -469,8 +510,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
 3. Tests verify the delivered watermark is irrevocable: exact transport retries, invalid-response recovery, and fresh
    replacement requests never redeliver a delivered observation, and rematerialisation consolidates only
    newly pending observations into a new synthetic exchange.
-4. Tests verify only locally valid accepted responses atomically confirm a snapshot watermark and clear outside-wait
-   pressure; all failure, cancellation, stale, and invalid paths leave both unconfirmed.
+4. Tests verify only locally valid accepted responses atomically confirm a snapshot watermark and clear covered
+   pending freshness; all failure, cancellation, stale, and invalid paths leave both unconfirmed.
 5. Tests verify response validation: multiple tool calls in one response are accepted and executed serially as one
    batch; text content alongside tool calls keeps the response valid, is stripped from the retained exchange, and is
    recorded in the transcript sink as a stripped-text record, with synthetic exchanges marked runtime-authored
@@ -481,9 +522,14 @@ persistent event timeline remains canonical memory; the provider transcript is d
    synthetic scene-update tool results; and scheduling signals carry no payload.
 7. Tests verify the `S` admission and `PresentedAwaitingConfirmation` stages, including release on every non-confirming
    outcome.
-9. Tests verify the `wait` description presents yielding semantics, with no description text contradicting the
-   payload-free wait contract, automatic delivery, retained-exchange persistence, or the `speak` call-record
-   requirement (TR-15, TR-16).
+8. Tests verify automatic parking only after batch settlement with an actual commit: speech handed off to playback
+   counts even if later interrupted, but skipped, pre-commit, or rejected speech and information-only batches do not.
+   With a commit, an explicit `wait` that entered the gate suppresses a second park; a proposed, started, or rejected
+   call that did not enter does not. Automatic parking retains one runtime-authored exchange with an argument-free
+   call, a payload-free result, and a call ID that cannot collide with a consumed ID (TR-39).
+9. Tests verify guidance describes quiet time, automatic parking, same-contribution batching, and the freedom to stay
+   silent on waking, without contradicting automatic delivery, payload-free results, or retained `speak` and `wait`
+   exchanges (TR-15, TR-16, TR-39).
 10. Tests verify retention integrity: every accepted exchange — assistant tool calls, retained reasoning content, and
     the tool-result message — persists in every later request context; accompanying text content does not; no call
     or result is orphaned; and the bootstrap input always remains the transcript's first user message after the
@@ -543,6 +589,14 @@ persistent event timeline remains canonical memory; the provider transcript is d
     is deterministic and process-stable — re-derived across simulated sessions and process launches it yields the
     same non-negative integer for the same character, and minds sharing one provider resource resolve
     per-character values.
+24. Deterministic fixtures verify both questions share bounded, perspective-labelled evidence, the response criteria
+    accept non-verbal responses, and cadence and nudges consult the gate without themselves waking it. Cover both
+    immediate verdicts, `must_act` over `expecting_pending`, each configured jittered delay, and failure arming
+    `no_reason` with bounded re-poll backoff (TR-40–TR-42).
+25. Tests verify the explicit wall-clock seed is unjittered; decisions can shorten but never extend it or another
+    armed deadline; and a due deadline wins over pending evaluation or re-poll backoff. Verify a fresh signal while
+    parked leaves the wait in control and still rematerialises stale context, without altering continuation or
+    playback hand-off guarantees (TR-7–TR-9, TR-41–TR-42).
 
 ## References
 
@@ -555,7 +609,12 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - [AI-013: Visual AI Context](../013-visual-context/index.md) — visual-context mode configuration, the zero-argument
   minimap and view-capture tools, the auto-mode fabricated visual-context exchange, and the ephemeral image lifetime
   owning the scoped TR-17 exception
+- [AI-013: Decision Payload Diagnostics][decision-dumps] — normative for wait-decision dumps.
+- [AI-014: Decision Model API][decision-api] — normative for typed choice questions, answers, and failures.
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
 - [TEST-001: Integration Test Framework](../../testing/001-test-framework/index.md) — integration-session opt-in
   gate, `AITest` configuration boundary, live-LLM pathway, and framework-side acceptance coverage normative for
   TR-34's testing obligations and the live validation of Acceptance Criteria
+
+[decision-dumps]: ../013-visual-context/index.md#decision-payload-diagnostics
+[decision-api]: ../014-decision-model-api/index.md

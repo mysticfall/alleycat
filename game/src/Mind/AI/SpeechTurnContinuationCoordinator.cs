@@ -51,7 +51,19 @@ internal sealed class SpeechTurnContinuationCoordinator(AgenticMind mind)
                 SpeechContinuationKey runnerKey = ToRunnerKey(identity);
                 AgentSessionRunner? runner = mind.ActiveRunner;
                 runner?.RegisterSpeechContinuation(runnerKey);
-                runner?.InvalidateForFreshTurn(new HashSet<SpeechContinuationKey> { runnerKey });
+                if (mind.HasActiveObservationWait)
+                {
+                    // An active wait owns its normal completion (wait experiment §1/§4): a lifecycle start keeps
+                    // it parked — the wait decision poll's own nudge judges the event — exactly as a wait-owned
+                    // fresh observation does, while the stale latch still rematerialises the next request after
+                    // the wait's natural result.
+                    runner?.InvalidateForFreshTurn(cancelActivePhase: false);
+                }
+                else
+                {
+                    runner?.InvalidateForFreshTurn(new HashSet<SpeechContinuationKey> { runnerKey });
+                }
+
                 break;
 
             case SpeechSegmentLifecycleTransition.Blank:

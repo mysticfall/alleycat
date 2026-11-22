@@ -38,9 +38,12 @@ public sealed class AIDiagnosticsOptions
         init;
     }
     /// <summary>
-    /// Enables per-evaluation JSON decision-payload dumps under <c>user://logs/mind/decision-payloads/</c>: the
-    /// verbatim evidence and question instructions the decision gate dispatched, plus the evaluation's outcome.
-    /// Disabled by default and independent of <see cref="EnableRequestResponseLogging" />.
+    /// Enables per-evaluation JSON decision-payload dumps under
+    /// <c>user://logs/mind/&lt;game-run-timestamp&gt;/&lt;character&gt;/decision-payloads/</c>, following the
+    /// session-transcript log convention beside each character's transcripts, with one subdirectory per question
+    /// category (<c>gaze</c>, <c>wait</c>): the verbatim evidence and question instructions the decision gate
+    /// dispatched, plus the evaluation's outcome. Disabled by default and independent of
+    /// <see cref="EnableRequestResponseLogging" />.
     /// </summary>
     public bool EnableDecisionPayloadLogging
     {

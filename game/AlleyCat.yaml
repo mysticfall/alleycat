@@ -73,17 +73,32 @@ AI:
 # OpenAI alternative: APIKind: OpenAI, Host: "https://api.openai.com/v1", Model: "gpt-6-luna".
 # SystemOne overrides (all optional): APIKind: SystemOne, Host: "http://localhost:8081/v1", Timeout: 30.
 
+# Wait-gate timing for character minds. While a character waits, the decision model classifies whether their
+# latest speech or action still awaits a response and whether the circumstances call for them to act; code owns
+# the timing. An arrived response or a must-act verdict starts the character at once; otherwise the verdict arms
+# one of these deadlines (seconds), after which the character gets a chance to act. An armed deadline is never
+# extended: later verdicts can only shorten it. A failed decision call counts as NoReason for timing, so a waiting
+# character always gets a chance to act eventually. Each armed deadline is scaled by a random factor within
+# ±TimeoutJitter (a ratio, 0–0.9) so several waiting characters do not wake in lockstep.
+DecisionWait:
+    ResponsePendingTimeout: 5   # Their speech or action expects a response that has not arrived yet.
+    MayActTimeout: 3            # Nobody waits on them, but the scene offers an opening to act.
+    NoReasonTimeout: 10         # They have no particular reason to act.
+    TimeoutJitter: 0.2
+
 # Diagnostics toggles for AI request and response logging.
 Diagnostics:
     AI:
         EnableRequestResponseLogging: true
         # Human-readable per-cycle Markdown transcripts under user://logs/mind/ (AI-011); disabled by default.
         EnableSessionTranscriptLogging: false
-        # Per-evaluation JSON decision-payload dumps under user://logs/mind/decision-payloads/
-        # (decision-gate experiment): the verbatim evidence and question instructions the decision gate
-        # dispatched, plus verdict, probability, threshold, staleness and latency — one file per evaluation,
-        # named {timestamp}_{character}_{trigger}_{verdict}.json. Disabled by default; enabling it costs one
-        # small file write per gate evaluation.
+        # Per-evaluation JSON decision-payload dumps following the transcript-log convention (AI-011 TR-2–TR-5):
+        # under user://logs/mind/<game-run-timestamp>/<character>/decision-payloads/, one subdirectory per question
+        # category (decision-gate experiment: gaze/ for the look-target policy, wait/ for the wait gate), beside
+        # that character's session transcripts: the verbatim evidence and questions the decision gate dispatched,
+        # plus the answers, resolved verdict, wait deadline and latency — one file per evaluation, named
+        # {timestamp}_{character}_{trigger}_{verdict}.json (wait verdicts: now, arm-5.2s, keep-3.1s, failed).
+        # Disabled by default; enabling it costs one small file write per gate evaluation.
         #EnableDecisionPayloadLogging: false
 
 # Logging levels per category.

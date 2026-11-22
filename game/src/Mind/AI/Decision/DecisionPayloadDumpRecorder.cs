@@ -12,13 +12,18 @@ namespace AlleyCat.Mind.AI.Decision;
 /// </summary>
 /// <remarks>
 /// Recording is fully contained: a writing failure is logged at Warning and never propagates into the evaluation
-/// it observes. Files land flat under the diagnostics root, named for sortability and self-description:
-/// <c>yyyyMMdd-HHmmss-fff_{characterId}_{TriggerKind}_{verdict}.json</c>.
+/// it observes. Dumps follow the session-transcript log convention (AI-011 TR-2–TR-5), co-located beside each
+/// character's transcripts: <c>user://logs/mind/&lt;game-run-start-timestamp&gt;/&lt;character-id&gt;/decision-payloads/</c>
+/// with one subdirectory per producer-declared question category — <c>gaze</c> for the look-target policy,
+/// <c>wait</c> for the two-question wait gate — named for sortability and self-description:
+/// <c>yyyyMMdd-HHmmss-fff_{characterId}_{TriggerKind}_{verdict}.json</c>. The session directory resolves through
+/// <see cref="MindSessionTranscriptRecorder.GetRunDirectory" /> so both log families share one latched session
+/// directory per game run.
 /// </remarks>
 internal sealed class DecisionPayloadDumpRecorder
 {
-    /// <summary>The canonical decision-payload root under the Godot user-data diagnostics tree.</summary>
-    internal const string UserRootPath = "user://logs/mind/decision-payloads";
+    /// <summary>The per-character directory decision-payload dumps live in, beside the transcript turn pages.</summary>
+    internal const string DumpDirectoryName = "decision-payloads";
 
     private const string FileExtension = ".json";
 
@@ -35,18 +40,30 @@ internal sealed class DecisionPayloadDumpRecorder
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    private readonly string _category;
     private readonly string _characterId;
+    private readonly string _characterDirectoryName;
     private readonly Func<string> _rootPathResolver;
     private readonly ILogger _logger;
 
-    public DecisionPayloadDumpRecorder(string characterId, Func<string> rootPathResolver, ILogger logger)
+    public DecisionPayloadDumpRecorder(
+        string category,
+        string characterId,
+        string characterDirectoryName,
+        Func<string> rootPathResolver,
+        ILogger logger)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(category);
         ArgumentException.ThrowIfNullOrWhiteSpace(characterId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(characterDirectoryName);
         ArgumentNullException.ThrowIfNull(rootPathResolver);
         ArgumentNullException.ThrowIfNull(logger);
         IdentityValidator.ValidateFullId(characterId, nameof(characterId));
+        IdentityValidator.ValidateId(characterDirectoryName, nameof(characterDirectoryName));
 
+        _category = category;
         _characterId = characterId;
+        _characterDirectoryName = characterDirectoryName;
         _rootPathResolver = rootPathResolver;
         _logger = logger;
     }
@@ -58,15 +75,20 @@ internal sealed class DecisionPayloadDumpRecorder
         {
             ArgumentNullException.ThrowIfNull(dump);
 
-            string rootPath = Volatile.Read(ref _rootPathOverride) ?? _rootPathResolver();
+            string characterDumpDirectory = Path.Combine(
+                MindSessionTranscriptRecorder.GetRunDirectory(
+                    Volatile.Read(ref _rootPathOverride) ?? _rootPathResolver()),
+                _characterDirectoryName,
+                DumpDirectoryName,
+                SanitisePathComponent(_category));
             string fileName = $"{dump.Timestamp.LocalDateTime:yyyy-MM-dd-HH-mm-ss-fff}"
                 + $"_{SanitisePathComponent(_characterId)}"
                 + $"_{SanitisePathComponent(dump.TriggerKind)}"
                 + $"_{SanitisePathComponent(dump.Verdict)}"
                 + FileExtension;
-            _ = Directory.CreateDirectory(rootPath);
+            _ = Directory.CreateDirectory(characterDumpDirectory);
             File.WriteAllText(
-                Path.Combine(rootPath, fileName),
+                Path.Combine(characterDumpDirectory, fileName),
                 JsonSerializer.Serialize(dump, _serialiserOptions));
         }
         catch (Exception exception)
@@ -80,8 +102,9 @@ internal sealed class DecisionPayloadDumpRecorder
     }
 
     /// <summary>Replaces every path separator and invalid filename character with a safe dash.</summary>
-    /// <remarks>Applied to the character ID, trigger kind, and verdict filename components alike: free-form
-    /// verdicts such as canonical full IDs carry colons that are invalid in filenames on some platforms.</remarks>
+    /// <remarks>Applied to the question category, character ID, trigger kind, and verdict filename components
+    /// alike: free-form verdicts such as canonical full IDs carry colons that are invalid in filenames on some
+    /// platforms.</remarks>
     private static string SanitisePathComponent(string value)
         => string.Join(
             "-",

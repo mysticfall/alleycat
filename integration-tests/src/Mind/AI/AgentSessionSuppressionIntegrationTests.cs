@@ -137,7 +137,6 @@ public sealed partial class AgentSessionSuppressionIntegrationTests
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         return mind;

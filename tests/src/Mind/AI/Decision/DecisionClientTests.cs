@@ -328,6 +328,135 @@ public partial class DecisionClientTests
         }
     }
 
+    /// <summary>
+    /// Boolean pole guidance rides the dialect's documented criteria shape: the noul criteria map on the
+    /// map-based dialects, and instructions-appended plain text on the OpenAI dialect — nothing silently
+    /// discarded. Without poles, neither dialect emits any criteria field.
+    /// </summary>
+    /// <param name="kind">Dialect under test.</param>
+    [Theory]
+    [InlineData("OpenRouter")]
+    [InlineData("OpenAI")]
+    public async Task BooleanCriteria_RenderPerDialectWithoutSilentLoss(string kind)
+    {
+        JsonDocument? captured = null;
+        DecisionRequest request = new(/*lang=json,strict*/ "{\"ticket\":\"broken checkout\"}",
+        [
+            new BooleanQuestion(
+                "bug",
+                "Is it broken?",
+                CriteriaTrue: "The report describes broken behaviour.",
+                CriteriaFalse: "The report asks a question."),
+        ]);
+        string response = kind == "OpenRouter"
+            ? /*lang=json,strict*/ """{"model":"resolved","answers":{"bug":{"type":"noul","noul":0.9}}}"""
+            : /*lang=json,strict*/ """{"model":"resolved","answers":[{"name":"bug","type":"predicate","probability":0.9}]}""";
+        using HttpClient http = new(new Handler(async (message, token) =>
+        {
+            captured = JsonDocument.Parse(await message.Content!.ReadAsStringAsync(token));
+            return Response(response);
+        }))
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        DecisionClient client = new(http, Options(kind), NullLogger<DecisionClient>.Instance);
+
+        _ = await client.EvaluateAsync(request);
+
+        JsonElement bug = kind == "OpenRouter"
+            ? captured!.RootElement.GetProperty("questions").GetProperty("bug")
+            : captured!.RootElement.GetProperty("questions")[0];
+        if (kind == "OpenRouter")
+        {
+            Assert.Equal("Is it broken?", bug.GetProperty("instructions").GetString());
+            Assert.Equal(
+                "The report describes broken behaviour.",
+                bug.GetProperty("criteria").GetProperty("true").GetString());
+            Assert.Equal(
+                "The report asks a question.",
+                bug.GetProperty("criteria").GetProperty("false").GetString());
+        }
+        else
+        {
+            Assert.Equal(
+                "Is it broken? Answer true when: The report describes broken behaviour. "
+                    + "Answer false when: The report asks a question.",
+                bug.GetProperty("instructions").GetString());
+            _ = Assert.Throws<KeyNotFoundException>(() => bug.GetProperty("criteria"));
+        }
+    }
+
+    /// <summary>A boolean question without poles emits no criteria field on either dialect.</summary>
+    [Theory]
+    [InlineData("OpenRouter")]
+    [InlineData("OpenAI")]
+    public async Task BooleanWithoutCriteria_EmitsNoCriteriaField(string kind)
+    {
+        JsonDocument? captured = null;
+        DecisionRequest request = new(/*lang=json,strict*/ "{\"ticket\":\"broken checkout\"}", [new BooleanQuestion("bug", "Is it broken?")]);
+        string response = kind == "OpenRouter"
+            ? /*lang=json,strict*/ """{"model":"resolved","answers":{"bug":{"type":"noul","noul":0.9}}}"""
+            : /*lang=json,strict*/ """{"model":"resolved","answers":[{"name":"bug","type":"predicate","probability":0.9}]}""";
+        using HttpClient http = new(new Handler(async (message, token) =>
+        {
+            captured = JsonDocument.Parse(await message.Content!.ReadAsStringAsync(token));
+            return Response(response);
+        }))
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        DecisionClient client = new(http, Options(kind), NullLogger<DecisionClient>.Instance);
+
+        _ = await client.EvaluateAsync(request);
+
+        JsonElement bug = kind == "OpenRouter"
+            ? captured!.RootElement.GetProperty("questions").GetProperty("bug")
+            : captured!.RootElement.GetProperty("questions")[0];
+        Assert.Equal("Is it broken?", bug.GetProperty("instructions").GetString());
+        _ = Assert.Throws<KeyNotFoundException>(() => bug.GetProperty("criteria"));
+    }
+
+    /// <summary>
+    /// The documented noul answer is a number: a literal string or boolean answer — undocumented response
+    /// shapes — fail closed as InvalidResponse.
+    /// </summary>
+    /// <param name="answerValue">Raw JSON fragment the model emitted for the noul answer.</param>
+    [Theory]
+    [InlineData("\"yes\"")]
+    [InlineData("true")]
+    public async Task BooleanAnswer_NonNumberFailsClosed(string answerValue)
+    {
+        DecisionRequest request = new(/*lang=json,strict*/ "{\"ticket\":\"broken checkout\"}", [new BooleanQuestion("bug", "Is it broken?")]);
+        string body = "{\"model\":\"resolved\",\"answers\":{\"bug\":{\"type\":\"noul\",\"noul\":"
+            + answerValue + "}}}";
+        using HttpClient http = new(new Handler((_, _) => Task.FromResult(Response(body))))
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        DecisionClient client = new(http, Options(), NullLogger<DecisionClient>.Instance);
+
+        DecisionException failure = await Assert.ThrowsAsync<DecisionException>(() => client.EvaluateAsync(request));
+        Assert.Equal(DecisionFailure.InvalidResponse, failure.Failure);
+    }
+
+    /// <summary>A lone boolean pole is a composition bug and fails fast as a typed input failure.</summary>
+    [Fact]
+    public async Task BooleanCriteria_RequireBothPoles()
+    {
+        DecisionRequest request = new(/*lang=json,strict*/ "{\"ticket\":\"broken checkout\"}",
+        [
+            new BooleanQuestion("bug", "Is it broken?", CriteriaTrue: "Only one pole supplied."),
+        ]);
+        using HttpClient http = new(new Handler((_, _) => Task.FromResult(Response(/*lang=json,strict*/ """{"model":"m"}"""))))
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        DecisionClient client = new(http, Options(), NullLogger<DecisionClient>.Instance);
+
+        DecisionException failure = await Assert.ThrowsAsync<DecisionException>(() => client.EvaluateAsync(request));
+        Assert.Equal(DecisionFailure.Input, failure.Failure);
+    }
+
     /// <summary>Host prefix and optional trailing slash are preserved with exactly one operation segment.</summary>
     [Theory]
     [InlineData("OpenRouter", "https://example.invalid/api/alpha", "/api/alpha/decisions")]

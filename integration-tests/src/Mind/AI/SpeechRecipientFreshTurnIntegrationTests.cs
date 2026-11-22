@@ -225,7 +225,6 @@ public sealed class SpeechRecipientFreshTurnIntegrationTests
                     Sections = [new TextPromptSection { Text = "static", Name = "Static" }],
                 },
                 ClientProvider = clientProvider,
-                ObservationImportanceThreshold = 1f,
             };
             mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player, speaker]));
             mind.SetVisualContextModeLoaderForTesting(() => VisualContextMode.Tools);
