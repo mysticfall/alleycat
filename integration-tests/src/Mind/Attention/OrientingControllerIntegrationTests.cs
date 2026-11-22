@@ -171,8 +171,8 @@ public sealed class OrientingControllerIntegrationTests
             Assert.Same(root.GetNode("Mind"), mind);
             Assert.NotNull(root.GetNode("Mind/AttentionGazeTargetSelector"));
             Assert.False(controller is IComponent);
-            Assert.Same(root.GetNode("Female/GeneralSkeleton/Head/Viewpoint"), controller.Viewpoint);
-            Assert.Same(root.GetNode("Female/GeneralSkeleton/Neck/NeckPivot"), controller.NeckPivot);
+            Assert.Same(root.GetNode("Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint"), controller.Viewpoint);
+            Assert.Same(root.GetNode("Female/SOMA/Native/GeneralSkeleton/Neck/NeckPivot"), controller.NeckPivot);
             Assert.Equal(0f, controller.GetTargetIntent().DesiredInfluence);
         }
         finally

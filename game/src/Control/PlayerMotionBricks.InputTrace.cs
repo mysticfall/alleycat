@@ -61,7 +61,7 @@ public partial class PlayerMotionBricks
                 Deadzone,
                 WalkingSteeringDegreesPerSecond,
                 movementQuantisation = 0,
-                linePolicy = "curved-walking-guide; stationary-source-landmark-cue-debt; whole-unstarted-cycle-yaw-drops",
+                linePolicy = "curved-walking-guide; stationary-cycle-angle-by-intensity; ordered-primary-lifts",
                 animationBody = System.Environment.GetEnvironmentVariable("PLAYER_ANIMATION_BODY") == "1"
             });
             _logger.LogInformation("Player input trace started: {Path}", InputTracePath);
@@ -91,13 +91,17 @@ public partial class PlayerMotionBricks
         }
     }
 
-    internal void RecordControllerInput(bool left, Vector2 raw, bool accepted) => _inputTrace?.Record("input-received", new
+    internal void RecordControllerInput(bool left, Vector2 raw, bool accepted)
     {
-        physicsFrame = Engine.GetPhysicsFrames(),
-        side = left ? "left" : "right",
-        raw = new[] { raw.X, raw.Y },
-        accepted
-    });
+        _turnTrace?.Controller(left, raw, accepted);
+        _inputTrace?.Record("input-received", new
+        {
+            physicsFrame = Engine.GetPhysicsFrames(),
+            side = left ? "left" : "right",
+            raw = new[] { raw.X, raw.Y },
+            accepted
+        });
+    }
 
     private void RecordStick(bool left, Vector2 raw, Vector2 quantised, bool changed, string origin) => _inputTrace?.Record("input-acknowledged", new
     {

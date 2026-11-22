@@ -147,7 +147,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             phase = "current-release";
             fixture.Right.TriggerActionVector2InputChanged("primary", Vector2.Zero);
             await Step(240);
-            Assert.Equal("settled-idle", fixture.Motion.Phase);
+            Assert.Equal("tracked-idle", fixture.Motion.Phase);
             Assert.Equal("", fixture.Motion.Failure);
             Assert.DoesNotContain(stale, applied);
         }
@@ -263,7 +263,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.False(crossed, "The root crossed the near plane or exceeded the engine's permitted penetration during playback or settling.");
             Assert.True(requestsAfterBlocked >= 2, "Observe continued playback and subsequent requests after contact.");
             Assert.True(contextMatches, "Submitted context must be a preceding actual skin-ready observation.");
-            Assert.Equal("settled-idle", fixture.Motion.Phase);
+            Assert.Equal("tracked-idle", fixture.Motion.Phase);
         }
         finally
         {
@@ -301,8 +301,11 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     {
         private int _generated;
         public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => Publish(inner.Generate(context, target));
+        public Transform3D[][] GeneratePresented(Transform3D[][] context, Transform3D[][] target, Transform3D[] start)
+            => Publish(inner.GeneratePresented(context, target, start));
+        private Transform3D[][] Publish(Transform3D[][] result)
         {
-            Transform3D[][] result = inner.Generate(context, target);
             if (++_generated == gate.HoldGeneration)
             {
                 gate.GeneratedFrames = result.Length;
@@ -327,7 +330,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         public MockXRHandControllerNode Right => (MockXRHandControllerNode)runtime.RightHandController;
         public PlayerMotionBricks Motion => player.GetNode<PlayerMotionBricks>("MotionBricks");
         public PlayerVRIK VRIK => player.GetNode<PlayerVRIK>("VRIK");
-        public Skeleton3D Skeleton => player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        public Skeleton3D Skeleton => player.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
 
         public static async Task<ClosureFixture> CreateAsync(float? backwardSpeedRatio = null, Action<PlayerMotionBricks>? configure = null)
         {
@@ -336,21 +339,17 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             var root = new ProbeGame { Name = "PlayerClosureProbe" };
             var manager = new ProbeXRManager { Name = "XR" };
             MockXRRuntimeNode runtime = GD.Load<PackedScene>("res://assets/xr/mock_runtime.tscn").Instantiate<MockXRRuntimeNode>();
-            // Explicit settings use the same authored player template that the runtime role installer copies.
-            string scene = backwardSpeedRatio.HasValue
-                ? "res://assets/characters/templates/reference_female/reference_female_player.tscn"
-                : "res://assets/characters/reference/ally_player.tscn";
-            CharacterBody3D player = GD.Load<PackedScene>(scene).Instantiate<CharacterBody3D>();
-            if (backwardSpeedRatio.HasValue)
-            {
-                player.GetNode<PlayerMotionBricks>("MotionBricks").BackwardSpeedRatio = backwardSpeedRatio.Value;
-            }
+            CharacterBody3D player = GD.Load<PackedScene>("res://assets/characters/reference/ally_player.tscn").Instantiate<CharacterBody3D>();
             // The normal ally installer creates MotionBricks on entry. Configure the actual installed child
             // before its Ready, rather than dereferencing a child that does not exist before installation.
             void ConfigureInstalled(Node node)
             {
                 if (node is PlayerMotionBricks motion && motion.GetParent() == player)
                 {
+                    if (backwardSpeedRatio.HasValue)
+                    {
+                        motion.BackwardSpeedRatio = backwardSpeedRatio.Value;
+                    }
                     configure?.Invoke(motion);
                 }
             }
@@ -364,9 +363,10 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             try
             {
                 tree.Root.AddChild(root);
+                // The role installs its modules deferred, not during AddChild.
+                await TestUtils.WaitForPhysicsFramesAsync(tree, 20);
             }
             finally { tree.NodeAdded -= ConfigureInstalled; }
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 20);
             var fixture = new ClosureFixture(root, runtime, player, tree);
             Assert.True(fixture.VRIK.BindToXRServices());
             fixture.Head.Transform = new Transform3D(Basis.Identity, new Vector3(0, 1.4f, 0));

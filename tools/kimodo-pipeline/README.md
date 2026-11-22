@@ -444,3 +444,15 @@ registration or import-cache state (`test_cold_import_project_loads_the_package_
 [bootstrap-workspace]: kimodo_pipeline/bootstrap_workspace.py
 [bootstrap-extraction]: kimodo_pipeline/bootstrap_extraction.py
 [idle-source-bootstrap]: kimodo_pipeline/idle_source_bootstrap.py
+
+### Native Source Rests
+
+`export_motionbricks.py` publishes canonical samples, source layout and Blender source rests, not target-helper,
+LOOK or target-rest calibration rows. Its CLI is unchanged. To derive each native source skeleton from the reviewed
+F6 donor's named rest/bind table and the current imported body, from the checkout root run:
+
+```sh
+godot-mono --headless --xr-mode off --path game -s "$(realpath tools/kimodo-pipeline/native-rest/derive.gd)"
+```
+
+Pass `-- /absolute/output/directory` to compare without replacing runtime resources. The destination must exist.

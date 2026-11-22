@@ -354,17 +354,17 @@ public sealed class ArmShoulderIKIntegrationTests
             EnsureCharacterRuntimeInstalled(actor);
             await WaitForFramesAsync(sceneTree, 4);
 
-            Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             AssertReferenceRigSkeletonLocalFrame(skeleton, actorLabel);
 
             Node3D leftHandTarget = actor.GetNode<Node3D>("IKTargets/LeftHand");
             Node3D rightHandTarget = actor.GetNode<Node3D>("IKTargets/RightHand");
             Node3D leftPoleTarget = actor.GetNode<Node3D>("IKTargets/LeftElbow");
             Node3D rightPoleTarget = actor.GetNode<Node3D>("IKTargets/RightElbow");
-            SkeletonModifier3D leftArmController = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/LeftArmIKController");
-            SkeletonModifier3D rightArmController = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/RightArmIKController");
-            SkeletonModifier3D leftArmIK = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/LeftArmTwoBoneIKController");
-            SkeletonModifier3D rightArmIK = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/RightArmTwoBoneIKController");
+            SkeletonModifier3D leftArmController = actor.GetNode<SkeletonModifier3D>("Female/SOMA/Native/GeneralSkeleton/LeftArmIKController");
+            SkeletonModifier3D rightArmController = actor.GetNode<SkeletonModifier3D>("Female/SOMA/Native/GeneralSkeleton/RightArmIKController");
+            SkeletonModifier3D leftArmIK = actor.GetNode<SkeletonModifier3D>("Female/SOMA/Native/GeneralSkeleton/LeftArmTwoBoneIKController");
+            SkeletonModifier3D rightArmIK = actor.GetNode<SkeletonModifier3D>("Female/SOMA/Native/GeneralSkeleton/RightArmTwoBoneIKController");
 
             // Drive the installed arm modifiers directly for this regression. Runtime CharacterIK provider stages may
             // intentionally deactivate hands when no XR/NPC provider is present in the test process; the assertion here

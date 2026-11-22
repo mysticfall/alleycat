@@ -103,7 +103,7 @@ public partial class NavigationPlaytestRecorder : Node
         {
             _navigation = navigation;
             _actor = navigation.GetParent<Node3D>();
-            _skeleton = _actor.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
+            _skeleton = _actor.RequireNode<Skeleton3D>(((Character.Character)_actor).MotionModel + "/SOMA/Native/GeneralSkeleton");
             _camera = GetParent().RequireNode<Camera3D>("Camera3D");
             // A value-only sink method, not a closure over this Node, is captured by the native worker.
             navigation.ReturnedMotion = _sink!.Returned;

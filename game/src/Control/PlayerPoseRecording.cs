@@ -36,7 +36,7 @@ internal sealed class PlayerPoseRecording
                     "src/Control/PlayerMotionBricks.InputTrace.cs", "src/Control/PlayerMotionBricks.PoseTrace.cs",
                     "src/Control/WalkingExperimentDriver.cs", "src/Control/PlayerInputTrace.cs", "src/Control/PlayerPoseRecording.cs",
                     "src/Motion/ReviewedRoleSampler.cs", "src/Motion/SourcePhaseClock.cs", "src/Motion/SomaInference.cs",
-                    "src/Motion/SomaModelFrames.cs", "src/Motion/CalibratedSomaRig.cs", "src/Motion/RealisedPoseHistory.cs",
+                    "src/Motion/SomaModelFrames.cs", "src/Motion/NativeSomaRig.cs", "src/Motion/RealisedPoseHistory.cs",
                     "src/Motion/SomaInferenceWorker.cs", "src/IK/PlayerVRIK.cs", "src/Navigation/Recording/NavigationSessionWriter.cs",
                     "assets/characters/templates/reference_female/reference_female_player.tscn"];
                 var hashes = new Dictionary<string, string>();

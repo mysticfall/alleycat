@@ -22,6 +22,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         var root = new ProbeGame { Name = "RepeatNavigationDiagnosis" };
         Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
         AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
+        // Capture the authored target before tree entry; the role reparents this same object on entry.
         Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
         MotionBricksNavigation? nav = null;
         var events = new List<object>();

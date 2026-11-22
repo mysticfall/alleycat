@@ -16,14 +16,14 @@ source set; that adoption does not complete broader variant/default admission or
 
 ## Goal
 
-Artists and implementers can identify usable locomotion/idle sources, their calibration and provenance, and any missing
-inputs without confusing generated packages with protected source assets or with proof of runtime suitability.
+Artists and implementers can identify usable locomotion/idle sources, their canonical skeleton and provenance, and any
+missing inputs without confusing generated packages with protected source assets or with proof of runtime suitability.
 
 ## User Requirements
 
 1. Supplied setups and source animations remain unmodified; invalid or missing inputs produce actionable diagnostics.
 2. Artists own external source creation, template duplication/adjustment where used, prompt authoring, mandatory motion
-   review and calibration approval. A reviewed Blender action can be ingested without a pipeline generation runner.
+   review and setup approval. A reviewed Blender action can be ingested without a pipeline generation runner.
    Source motion is not regenerated merely to conceal a runtime defect.
 3. Supply the shared eight-role locomotion source and externally owned idle from our Kimodo content where available.
    Verify availability rather than assuming it, and never substitute evaluation-only upstream sample motions.
@@ -45,7 +45,7 @@ inputs without confusing generated packages with protected source assets or with
    helpers, constraints, poses, overrides, or source files. Source selection and local processing preserve anatomy,
    hierarchy, intended direction, contact safety, and one-time root ownership.
 3. Source suitability and conversion to MotionBricks target windows require explicit evidence under the shared
-   animation contract. A packaged idle/walk clip or Blender calibration alone does not prove SOMA conversion,
+   animation contract. A packaged idle/walk clip or Blender preview alone does not prove SOMA conversion,
    actual-rig retargeting, or realised-context feedback.
 
 ### Repository Source Asset Contract
@@ -75,6 +75,10 @@ inputs without confusing generated packages with protected source assets or with
 
 ### Character Setup and Calibration Contract
 
+This contract governs Blender-side Kimodo baking and idle staging only. It does not define runtime presentation,
+preview authority or published runtime data; the [shared animation contract](../../animation/index.md) TR4 owns
+presentation.
+
 1. **KIMODO-SET-001:** The approved per-character setup remains the calibration reuse unit for Kimodo baking.
    Locomotion workspaces and idle staging use a verified copy of it.
 2. **KIMODO-SET-002:** Every bake verifies setup parity before publication: approved setup-byte hash and a
@@ -95,9 +99,9 @@ inputs without confusing generated packages with protected source assets or with
 ### Source Production Contract
 
 1. **KIMODO-PROD-001:** Source creation is external and artist-owned; the repository delivers reviewed-action ingestion,
-   calibrated export and source-set publication, not source-generation machinery or an executable template recipe.
+   canonical export and source-set publication, not source-generation machinery or an executable template recipe.
    Retain inspectable authored Blender sources and reference/authoring inputs. Record source, variant/posture,
-   local reference identity, stages, roles, timing, constraints, calibrated setup, root/facing trajectories and
+   local reference identity, stages, roles, timing, constraints, root/facing trajectories and
    available prompts/seed/generation settings. Do not invent generator provenance for user-authored actions or promise
    bit-identical stochastic inference. Prefer short literal subject/action/direction prompts without style
    embellishments; constraints carry spatial requirements. The reference
@@ -119,11 +123,13 @@ inputs without confusing generated packages with protected source assets or with
    aesthetic constraint gates. Essential processing checks reject nonfinite data, unsupported skeleton/coordinates/rate,
    invalid ranges, mismatched source identity and incomplete role coverage when claiming a complete variant.
    Foot-joint targets are not sole-contact
-   assertions. Preserve calibrated sources, helpers and preview setup; approval does not waive data integrity.
+   assertions. Preserve authored sources and setups; approval does not waive data integrity.
 5. **KIMODO-PROD-005:** Provide a maintained command to ingest an arbitrary approved Blender source/action with explicit
-   role/review metadata, independent of generation-runner receipts. Evaluate original calibrated Kimodo/SOMA poses
-   read-only, without a MakeHuman round-trip or saving/rebaking source files. Use a small versioned format with generic
-   variants containing one or more speed stages. Retain all chronological samples and provenance. Slicing may use
+   role/review metadata, independent of generation-runner receipts. Evaluate original canonical Kimodo/SOMA poses
+   read-only, without a MakeHuman round-trip or saving/rebaking source files, and validate the source against the
+   published canonical skeleton identity (joint names, parents and rest), not handmade calibration rows. Use a small
+   versioned format with generic variants containing one or more speed stages. Retain all chronological samples and
+   provenance. Slicing may use
    ranges/sample offsets over the full take; separate clips are not required. Preserve consecutive four-frame 30 Hz
    windows, local motion and placement displacement/facing, without sampling across unrelated role boundaries.
    Document and verify each technical sanitising operation's pose/trajectory fidelity; normalisation/cleanup must not
@@ -145,12 +151,14 @@ inputs without confusing generated packages with protected source assets or with
    motion, not automatic gait/output repair. Undeclared non-cyclic content retains truthful exhaustion, never silent
    wrapping.
 6. **KIMODO-PROD-006:** Require human approval bound to source hash, action identity and reviewed ranges. Review the
-   full relevant window on canonical source and calibrated character preview where applicable: reference, acquisition,
+   full relevant window on canonical source and reference-character preview where applicable: reference, acquisition,
    movement interiors, transitions and settling. Boundary agreement, prompt wording and transport checks alone cannot
    admit motion. Retain rejected takes/reports; failed or unreviewed motion cannot become admitted content. Publish
    content and review/provenance metadata atomically per destination, preserving prior valid outputs on failure.
    Record hashes, action/frame/rate identities, units, tool identities and available generation provenance. Human
    artistic approval is distinct from independent implementation safety review and actual-rig runtime proof.
+   Reference-character previews follow the shared animation contract's visual authority: Godot native playback, or
+   a Blender preview independently shown to match it on skinned landmarks.
    Retain feminine and masculine defaults, feminine first, as styles rather than sex-wide claims. A reviewed subset
    may support representative implementation; final default acceptance needs both actual sources and reference-character
    previews. Missing complete content does not authorise generation or make a representative result complete.
@@ -162,7 +170,8 @@ inputs without confusing generated packages with protected source assets or with
    needs. Normal CTRL/NAV load the same current full-source export through `reviewed-feminine/set.json`, without
    source activation switches or a prototype movement fallback. No planted-interval catalogue, stitch table or
    clip-seam repair is required.
-2. Retained outputs identify character, source, variant, calibration, coordinates, units, and provenance truthfully.
+2. Retained outputs identify character, source, variant, canonical skeleton, coordinates, units, and provenance
+   truthfully.
    Generated data is tool-owned, not hand-edited to conceal mismatches. Unknown or contradictory bindings fail clearly.
 3. Stage and validate output before durable mutation; publication is all-or-rollback. Metadata-only changes require
    retained animation, identity, and integrity bindings to remain valid. No partial or stale publication is accepted.
@@ -172,7 +181,9 @@ inputs without confusing generated packages with protected source assets or with
 5. Do not redesign the broader pipeline as a prerequisite to the actual-rig walk-to-idle demonstration. Record which
    source extraction/conversion path works and which tooling remains unadapted; never label an unexecuted path ready.
 6. The minimal MotionBricks export path lives under `tools/kimodo-pipeline/`: `export_motionbricks.py` reads protected
-   calibrated setup and external-idle inputs without saving or rebaking them and verifies before/after hashes.
+   setup and external-idle inputs without saving or rebaking them and verifies before/after hashes. It publishes the
+   canonical skeleton identity, external-idle samples and provenance; it neither exports nor requires handmade
+   calibration rows (helper, `LOOK` or `targetRest`), and publication validation does not require them.
    Moving/turn roles use the separate reviewed-source ingestion under KIMODO-PROD-005;
    `export_motionbricks_frames.py` exports named `SOMASkeleton77.global_rot_offsets` from the approved Kimodo
    installation.
@@ -197,7 +208,7 @@ inputs without confusing generated packages with protected source assets or with
 
 ## In Scope
 
-- Source discovery and preservation, calibrated source processing where used, provenance, licensing checks through
+- Source discovery and preservation, canonical source processing, provenance, licensing checks through
   the shared animation contract, safe output publication, and real consumer validation.
 - Existing bootstrap/input lifecycle safeguards and per-character calibration/reuse boundaries.
 - Externally authored source/reference inputs, continuous multi-role source requirements and essential integrity checks.
@@ -232,8 +243,10 @@ These exclusions do not defer required idle/walk source verification, conversion
 3. **KIMODO-TAC-003:** Output checks verify truthful bindings, rollback, clean loading, real selected-source conversion,
     and the absence of a legacy catalogue prerequisite. The recorded supported path and gaps match executed evidence.
     For MotionBricks, verify read-only export/input integrity, named frame provenance, catalogue/action-window loading
-    from runtime data paths and documented external prerequisites. Reused exports or an existing import cache alone do
-     not satisfy clean-checkout acceptance.
+    from runtime data paths and documented external prerequisites. Verify that published data and reviewed-source
+    ingestion neither contain nor require helper, `LOOK` or `targetRest` calibration rows while retaining canonical
+    skeleton identity, samples, external idle, model frames and provenance. Reused exports or an existing import
+    cache alone do not satisfy clean-checkout acceptance.
 4. **KIMODO-TAC-004 (KIMODO-PROD-001–006, UR2/4/6):** Verify externally authored source/reference provenance,
    whole-pose boundary placement, multiple intended cycles and predeclared extraction policy, without requiring
    repository source-generation machinery. Test essential identity, format/range and claimed-complete coverage failures,
@@ -246,7 +259,8 @@ These exclusions do not defer required idle/walk source verification, conversion
    sampling/placement and actual-rig evidence. Fallback source-boundary processing needs visible generated-harm
    evidence, explicit changes and human review, not mandatory sanitising. Verify atomic content/review publication
    preserves valid outputs on failure and refuses failed/unreviewed sources. Full source
-   and calibrated-preview evidence distinguishes human suitability, technical integrity and actual-rig runtime proof.
+   and reference-character preview evidence under the shared visual authority distinguishes human suitability,
+   technical integrity and actual-rig runtime proof.
    A complete variant requires all eight roles; final default acceptance requires both defaults and their previews,
    not merely a representative subset. Independent implementation review remains required.
 
@@ -266,7 +280,9 @@ not feature switches. No source poses are repaired or regenerated by normal runt
 The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records
 read-only full export, complete eight-role publication, coordinated set/angular replacement and normal consumer checks.
 Runtime JSON is self-contained; durable Blender inputs retain host-specific texture references, not a proved portable
-texture archive. Migration technical checks pass; combined independent review remains pending, and no multi-file
+texture archive. The source-set migration's technical checks pass; they do not cover removing helper, `LOOK` or
+`targetRest` calibration rows from the exporter, publication or ingestion under Output 6 and KIMODO-PROD-005, which
+remains unverified. Combined independent review remains pending, and no multi-file
 atomic hot-publication, default-entrypoint native-motion, performance or artistic quality certification is claimed.
 Human acceptance covers source stepping/foot-sliding mitigation with initial twitch deferred. Raw repetitions,
 generated gait/contact/sliding, headset quality, masculine/default content and previews, and known shutdown/hand-origin

@@ -63,7 +63,7 @@ public partial class MotionBricksContactObserver : Node
     public void Begin(Node actor)
     {
         _nav = (MotionBricksNavigation)((Character.Character)actor).Navigation!;
-        _skeleton = actor.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
+        _skeleton = actor.RequireNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
         _bones = [.. new[] { "LeftFoot", "LeftToes", "RightFoot", "RightToes" }.Select(_skeleton.FindBone)];
         if (_bones.Any(b => b < 0))
         {

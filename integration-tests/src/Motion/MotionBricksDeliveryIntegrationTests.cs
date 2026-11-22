@@ -100,8 +100,8 @@ public sealed class MotionBricksDeliveryIntegrationTests
         Assert.Equal("idle", catalogue.Select(0).Action);
         Assert.Equal("idle", Assert.Single(catalogue.Stages).Action);
         Assert.Equal(0, catalogue.Stages[0].Speed);
-        Assert.False(data.Calibration.GetProperty("clips").TryGetProperty("walk", out _));
-        Assert.False(data.Calibration.GetProperty("sources").TryGetProperty(
+        Assert.False(data.Manifest.GetProperty("clips").TryGetProperty("walk", out _));
+        Assert.False(data.Manifest.GetProperty("sources").TryGetProperty(
             "game/assets/characters/animations/source/locomotion/locomotion.blend", out _));
         Assert.All(["LeftFoot", "LeftToeBase", "RightFoot", "RightToeBase"], n => Assert.Contains(n, data.Names));
         Assert.All(catalogue.Stages, stage =>

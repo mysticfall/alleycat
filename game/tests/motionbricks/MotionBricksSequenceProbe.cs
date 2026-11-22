@@ -33,7 +33,7 @@ public partial class MotionBricksSequenceProbe : Node
     private Task<Transform3D[][]>? _generation;
     private CharacterBody3D? _actor;
     private Skeleton3D? _skeleton;
-    private CalibratedSomaRig? _rig;
+    private NativeSomaRig? _rig;
     private RealisedPoseHistory? _history;
     private ILogger<MotionBricksSequenceProbe>? _logger;
     private Transform3D[] _pose = [];
@@ -72,8 +72,8 @@ public partial class MotionBricksSequenceProbe : Node
         source.CopyWindow(source.GetRole("feminine", "normal", "forward"), 58, travel);
         _travel = [.. Enumerable.Range(0, 4).Select(f => travel.AsSpan(f * _data.Names.Length, _data.Names.Length).ToArray())];
         _actor = scene.RequireNode<CharacterBody3D>("NavigationTestNpc");
-        _skeleton = _actor.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
-        _rig = new CalibratedSomaRig(_data, _skeleton);
+        _skeleton = _actor.RequireNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
+        _rig = new NativeSomaRig(_data, _skeleton);
         _pose = new Transform3D[_data.Names.Length];
         _observed = new Transform3D[_data.Names.Length];
         _history = new RealisedPoseHistory(_pose.Length);

@@ -172,11 +172,12 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 "res://data/motionbricks/reviewed-feminine/turn-angular-reference.json")));
             JsonElement firstCue = angular.RootElement.GetProperty("right_turn").GetProperty("recoveryTrial").GetProperty("events")[0];
             float firstYaw = (float)(firstCue.GetProperty("sourceAngularProgressRadians").GetDouble() * 180 / Math.PI);
-            Assert.InRange(submissions[0].RelativeYaw, firstYaw - .001f, firstYaw + .001f);
+            float mappedYaw = firstYaw * 114 / 91.3519f;
+            Assert.InRange(submissions[0].RelativeYaw, mappedYaw - .001f, mappedYaw + .001f);
             Assert.Equal(firstCue.GetProperty("id").GetString(), turnOwners[0].EventId);
             Assert.Equal(.95f, (float)turnOwners[0].Magnitude);
-            Assert.Equal(1, turnOwners[1].Magnitude); // Latest intent applies at the next eligible cue, not a fixed 60-degree target.
-            Assert.Equal("recover_after_RightFoot", turnOwners[1].EventId);
+            Assert.Equal(.95f, (float)turnOwners[1].Magnitude); // The second lift belongs to the original cycle.
+            Assert.Equal("lift_LeftFoot", turnOwners[1].EventId);
             Assert.Equal(epoch, CompatibleTurnEpoch(motion));
             Assert.Equal(revision, driver.ReviewedRoles.Selection.Revision);
             Assert.Equal(immutable, CompatibleTurnPoseHash(submissions[0].Target));
@@ -225,7 +226,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         NavigationSessionReader.Entry[] entries = [.. NavigationSessionReader.ReadCheckpoint(path)];
         NavigationSessionReader.Entry[] firstTwo = [.. entries.Where(e => e.Event.GetProperty("kind").GetString() == "submission").Take(2)];
         Assert.Equal(.95f, firstTwo[0].Event.GetProperty("data").GetProperty("submittedTurnIntent").GetSingle());
-        Assert.Equal(1, firstTwo[1].Event.GetProperty("data").GetProperty("submittedTurnIntent").GetSingle());
+        Assert.Equal(.95f, firstTwo[1].Event.GetProperty("data").GetProperty("submittedTurnIntent").GetSingle());
         Assert.DoesNotContain(entries, e => e.Event.GetProperty("kind").GetString() == "input-retire" &&
             e.Event.GetProperty("sequence").GetInt64() > firstTwo[0].Event.GetProperty("sequence").GetInt64() &&
             e.Event.GetProperty("sequence").GetInt64() < firstTwo[1].Event.GetProperty("sequence").GetInt64());
@@ -278,8 +279,12 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             motion.SetStick(false, new Vector2(.95f, 0));
             Assert.Equal(epoch, CompatibleTurnEpoch(motion));
             Assert.True(driver.RecordingPending);
-            Retires(() => motion.SetStick(false, new Vector2(.9f, 0))); // No cumulative 1 -> .95 -> .9 widening.
-            Retires(() => motion.SetStick(false, new Vector2(.95f, 0))); // No resurrection of retired owner.
+            motion.SetStick(false, new Vector2(.6f, 0));
+            Assert.Equal(epoch, CompatibleTurnEpoch(motion));
+            Assert.True(driver.RecordingPending);
+            Assert.Equal(1f, driver.SubmittedTurnIntent);
+            Retires(() => motion.SetStick(false, Vector2.Zero));
+            Retires(() => motion.SetStick(false, new Vector2(.9f, 0))); // New intent cannot resurrect the cancelled ticket.
             Tick();
             Assert.True(driver.RecordingPending);
             Retires(() => motion.SetStick(false, new Vector2(-1, 0)));

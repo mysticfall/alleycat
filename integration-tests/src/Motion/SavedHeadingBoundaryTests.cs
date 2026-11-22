@@ -250,7 +250,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Field(nav, "_record", false);
             Field(nav, "_lastGround", new Vector3(feedback[0].Origin.X, 0, feedback[0].Origin.Z));
             Property(nav, "Phase", seeds[^1].Event.GetProperty("data").GetProperty("Phase").GetString()!);
-            ((CalibratedSomaRig)typeof(MotionBricksNavigation).GetField("_rig", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav)!).Apply(input);
+            ((NativeSomaRig)typeof(MotionBricksNavigation).GetField("_rig", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav)!).Apply(input);
             Assert.Equal(inputData.GetProperty("anatomicalHeadingWorld").GetSingle(), nav.RecordingAnatomicalHeading!.Value);
             clock.Start();
             Assert.Equal(0, scene.Call("_submit_destination", goal, Array.Empty<Vector3>()).AsInt32());

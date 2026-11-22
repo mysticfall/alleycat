@@ -496,7 +496,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
             TestUtils.EnsureCharacterRuntimeInstalled(root);
             AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
             AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
-            Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
             Animation reset = Assert.IsType<Animation>(ResourceLoader.Load(ResetAnimationPath), exactMatch: false);
             NodePath fingerTrackPath = new($"%GeneralSkeleton:{fingerBoneName}");

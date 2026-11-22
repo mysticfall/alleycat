@@ -281,7 +281,7 @@ public sealed class ControllerGrabRealSceneRegressionIntegrationTests
 
         public Node3D RightHandTargetNode => _playerRoot.GetNode<Node3D>("IKTargets/RightHand");
 
-        public Node3D RightHandBoneAttachment => _playerRoot.GetNode<Node3D>("Female/GeneralSkeleton/RightHand");
+        public Node3D RightHandBoneAttachment => _playerRoot.GetNode<Node3D>("Female/SOMA/Native/GeneralSkeleton/RightHand");
 
         public static async Task<RegressionFixture> CreateAsync(SceneTree sceneTree, XRHandTrackingMode committedMode)
         {

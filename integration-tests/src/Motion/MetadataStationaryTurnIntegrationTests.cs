@@ -9,6 +9,86 @@ namespace AlleyCat.IntegrationTests.Motion;
 
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
+    private sealed class ContraryTurnSession : SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+        {
+            Transform3D[][] frames = [.. Enumerable.Range(0, 31).Select(_ => (Transform3D[])context[3].Clone())];
+            foreach (Transform3D[] frame in frames)
+            {
+                frame[0].Basis = new Basis(Vector3.Up, -.8f);
+            }
+            return frames;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>Contrary generated hips stay in the world pose; the actor follows the first mapped lift instead.</summary>
+    [Headless]
+    [Fact]
+    public async Task PlannedCTRLTurn_ContraryHipsDoNotSteerActor()
+    {
+        await using ClosureFixture fixture = await ClosureFixture.CreateAsync(.75f);
+        fixture.Player.ProcessMode = Node.ProcessModeEnum.Disabled;
+        WalkingExperimentDriver driver = fixture.Motion.ContinuousDriver!;
+        ExhaustionField("_worker").SetValue(driver, fixture.Root.MotionWorkers.Create(() => new ContraryTurnSession()));
+        Skeleton3D source = fixture.Skeleton.GetParent().GetParent<Skeleton3D>();
+        double entry = fixture.Player.GlobalRotation.Y;
+        fixture.Motion.SetStick(false, new Vector2(-1, 0));
+        int checkedFrames = 0;
+        for (int i = 0; i < 300; i++)
+        {
+            driver.Advance(1.0 / 120, Vector2.Zero, Basis.Identity, fixture.Motion.TurnIntent);
+            driver.Observe();
+            if (driver.RecordingPending)
+            {
+                await Task.Delay(1);
+            }
+            if (!driver.RecordingAdvanced)
+            {
+                continue;
+            }
+            // The first left lift is exactly one source-frame interval from entry.
+            double expected = entry + (driver.RecordingFrame / 30 * (8.026955 * Math.PI / 180));
+            Assert.InRange(Math.Abs(fixture.Player.GlobalRotation.Y - expected), 0, .00001);
+            Basis world = source.GlobalBasis * source.GetBoneGlobalPose(0).Basis;
+            Basis generated = SomaMotionData.ModelToWorld * new Basis(Vector3.Up, -.8f);
+            Assert.True(world.IsEqualApprox(generated));
+            checkedFrames++;
+            if (driver.RecordingFrame == 30)
+            {
+                break;
+            }
+        }
+        Assert.True(checkedFrames >= 120);
+        Assert.Equal(30, driver.RecordingFrame);
+        double held = fixture.Player.GlobalRotation.Y;
+        fixture.Motion.SetStick(false, Vector2.Zero);
+        // The player is manually stepped; evaluate its tree to supply the release destination.
+        fixture.Player.GetNode<AnimationTree>("AnimationTree").Advance(1.0 / 120);
+        for (int i = 0; i < 180; i++)
+        {
+            driver.Advance(1.0 / 120, Vector2.Zero, Basis.Identity, 0);
+            driver.Observe();
+            if (driver.RecordingPending)
+            {
+                await Task.Delay(1);
+            }
+            if (driver.RecordingAdvanced && driver.Phase == "settling")
+            {
+                Assert.Equal(0, driver.RecordingFrame);
+                Assert.InRange(Math.Abs(fixture.Player.GlobalRotation.Y - held), 0, .00001);
+                Basis world = source.GlobalBasis * source.GetBoneGlobalPose(0).Basis;
+                Assert.True(world.IsEqualApprox(SomaMotionData.ModelToWorld * new Basis(Vector3.Up, -.8f)));
+                return;
+            }
+        }
+        Assert.Fail("No settling frame zero was consumed.");
+    }
+
     /// <summary>Native-free endpoint fixture; not generated movement or visual acceptance.</summary>
     [Headless]
     [Fact]
@@ -25,10 +105,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             driver.WindowSubmitted += (_, _, target) =>
             {
                 Vector3 z = target[0][0].Basis.Z;
-                if (driver.LastMetadataTurnRequest!.IsPrimaryLift)
-                {
-                    targets.Add((driver.LastReviewedRequest!.Value.WindowStart, Mathf.RadToDeg(Mathf.Atan2(z.X, z.Z))));
-                }
+                targets.Add((driver.LastReviewedRequest!.Value.WindowStart, Mathf.RadToDeg(Mathf.Atan2(z.X, z.Z))));
             };
             fixture.Motion.SetStick(false, new Vector2(-1, 0));
             for (int i = 0; i < 600 && targets.Count < 2; i++)
@@ -44,13 +121,13 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             string evidence = ProjectSettings.GlobalizePath("res://temp/motionbricks/anim002-regenerated-source-adoption-01/first-pair-" + Guid.NewGuid().ToString("N") + ".json");
             File.WriteAllText(evidence, JsonSerializer.Serialize(targets.Select(t => new { t.Frame, t.Angle })));
             Assert.Equal(947, targets[0].Frame);
-            Assert.InRange(Math.Abs(targets[0].Angle - 4.471126472374838), 0, .001);
+            Assert.InRange(Math.Abs(targets[0].Angle - 8.026955038153414), 0, .001);
             Assert.Equal(961, targets[1].Frame);
-            Assert.InRange(Math.Abs(targets[1].Angle - 38.89189768944148), 0, .001);
+            Assert.InRange(Math.Abs(targets[1].Angle - 69.82211664788655), 0, .001);
         }
     }
 
-    /// <summary>Production scheduling with synthetic endpoints exercises prospective input and constant-size lag debt.</summary>
+    /// <summary>Production scheduling with synthetic endpoints exercises prospective input and immutable cycle ownership.</summary>
     [Headless]
     [Fact]
     public async Task MetadataTurn_InputSnapshotsRetirementAndLagStayCoordinated()
@@ -62,8 +139,10 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.Null(driver.Completion);
             ExhaustionField("_worker").SetValue(driver, fixture.Root.MotionWorkers.Create(() => new MetadataTurnEndpointSession()));
             var submissions = new List<MetadataStationaryTurn.Snapshot>();
-            driver.WindowSubmitted += (_, _, _) =>
+            long submittedTicket = 0;
+            driver.WindowSubmitted += (ticket, _, _) =>
             {
+                submittedTicket = ticket;
                 if (driver.MetadataTurn is not null)
                 {
                     submissions.Add(driver.LastMetadataTurnRequest!);
@@ -80,69 +159,52 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                     await Task.Delay(1);
                 }
             }
-            for (int tick = 0; tick < 1560; tick++)
+            async Task NextSubmissionAsync()
             {
-                if (tick is 120 or 360)
+                int previous = driver.Requests;
+                for (int tick = 0; tick < 210 && driver.Requests == previous; tick++)
                 {
-                    MetadataStationaryTurn.Snapshot owner = state.Owner!;
-                    int count = driver.Requests;
-                    fixture.Motion.SetStick(false, new Vector2(tick == 120 ? -.95f : -1, 0));
-                    Assert.Same(owner, state.Owner);
-                    Assert.Equal(count, driver.Requests);
+                    await TickAsync();
                 }
-                await TickAsync();
+                Assert.Equal(previous + 1, driver.Requests);
             }
-            Assert.InRange(Math.Abs(state.Phase - (30 * (1 + (.95f * 2) + 10))), 0, .001);
-            Assert.Contains(submissions, s => Math.Abs(s.Magnitude - .95) < 1e-6);
-            Assert.True(state.DroppedCycles > 0);
-            Assert.Equal(0, state.PassedUnplayed);
-            Assert.Equal(["lift_LeftFoot", "recover_after_LeftFoot", "lift_RightFoot", "recover_after_RightFoot"],
-                submissions.Take(4).Select(s => s.EventId));
-            Assert.Equal([true, false, true, false], submissions.Take(4).Select(s => s.IsPrimaryLift));
-            Assert.All(submissions.Where(s => s.EventKind == StationaryTurnReference.LandmarkKind.Recovery), s =>
-            {
-                Assert.Null(s.Foot);
-                Assert.Equal(s.SubjectFoot, s.RecoveringFoot);
-                Assert.Contains("\"EventKind\":\"recovery\"", JsonSerializer.Serialize(s));
-            });
-            Assert.True(state.PrimaryLiftCompletions >= 4);
-            Assert.True(state.RecoveryCompletions >= 4);
-            Assert.Equal(["LeftFoot", "RightFoot", "LeftFoot", "RightFoot"], submissions.Where(s => s.IsPrimaryLift).Take(4).Select(s => s.Foot));
-            Assert.All(submissions.Zip(submissions.Skip(1)), pair =>
-            {
-                Assert.True(pair.Second.SelectedPhase >= pair.First.SelectedPhase);
-                Assert.InRange(Math.Abs(pair.Second.RootYaw - pair.First.RootYaw), 0, pair.Second.Cap + 1e-5);
-                if (pair.Second.DroppedCycles > pair.First.DroppedCycles)
-                {
-                    Assert.InRange((pair.Second.RootYaw - pair.First.RootYaw) * 180 / Math.PI, 2.733, 2.735);
-                }
-            });
-            double phase = state.Phase;
-            int floor = state.Floor;
-            MetadataStationaryTurn.Snapshot old = state.Owner!;
+            await NextSubmissionAsync();
+            MetadataStationaryTurn.Snapshot first = state.Owner!;
+            long epoch = CompatibleTurnEpoch(fixture.Motion);
+            long ticket = submittedTicket;
             fixture.Motion.SetStick(false, new Vector2(-.5f, 0));
-            Assert.Same(state, driver.MetadataTurn);
-            Assert.Null(state.Owner);
-            Assert.Equal(phase, state.Phase);
-            Assert.Equal(floor, state.Floor);
-            Assert.False(driver.IsPlaying);
-            Assert.False(driver.RecordingPending);
-            Assert.False(state.Complete(old, old.RootYaw));
-            await TickAsync();
-            Assert.Equal(.5, state.Owner!.Magnitude);
-            Assert.True(state.Owner.SelectedPhase >= floor);
-            Assert.InRange(Math.Abs(state.Phase - phase - .125), 0, 1e-7);
+            Assert.Same(first, state.Owner);
+            Assert.Equal(ticket, submittedTicket);
+            await NextSubmissionAsync();
+            Assert.Equal(ticket, driver.LastAppliedRequest);
+            Assert.Equal(1, state.Owner!.Magnitude);
+            Assert.False(state.Complete(first));
+            await NextSubmissionAsync();
+            MetadataStationaryTurn.Snapshot partial = state.Owner!;
+            Assert.Equal(.5, partial.Magnitude);
+            ticket = submittedTicket;
+            fixture.Motion.SetStick(false, new Vector2(-.75f, 0));
+            Assert.Same(partial, state.Owner);
+            Assert.Equal(ticket, submittedTicket);
+            Assert.Equal(-.5f, driver.SubmittedTurnIntent);
+            await NextSubmissionAsync();
+            Assert.Equal(ticket, driver.LastAppliedRequest);
+            Assert.Equal(-.5f, driver.SubmittedTurnIntent);
+            await NextSubmissionAsync();
+            Assert.Equal(-.75f, driver.SubmittedTurnIntent);
+            Assert.Equal(epoch, CompatibleTurnEpoch(fixture.Motion));
+            Assert.Equal(["LeftFoot", "RightFoot", "LeftFoot", "RightFoot", "LeftFoot"], submissions.Select(s => s.Foot));
             fixture.Motion.SetStick(false, Vector2.Zero);
             MetadataStationaryTurn.Snapshot retiredOnRelease = driver.LastMetadataTurnRequest!;
             Assert.Null(state.Owner);
-            Assert.False(state.Complete(retiredOnRelease, retiredOnRelease.RootYaw));
+            Assert.False(state.Complete(retiredOnRelease));
             Assert.Null(driver.MetadataTurn);
             Assert.False(driver.IsPlaying);
             Assert.False(driver.RecordingPending);
             fixture.Motion.SetStick(false, new Vector2(1, 0));
             Assert.NotSame(state, driver.MetadataTurn);
             Assert.Equal("right_turn", driver.MetadataTurn!.Reference.Role);
-            Assert.Equal(0, driver.MetadataTurn.Phase);
+            Assert.Equal(0, driver.MetadataTurn.Cycle);
             await TickAsync();
             Assert.Equal(1103, driver.LastMetadataTurnRequest!.WindowStart);
             Assert.Equal("RightFoot", driver.LastMetadataTurnRequest.Foot);
@@ -182,10 +244,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         {
             double[] expectedYaw = [.. originals.Select((f, i) => .5 *
                 (samples[f - 1].GetProperty("heading_radians").GetDouble() - entryYaw + (cycles[i] * span)))];
-            MetadataStationaryTurn.Snapshot snapshot = new(1, 1, "left_turn", start - 946, start - 946,
-                start - 946, start, "recover_after_RightFoot", StationaryTurnReference.LandmarkKind.Recovery,
-                "RightFoot", false, .5, .629770886, .5, 0, 0, expectedYaw[0], 0, 0, 0);
-            Transform3D[][] placed = sampler.TurnTargets(snapshot, Vector3.Zero);
+            Transform3D[][] placed = sampler.FiniteTurnTargets("left_turn", 0, start, start - 946, 0, .5, Vector3.Zero);
             source.CopyCycleWindow(cycle, start, raw);
             Assert.Equal(start, sampler.Selection.WindowStart);
             for (int i = 0; i < 4; i++)

@@ -4,7 +4,6 @@ Run from repository root with Blender --background --python this/file.py.
 Moving and turn sources use the separate maintained reviewed-source ingestion.
 """
 import hashlib
-import re
 import sys
 from pathlib import Path
 
@@ -24,7 +23,7 @@ CLIPS = [
 ]
 hashes = {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in [SETUP, MAP, *[c[1] for c in CLIPS]]}
 bpy.ops.wm.open_mainfile(filepath=str(ROOT / SETUP))
-source, target = bpy.data.objects["Kimodo_Source"], bpy.data.objects["Female"]
+source = bpy.data.objects["Kimodo_Source"]
 names = [b.name for b in source.data.bones if not b.name.endswith(("_RET", "_LOOK")) and b.name != "Root"]
 A = Matrix(((1, 0, 0), (0, 0, 1), (0, -1, 0)))
 rests = {b.name: b.matrix_local.copy() for b in source.data.bones}
@@ -45,22 +44,8 @@ for i, n in enumerate(names):
     if parents[i] >= 0:
         p -= rests[names[parents[i]]].translation
     rest.append(pose(A @ p, Matrix.Identity(3).to_quaternion()))
-bone_map = dict(re.findall(r'bone_map/(\w+) = &"([^"]+)"', (ROOT / MAP).read_text()))
-reverse = {v: k for k, v in bone_map.items()}
-mapping = []
-for b in target.data.bones:
-    helper = source.pose.bones.get(b.name + "_RET")
-    if helper is None or b.name == "Root":
-        continue
-    track = next((c for c in helper.constraints if c.type == "LOCKED_TRACK" and not c.mute), None)
-    mapping.append(dict(target=reverse[b.name], source=names.index(helper.parent.name),
-                        helper=matrix(helper.bone.matrix_local @ helper.matrix_basis),
-                        targetRest=matrix(b.matrix_local), track=track.subtarget if track else "", length=helper.length))
-looks = {b.name: dict(source=names.index(b.parent.name),
-                     offset=matrix(rests[b.parent.name].inverted() @ b.bone.matrix_local @ b.matrix_basis), length=b.length)
-         for b in source.pose.bones if b.name.endswith("_LOOK")}
 data = dict(names=names, parents=parents, rest=rest, blenderRest=[matrix(rests[n]) for n in names],
-            mapping=mapping, looks=looks, clips={}, sources=hashes)
+            clips={}, sources=hashes)
 for label, path, action_name in CLIPS:
     with bpy.data.libraries.load(str(ROOT / path), link=False) as (_, dst):
         dst.actions = [action_name]

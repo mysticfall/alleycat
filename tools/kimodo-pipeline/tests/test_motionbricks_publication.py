@@ -20,8 +20,7 @@ def fixture(kind):
         return dict(names=names, offsets=[[[1, 0, 0], [0, 1, 0], [0, 0, 1]]] * 2)
     pose = [[0, 1, 0, 0, 0, 0, 1], [0, 0.4, 0, 0, 0, 0, 1]]
     return dict(names=names, parents=[-1, 0], rest=pose, blenderRest=[matrix, matrix],
-                mapping=[dict(target="Hips", source=0, helper=matrix, targetRest=matrix, track="", length=1)],
-                looks={}, sources={"fixture.blend": "a" * 64},
+                sources={"fixture.blend": "a" * 64},
                 clips={name: dict(frames=[pose] * 4, fps=30, action=name, source="fixture.blend")
                        for name in ("idle",)})
 

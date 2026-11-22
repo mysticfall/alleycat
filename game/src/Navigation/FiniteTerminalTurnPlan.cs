@@ -58,21 +58,38 @@ internal sealed class FiniteTerminalTurnPlan
         double remaining = Math.Abs(signedAngle), start = startingWorldYaw;
         while (remaining > 0)
         {
-            double allocation = Math.Min(remaining, Math.PI * 2 / 3) * reference.Sign;
-            double scale = allocation / reference.SignedSpan;
+            var mapping = AngularTurnCycle.Allocate(reference, start, remaining);
+            double allocation = mapping.Allocation;
             int cycle = allocations.Count;
             allocations.Add(allocation);
             foreach (StationaryTurnReference.FootEvent foot in reference.Feet.OrderBy(f => f.Frame))
             {
                 int phase = foot.Frame - reference.First;
-                cues.Add(new(cues.Count, cycle, foot.Frame, foot.Foot, allocation, start, scale, phase,
-                    foot.Frame + (cycle * reference.Period), start + (reference.Sign * scale * reference.Angle(phase))));
+                cues.Add(new(cues.Count, cycle, foot.Frame, foot.Foot, allocation, start, mapping.Scale, phase,
+                    foot.Frame + (cycle * reference.Period), mapping.YawAt(phase)));
             }
             start += allocation;
             remaining -= Math.Abs(allocation);
         }
         Allocations = allocations.AsReadOnly();
         Cues = cues.AsReadOnly();
+    }
+
+    internal AngularTurnInterval Playback(StationaryTurnReference reference)
+    {
+        Cue cue = FinishedCues ? Cues[^1] : Current;
+        AngularTurnCycle current = new(reference, cue.CycleStart, cue.Allocation);
+        if (FinishedCues)
+        {
+            return new(current, current, cue.LocalPhase, reference.Period);
+        }
+        if (Served == 0)
+        {
+            return new(current, current, 0, cue.LocalPhase);
+        }
+        Cue last = Cues[Served - 1];
+        return new(new(reference, last.CycleStart, last.Allocation), current,
+            last.LocalPhase - ((cue.Cycle - last.Cycle) * reference.Period), cue.LocalPhase);
     }
 
     internal void Service() => Served++;

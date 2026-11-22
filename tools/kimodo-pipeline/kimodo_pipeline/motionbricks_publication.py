@@ -31,9 +31,6 @@ def validate_motionbricks(data, kind):
     _require(len(set(names)) == len(names) and names[0] == "Hips", "Invalid joint identity")
     count = len(names)
 
-    def joint(index):
-        _require(type(index) is int and 0 <= index < count, "Invalid source joint index")
-
     def pose(rows):
         _require(isinstance(rows, list) and len(rows) == count, "Incomplete pose")
         for row in rows:
@@ -57,26 +54,7 @@ def validate_motionbricks(data, kind):
     _require(isinstance(rests, list) and len(rests) == count, "Incomplete Blender rests")
     for rest in rests:
         _matrix(rest, 4)
-    looks = data.get("looks")
-    _require(isinstance(looks, dict), "Missing calibration looks")
-    for name, look in looks.items():
-        _require(isinstance(name, str) and name and isinstance(look, dict), "Invalid look")
-        joint(look.get("source"))
-        _matrix(look.get("offset"), 4)
-        _numbers([look.get("length")], 1)
-    mapping = data.get("mapping")
-    _require(isinstance(mapping, list) and mapping, "Missing calibration mapping")
-    targets = set()
-    for row in mapping:
-        _require(isinstance(row, dict), "Invalid mapping row")
-        target = row.get("target")
-        _require(isinstance(target, str) and target and target not in targets, "Invalid target identity")
-        targets.add(target)
-        joint(row.get("source"))
-        _matrix(row.get("helper"), 4)
-        _matrix(row.get("targetRest"), 4)
-        _numbers([row.get("length")], 1)
-        _require(row.get("track") == "" or row.get("track") in looks, "Unknown calibration look")
+    _require(not ({"looks", "mapping", "targetRest"} & data.keys()), "Unexpected legacy calibration rows")
     sources = data.get("sources")
     _require(isinstance(sources, dict) and sources, "Missing source hashes")
     for path, digest in sources.items():

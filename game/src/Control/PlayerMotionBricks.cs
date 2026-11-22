@@ -32,8 +32,8 @@ public partial class PlayerMotionBricks : Node
 
     private CharacterBody3D? _actor;
     private Skeleton3D? _skeleton;
-    private PlayerMotionStage? _stage;
-    private CalibratedSomaRig? _rig;
+    private AnimationTree? _tree;
+    private NativeSomaRig? _rig;
     private SomaMotionData? _data;
     private RealisedPoseHistory? _history;
     private ILogger<PlayerMotionBricks>? _logger;
@@ -133,11 +133,11 @@ public partial class PlayerMotionBricks : Node
         try
         {
             _actor = GetParent<CharacterBody3D>();
-            _skeleton = _actor.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
+            _skeleton = _actor.RequireNode<Skeleton3D>(((Character.Character)_actor).MotionModel + "/SOMA/Native/GeneralSkeleton");
             _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
             _pose = new Transform3D[_data.Names.Length];
             _observed = new Transform3D[_pose.Length];
-            _rig = new CalibratedSomaRig(_data, _skeleton, preserveFingerPoses: true);
+            _rig = new NativeSomaRig(_data, _skeleton);
             _history = new RealisedPoseHistory(_pose.Length);
             var reviewedRoles = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), _data);
             _ = reviewedRoles.TurnReference("left_turn");
@@ -148,7 +148,8 @@ public partial class PlayerMotionBricks : Node
                 ContinuousDriver = new WalkingExperimentDriver(_actor, _skeleton, _data, model, session =>
                 {
                     SomaInferenceWorker.ISession decorated = SessionDecorator?.Invoke(session) ?? session;
-                    return _inputTrace?.Wrap(decorated) ?? decorated;
+                    decorated = _inputTrace?.Wrap(decorated) ?? decorated;
+                    return _turnTrace?.Wrap(decorated) ?? decorated;
                 })
                 {
                     Reconcile = true,
@@ -169,12 +170,13 @@ public partial class PlayerMotionBricks : Node
                 ContinuousDriver.PlaybackCompleted += OnContinuousCompleted;
                 ContinuousDriver.IntentRetired += () => SetTargetDiagnostic("");
             }
-            _stage = new PlayerMotionStage { Name = "PlayerMotionStage", OwnerMotion = this };
-            _skeleton.AddChild(_stage);
-            _skeleton.MoveChild(_stage, 0);
+            ProcessPhysicsPriority = -100;
             _skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Physics;
             _skeleton.SkeletonUpdated += Observe;
+            _tree = _actor.RequireNode<AnimationTree>("AnimationTree");
+            _tree.MixerApplied += SupplyTreeDestination;
             Phase = "tracked-idle";
+            StartTurnTrace();
         }
         catch (Exception error) { Fail(error); }
     }
@@ -184,12 +186,8 @@ public partial class PlayerMotionBricks : Node
     {
         UpdateInputTrace();
         RefreshTargetDiagnostic();
-        // Role installers may finish ordering IK after our deferred initialisation. Establish the
-        // base-pose predecessor outside modifier traversal, before any generated window is consumed.
-        if (_stage is not null && _stage.GetIndex() != 0)
-        {
-            _skeleton!.MoveChild(_stage, 0);
-        }
+        Advance(delta);
+        TraceTurnTick();
     }
 
     /// <summary>Production XR vector input; right vertical is deliberately ignored.</summary>
@@ -232,6 +230,7 @@ public partial class PlayerMotionBricks : Node
         }
         Vector2 movement = _left.Length() > Deadzone ? _left : Vector2.Zero;
         float turn = Mathf.Abs(_right.X) > Deadzone ? _right.X : 0;
+        _turnTrace?.Input(left, rawValue, value, origin);
         if (movement == _movement && turn == TurnIntent)
         {
             RecordStick(left, rawValue, value, false, origin);
@@ -294,7 +293,8 @@ public partial class PlayerMotionBricks : Node
             _time += delta;
             if (ContinuousDriver is not null)
             {
-                ContinuousDriver.Advance(delta, _movement, _movementFrame, TurnIntent);
+                ContinuousDriver.Advance(delta, _movement, _movementFrame, TurnIntent,
+                    _left.Length() <= Deadzone && _right.Length() <= Deadzone);
                 RefreshVirtualMarker();
                 Phase = ContinuousDriver.Phase;
                 Requests = ContinuousDriver.Requests;
@@ -314,7 +314,10 @@ public partial class PlayerMotionBricks : Node
         _observedPhysicsFrame = Engine.GetPhysicsFrames();
         ContinuousDriver?.Observe();
         RecordSkinPose();
+        TraceTurnSkin();
     }
+
+    private void SupplyTreeDestination() => ContinuousDriver?.ReadTreeDestination();
 
     private void Fail(Exception error)
     {
@@ -322,6 +325,7 @@ public partial class PlayerMotionBricks : Node
         Phase = "failed";
         SetTargetDiagnostic("");
         ContinuousDriver?.Stop();
+        _turnTrace?.Stop();
         _inputTrace?.Record("failure", new
         {
             Failure,
@@ -336,14 +340,15 @@ public partial class PlayerMotionBricks : Node
     /// <inheritdoc/>
     public override void _ExitTree()
     {
+        if (_tree is not null && IsInstanceValid(_tree))
+        {
+            _tree.MixerApplied -= SupplyTreeDestination;
+        }
         if (_skeleton is not null && IsInstanceValid(_skeleton))
         {
             _skeleton.SkeletonUpdated -= Observe;
         }
-        if (_stage is not null && IsInstanceValid(_stage))
-        {
-            _stage.OwnerMotion = null;
-        }
+
         ContinuousDriver?.Stop();
         _inputTrace?.Record("shutdown", new
         {
@@ -354,14 +359,4 @@ public partial class PlayerMotionBricks : Node
         _inputTrace?.Stop();
         StopPoseTrace(WorkerCompletion, false);
     }
-}
-
-/// <summary>Generated base pose precedes the existing tracking/modifier pipeline, after animation evaluation.</summary>
-internal sealed partial class PlayerMotionStage : SkeletonModifier3D
-{
-    internal PlayerMotionBricks? OwnerMotion
-    {
-        get; set;
-    }
-    public override void _ProcessModificationWithDelta(double delta) => OwnerMotion?.Advance(delta);
 }

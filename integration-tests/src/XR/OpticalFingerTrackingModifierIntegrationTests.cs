@@ -288,7 +288,7 @@ public sealed class OpticalFingerTrackingModifierIntegrationTests
             EnsureCharacterRuntimeInstalled(playerRoot);
 
             AnimationTree tree = playerRoot.GetNode<AnimationTree>("AnimationTree");
-            Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             OpticalFingerTrackingModifier modifier =
                 skeleton.GetNode<OpticalFingerTrackingModifier>("OpticalFingerTrackingModifier");
             SkeletonPoseCapture poseCapture = AttachPoseCapture(skeleton);
@@ -413,7 +413,7 @@ public sealed class OpticalFingerTrackingModifierIntegrationTests
             EnsureCharacterRuntimeInstalled(playerRoot);
 
             AnimationTree tree = playerRoot.GetNode<AnimationTree>("AnimationTree");
-            Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             OpticalFingerTrackingModifier modifier =
                 skeleton.GetNode<OpticalFingerTrackingModifier>("OpticalFingerTrackingModifier");
             SkeletonPoseCapture poseCapture = AttachPoseCapture(skeleton);

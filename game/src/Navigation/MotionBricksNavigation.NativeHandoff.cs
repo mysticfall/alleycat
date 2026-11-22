@@ -212,6 +212,12 @@ public partial class MotionBricksNavigation
         if (_segment is not null)
         {
             SomaMotionData.Sample(_segment, _phaseTime, _pose);
+            if (_finiteTurn is not null && _activeNativeTicket == _finiteTicket)
+            {
+                // NAV plan headings use atan2(forward.X,forward.Z); Godot actor yaw faces -Z at zero.
+                double heading = _finitePlayback.AtFrame(_phaseTime * 30, _segment.Length - 1);
+                _actor!.GlobalBasis = new Basis(Vector3.Up, (float)(heading - Math.PI));
+            }
             PlaybackObserved?.Invoke(_activeNativeTicket, _segment, Math.Clamp(_phaseTime * 30, 0, _segment.Length - 1));
             if (_phaseTime >= (_segment.Length - 1) / 30.0)
             {

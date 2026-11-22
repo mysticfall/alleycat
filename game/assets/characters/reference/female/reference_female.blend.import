@@ -32940,9 +32940,11 @@ _subresources={
 },
 "nodes": {
 "PATH:Female/Skeleton3D": {
+"rest_pose/load_pose": 1,
+"rest_pose/selected_animation": "AuthoredT",
+"rest_pose/selected_timestamp": 0.5,
 "retarget/bone_map": Resource("uid://db42k2j8v05ku", "res://assets/characters/reference/skeleton_profiles/bone_map_makehuman.tres"),
-"retarget/rest_fixer/fix_silhouette/enable": true,
-"retarget/rest_fixer/fix_silhouette/filter": [&"Head", &"Neck", &"UpperChest", &"Chest", &"Spine", &"Hips", &"RightThumbMetacarpal", &"RightThumbProximal", &"RightThumbDistal", &"RightIndexProximal", &"RightIndexIntermediate", &"RightIndexDistal", &"RightMiddleProximal", &"RightMiddleIntermediate", &"RightMiddleDistal", &"RightRingProximal", &"RightRingIntermediate", &"RightRingDistal", &"RightLittleProximal", &"RightLittleIntermediate", &"RightLittleDistal", &"LeftThumbMetacarpal", &"LeftThumbProximal", &"LeftThumbDistal", &"LeftIndexProximal", &"LeftIndexIntermediate", &"LeftIndexDistal", &"LeftMiddleProximal", &"LeftMiddleIntermediate", &"LeftMiddleDistal", &"LeftRingProximal", &"LeftRingIntermediate", &"LeftRingDistal", &"LeftLittleProximal", &"LeftLittleIntermediate", &"LeftLittleDistal", &"RightFoot", &"LeftFoot"]
+"retarget/rest_fixer/fix_silhouette/enable": false
 },
 "PATH:Female/Skeleton3D/Female_high-poly": {
 "import/skip_import": true

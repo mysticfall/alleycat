@@ -17,20 +17,6 @@ BONE_MAP_RESOURCE = (
 CHARACTER_ROOT_TYPE = '"CharacterBody3D"'
 CHARACTER_ROOT_SCRIPT = 'Resource("uid://bh2t1kkfwpvbf", "res://src/Character/Character.cs")'
 CHARACTER_IMPORT_SCRIPT = '"res://assets/characters/import/character_import.gd"'
-SILHOUETTE_FILTER = (
-    '[&"Head", &"Neck", &"UpperChest", &"Chest", &"Spine", &"Hips", '
-    '&"RightThumbMetacarpal", &"RightThumbProximal", &"RightThumbDistal", '
-    '&"RightIndexProximal", &"RightIndexIntermediate", &"RightIndexDistal", '
-    '&"RightMiddleProximal", &"RightMiddleIntermediate", &"RightMiddleDistal", '
-    '&"RightRingProximal", &"RightRingIntermediate", &"RightRingDistal", '
-    '&"RightLittleProximal", &"RightLittleIntermediate", &"RightLittleDistal", '
-    '&"LeftThumbMetacarpal", &"LeftThumbProximal", &"LeftThumbDistal", '
-    '&"LeftIndexProximal", &"LeftIndexIntermediate", &"LeftIndexDistal", '
-    '&"LeftMiddleProximal", &"LeftMiddleIntermediate", &"LeftMiddleDistal", '
-    '&"LeftRingProximal", &"LeftRingIntermediate", &"LeftRingDistal", '
-    '&"LeftLittleProximal", &"LeftLittleIntermediate", &"LeftLittleDistal", '
-    '&"RightFoot", &"LeftFoot"]'
-)
 
 
 @dataclass(frozen=True)
@@ -59,14 +45,20 @@ def collider_skeleton_path() -> str:
     return "PATH:Ragdoll/Skeleton3D"
 
 
+SILHOUETTE_ENABLE_KEY = "retarget/rest_fixer/fix_silhouette/enable"
+SILHOUETTE_FILTER_KEY = "retarget/rest_fixer/fix_silhouette/filter"
+REST_SETTINGS = {
+    "rest_pose/load_pose": "1",
+    "rest_pose/selected_animation": '"AuthoredT"',
+    "rest_pose/selected_timestamp": "0.5",
+    "retarget/bone_map": BONE_MAP_RESOURCE,
+    SILHOUETTE_ENABLE_KEY: "false",
+}
+
+
 def retarget_node_block(skeleton_path: str) -> str:
-    return (
-        f'"{skeleton_path}": {{\n'
-        f'"retarget/bone_map": {BONE_MAP_RESOURCE},\n'
-        '"retarget/rest_fixer/fix_silhouette/enable": true,\n'
-        f'"retarget/rest_fixer/fix_silhouette/filter": {SILHOUETTE_FILTER}\n'
-        '}'
-    )
+    settings = ",\n".join(f'"{key}": {value}' for key, value in REST_SETTINGS.items())
+    return f'"{skeleton_path}": {{\n{settings}\n}}'
 
 
 def _find_balanced_block(text: str, open_brace_index: int) -> tuple[int, int]:
@@ -162,6 +154,14 @@ def _replace_or_insert_node_entry(subresources: str, skeleton_path: str) -> str:
     node_entry = _find_keyed_dictionary(nodes_text_without_comma, skeleton_path)
     if node_entry is not None:
         entry_start, entry_end, entry_has_comma = node_entry
+        existing = nodes_text_without_comma[entry_start:entry_end]
+        body = existing[existing.index("{") + 1:existing.rindex("}")]
+        # Godot serialises these owned scalar/resource/filter properties one per line.
+        for key in (*REST_SETTINGS, SILHOUETTE_FILTER_KEY):
+            body = re.sub(rf'^\s*"{re.escape(key)}": [^\n]*$', "", body, flags=re.MULTILINE)
+        extra = body.strip().removesuffix(",")
+        if extra:
+            node_block = node_block[:-2] + ",\n" + extra + "\n}"
         replacement = node_block + ("," if entry_has_comma else "")
         new_nodes_text = (
             nodes_text_without_comma[:entry_start]

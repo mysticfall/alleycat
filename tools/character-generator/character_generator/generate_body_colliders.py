@@ -1253,6 +1253,10 @@ def generate(args: argparse.Namespace) -> None:
         generated.append(f"{spec.name}: {len(mesh.vertices)} verts, {len(mesh.polygons)} polys, decimate {spec.decimate_ratio}")
 
     strip_actions_and_linked_libraries()
+    # Build the hulls in neutral; only the importer consumes the muted rest action.
+    from .authored_rest import add_authored_rest
+
+    add_authored_rest(armature)
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=args.output)

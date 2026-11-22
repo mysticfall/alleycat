@@ -164,8 +164,8 @@ blender/nodes/visible=0
         self.assertIn('"nodes": {', text)
         self.assertIn('"PATH:Ragdoll/Skeleton3D": {', text)
         self.assertIn('"retarget/bone_map": ' + import_metadata.BONE_MAP_RESOURCE, text)
-        self.assertIn('"retarget/rest_fixer/fix_silhouette/enable": true', text)
-        self.assertIn('"retarget/rest_fixer/fix_silhouette/filter": ' + import_metadata.SILHOUETTE_FILTER, text)
+        self.assertIn('"retarget/rest_fixer/fix_silhouette/enable": false', text)
+        self.assertNotIn('"retarget/rest_fixer/fix_silhouette/filter"', text)
 
     def test_merges_retarget_metadata_with_populated_subresources(self) -> None:
         populated_import = """[params]
@@ -212,7 +212,9 @@ _subresources={
 "nodes": {
 "PATH:Female/Skeleton3D": {
 "retarget/bone_map": null,
-"retarget/rest_fixer/fix_silhouette/enable": false
+"unrelated/option": true,
+"retarget/rest_fixer/fix_silhouette/filter": [],
+"retarget/rest_fixer/fix_silhouette/enable": true
 },
 "PATH:Female/Female_body": {
 "import/skip_import": true
@@ -237,7 +239,10 @@ animation/import=true
         self.assertIn('"PATH:Female/Skeleton3D": {', text)
         self.assertNotIn('"PATH:Ayana/Skeleton3D": {', text)
         self.assertNotIn('"retarget/bone_map": null', text)
-        self.assertNotIn('"retarget/rest_fixer/fix_silhouette/enable": false', text)
+        self.assertIn('"retarget/rest_fixer/fix_silhouette/enable": false', text)
+        self.assertNotIn('"retarget/rest_fixer/fix_silhouette/filter"', text)
+        self.assertIn('"rest_pose/selected_animation": "AuthoredT"', text)
+        self.assertIn('"unrelated/option": true', text)
         self.assertIn(import_metadata.BONE_MAP_RESOURCE, text)
 
     def test_replaces_existing_skeleton_entry_without_dropping_unrelated_nodes(self) -> None:
@@ -268,7 +273,7 @@ _subresources={
 
         self.assertTrue(changed)
         self.assertNotIn('"retarget/bone_map": null', text)
-        self.assertNotIn('"retarget/rest_fixer/fix_silhouette/enable": false', text)
+        self.assertIn('"retarget/rest_fixer/fix_silhouette/enable": false', text)
         self.assertIn('"PATH:Ragdoll/Collider": {', text)
         self.assertIn('"import/skip_import": true', text)
 

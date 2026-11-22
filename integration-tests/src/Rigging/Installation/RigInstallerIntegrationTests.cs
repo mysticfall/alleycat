@@ -928,7 +928,7 @@ public sealed class RigInstallerIntegrationTests
         Node playerVRIK = playerRoot.GetNode("VRIK");
         Node poseStateMachine = playerRoot.GetNode("VRIK/PoseStateMachine");
         Node hands = playerRoot.GetNode("Hands");
-        Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
 
         Assert.Contains(typeof(PlayerVRIK).FullName, GetTypeHierarchyNames(playerVRIK.GetType()), StringComparer.Ordinal);
         Assert.Same(poseStateMachine, GetPropertyValue(playerVRIK, nameof(PlayerVRIK.PoseStateMachine)));
@@ -956,7 +956,7 @@ public sealed class RigInstallerIntegrationTests
 
         AssertNPCRuntimeBindings(npcRoot);
         Node characterIK = npcRoot.GetNode("CharacterIK");
-        Skeleton3D skeleton = npcRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        Skeleton3D skeleton = npcRoot.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
 
         Assert.Contains(typeof(CharacterIK).FullName, GetTypeHierarchyNames(characterIK.GetType()), StringComparer.Ordinal);
         Assert.Same(skeleton.GetNode("Head/Viewpoint"), GetPropertyValue(characterIK, nameof(CharacterIK.Viewpoint)));
@@ -1352,10 +1352,11 @@ public sealed class RigInstallerIntegrationTests
         Assert.Same(animationTree, GetPropertyValue(leftHand, "AnimationTree"));
         Assert.Same(character.GetNode("IKTargets/RightHand"), GetPropertyValue(rightHand, "HandTargetNode"));
         Assert.Same(character.GetNode("IKTargets/LeftHand"), GetPropertyValue(leftHand, "HandTargetNode"));
-        Assert.Same(character.GetNode("Female/GeneralSkeleton/RightHand"), GetPropertyValue(rightHand, "HandBoneAttachment"));
-        Assert.Same(character.GetNode("Female/GeneralSkeleton/LeftHand"), GetPropertyValue(leftHand, "HandBoneAttachment"));
-        Assert.Same(character.GetNode("Female/GeneralSkeleton/DynamicPhysicalRig"), GetPropertyValue(rightHand, "PhysicalRig"));
-        Assert.Same(character.GetNode("Female/GeneralSkeleton/DynamicPhysicalRig"), GetPropertyValue(leftHand, "PhysicalRig"));
+        string skeletonPath = character.IsInsideTree() ? "Female/SOMA/Native/GeneralSkeleton" : "Female/GeneralSkeleton";
+        Assert.Same(character.GetNode(skeletonPath + "/RightHand"), GetPropertyValue(rightHand, "HandBoneAttachment"));
+        Assert.Same(character.GetNode(skeletonPath + "/LeftHand"), GetPropertyValue(leftHand, "HandBoneAttachment"));
+        Assert.Same(character.GetNode(skeletonPath + "/DynamicPhysicalRig"), GetPropertyValue(rightHand, "PhysicalRig"));
+        Assert.Same(character.GetNode(skeletonPath + "/DynamicPhysicalRig"), GetPropertyValue(leftHand, "PhysicalRig"));
     }
 
     private static void AssertPlayerRuntimeBindings(Node character)
@@ -1419,7 +1420,7 @@ public sealed class RigInstallerIntegrationTests
 
     private static void EnsureReferenceFemaleInventoryInstalled(Node character)
     {
-        if (character.HasNode("IKTargets/RightHand") && character.HasNode("Female/GeneralSkeleton/DynamicPhysicalRig"))
+        if (character.HasNode("IKTargets/RightHand") && character.HasNode("Female/SOMA/Native/GeneralSkeleton/DynamicPhysicalRig"))
         {
             return;
         }

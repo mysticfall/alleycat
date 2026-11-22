@@ -15,12 +15,15 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from .update_character_import_retarget_metadata import (
+    REST_SETTINGS,
+    SILHOUETTE_FILTER_KEY,
     _existing_skeleton_node_paths,
     _find_keyed_dictionary,
     _find_subresources_value,
@@ -29,11 +32,6 @@ from .update_character_import_retarget_metadata import (
 )
 
 
-REQUIRED_RETARGET_KEYS = (
-    "retarget/bone_map",
-    "retarget/rest_fixer/fix_silhouette/enable",
-    "retarget/rest_fixer/fix_silhouette/filter",
-)
 COLLIDER_BLEND_SUFFIX = ".colliders.blend"
 IMPORT_SUFFIX = ".import"
 RETARGET_HELPER_COMMAND = "python3 tools/character-generator/commands/update_character_import_retarget_metadata.py"
@@ -101,10 +99,12 @@ def _nodes_text(subresources: str) -> str | None:
     return _entry_text(subresources, nodes_entry)
 
 
-def missing_retarget_keys(entry_text: str) -> list[str]:
-    """Return the required retarget keys absent from one skeleton node entry."""
-
-    return [key for key in REQUIRED_RETARGET_KEYS if f'"{key}":' not in entry_text]
+def invalid_rest_settings(block: str) -> list[str]:
+    missing = [key for key, value in REST_SETTINGS.items()
+               if not re.search(rf'^"{re.escape(key)}": {re.escape(value)},?$', block, re.MULTILINE)]
+    if f'"{SILHOUETTE_FILTER_KEY}":' in block:
+        missing.append(f"unexpected {SILHOUETTE_FILTER_KEY}")
+    return missing
 
 
 def main_sidecar_errors(sidecar_text: str) -> list[str]:
@@ -116,18 +116,20 @@ def main_sidecar_errors(sidecar_text: str) -> list[str]:
         return [str(error)]
 
     nodes = _nodes_text(subresources)
-    if nodes is None:
-        return []
+    paths = _existing_skeleton_node_paths(subresources)
+    if nodes is None or not paths:
+        return ["Required main skeleton entry is absent."]
 
     errors: list[str] = []
-    for skeleton_path in sorted(_existing_skeleton_node_paths(subresources)):
+    for skeleton_path in sorted(paths):
         entry = _find_keyed_dictionary(nodes, skeleton_path)
         if entry is None:
             continue
-        missing = missing_retarget_keys(_entry_text(nodes, entry))
+        block = _entry_text(nodes, entry)
+        missing = invalid_rest_settings(block)
         if missing:
             errors.append(
-                f'Skeleton entry "{skeleton_path}" is missing required retarget keys: '
+                f'Skeleton entry "{skeleton_path}" has invalid retarget settings: '
                 + ", ".join(missing)
                 + "."
             )
@@ -147,10 +149,10 @@ def collider_sidecar_errors(sidecar_text: str) -> list[str]:
     entry = None if nodes is None else _find_keyed_dictionary(nodes, skeleton_path)
     if entry is None:
         return [f'Required skeleton entry "{skeleton_path}" is absent.']
-    missing = missing_retarget_keys(_entry_text(nodes, entry))
+    missing = invalid_rest_settings(_entry_text(nodes, entry))
     if missing:
         return [
-            f'Skeleton entry "{skeleton_path}" is missing required retarget keys: '
+            f'Skeleton entry "{skeleton_path}" has invalid retarget settings: '
             + ", ".join(missing)
             + "."
         ]

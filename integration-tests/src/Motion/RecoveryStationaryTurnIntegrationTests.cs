@@ -9,17 +9,17 @@ namespace AlleyCat.IntegrationTests.Motion;
 
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
-    /// <summary>Approved recovery source order through real input/submission wiring; synthetic endpoints, never native inference.</summary>
+    /// <summary>Half-input source order through real input/submission wiring; synthetic endpoints, never native inference.</summary>
     [Headless]
     [Fact]
-    public Task RecoveryTurn_ProductionSubmitsBothFourLandmarkGroups() => CheckRecoveryGroupAsync(.5f);
+    public Task MappedTurn_HalfInputUsesBothPrimaryLifts() => CheckPrimaryGroupAsync(.5f);
 
-    /// <summary>The final recovery must complete before a clock-selected whole-cycle yaw drop.</summary>
+    /// <summary>Full input uses the same source poses with wider angular separation.</summary>
     [Headless]
     [Fact]
-    public Task RecoveryTurn_FullInputDropsOnlyAfterFinalRecovery() => CheckRecoveryGroupAsync(1);
+    public Task MappedTurn_FullInputUsesBothPrimaryLifts() => CheckPrimaryGroupAsync(1);
 
-    private static async Task CheckRecoveryGroupAsync(float magnitude)
+    private static async Task CheckPrimaryGroupAsync(float magnitude)
     {
         var evidence = new List<object>();
         var observations = new List<(int[] Frames, float[] Angles, bool RawNonRoots)>();
@@ -80,23 +80,17 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             }
             string path = ProjectSettings.GlobalizePath($"res://temp/motionbricks/anim002-regenerated-source-adoption-01/driver-{magnitude}-{Guid.NewGuid():N}.json");
             File.WriteAllText(path, JsonSerializer.Serialize(evidence));
-            int nextLeft = magnitude == .5f ? 1007 : 1067, nextRight = magnitude == .5f ? 1163 : 1223;
-            Assert.Equal([947, 951, 961, 1001, nextLeft], observations[0].Frames);
-            Assert.Equal([1103, 1107, 1120, 1152, nextRight], observations[1].Frames);
-            // Independent exported Hips-angle oracle. At half input the approved rate*intensity*H cap
-            // is 27.293686847deg left / 37.302033696deg right; the last-left/second-right-lift deltas bind.
-            // Synthetic endpoint completion carries that shortfall forward; it does not rewrite source angles.
-            double[][] expected = magnitude == .5f ? [
-                [4.471126472374838,18.00060249623247,38.89189768944148,66.1855845364488,68.91958446512824],
-                [-20.907733993342532,-39.10439950786896,-76.40643320360022,-85.45024508691796,-106.34044565398865]] : [
-                [4.471126472374838,18.00060249623247,38.89189768944148,68.57880861799906,71.3128085466785],
-                [-20.907733993342532,-39.10439950786896,-82.32564079780614,-91.36945268112389,-112.25965324819458]];
+            Assert.Equal([947, 961, 1007, 1021, 1067], observations[0].Frames);
+            Assert.Equal([1103, 1120, 1163, 1180, 1223], observations[1].Frames);
+            // Absolute primary-lift headings for 120 degrees, from independently exported source angles.
+            double[][] expected = [[8.02696, 69.82212, 128.02696, 189.82212, 248.02696],
+                [-27.46443, -108.14307, -147.46443, -228.14307, -267.46443]];
             for (int role = 0; role < 2; role++)
             {
                 Assert.True(observations[role].RawNonRoots);
                 for (int i = 0; i < 5; i++)
                 {
-                    Assert.InRange(Math.Abs(observations[role].Angles[i] - expected[role][i]), 0, .001);
+                    Assert.InRange(Math.Abs(Math.IEEERemainder(observations[role].Angles[i] - (magnitude * expected[role][i]), 360)), 0, .001);
                 }
             }
         }

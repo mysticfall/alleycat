@@ -15,6 +15,25 @@ namespace AlleyCat.Character;
 [GlobalClass]
 public partial class Character : CharacterBody3D, ICharacter, IComponentProjectionNotifier
 {
+    /// <summary>Model carrying the native MotionBricks source on installed reference actors.</summary>
+    [Export] public string MotionModel { get; set; } = "";
+
+    /// <inheritdoc />
+    public override void _EnterTree()
+    {
+        if (Engine.IsEditorHint() || MotionModel.Length == 0)
+        {
+            return;
+        }
+
+        bool player = HasNode("PlayerCharacterInstaller");
+        if (player || HasNode("NPCCharacterInstaller"))
+        {
+            using GodotObject mount = GD.Load<GDScript>("res://src/Motion/native_soma_mount.gd").New().AsGodotObject();
+            _ = mount.Call("install", this, MotionModel, player);
+        }
+    }
+
     private IComponent[] _components = [];
 
     /// <inheritdoc />

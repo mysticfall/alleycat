@@ -91,6 +91,13 @@ public sealed class SomaInference : SomaInferenceWorker.ISession
 
     /// <inheritdoc/>
     public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+        => GenerateMotion(context, target, null);
+
+    /// <inheritdoc/>
+    public Transform3D[][] GeneratePresented(Transform3D[][] context, Transform3D[][] target, Transform3D[] start)
+        => GenerateMotion(context, target, start);
+
+    private Transform3D[][] GenerateMotion(Transform3D[][] context, Transform3D[][] target, Transform3D[]? presentationStart)
     {
         if (context.Length != 4 || target.Length != 4)
         {
@@ -176,6 +183,12 @@ public sealed class SomaInference : SomaInferenceWorker.ISession
             }
         }
         DecodedObserved?.Invoke(result);
+        if (presentationStart is not null)
+        {
+            // Inference consumed the realised guides. Change only the start constraint of
+            // the existing endpoint pass, before returning the segment for presentation.
+            _frames.ToModel(presentationStart, guides[3]);
+        }
         CorrectEndpoints(result, guides[3], guides[4]);
         foreach (Transform3D[] pose in result)
         {

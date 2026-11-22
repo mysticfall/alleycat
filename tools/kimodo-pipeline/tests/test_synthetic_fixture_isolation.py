@@ -174,7 +174,7 @@ def _category_for(path: Path, symbol: str, literal: str) -> str:
         remaining = literal
         for statement in (
             '_ = poses["sources"]!.AsObject().Remove("game/assets/characters/animations/source/locomotion/locomotion.blend");',
-            'Assert.False(data.Calibration.GetProperty("sources").TryGetProperty(\n'
+            'Assert.False(data.Manifest.GetProperty("sources").TryGetProperty(\n'
             '            "game/assets/characters/animations/source/locomotion/locomotion.blend", out _));',
         ):
             remaining = remaining.replace(statement, "")

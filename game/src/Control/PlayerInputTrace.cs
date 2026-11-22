@@ -101,6 +101,8 @@ internal sealed class PlayerInputTrace
     private sealed class DrainSession(SomaInferenceWorker.ISession inner, PlayerInputTrace trace) : SomaInferenceWorker.ISession
     {
         public Godot.Transform3D[][] Generate(Godot.Transform3D[][] context, Godot.Transform3D[][] target) => inner.Generate(context, target);
+        public Godot.Transform3D[][] GeneratePresented(Godot.Transform3D[][] context, Godot.Transform3D[][] target, Godot.Transform3D[] start)
+            => inner.GeneratePresented(context, target, start);
         public void Dispose()
         {
             try

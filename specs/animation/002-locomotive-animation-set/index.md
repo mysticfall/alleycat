@@ -26,8 +26,9 @@ owner of intended state progression.
    and posture inform movement; crawling must not inherit walking speed merely because input magnitude is identical.
 3. Source sampling follows intended role and phase, including uneven motion, without waiting for displayed feet to
    match a source phase. Input/route changes and release remain responsive; intended source phase is not a promise of
-   identical generated foot placement or timing. Stationary-turn progression coordinates intended facing with the
-   source's actual angular span and ordered left/right lift cues, rather than assuming a lift at the turn midpoint.
+   identical generated foot placement or timing. Stationary turns retain the source's pacing and ordered left/right
+   lift cues as the turn arc widens or narrows. Wider turns read as larger turns, not as clusters of small turns.
+   Actor facing progresses in the commanded direction without being reversed by generated hip motion.
 4. Locomotion enters and leaves externally supplied compatible idle/action targets. Idle assets belong to a separate
    system. Each source variant owns a reference posture for authoring, not a matching runtime idle asset or a
    requirement to pass through idle during movement or state changes.
@@ -65,43 +66,15 @@ owner of intended state progression.
    articulated pose cues. The current SOMA interface consumes four consecutive frames at 30 Hz; sampling/conversion
    must respect source timing and this interface. Fixed entry/exit indices alone do not satisfy dynamic sampling.
    Transform source-relative windows into controller-selected target placement/facing without flattening uneven
-    local motion into identical poses or constant-speed samples. No automatic keyframe-selection algorithm is mandated.
-   Normal CTRL stationary-turn conditioning in CTRL-001 TR10 permits landmark-clipped selected snapshots behind elapsed
-   intended phase, or beyond its forecast under the bounded overtake exception. This is not a global replacement
-   for future lookahead or fulfilment of the full dynamic-source contract; retain four consecutive 30 Hz poses.
-   Its source-bound recovery metadata adds one full-pose recovery landmark after each primary lift, without changing
-   the authoritative two-foot references. Recovery is source intent, not sole contact, support or a proven whole step.
-   NAV-001's [finite terminal-facing plan](../../nav/001-npc-navigation/index.md#finite-terminal-facing-turn-plan)
-   instead selects every planned primary landmark in source order under a fixed angular request. Its phase/service
-   cursor is separate from elapsed lookahead; each first-guide endpoint must actually play before ordinary handoff.
-   Angular allocation uses measured source progression, not time fractions. This NAV exception does not change CTRL.
+   local motion into identical poses or constant-speed samples. No automatic keyframe-selection algorithm is mandated.
+   Stationary turns use the [shared angular mapping](#stationary-turn-angular-mapping) below.
 4. **Game-Owned Lifecycle:** the game controller owns variant, state, role, virtual source clock/phase, expected source
    foot phase and target selection. MotionBricks owns connecting generation, not semantic phase progression.
    The lifecycle must define the following, with selection decisions explicit and inspectable:
-    - Initialise phase within an admitted source range on activation. Advance elapsed virtual playback under a declared
-      source-rate policy, not inference completion. For the finite NAV exception in TR3, retain a separate ordered
-      planned-phase cursor whose landmark service requires actual endpoint playback, not model duration or elapsed time.
-    - Select a future phase/window using the controller's target horizon and source timing, subject to the
-      CTRL stationary-turn and finite NAV policies in TR3. Source-clock time, planned phase, selection, target horizon
-      and model-selected generated duration are distinct; do not assume they coincide.
-   - For stationary turns, coordinate intended source phase and target facing using measured angular metadata,
-      input intensity or fixed requested arc and the controller's chosen rotation. Declare a playback-rate/selection
-      policy that may vary with intent; an independent fixed source pace that ignores angular intent is insufficient.
-     Preserve ordered progression through both foot-lift phases where present and across declared cyclic boundaries,
-     including asymmetric local angular cues, rather than flattening the episode into one fixed lift window.
-     Apply intensity changes prospectively without rewinding phase or mutating submitted work; preserve the
-     controller's release, reversal, material-change and compatible-ownership rules. This does not prescribe a gain,
-     angular-waypoint planner, fixed subrequest count or one source episode per native call. Actual model output is
-      not the semantic clock, and a declared intent policy does not guarantee generated timing or footwork.
-     - In CTRL stationary-turn conditioning, finish the current four-landmark group, including final recovery after the
-      second primary lift, before jumping to the latest clock-selected cycle. Selected phase is monotone but may lag
-      elapsed intent. Drop only whole unstarted cycles and their prospective net yaw, without changing actor-root
-      geometry or rewinding the clock. Only matching-owner full stationary playback with the landmark as first guide
-      services it; interims or appearance in the other three poses do not. Record primary/recovery completions and
-      passed-unplayed events separately; neither is contact or whole-gait evidence. CTRL-001 TR10's overtake exception
-      may explicitly pass an overtaken landmark, never silently omit recovery at the second lift. Bound search to the
-      remaining current plus next four-event group, at most eight candidates, then report availability failure.
-      No arbitrary-cycle search, catch-up queue, pace compensation or realised-pace guarantee is authorised.
+   - Initialise phase within an admitted source range on activation. Advance elapsed virtual playback under a declared
+     source-rate policy, not inference completion. Select a future phase/window using the controller's target horizon
+     and source timing, subject to the stationary-turn contract below. Source-clock time, planned phase, selection,
+     target horizon and model-selected generated duration are distinct; do not assume they coincide.
    - For repeated sampling, identify a candidate complete cycle supported by actual source motion, manually or with
      reused deterministic tools; no particular cycle-finding algorithm is required. Freeze source bounds, period,
      endpoint-duplicate convention and accumulated travel/facing transform before the trial. Authoring boundaries alone
@@ -132,19 +105,19 @@ owner of intended state progression.
    compatibility. The locomotion controller requests compatible targets for arrival, release or interruption and
    connects from actual realised context; it must not assume an idle clip in every locomotion variant. Report missing
    or incompatible targets explicitly under CTRL/NAV failure policy. This defines the boundary, not an idle subsystem.
-7. **Realisation and Safety:** apply the [shared animation contract](../index.md) for source licensing, calibrated
-   conversion, SOMA helpers and actual post-modifier feedback. Virtual phase and expected source foot phase are
+7. **Realisation and Safety:** apply the [shared animation contract](../index.md) for source licensing, native
+   presentation, SOMA helpers and actual final-target feedback. Virtual phase and expected source foot phase are
    intended state only; never feed sampled/predicted targets back as observed motion. CTRL/NAV retain collision-root,
    tracking, request ownership and worker-lifetime authority. Source slicing may declare ranges/sample offsets or
-   materialise traceable role data without altering motion. No runtime procedural stitching, seam repair,
-   foot-IK rescue or forced endpoint convergence may conceal conditioning limitations. Source-boundary processing is
-   only an optional fallback to visible generated-motion harm, with explicit changes and human review under TR9;
-   it is not mandatory technical sanitising or generated-output repair.
+    materialise traceable role data without altering motion. The shared SOMA endpoint pass still applies; do not add
+    procedural stitching, seam repair, foot-IK rescue or forced endpoint convergence to conceal conditioning
+    limitations. Source-boundary processing is only an optional fallback to visible generated-motion harm, with
+    explicit changes and human review under TR9; it is not mandatory technical sanitising or generated-output repair.
 8. **Validation:** verify semantic coverage, physical metadata, source timing, sampling and lifecycle independently of
    model output, then inspect full actual-rig temporal evidence under both controllers. Candidate-cycle checks establish
    inspectable trial metadata, not seamlessness or artistic approval; do not block the raw trial on unverified loop
    quality. Record intended phase and actual observations separately. Do not invent numerical motion-quality gates or
-   claim source cue transfer proves dynamic-sampling suitability. Preserve calibrated sources and provenance; the
+   claim source cue transfer proves dynamic-sampling suitability. Preserve canonical sources and provenance; the
    [source-production contract](../../tooling/kimodo-pipeline/locomotive-animation-set.md#source-production-contract)
    owns reviewed-action ingestion, technical sanitising, slicing and safe publication.
 9. **Local Source Reference Posture:** artists own each variant's explicit compatible source reference posture and
@@ -153,7 +126,7 @@ owner of intended state progression.
    arms-down standing or another authored configuration, such as arms crossed; it is not limited to a T-pose or
    default standing pose and does not depend on an external matching idle asset.
    Source creation is external and artist-owned; retain inspectable Blender source/reference inputs for generic variants
-   with one or more stages. Repository delivery covers reviewed-action ingestion, calibrated export and source-set
+   with one or more stages. Repository delivery covers reviewed-action ingestion, canonical export and source-set
    publication, not a template generator or extension runner.
    Retain feminine and masculine defaults, feminine first, as movement styles rather than claims about every person
    of a given sex. Both complete defaults are required for final content acceptance, not for a representative
@@ -165,7 +138,8 @@ owner of intended state progression.
    mutation, covert favourable crop or promotion of rejected motion. Retain whole chronology and the approval bounds;
    human review of actual motion remains necessary for content admission and cyclic suitability.
    Mandatory human review binds approval to source hash, action and ranges, covering acquisition, movement interiors,
-   transitions and settling on the canonical source and calibrated character preview where applicable. Matching
+   transitions and settling on the canonical source and on the reference characters in Godot native playback, or in a
+   Blender preview independently shown to match native playback on skinned landmarks. Matching
    boundaries do not establish interior suitability, phase or loopability. Keep finite-data, supported
    skeleton/coordinates/rate, range, identity and claimed-complete coverage checks; human approval does not waive them.
    Preserve declared authoring constraints, source protections and clear processing errors without requiring
@@ -173,6 +147,39 @@ owner of intended state progression.
    control or permission to repair bad motion. The
    [source-production contract](../../tooling/kimodo-pipeline/locomotive-animation-set.md#source-production-contract)
    is normative for acceptable source properties, reviewed-source processing and source-evidence delivery.
+
+### Stationary-Turn Angular Mapping
+
+This TR3–4 contract is normative for both [CTRL stationary turns][ctrl-turn] and [NAV terminal-facing turns][nav-turn].
+Both controllers must use the same mapping component; each owns its allocation, request lifecycle and finish policy.
+
+[ctrl-turn]: ../../ctrl/001-locomotion/index.md#stationary-turn-conditioning
+[nav-turn]: ../../nav/001-npc-navigation/index.md#finite-terminal-facing-turn-plan
+
+- **Cycle Allocation:** allocate a signed angle to each cycle of the selected directional source, with an initial
+  maximum magnitude of 120 degrees per cycle. Use the source-bound angular metadata to validate the selected cycle's
+  identity, timing, bounds, facing/sign convention, measured signed span and ordered primary lift landmarks.
+- **Root-Yaw Mapping:** anchor at the cycle's planned start facing. At each source sample, add its signed yaw change
+  from cycle start multiplied by `allocated signed angle / measured signed source span`. Use actual angular
+  progress at each landmark, not elapsed-time fraction; larger allocations place the same cues farther apart on the
+  target arc. Preserve both primary lift cues where present, their order, local holds and authored micro-reversals,
+  and declared wrap transforms. Do not invert yaw as a phase clock or turn backwards to catch up to past cues.
+- **Source Pacing:** leave non-root articulation and source timing unchanged. Use consecutive original samples under
+  TR3, without time warp, scaling generated output or adding corrective rotation. The allocation changes angle,
+  not cycle duration. Landmarks are source cues, not a shared requirement for one request per cue. Model-selected
+  duration and realised pace remain separate evidence; compare full displayed cycles with the source duration.
+- **Conditioning and Ownership:** every submission uses actual post-modifier realised context under ANIM TR5, not
+  source poses, planned facing or unplayed predictions. Snapshot the cycle, mapping, selected window and ownership
+  with each request; retain the controller's interruption and stale-result rules. Mapped targets are not proof of
+  displayed footwork or contact.
+
+#### Actor Facing During Stationary Turns
+
+At each tick during a stationary-turn cycle, the game sets actor facing to the mapped yaw at current planned cycle
+progress, not to yaw derived from generated hips or any other generated bone. Hip orientation depends on the
+animation variant; for example, crawling hips can be oriented very differently from hips in a standing turn.
+The generated pose still supplies articulation. Apply the planned yaw once: residual generated hip yaw must not
+drive the actor or be applied twice in presentation. The planned cycle endpoint is unchanged.
 
 ## In Scope
 
@@ -197,7 +204,9 @@ owner of intended state progression.
 2. **ANIM-002-UAC-002 (UR2–3):** Variant/stage examples include different physical speeds and uneven local motion;
    sampling follows intended progression without displayed-foot synchronisation or delayed input response.
    Review full actual-rig stationary turns with intensity changes, release and settlement, including ordered cues
-   from both feet where present. Intended phase/facing coherence does not itself prove displayed mid-turn footwork.
+   from both feet where present. Check that larger arcs read as larger turns at source pace and that neither controller
+   sustains rotation against the command or reverses actor facing because of generated hip motion. Distinguish
+   authored micro-reversals in the mapped source from hip-driven reversals. Correct facing does not prove footwork.
 3. **ANIM-002-UAC-003 (UR4):** Locomotion connects to compatible externally owned idle/action targets without requiring
    a runtime ANIM-002 idle asset or passing through the source reference posture; unavailable targets are reported
    truthfully rather than silently reset. Source reference ownership remains local and independent of those targets.
@@ -212,8 +221,10 @@ owner of intended state progression.
    the declared episode, including holds/reversals. Validate each foot's cue phase, order and associated angular
    progression with the declared measurement convention, not one global peak or an assumed angular/time midpoint.
     Missing cues remain explicit coverage/validation gaps; do not infer support or contact from joint-origin peaks.
-   For the finite NAV exception, validate allocated cycle angles and primary-landmark targets against measured signed
-    source angular progression, with unchanged non-root articulation and four consecutive 30 Hz poses per connection.
+   For both controllers, verify use of the same mapping component. Independently check allocation, cycle start
+   facing, scale and angular landmark placement against measured source yaw, with unchanged non-root articulation
+   and four consecutive 30 Hz poses per connection. Check unchanged source timing and compare realised cycle duration
+   with source duration in actual-rig captures; distinguish request handoffs and inference holds from source pacing.
    Verify normal CTRL/NAV startup without activation variables binds all eight roles and angular metadata to the same
    current source. Quality-admission labels must not be interpreted as runtime activation switches.
 2. **ANIM-002-TAC-002 (TR4–6):** Independent lifecycle checks cover advance/sample-ahead, loop/end boundaries,
@@ -221,16 +232,16 @@ owner of intended state progression.
    controller-owned intended phase independently of generated duration, displayed feet and actual context timestamps.
    Check multiple cycle counts, wrap-straddling four-frame windows and accumulated travel/facing without origin reset
     or double placement; retain finite-range exhaustion and abandoned-phase invalidation checks for non-cyclic content.
-   Check stationary-turn phase/facing coherence under intensity changes, prospective updates without phase rewind,
-    immutable owned work, both ordered foot phases and cyclic boundaries; distinguish intended pace from actual output.
-   For normal CTRL stationary turns, verify both ordered lift/recovery pairs, lagging snapshots, typed first-guide-only
-   service and separate passed-unplayed receipts. Verify final-recovery group completion before whole unstarted-cycle
-   drops, without skipped yaw, actor movement or clock rewind, and the bounded eight-candidate overtake exception
-   under CTRL-TAC-005. Validate all four original poses and source-bound recovery associations, not a contact claim.
+   Check stationary-turn phase/facing coherence at cycle boundaries, including next-cycle intensity changes in
+   CTRL-TAC-005 without mutation, rewind or loss of realised context.
+   For both controllers, compare actual actor yaw at each tick against mapped yaw at the recorded cycle progress
+   within a declared, tunable angular tolerance. Vary generated hip yaw at the same planned progress and verify
+   actor facing is unaffected, yaw is applied once and the planned endpoint is unchanged. Verify the worker still
+   receives actual post-modifier realised context, not the planned pose.
    Under NAV-TAC-004, separately verify fixed-plan ownership, actual-context provenance, every planned primary endpoint
    played before ordinary handoff and finite final-facing/compatible-idle completion. Elapsed lookahead, native duration
    and advance planning must not skip service obligations; retain immediate safety/replacement interruptions.
-3. **ANIM-002-TAC-003 (TR7–8):** Verify unchanged collision/tracking/worker ownership and realised feedback; review
+3. **ANIM-002-TAC-003 (TR7–8):** Verify unchanged collision/tracking/worker ownership and final-target feedback; review
     actual-rig temporal results and source integrity separately from metadata/sampling correctness. Report gaps and
     model limitations without corrective locomotion or arbitrary thresholds. Review repeated actual-rig generated
     motion across wraps from the raw candidate, with diagnostic boundary measurements but no exact-seam gate.
@@ -248,7 +259,8 @@ owner of intended state progression.
    Review full source/preview motion, not endpoints alone, separately from implementation safety review and actual-rig
    runtime proof. No repository source-generation machinery or extra misplaced-constraint test is a prerequisite.
    Report representative versus complete coverage; final default acceptance requires both defaults' actual sources
-   and reference-character previews. Correct metadata or a one-role demonstration does not prove natural all-role flow.
+   and reference-character previews under TR9's native-playback authority. Correct metadata or a one-role
+   demonstration does not prove natural all-role flow.
 
 ## Implementation Status
 
@@ -267,14 +279,14 @@ Current inclusive usable ranges and half-open repetitions are:
 - Left/right crossing: 646–706 / [646,676) and 796–856 / [796,826).
 - Left/right turns: 946–1006 / [946,1006) and 1096–1156 / [1096,1156).
 
-CTRL's four typed lift/recovery landmarks are left 947→951→961→1001 and right 1103→1107→1120→1152; NAV finite turns use
-the two primary lifts from each role. Read actual phase/angular associations and representative rates from the sidecar,
-including local reversals; neither turn is assumed to span 90 degrees. Runtime does not search for a substitute cue.
-Source ranges remain non-cyclic; `EXPERIMENTAL_NOT_ADMITTED` repetition/recovery labels describe content quality,
+Read primary lift phases, measured span and angular progression from the sidecar, including local reversals;
+neither turn is assumed to span 90 degrees. Runtime does not search for a substitute cue.
+Source ranges remain non-cyclic; `EXPERIMENTAL_NOT_ADMITTED` labels describe content quality,
 not an activation flag. They confer no seamless-loop, sole-contact or generated-motion naturalness guarantee.
 
-Shared normal-source adoption, CTRL turn groups and native NAV path/handoff with finite terminal turns are implemented
-and technically validated; combined independent review remains pending. See the
+Shared normal-source adoption and native NAV path/handoff with finite terminal turns have technical evidence;
+combined independent review remains pending. CTRL integration with the shared angular mapping and planned-yaw facing
+for both controllers are in progress. See the
 [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md).
 Source stepping/foot-sliding mitigation is user accepted; initial twitch is explicitly deferred. Runtime generated
 gait, sliding, turn pace, headset/interaction quality and raw repetition admission remain open. Masculine/default

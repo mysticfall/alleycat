@@ -21,17 +21,19 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     {
         SceneTree tree = TestUtils.GetSceneTree();
         await TestUtils.WaitForNextFrameAsync(tree);
-        Node model = GD.Load<PackedScene>("res://assets/characters/reference/female/reference_female.blend").Instantiate();
+        Node model = MotionBricksIntegrationTests.MountMotionModel(true, out Skeleton3D skeleton);
         tree.Root.AddChild(model);
         try
         {
-            Skeleton3D skeleton = model.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>().Single();
+            Skeleton3D source = skeleton.GetParent().GetParent<Skeleton3D>();
+            source.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
             var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-            var rig = new CalibratedSomaRig(data, skeleton, preserveFingerPoses: true);
+            var rig = new NativeSomaRig(data, skeleton);
             int finger = skeleton.FindBone("LeftIndexProximal");
             var authored = new Quaternion(Vector3.Right, 0.4f);
             skeleton.SetBonePoseRotation(finger, authored);
             rig.Apply(data.Idle[0]);
+            source.Advance(1.0 / 30);
             Assert.Equal(authored, skeleton.GetBonePoseRotation(finger));
         }
         finally
@@ -114,8 +116,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             PlayerMotionBricks motion = player.GetNode<PlayerMotionBricks>("MotionBricks");
             Assert.Same(motion, player.GetNode<PlayerController>("PlayerController").Motion);
             Assert.Equal("", motion.Failure);
-            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
-            Assert.Equal("PlayerMotionStage", skeleton.GetChild(0).Name.ToString());
+            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
+            _ = Assert.IsType<RetargetModifier3D>(skeleton.GetParent());
             double clock = 0;
             string phase = "idle";
             bool anatomyValid = true;
@@ -276,7 +278,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             await TestUtils.WaitForPhysicsFramesAsync(tree, 20);
             PlayerVRIK vrik = player.GetNode<PlayerVRIK>("VRIK");
             Assert.True(vrik.BindToXRServices());
-            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Physics;
             Camera3D head = runtime.Camera.CameraNode;
             head.Transform = new Transform3D(Basis.Identity, new Vector3(0, 1.6f, 0));

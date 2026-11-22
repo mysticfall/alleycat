@@ -14,6 +14,10 @@ public sealed class SomaInferenceWorker : IDisposable
     {
         /// <summary>Generates poses without accessing scene nodes.</summary>
         Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target);
+        /// <summary>Sessions with decoded-pose endpoint correction may use a distinct presentation start.
+        /// The model's conditioning poses are unchanged.</summary>
+        Transform3D[][] GeneratePresented(Transform3D[][] context, Transform3D[][] target, Transform3D[] start)
+            => Generate(context, target);
     }
 
     /// <summary>Only the current request may be consumed; errors are delivered, never silently retried.</summary>
@@ -26,7 +30,7 @@ public sealed class SomaInferenceWorker : IDisposable
         }
     }
 
-    private sealed record Request(long ID, Transform3D[][] Context, Transform3D[][] Target);
+    private sealed record Request(long ID, Transform3D[][] Context, Transform3D[][] Target, Transform3D[]? PresentationStart);
     private readonly Lock _gate = new();
     private readonly Channel<Request> _requests = Channel.CreateBounded<Request>(new BoundedChannelOptions(1)
     {
@@ -40,6 +44,10 @@ public sealed class SomaInferenceWorker : IDisposable
     private Result? _result;
     private Exception? _loadError;
     private int _discardedResults;
+    internal Action<long, string>? TraceWorkerEvent
+    {
+        private get; set;
+    }
     private readonly Action<Result>? _returned;
     /// <summary>Completed native results discarded after cancellation, replacement or shutdown.</summary>
     public int DiscardedResults => Volatile.Read(ref _discardedResults);
@@ -59,7 +67,7 @@ public sealed class SomaInferenceWorker : IDisposable
     }
 
     /// <summary>Copies input ownership and supersedes queued/in-flight results. Returns the new request identity.</summary>
-    public long Submit(Transform3D[][] context, Transform3D[][] target)
+    public long Submit(Transform3D[][] context, Transform3D[][] target, Transform3D[]? presentationStart = null)
     {
         Transform3D[][] ownedContext = Copy(context), ownedTarget = Copy(target);
         lock (_gate)
@@ -70,7 +78,7 @@ public sealed class SomaInferenceWorker : IDisposable
             _result = _loadError is null ? null : new Result(id, null, _loadError);
             if (_loadError is null)
             {
-                _ = _requests.Writer.TryWrite(new Request(id, ownedContext, ownedTarget));
+                _ = _requests.Writer.TryWrite(new Request(id, ownedContext, ownedTarget, presentationStart is null ? null : (Transform3D[])presentationStart.Clone()));
             }
             return id;
         }
@@ -154,18 +162,23 @@ public sealed class SomaInferenceWorker : IDisposable
                     }
                     if (request.ID != _version)
                     {
+                        TraceWorkerEvent?.Invoke(request.ID, "stale-before-start");
                         continue;
                     }
                 }
                 Result result;
                 try
                 {
-                    result = new Result(request.ID, session.Generate(request.Context, request.Target), null);
+                    TraceWorkerEvent?.Invoke(request.ID, "worker-start");
+                    result = new Result(request.ID, request.PresentationStart is { } start
+                        ? session.GeneratePresented(request.Context, request.Target, start)
+                        : session.Generate(request.Context, request.Target), null);
                 }
                 catch (Exception error)
                 {
                     result = new Result(request.ID, null, error);
                 }
+                TraceWorkerEvent?.Invoke(request.ID, "worker-end");
                 // Value-only diagnostics copy before publication/reuse, including outputs later discarded.
                 // Observer failure must never become a provider failure or change ownership.
                 try
@@ -185,6 +198,7 @@ public sealed class SomaInferenceWorker : IDisposable
                     else
                     {
                         _ = Interlocked.Increment(ref _discardedResults);
+                        TraceWorkerEvent?.Invoke(request.ID, "late-reject");
                     }
                 }
             }

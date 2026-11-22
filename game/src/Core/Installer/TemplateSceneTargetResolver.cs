@@ -29,7 +29,8 @@ internal static class TemplateSceneTargetResolver
         }
 
         NodePath relativePath = templateRoot.GetPathTo(templateNode);
-        return targetRoot.GetNodeOrNull(relativePath)
+        string nativePath = relativePath.ToString().Replace("/GeneralSkeleton", "/SOMA/Native/GeneralSkeleton", StringComparison.Ordinal);
+        return targetRoot.GetNodeOrNull(relativePath) ?? targetRoot.GetNodeOrNull(nativePath)
             ?? ResolveViaEquivalentTargetRootChild(targetRoot, relativePath);
     }
 
@@ -51,7 +52,7 @@ internal static class TemplateSceneTargetResolver
         Node? uniqueCandidate = null;
         foreach (Node targetChild in targetRoot.GetChildren())
         {
-            Node? candidate = targetChild.GetNodeOrNull(suffixPath);
+            Node? candidate = targetChild.GetNodeOrNull(suffixPath) ?? targetChild.GetNodeOrNull("SOMA/Native/" + suffixPath);
             if (candidate is null)
             {
                 continue;

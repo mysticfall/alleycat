@@ -73,8 +73,8 @@ public sealed partial class HandGrabAssetIntegrationTests
         {
             await TestUtils.WaitForFramesAsync(sceneTree, 8);
             EnsureRuntimeRoleInstalled(root);
-            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"));
-            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/GeneralSkeleton/LeftHand"));
+            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/SOMA/Native/GeneralSkeleton/RightHand"));
+            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/SOMA/Native/GeneralSkeleton/LeftHand"));
         }
         finally
         {
@@ -3760,9 +3760,9 @@ public sealed partial class HandGrabAssetIntegrationTests
             IKTargetIntentProvider rightHandFallbackProvider = player.GetNode<IKTargetIntentProvider>("VRIK/RightHandFallbackIntentProvider");
             AnimatableBody3D rightHandTarget = player.GetNode<AnimatableBody3D>("IKTargets/RightHand");
             AnimatableBody3D leftHandTarget = player.GetNode<AnimatableBody3D>("IKTargets/LeftHand");
-            BoneAttachment3D rightHandAttachment = player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/RightHand");
-            BoneAttachment3D leftHandAttachment = player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/LeftHand");
-            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            BoneAttachment3D rightHandAttachment = player.GetNode<BoneAttachment3D>("Female/SOMA/Native/GeneralSkeleton/RightHand");
+            BoneAttachment3D leftHandAttachment = player.GetNode<BoneAttachment3D>("Female/SOMA/Native/GeneralSkeleton/LeftHand");
+            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             GrabbableRigidBody3D ball = referenceFixture.GetNode<GrabbableRigidBody3D>("Items/Ball");
             GrabbableRigidBody3D stick = ResourceLoader.Load<PackedScene>(TestStickScenePath).Instantiate<GrabbableRigidBody3D>();
             Node3D items = referenceFixture.GetNode<Node3D>("Items");

@@ -54,7 +54,7 @@ public partial class MotionBricksNavigation : NavigationBase
     /// <summary>Actual selected reviewed role, not an override of path intent.</summary>
     public string ReviewedRole => _reviewed?.Role ?? "";
     private SomaInferenceWorker? _worker;
-    private CalibratedSomaRig? _rig;
+    private NativeSomaRig? _rig;
     private RealisedPoseHistory? _history;
     private ILogger<MotionBricksNavigation>? _logger;
     private Transform3D[] _pose = [], _observed = [];
@@ -129,7 +129,7 @@ public partial class MotionBricksNavigation : NavigationBase
         try
         {
             _actor = GetParent<Character.Character>();
-            _skeleton = _actor.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
+            _skeleton = _actor.RequireNode<Skeleton3D>(_actor.MotionModel + "/SOMA/Native/GeneralSkeleton");
             _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
             _catalogue = new MotionCatalogue(ProjectSettings.GlobalizePath("res://data/motionbricks/catalogue.json"), _data);
             _reviewed = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), _data);
@@ -137,7 +137,7 @@ public partial class MotionBricksNavigation : NavigationBase
             _ = _reviewed.TurnReference("right_turn");
             _pose = new Transform3D[_data.Names.Length];
             _observed = new Transform3D[_pose.Length];
-            _rig = new CalibratedSomaRig(_data, _skeleton);
+            _rig = new NativeSomaRig(_data, _skeleton);
             _history = new RealisedPoseHistory(_pose.Length);
             string model = ResolveModelPath(System.Environment.GetEnvironmentVariable("MOTIONBRICKS_MODEL"));
             string frames = ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json");
@@ -353,6 +353,12 @@ public partial class MotionBricksNavigation : NavigationBase
 
     private Transform3D MeasuredTransform()
     {
+        // Service is recorded only after the played endpoint is observed. It preserves facing ownership
+        // between tickets of this plan, without acquiring it while the first ticket is still pending.
+        if (_finiteTurn is { } plan && (plan.Served > 0 || (_activeNativeTicket != 0 && _activeNativeTicket == _finiteTicket)))
+        {
+            return _actor!.GlobalTransform;
+        }
         Basis world = SomaMotionData.ModelToWorld * (_observed.Length > 0 ? _observed[0].Basis : Basis.Identity);
         Vector3 forward = world.Z;
         float yaw = Mathf.Atan2(-forward.X, -forward.Z);

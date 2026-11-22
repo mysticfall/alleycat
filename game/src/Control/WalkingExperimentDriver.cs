@@ -9,8 +9,13 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
 {
     private readonly CharacterBody3D _actor = actor;
     private readonly SomaMotionData _data = data;
-    private readonly MotionCatalogue _catalogue = new(ProjectSettings.GlobalizePath("res://data/motionbricks/catalogue.json"), data);
-    private readonly CalibratedSomaRig _rig = new(data, skeleton, preserveFingerPoses: true);
+    private readonly Transform3D[] _treeDestination = new Transform3D[data.Names.Length];
+    private Transform3D _settlingModelToSource;
+    private Vector3 _heldLocalHips;
+    private bool _replacingStop;
+    private bool _destinationReady;
+    private ulong? _waitingForMixer;
+    private readonly NativeSomaRig _rig = new(data, skeleton);
     private readonly RealisedPoseHistory _history = new(data.Names.Length);
     private readonly Func<SomaInferenceWorker.ISession, SomaInferenceWorker.ISession> _decorate = decorate;
     private readonly string _model = model;
@@ -119,8 +124,19 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
     private Basis _frame = Basis.Identity;
     private Vector3 _lastGround;
     private double _time, _playTime, _submittedAt;
+    private ulong? _settlingObservedFrame;
     private bool _agedSplice, _hasPose, _settling, _endpoint;
+    private bool _holdFacingOnRelease;
     private long _ticket;
+    // Temporary opt-in headset trace. No callbacks installed during normal play.
+    internal Action<long, string>? TraceRetirement
+    {
+        get; set;
+    }
+    internal Action<long, string>? TraceWorkerEvent
+    {
+        get; set;
+    }
     public bool Reconcile
     {
         get; init;
@@ -130,6 +146,9 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         get; set;
     }
     private const double DecaySeconds = 0.2;
+    private readonly Transform3D[] _heldTurnPose = new Transform3D[data.Names.Length];
+    private bool _turnSuccessor;
+    private double _turnJoinSeconds;
     private readonly Quaternion[] _rotationOffsets = new Quaternion[data.Names.Length];
     private Vector3 _actorObserved, _rootVelocity, _positionOffset, _velocityOffset;
     private double _decayTime = DecaySeconds;
@@ -164,6 +183,10 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         _actorObserved = _actor.GlobalPosition;
         _haveObservation = true;
         _history.Record(_time, _observed);
+        if (_settling && _endpoint)
+        {
+            _settlingObservedFrame ??= Engine.GetPhysicsFrames();
+        }
         ObservedAt = _time;
     }
 
@@ -174,7 +197,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             bool roleChanged = ReviewedRoles.SetIntent(ReviewedRoleSampler.Classify(movement, turn, RoleDeadzone), _time, GenerationLookaheadSeconds);
             _inputChangedSinceSubmission = true;
             Vector2 direction = TerminalDirection(movement, turn);
-            bool retainTurn = !roleChanged && RetainsNearFullStationaryTurn(movement, turn);
+            bool retainTurn = !roleChanged && RetainsStationaryTurn(movement, turn);
             bool retire = !retainTurn && (roleChanged || movement == Vector2.Zero || _movement == Vector2.Zero ||
                 DirectionChange(direction, _submittedMovement) >= SharpChangeDegrees ||
                 DirectionChange(direction, _activeMovement) >= SharpChangeDegrees);
@@ -182,6 +205,14 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             {
                 SteeringYaw = 0;
             }
+            if (retire)
+            {
+                TraceRetirement?.Invoke(_ticket, movement == Vector2.Zero && turn == 0 ? "re-centre" :
+                    turn * _turn < 0 && movement == Vector2.Zero && _movement == Vector2.Zero ? "reversal" :
+                    roleChanged ? "role-change" : "incompatible-input");
+            }
+            // A turn's world hips include an actor-relative residual. It is still articulation during settling.
+            _holdFacingOnRelease = MetadataTurn is not null && movement == Vector2.Zero && turn == 0;
             _movement = movement;
             _turn = turn;
             _frame = frame;
@@ -208,18 +239,22 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         return false;
     }
 
-    private bool RetainsNearFullStationaryTurn(Vector2 movement, float turn) =>
+    private bool RetainsStationaryTurn(Vector2 movement, float turn) =>
         movement == Vector2.Zero && _movement == Vector2.Zero && !_settling &&
-        (RecordingPending || _segment is not null) && NearFullSameSign(_turn, turn) &&
-        (!RecordingPending || NearFullSameSign(SubmittedTurnIntent, turn)) &&
-        (_segment is null || NearFullSameSign(PlayedTurnIntent, turn));
+        SameTurnDirection(_turn, turn) &&
+        (!RecordingPending || SameTurnDirection(SubmittedTurnIntent, turn)) &&
+        (_segment is null || SameTurnDirection(PlayedTurnIntent, turn));
 
-    // Exact existing quantised bins only, including either sign. No angular-tolerance widening or ratcheting.
-    private static bool NearFullSameSign(float owned, float requested) => float.IsFinite(owned) && float.IsFinite(requested) &&
-        (Mathf.Abs(owned) is .95f or 1f) && (Mathf.Abs(requested) is .95f or 1f) && (owned > 0) == (requested > 0);
+    // Intensity is prospective. Releases and sign changes are different intents, not speed changes.
+    private static bool SameTurnDirection(float owned, float requested) => float.IsFinite(owned) && float.IsFinite(requested) &&
+        owned != 0 && requested != 0 && (owned > 0) == (requested > 0);
 
     private void RetireIntent()
     {
+        _replacingStop = _hasPose && (_settling || _replacingStop) && (_movement != Vector2.Zero || _turn != 0);
+        _destinationReady = false;
+        _waitingForMixer = null;
+        _settlingObservedFrame = null;
         MetadataTurn?.Retire();
         _worker?.CancelRequest();
         _segment = null;
@@ -311,17 +346,18 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         (Ground(desired.Origin - submitted.Origin).Length() >= TargetChangeMetres ||
          Mathf.RadToDeg(desired.Basis.Z.AngleTo(submitted.Basis.Z)) >= TargetChangeDegrees);
 
-    public void Advance(double delta, Vector2 movement, Basis frame, float turn = 0)
+    public void Advance(double delta, Vector2 movement, Basis frame, float turn = 0, bool sticksNeutral = true)
     {
         RecordingAdvanced = false;
-        if (MetadataTurn is { } turnState)
+        if (MetadataTurn is not null)
         {
-            turnState.Advance(delta, Math.Abs(_turn));
-            _ = turnState.TrackRoot(_actor.GlobalRotation.Y);
             if (RecordingPending && _segment is null && !Mathf.IsEqualApprox(_metadataPendingYaw, _actor.GlobalRotation.Y))
             {
                 // No other stationary owner may move the actor during native work. Replace from actual context.
+                TraceRetirement?.Invoke(_ticket, "root-drift");
                 RetireIntent();
+                // The displaced plan no longer owns this world anchor; restart the bout from the observed actor.
+                MetadataTurn = new MetadataStationaryTurn(MetadataTurn.Reference, _actor.GlobalRotation.Y);
                 RequestReason = "turn-context-root-drift";
             }
         }
@@ -341,6 +377,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
                 (DirectionChange(direction, _submittedMovement) >= SharpChangeDegrees ||
                  DirectionChange(direction, _activeMovement) >= SharpChangeDegrees))
             {
+                TraceRetirement?.Invoke(_ticket, "stale-movement-direction");
                 RetireIntent();
             }
             // Roll a due deadline BEFORE predicting: an update predicts the following cycle,
@@ -348,22 +385,34 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             _nextSnapshot = _time + SnapshotSeconds;
         }
         UpdateVirtualTarget();
-        if (_request && _history.SamplesRecorded >= 8)
+        if (_request && _settling && !_destinationReady)
+        {
+            _waitingForMixer ??= Engine.GetPhysicsFrames();
+            if (Engine.GetPhysicsFrames() > _waitingForMixer + 1)
+            {
+                throw new InvalidOperationException("The player animation tree did not supply a release destination.");
+            }
+        }
+        else if (_request && _history.SamplesRecorded >= 8)
         {
             _request = false;
             Submit(false);
         }
-        if (_endpoint && !RecordingPending)
+        if (_endpoint && !RecordingPending && (!_settling || (sticksNeutral && !_request && _settlingObservedFrame < Engine.GetPhysicsFrames())))
         {
             _endpoint = false;
             if (_settling)
             {
-                Phase = "settled-idle";
+                Phase = "tracked-idle";
+                _hasPose = false;
+                _heldLocalHips = Vector3.Zero;
+                _settlingObservedFrame = null;
+                _rig.Relinquish();
             }
             else
             {
                 RequestReason = "segment-end";
-                Submit(false);
+                Submit(false, turnSuccessor: MetadataTurn is not null && _metadataTurnTicket == LastAppliedRequest);
             }
         }
         if (snapshotDue)
@@ -397,6 +446,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             }
             RecordingPending = false;
             _endpoint = false;
+            _replacingStop = false;
             LastResponseSeconds = _time - _submittedAt;
             LastAppliedRequest = result.Request;
             PlayedTurnIntent = SubmittedTurnIntent;
@@ -407,6 +457,13 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             _playTime = _agedSplice ? _time - _contextAtSubmit : 0;
             var next = new Transform3D[SuppliedPose.Length];
             SomaMotionData.Sample(_segment, _playTime, next);
+            _turnJoinSeconds = _turnSuccessor ? Math.Min(DecaySeconds, (_segment.Length - 1) / 60.0) : 0;
+            if (_turnJoinSeconds > 0)
+            {
+                // Context is the realised pose. The downstream modifiers' continuous input,
+                // however, is the last supplied pose, not their output from the previous tick.
+                SuppliedPose.CopyTo(_heldTurnPose, 0);
+            }
             if (Reconcile && _agedSplice)
             {
                 var after = new Transform3D[SuppliedPose.Length];
@@ -438,7 +495,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
                 sampleTime = _playTime,
                 previous = _hasPose ? SuppliedPose.Select(Flatten).ToArray() : [],
                 next = next.Select(Flatten).ToArray(),
-                commandedRootDelta = Position(SomaMotionData.ModelToWorld * (Ground(next[0].Origin) - _lastGround)),
+                commandedRootDelta = Position(_settling ? Vector3.Zero : SomaMotionData.ModelToWorld * (Ground(next[0].Origin) - _lastGround)),
                 actorBefore = Position(_actor.GlobalPosition)
                 ,
                 reconciled = Reconcile && _agedSplice,
@@ -462,6 +519,19 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             RecordingAdvanced = true;
             SomaMotionData.Sample(_segment, _playTime, SuppliedPose);
             Array.Copy(SuppliedPose, RecordingRawPose, SuppliedPose.Length);
+            if (_playTime < _turnJoinSeconds)
+            {
+                float u = (float)(_playTime / _turnJoinSeconds);
+                float weight = u * u * (3 - (2 * u));
+                for (int j = 0; j < SuppliedPose.Length; j++)
+                {
+                    SuppliedPose[j] = SomaMotionData.Blend(_heldTurnPose[j], SuppliedPose[j], weight);
+                }
+                // Planar travel belongs to the actor, not the visual splice. Keep the
+                // sampled X/Z so the first delta starts at the realised submission root.
+                Vector3 sampledRoot = RecordingRawPose[0].Origin;
+                SuppliedPose[0].Origin = new Vector3(sampledRoot.X, SuppliedPose[0].Origin.Y, sampledRoot.Z);
+            }
             if (Reconcile && _decayTime < DecaySeconds)
             {
                 float u = (float)(_decayTime / DecaySeconds);
@@ -474,17 +544,36 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
                 }
             }
             Vector3 ground = Ground(SuppliedPose[0].Origin);
-            _ = _actor.MoveAndCollide(SomaMotionData.ModelToWorld * (ground - _lastGround));
+            if (_settling)
+            {
+                // The collider receives no generated travel during a stop. Interpret the returned
+                // hips in the tree request's frame; external movement carries that local pose.
+                _heldLocalHips = _settlingModelToSource * SuppliedPose[0].Origin;
+            }
+            else
+            {
+                // An interrupted stop leaves an actor-local reference, not a new travel
+                // demand. Keep it fixed through travel; the next stop replaces it absolutely.
+                _ = _actor.MoveAndCollide(SomaMotionData.ModelToWorld * (ground - _lastGround));
+            }
             _lastGround = ground;
-            Vector3 forward = (SomaMotionData.ModelToWorld * SuppliedPose[0].Basis).Z;
-            _actor.GlobalBasis = new Basis(Vector3.Up, Mathf.Atan2(-forward.X, -forward.Z));
+            if (MetadataTurn?.Owner is { } owner && _metadataTurnTicket == LastAppliedRequest)
+            {
+                // Apply the world pose unchanged below: NativeSomaRig factors this actor frame out of the hips.
+                _actor.GlobalBasis = new Basis(Vector3.Up, (float)owner.Playback.AtFrame(RecordingFrame, _segment.Length - 1));
+            }
+            else if (!_holdFacingOnRelease)
+            {
+                Vector3 forward = (SomaMotionData.ModelToWorld * SuppliedPose[0].Basis).Z;
+                _actor.GlobalBasis = new Basis(Vector3.Up, Mathf.Atan2(-forward.X, -forward.Z));
+            }
             if (_playTime >= (_segment.Length - 1) / 30.0)
             {
                 _segment = null;
                 _endpoint = true;
                 if (MetadataTurn is { } metadata && LastMetadataTurnRequest is { } completed && _metadataTurnTicket == LastAppliedRequest)
                 {
-                    _ = metadata.Complete(completed, _actor.GlobalRotation.Y);
+                    _ = metadata.Complete(completed);
                 }
                 PlaybackCompleted?.Invoke(LastAppliedRequest);
             }
@@ -492,7 +581,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         }
         if (_hasPose)
         {
-            _rig.Apply(SuppliedPose);
+            _rig.Apply(SuppliedPose, _heldLocalHips);
         }
         if (RecordingPending && _segment is null)
         {
@@ -517,16 +606,8 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             reviewedSourceStatus = ReviewedSourceStatus,
             metadataTurn = MetadataTurn is { } metadataState ? new
             {
-                metadataState.Phase,
-                metadataState.Floor,
                 metadataState.Cycle,
                 metadataState.EventIndex,
-                metadataState.PrimaryLiftCompletions,
-                metadataState.RecoveryCompletions,
-                metadataState.PassedPrimaryLifts,
-                metadataState.PassedRecoveries,
-                metadataState.DroppedCycles,
-                metadataState.PassedUnplayed,
                 metadataState.Epoch,
                 latestMagnitude = Math.Abs(_turn),
                 owner = metadataState.Owner,
@@ -545,7 +626,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
     }
 
     private double _contextAtSubmit;
-    private void Submit(bool agedSplice)
+    private void Submit(bool agedSplice, bool turnSuccessor = false)
     {
         bool reviewedRoleActive = ReviewedRoles.Role.Length > 0 && !_settling;
         if (_worker is null)
@@ -560,6 +641,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
                 }
                 catch { session.Dispose(); throw; }
             }, ReturnedObserved);
+            _worker.TraceWorkerEvent = TraceWorkerEvent;
         }
         Transform3D[][] context = _history.Context();
         bool moving = _movement != Vector2.Zero && !_settling;
@@ -574,9 +656,10 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         {
             if (MetadataTurn is { } metadata)
             {
-                LastMetadataTurnRequest = metadata.Select(Math.Abs(_turn), GenerationLookaheadSeconds, _actor.GlobalRotation.Y);
-                target = ReviewedRoles!.TurnTargets(LastMetadataTurnRequest, placement);
-                ReviewedSourceStatus = "source landmark cue debt; intended phase is not displayed foot phase";
+                LastMetadataTurnRequest = metadata.Select(Math.Abs(_turn));
+                target = ReviewedRoles!.FiniteTurnTargets(LastMetadataTurnRequest.Role, _time, LastMetadataTurnRequest.WindowStart,
+                    LastMetadataTurnRequest.LocalPhase, LastMetadataTurnRequest.CycleStart, LastMetadataTurnRequest.Scale, placement);
+                ReviewedSourceStatus = "primary lift on allocated cycle; intended phase is not displayed foot phase";
             }
             else
             {
@@ -598,15 +681,10 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         }
         else
         {
-            MotionCatalogue.Stage idle = _catalogue.Select(0);
-            Transform3D[][] clip = MotionCatalogue.Clip(_data, idle.Action);
-            Vector3 initial = Ground(clip[idle.Entry][0].Origin);
             target = new Transform3D[4][];
             for (int i = 0; i < 4; i++)
             {
-                target[i] = (Transform3D[])clip[idle.Entry + i].Clone();
-                Vector3 delta = target[i][0].Origin - initial;
-                target[i][0] = new Transform3D(yaw * target[i][0].Basis, placement + (yaw * delta));
+                target[i] = (Transform3D[])_treeDestination.Clone();
             }
         }
         if (!agedSplice)
@@ -614,14 +692,28 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
             _lastGround = Ground(context[3][0].Origin);
         }
         _agedSplice = agedSplice;
+        _turnSuccessor = turnSuccessor;
         _contextAtSubmit = ObservedAt;
-        _ticket = _worker.Submit(context, target);
+        Transform3D[]? presentationStart = null;
+        if (_hasPose && (_settling || _replacingStop))
+        {
+            presentationStart = (Transform3D[])SuppliedPose.Clone();
+            presentationStart[0] = _rig.PresentedRoot();
+            if (!_settling)
+            {
+                // Replacement root deltas start at realised context. The retained local
+                // stance already positions the skeleton; do not command it as frame-zero travel.
+                presentationStart[0].Origin = _lastGround + (Vector3.Up * presentationStart[0].Origin.Y);
+            }
+        }
+        _ticket = _worker.Submit(context, target, presentationStart);
         if (MetadataTurn is not null)
         {
             _metadataTurnTicket = _ticket;
             _metadataPendingYaw = _actor.GlobalRotation.Y;
         }
-        SubmittedTurnIntent = moving || _settling ? 0 : _turn;
+        SubmittedTurnIntent = MetadataTurn is not null && LastMetadataTurnRequest is { } turnOwner
+            ? Math.Sign(_turn) * (float)turnOwner.Magnitude : moving || _settling ? 0 : _turn;
         LastReviewedRequest = reviewedRoleActive ? ReviewedSelection : null;
         _inputChangedSinceSubmission = false;
         LastSubmittedTarget = target[0][0];
@@ -634,11 +726,19 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
     }
 
     public void Stop() => _worker?.Dispose();
+    internal void ReadTreeDestination()
+    {
+        if (_request && _settling && !_destinationReady)
+        {
+            _settlingModelToSource = _rig.ReadTreeDestination(_treeDestination);
+            _destinationReady = true;
+        }
+    }
     public void ApplyHeldPose()
     {
         if (_hasPose)
         {
-            _rig.Apply(SuppliedPose);
+            _rig.Apply(SuppliedPose, _heldLocalHips);
         }
     }
     private static Vector3 Ground(Vector3 v) => new(v.X, 0, v.Z);
@@ -651,11 +751,14 @@ internal sealed class WalkingGuideSession(SomaInferenceWorker.ISession inner,
     Action<Transform3D[][]> record, bool lineTargets = false, Action<object>? recordLine = null) : SomaInferenceWorker.ISession
 {
     private readonly WalkingGuidePlacement _placement = new(lineTargets, recordLine);
-    public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+    public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target) => inner.Generate(context, Adjust(context, target));
+    public Transform3D[][] GeneratePresented(Transform3D[][] context, Transform3D[][] target, Transform3D[] start)
+        => inner.GeneratePresented(context, Adjust(context, target), start);
+    private Transform3D[][] Adjust(Transform3D[][] context, Transform3D[][] target)
     {
         Transform3D[][] adjusted = _placement.Adjust(context, target);
         record(adjusted);
-        return inner.Generate(context, adjusted);
+        return adjusted;
     }
     public void Dispose() => inner.Dispose();
 }

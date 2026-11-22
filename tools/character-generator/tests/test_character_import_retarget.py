@@ -22,7 +22,7 @@ CHARACTER_GENERATOR_ROOT = repository_root() / "tools" / "character-generator"
 sys.path.insert(0, str(CHARACTER_GENERATOR_ROOT))
 
 from character_generator import character_import_retarget as retarget_check
-from character_generator.update_character_import_retarget_metadata import BONE_MAP_RESOURCE, SILHOUETTE_FILTER
+from character_generator.update_character_import_retarget_metadata import BONE_MAP_RESOURCE
 
 
 HEALTHY_MAIN_IMPORT = f"""[params]
@@ -37,9 +37,11 @@ _subresources={{
 }},
 "nodes": {{
 "PATH:Female/Skeleton3D": {{
+"rest_pose/load_pose": 1,
+"rest_pose/selected_animation": "AuthoredT",
+"rest_pose/selected_timestamp": 0.5,
 "retarget/bone_map": {BONE_MAP_RESOURCE},
-"retarget/rest_fixer/fix_silhouette/enable": true,
-"retarget/rest_fixer/fix_silhouette/filter": {SILHOUETTE_FILTER}
+"retarget/rest_fixer/fix_silhouette/enable": false
 }}
 }}
 }}
@@ -53,8 +55,10 @@ _subresources={{
 "nodes": {{
 "PATH:Ragdoll/Skeleton3D": {{
 "retarget/bone_map": {BONE_MAP_RESOURCE},
-"retarget/rest_fixer/fix_silhouette/enable": true,
-"retarget/rest_fixer/fix_silhouette/filter": {SILHOUETTE_FILTER}
+"retarget/rest_fixer/fix_silhouette/enable": false,
+"rest_pose/load_pose": 1,
+"rest_pose/selected_animation": "AuthoredT",
+"rest_pose/selected_timestamp": 0.5
 }}
 }}
 }}
@@ -176,7 +180,15 @@ _subresources={
         self.assertEqual(1, len(errors))
         self.assertIn('"PATH:Ayana/Skeleton3D"', errors[0])
         self.assertIn("retarget/rest_fixer/fix_silhouette/enable", errors[0])
-        self.assertIn("retarget/rest_fixer/fix_silhouette/filter", errors[0])
+        self.assertIn("rest_pose/selected_animation", errors[0])
+
+    def test_main_rejects_wrong_action_and_stale_filter(self) -> None:
+        invalid = HEALTHY_MAIN_IMPORT.replace('"AuthoredT"', '"Other"').replace(
+            '"retarget/bone_map"', '"retarget/rest_fixer/fix_silhouette/filter": [],\n"retarget/bone_map"'
+        )
+        error, = retarget_check.main_sidecar_errors(invalid)
+        self.assertIn("rest_pose/selected_animation", error)
+        self.assertIn("unexpected retarget/rest_fixer/fix_silhouette/filter", error)
 
     def test_collider_skeleton_entry_missing_rest_fixer_keys_fails(self) -> None:
         partial_collider_import = """[params]
@@ -193,7 +205,7 @@ _subresources={
 
         self.assertEqual(1, len(errors))
         self.assertIn('"PATH:Ragdoll/Skeleton3D"', errors[0])
-        self.assertIn("retarget/rest_fixer/fix_silhouette/filter", errors[0])
+        self.assertIn("rest_pose/selected_timestamp", errors[0])
 
     def test_collider_sidecar_without_subresources_reports_parse_failure(self) -> None:
         errors = retarget_check.collider_sidecar_errors("[params]\n")

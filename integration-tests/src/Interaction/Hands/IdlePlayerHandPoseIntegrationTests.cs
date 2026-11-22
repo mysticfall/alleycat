@@ -20,7 +20,7 @@ namespace AlleyCat.IntegrationTests.Interaction.Hands;
 /// </summary>
 public sealed class IdlePlayerHandPoseIntegrationTests
 {
-    private const string PlayerTemplatePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
+    private const string PlayerTemplatePath = "res://assets/characters/reference/ally_player.tscn";
     private const string MockRuntimeScenePath = "res://assets/xr/mock_runtime.tscn";
     private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
 
@@ -64,12 +64,12 @@ public sealed class IdlePlayerHandPoseIntegrationTests
         xrManager.SetRuntime(runtime);
         Node player = LoadPackedScene(PlayerTemplatePath).Instantiate();
         root.AddChild(player);
-        EnsureCharacterRuntimeInstalled(player);
 
         sceneTree.NodeAdded += BindNativeFreeSession;
         try
         {
             sceneTree.Root.AddChild(root);
+            await WaitForFramesAsync(sceneTree, 2);
         }
         finally
         {
@@ -78,9 +78,8 @@ public sealed class IdlePlayerHandPoseIntegrationTests
 
         try
         {
-            await WaitForFramesAsync(sceneTree, 2);
             Assert.True(player.GetNode<PlayerVRIK>("VRIK").BindToXRServices(), "Expected the player VRIK to bind to the mock runtime.");
-            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             var capture = OpticalFingerTrackingModifierIntegrationTests.SkeletonPoseCapture.Attach(skeleton);
             PlayerMotionBricks motion = player.GetNode<PlayerMotionBricks>("MotionBricks");
             HandPoseBehaviour rightHand = player.GetNode<HandPoseBehaviour>("Hands/RightHand");

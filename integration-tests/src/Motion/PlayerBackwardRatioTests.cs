@@ -63,7 +63,17 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 Assert.Equal("settling-requested", fixture.Motion.Phase);
                 Assert.Null(driver.VirtualTarget);
                 await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 240);
-                Assert.Equal("settled-idle", fixture.Motion.Phase);
+                Assert.True(fixture.Motion.Phase == "tracked-idle", $"phase={fixture.Motion.Phase}, failure={fixture.Motion.Failure}, requests={driver.Requests}, applied={driver.LastAppliedRequest}, samples={fixture.Motion.SamplesRecorded}, pending={driver.RecordingPending}, factory={driver.SessionFactory is not null}");
+                RetargetModifier3D native = fixture.Skeleton.GetParent<RetargetModifier3D>();
+                Assert.False(native.Active);
+                fixture.Left.TriggerActionVector2InputChanged("primary", new Vector2(0, .5f));
+                Assert.False(native.Active); // A request is not a generated pose.
+                await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 30);
+                Assert.True(native.Active);
+                fixture.Left.TriggerActionVector2InputChanged("primary", Vector2.Zero);
+                await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 240);
+                Assert.False(native.Active);
+                Assert.Equal("tracked-idle", fixture.Motion.Phase);
             }
         }
     }

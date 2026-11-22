@@ -27,7 +27,7 @@ public sealed class SomaMotionData
         get;
     }
     /// <inheritdoc/>
-    public JsonElement Calibration
+    internal JsonElement Manifest
     {
         get;
     }
@@ -45,11 +45,11 @@ public sealed class SomaMotionData
     public SomaMotionData(string path)
     {
         using var document = JsonDocument.Parse(File.ReadAllText(path));
-        Calibration = document.RootElement.Clone();
-        Names = Calibration.GetProperty("names").Deserialize<string[]>()!;
-        Parents = Calibration.GetProperty("parents").Deserialize<int[]>()!;
-        Rest = ReadPose(Calibration.GetProperty("rest"));
-        BlenderRest = [.. Calibration.GetProperty("blenderRest").EnumerateArray().Select(ReadMatrix)];
+        Manifest = document.RootElement.Clone();
+        Names = Manifest.GetProperty("names").Deserialize<string[]>()!;
+        Parents = Manifest.GetProperty("parents").Deserialize<int[]>()!;
+        Rest = ReadPose(Manifest.GetProperty("rest"));
+        BlenderRest = [.. Manifest.GetProperty("blenderRest").EnumerateArray().Select(ReadMatrix)];
         Idle = ReadClip("idle");
         if (Names[0] != "Hips" || Parents[0] != -1 || Idle.Length < 4)
         {
@@ -57,7 +57,7 @@ public sealed class SomaMotionData
         }
     }
 
-    internal Transform3D[][] ReadClip(string name) => [.. Calibration.GetProperty("clips").GetProperty(name)
+    internal Transform3D[][] ReadClip(string name) => [.. Manifest.GetProperty("clips").GetProperty(name)
         .GetProperty("frames").EnumerateArray().Select(ReadPose)];
 
     private static Transform3D[] ReadPose(JsonElement rows) => [.. rows.EnumerateArray().Select(row =>

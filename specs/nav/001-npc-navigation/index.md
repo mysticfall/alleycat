@@ -56,7 +56,9 @@ preserving a parallel clip-planning implementation or disguising model limitatio
     with the selected posture.
    Once positioning is reached, an unchanged terminal-facing request uses a finite source-cycle/landmark turn plan.
    Preserve its ordered stepping cues through playback, then finish the requested facing and settle into compatible
-   idle; ordinary lookahead/handoffs must not skip cues or create endless small adjustments. Replacement, cancellation,
+   idle. A large turn should read as one large turn followed by any smaller remainder, without sustained
+   rotation against the commanded direction or reversal of actor facing from generated hip motion.
+   Ordinary lookahead/handoffs must not skip cues or create endless small adjustments. Replacement, cancellation,
    collision and genuine motion-provider failure remain truthful interruption boundaries, not promises to finish.
 8. Automatically record ordinary play in the existing navigation test scene, with no additional recording switch.
    Let the user mark a bad scenario, save feedback while continuing play, and share the folder for recorded-state
@@ -85,8 +87,9 @@ preserving a parallel clip-planning implementation or disguising model limitatio
    Normal installation loads `reviewed-feminine/set.json`, shared with CTRL and bound wholly to the current
    `landing-ablation-01.json` source. No source/controller activation flag or prototype movement fallback is required.
 4. Demonstrate generated walk-to-idle on the actual MakeHuman rig with realised-pose feedback before expanding route
-   integration. Prefer native Godot retargeting only if installed capabilities and actual-rig evidence support it.
-   Bone-name correspondence alone is insufficient.
+   integration. The NPC presents generated motion through native retargeting with digits mapped and feeds back the
+   final target pose under [ANIM TR4–5](../../animation/index.md#technical-requirements). Bone-name correspondence
+   alone is insufficient.
 
 ### Navigation and Motion Ownership
 
@@ -105,7 +108,9 @@ preserving a parallel clip-planning implementation or disguising model limitatio
     current progress, selected variant/stage physical metadata, requested normalised speed and horizon. It does not
     construct a replacement route, custom turn arc or off-path guide. Destination facing remains game-owned intent;
     source role selection does not replace native path authority or require every turn before translation.
-    Realise generated root motion through Godot's `MoveAndCollide` using the actor's actual root collider.
+    Realise generated root motion through Godot's `MoveAndCollide` using the actor's actual root collider, following
+    the [ANIM TR4 root and scale rule](../../animation/index.md#technical-requirements) for once-applied planar
+    demand, game-owned yaw and source-hips travel removal.
     Feed actual realised motion back into generation; do not silently teleport the actor into endpoint agreement.
      `MotionBricksNavigation` is the single collision-root movement owner. Targets follow native path order through
      corners and vias, without obstacle shortcuts or requiring every target window to fit one straight segment.
@@ -132,8 +137,10 @@ The following clauses refine TR5–8 and are covered by NAV-TAC-002:
 
 - `Completed` with `ArrivalSequenceCompleted` means the generated arrival sequence ended, not that the destination
   converged. Record the measured transform, position/facing errors, configured tolerances and signed margins as
-  diagnostics. Facing comes from the realised root/hips orientation, not an unchanged actor-node basis. Commit this
-  outcome before ordinary idle playback. Preserve convergence-based `TryComplete` semantics for other consumers.
+  diagnostics. For stationary-turn facing, measure actual actor yaw under the [shared actor-facing rule][turn-facing],
+  not planned yaw as a proxy for observation. Otherwise, facing comes from realised root/hips orientation, not an
+  unchanged actor-node basis. Commit the outcome before ordinary idle playback. Preserve convergence-based
+  `TryComplete` semantics for other consumers.
 - Setup/inference unavailability logs and retains its cause, fails accepted requests with `MotionUnavailable`, and
   preserves that cause on subsequent requests. Retain the last safe pose under normal scheduling, including pose-input
   reapplication where modifier output is transient. No generated idle, authored-idle reset or elaborate blend/retry is
@@ -230,20 +237,17 @@ The following clauses refine TR14 and UR7; NAV owns this policy, not CTRL's joys
 #### Finite Terminal-Facing Turn Plan
 
 These clauses refine UR2/5/7 and TR14 only after position is reached and terminal facing still requires a stationary
-turn. They do not require turn-first departure, change native routing, or replace CTRL's stationary-turn policy.
+turn. They do not require turn-first departure or change native routing. Use the normative ANIM-002
+[stationary-turn angular mapping][turn-mapping] shared with CTRL-001, including its [actor-facing rule][turn-facing]:
+the game sets actor facing from planned cycle yaw, independently of generated articulation.
 
-- **Finite Angular Allocation:** bind the unchanged request, actual starting orientation, signed remaining arc,
-  selected source and its measured signed cycle span/ordered primary foot landmarks. Allocate cycles greedily up to
-  an initial maximum of 120 degrees per cycle, then the remainder: 180 degrees becomes 120+60, not repeated receding
-  lookahead targets. This approved initial policy is not a universal naturalness bound; no minimum cycle angle,
-  expansion-ratio or rate-quality limit is introduced. Do not add CTRL's recovery landmarks to this NAV policy.
-- **Source-Angle Mapping:** expand or contract each cycle's root-yaw progression by allocated signed angle divided
-  by measured signed source span, anchored at that cycle's planned start facing. Use actual source angular progress
-  at each landmark, not source-time fraction as angular fraction. Thus two primary lifts per source cycle yield four
-  ordered lift targets over a 120+60 plan. Preserve local holds/micro-reversals, source coordinates, chronological
-  order and declared cycle-boundary transforms; do not invert yaw as a clock or turn backwards to catch up to a
-  skipped forward cue. Each connection supplies four consecutive original 30 Hz source poses with unchanged non-root
-  articulation and consistently mapped local root yaw, not four widely spaced interior keyframes or source replay.
+[turn-mapping]: ../../animation/002-locomotive-animation-set/index.md#stationary-turn-angular-mapping
+[turn-facing]: ../../animation/002-locomotive-animation-set/index.md#actor-facing-during-stationary-turns
+
+- **Finite Angular Allocation:** bind the unchanged request, actual starting orientation, signed remaining arc and
+  selected source. Allocate the remaining arc greedily up to the shared per-cycle maximum, then allocate the
+  remainder: 180 degrees becomes 120+60, not repeated receding lookahead targets. Do not impose a minimum cycle
+  angle. Two primary lifts per source cycle yield four ordered lift targets over that example.
 - **Endpoint Service and Ownership:** keep planned source phase/landmark cursor separate from elapsed observation
   time, context horizon and variable generated duration. Source phase is an ordered plan coordinate, not a clock
   advanced by model output length. Each planned primary landmark must be the first guide and reach its actually
@@ -253,14 +257,14 @@ turn. They do not require turn-first departure, change native routing, or replac
   never a sampled source pose or unplayed prediction. Endpoint service proves playback, not lift, support or contact.
 - **Finite Finish:** after the last primary lift, complete the remaining mapped cycle angle and connect from actual
   context to a compatible external idle target at the requested final position/facing, rather than stopping with a
-  raised-foot target. This is a finite end sequence, not a new idle system or mandatory four-recovery controller.
+  raised-foot target. This is a finite end sequence, not a new idle system.
   The existing reached-position contract/configured tolerance admits this end sequence; the turn source's incidental
   translation distance must not re-gate final arrival or restart small-turn/cue-catch-up loops. Completion remains
   sequence completion independent of convergence, with realised errors reported, not a new threshold or repair.
 - **Safety and Feasibility:** replacement/cancellation invalidate the plan and stale results immediately; actual
   collision or genuine provider failure interrupts truthfully under TR5–8. Preserve native path authority, the
   request-local lockout fix, worker lifetime, generated-root `MoveAndCollide`, rig modifiers and endpoint handling.
-  No procedural actor rotation, output repair, foot IK, artificial fixed pace or unbounded debt/recovery planner is
+  No corrective actor rotation, output repair, foot IK, forced generated duration or unbounded debt/recovery planner is
   permitted. Correct mapping, context, supplied cues, untruncated playback and rig fidelity make poor motion evidence
   about source suitability for this angular mapping and/or the MotionBricks connector, not proof of either's sole
   fault. Reached landmarks alone do not guarantee coordinated stepping, acceptable pace or non-sliding settled arrival.
@@ -321,8 +325,10 @@ player readiness. A broken NPC playtest is not a delivered prototype.
    motion and compatible external idle. Do not require every short diagonal to cross, every rear move to turn,
     displayed-foot matching, fixed step counts or mandatory transition clips.
    For the finite terminal-facing plan, inspect the complete fixed-request turn and settled arrival on the actual rig,
-   including inference holds and every planned primary cue. The user judges coordinated stepping, acceptable pace and
-   non-sliding arrival; target/endpoint agreement and synthetic service checks do not close those outcomes.
+   including inference holds and every planned primary cue. Check a 180-degree request reads as one large turn plus
+   a smaller finish, without sustained counter-rotation or hip-driven reversal of actor facing. The user judges
+   coordinated stepping, acceptable pace and non-sliding arrival; endpoint agreement and synthetic service checks
+   do not close those outcomes.
 5. **NAV-UAC-005 (UR8):** In the existing scene, recording starts without an extra switch; the user can identify an
    attempt (including a refusal or visually bad completed request), bookmark it, save a readable session while play
    continues, and share its folder for focused investigation and manual repetition. Path, identity, save progress and
@@ -331,8 +337,9 @@ player readiness. A broken NPC playtest is not a delivered prototype.
 ### Technical Requirement Acceptance
 
 1. **NAV-TAC-001 (TR1–4):** A representative in-process NVIDIA execution and actual MakeHuman walk-to-idle run prove
-   the selected runtime, required helpers, retargeting, and realised SOMA feedback against the shared animation
-    contract. Verify the globalised exported default and non-blank override precedence, and record representative
+   the selected runtime, required helpers, native retargeting with mapped digits, and final-target realised SOMA
+    feedback against the shared animation contract, including ANIM-TAC-002's blocked-step and perturbation check.
+    Verify the globalised exported default and non-blank override precedence, and record representative
      loading/generation without `MOTIONBRICKS_MODEL` or `LD_PRELOAD` on the supported host.
    Normal scene installation without source activation variables binds all eight roles and angular metadata to the
    same source as CTRL; missing/inconsistent content is an explicit failure, not fallback motion.
@@ -369,10 +376,14 @@ player readiness. A broken NPC playtest is not a delivered prototype.
    switches, arrival/failure/cancellation handoffs and compatible overlaps. Trace intended phase separately from
     actual context and generated duration; stale results cannot restore old route/state. Preserve native path order,
     collision-realised feedback, finite outcomes and safe native shutdown under the dynamic source controller.
-   For finite terminal-facing plans, verify 180→120+60 allocation, source-bound angular mapping at both primary lifts
-   of each cycle, consecutive four-pose windows and retained local reversals/boundaries. Verify immutable fixed-request
-   authority, actual-context provenance and every first-guide endpoint actually played before ordinary handoff, not
-   merely submitted/generated. Check final-angle/compatible-idle completion without source-translation gating or
+   For finite terminal-facing plans, verify 180→120+60 allocation and the same mapping component as CTRL under
+   ANIM-002-TAC-001–002. Check scale, angular placement at both primary lifts, consecutive four-pose windows and
+   retained local reversals/boundaries. Verify unchanged source timing and compare displayed cycle durations with the
+   source, including inference holds and ordinary handoffs. Apply ANIM-002-TAC-002's per-tick planned-yaw check,
+   including hip independence, once-applied yaw, unchanged endpoint and actual post-modifier worker context.
+   Verify immutable fixed-request authority, actual-context provenance and that every first-guide endpoint actually
+   plays before ordinary handoff, rather than just being submitted/generated. Check final-angle/compatible-idle
+   completion without source-translation gating or
    repeated small-turn loops, plus replacement/cancellation, stale rejection and truthful collision/provider failure.
    Keep planned phase/service separate from elapsed time and native duration. Synthetic checks establish technical
    mechanics only; NAV-UAC-004's full actual-rig turn/settled window remains mandatory.
@@ -390,6 +401,8 @@ terminal-facing plan above. Both primary lifts are source-angle mapped per alloc
 the next planned submission; fresh post-`SkeletonUpdated` context precedes one finite external-idle arrival connection.
 Request-local overrun/lockout handling, stale-result rejection, provider-failure retention, generated-root
 `MoveAndCollide` and worker disposal remain required. The automatic scene recorder remains part of normal play.
+Planned-yaw facing during stationary turns is in progress. Migration to TR4 native presentation and final-target
+feedback is in progress and not yet verified.
 
 The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records shared
 source identity/normal installation, finite cue service, route replacement/cancellation, actual-context/handoff and

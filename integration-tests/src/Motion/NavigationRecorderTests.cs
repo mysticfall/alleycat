@@ -33,6 +33,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         Node scene = GD.Load<PackedScene>(NavigationPlaytestRecorder.PlaytestScene).Instantiate();
         AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
         actor.Position = new(-2, 0, -2); // Normal-composition test placement, before Ready only.
+        // Capture the authored target before tree entry; the role reparents this same object on entry.
         Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
         Camera3D camera = scene.GetNode<Camera3D>("Camera3D");
         NavigationPlaytestRecorder recorder = scene.GetNode<NavigationPlaytestRecorder>("SessionRecorder");

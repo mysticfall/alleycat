@@ -50,11 +50,11 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.True(cancelled >= 2);
             fixture.Right.TriggerActionVector2InputChanged("primary", Vector2.Zero);
             session.Continue.Set();
-            for (int i = 0; i < 120 && motion.Phase != "settled-idle"; i++)
+            for (int i = 0; i < 120 && motion.Phase != "tracked-idle"; i++)
             {
                 await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 1);
             }
-            Assert.Equal("settled-idle", motion.Phase);
+            Assert.Equal("tracked-idle", motion.Phase);
             await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 3); // Retain an actual post-settlement observation, not a quality window.
             Assert.Equal("", motion.Failure);
             path = motion.InputPoseTracePath;

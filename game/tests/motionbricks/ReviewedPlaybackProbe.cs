@@ -16,7 +16,7 @@ public partial class ReviewedPlaybackProbe : Node
     private SomaMotionData? _data;
     private ReviewedMotionSource? _source;
     private ReviewedMotionSource.Role? _role;
-    private CalibratedSomaRig? _observer;
+    private NativeSomaRig? _observer;
     private readonly SourcePhaseClock _clock = new();
     private SourcePhaseClock.Selection? _selection;
     private readonly List<object> _samples = [], _requests = [], _events = [];
@@ -88,11 +88,11 @@ public partial class ReviewedPlaybackProbe : Node
     {
         _actor = (CharacterBody3D)actor;
         _nav = (MotionBricksNavigation)((Character.Character)actor).Navigation!;
-        _skeleton = actor.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
+        _skeleton = actor.RequireNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
         _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
         _source = new ReviewedMotionSource(ProjectSettings.GlobalizePath(
             "res://temp/motionbricks/source-pipeline-05/reviewed-ingestion-01/reviewed-source.json"), _data);
-        _observer = new CalibratedSomaRig(_data, _skeleton);
+        _observer = new NativeSomaRig(_data, _skeleton);
         _observed = new Transform3D[_data.Names.Length];
         _window = new Transform3D[_data.Names.Length * 4];
         _began = Time;

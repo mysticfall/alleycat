@@ -1,3 +1,4 @@
+using AlleyCat.Motion;
 using Godot;
 
 namespace AlleyCat.Navigation;
@@ -8,6 +9,7 @@ public partial class MotionBricksNavigation
     private long _finiteTicket, _finiteRouteRevision, _finiteRevision;
     private bool _finiteAwaitingObservation;
     private object? _finiteRequest;
+    private AngularTurnInterval _finitePlayback;
 
     internal object? TerminalTurnSnapshot
     {
@@ -70,6 +72,7 @@ public partial class MotionBricksNavigation
             throw new NavigationRefusalException("Finite terminal turn lost its native route ownership.");
         }
         RefreshRoleDecision(context); // Fresh measured diagnostics; the finite owner keeps its admitted role/cue plan.
+        _finitePlayback = plan.Playback(_reviewed!.TurnReference(plan.Role));
         if (plan.FinishedCues)
         {
             // The reached-position contract admitted this finite sequence; no source-translation-radius re-gate.

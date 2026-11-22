@@ -24,6 +24,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
         Assert.False(actor.IsInsideTree());
         actor.Position = new Vector3(-1.6f, 0, 2.5f); // Initial setup only; no writes after scene attachment.
+        // Capture the authored target before tree entry; the role reparents this same object on entry.
         Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
         MotionBricksNavigation? nav = null;
         var clock = Stopwatch.StartNew();

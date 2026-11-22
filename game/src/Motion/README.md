@@ -12,7 +12,7 @@ stationary-turn roles come from `ReviewedRoleSampler`, not fixed prototype walk 
 - `SomaMotionData`/`SomaModelFrames`: canonical poses/calibration and source-authoritative BONES frame conversion.
 - `SomaInference`: C# adaptation of NVIDIA MotionBricks `model/soma/kernels.py`, conditioning masks in
   `model/kernels.py` and endpoint transforms in `utils/pose_utils.py`.
-- `CalibratedSomaRig`: calibrated presentation-frame forward mapping and explicitly approximate inverse.
+- `NativeSomaRig`: absolute canonical source writer and post-modifier target readback.
 - `RealisedPoseHistory`: four 30 Hz context samples from displayed post-modifier observations.
 - `SomaInferenceWorker`: bounded latest-request ownership with Game-owned shutdown.
 

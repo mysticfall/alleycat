@@ -43,6 +43,7 @@ angle = 0.4886922
 angle = 0.55850536
 
 [node name="Male" unique_id=504240789 node_paths=PackedStringArray("Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
+MotionModel = "Male"
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")

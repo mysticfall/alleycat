@@ -4,11 +4,7 @@ extends RefCounted
 const BODY_COLLIDER_PROFILE_SCRIPT_PATH := "res://src/Rigging/Physics/BodyColliderProfile.cs"
 const BODY_COLLIDER_PROFILE_PATH := "body_collider_profile.tres"
 const COLLIDER_RETARGET_SKELETON_PATH := "PATH:Ragdoll/Skeleton3D"
-const REQUIRED_RETARGET_KEYS := [
-	"retarget/bone_map",
-	"retarget/rest_fixer/fix_silhouette/enable",
-	"retarget/rest_fixer/fix_silhouette/filter",
-]
+const BONE_MAP_PATH := "res://assets/characters/reference/skeleton_profiles/bone_map_makehuman.tres"
 
 
 func apply(source_file_path: String) -> void:
@@ -74,85 +70,21 @@ func _derive_profile_path(source_file_path: String) -> String:
 
 
 func _has_required_retarget_metadata(sidecar_path: String) -> bool:
-	var sidecar_text := FileAccess.get_file_as_string(sidecar_path)
-	var subresources_block := _find_subresources_block(sidecar_text)
-	if subresources_block.is_empty():
+	var config := ConfigFile.new()
+	if config.load(sidecar_path) != OK:
 		return false
-
-	var subresources_text := _block_text(sidecar_text, subresources_block)
-	var nodes_block := _find_keyed_dictionary_block(subresources_text, "nodes")
-	if nodes_block.is_empty():
-		return false
-
-	var nodes_text := _block_text(subresources_text, nodes_block)
-	var skeleton_block := _find_keyed_dictionary_block(nodes_text, COLLIDER_RETARGET_SKELETON_PATH)
-	if skeleton_block.is_empty():
-		return false
-
-	var skeleton_text := _block_text(nodes_text, skeleton_block)
-	for retarget_key in REQUIRED_RETARGET_KEYS:
-		if not skeleton_text.contains("\"%s\":" % retarget_key):
-			return false
-	return true
-
-
-func _find_subresources_block(text: String) -> Dictionary:
-	var key_index := text.find("_subresources=")
-	if key_index < 0:
-		return {}
-	var cursor := key_index + "_subresources=".length()
-	while cursor < text.length() and (text[cursor] == " " or text[cursor] == "\t"):
-		cursor += 1
-	if cursor >= text.length() or text[cursor] != "{":
-		return {}
-	var block_end := _find_balanced_block_end(text, cursor)
-	if block_end < 0:
-		return {}
-	return {"start": cursor, "end": block_end}
-
-
-func _find_keyed_dictionary_block(text: String, key: String) -> Dictionary:
-	var needle := "\"%s\":" % key
-	var key_index := text.find(needle)
-	if key_index < 0:
-		return {}
-	var open_brace_index := text.find("{", key_index + needle.length())
-	if open_brace_index < 0:
-		return {}
-	var block_end := _find_balanced_block_end(text, open_brace_index)
-	if block_end < 0:
-		return {}
-	return {"start": key_index, "end": block_end}
-
-
-func _find_balanced_block_end(text: String, open_brace_index: int) -> int:
-	var depth := 0
-	var in_string := false
-	var escaped := false
-	for index in range(open_brace_index, text.length()):
-		var character := text[index]
-		if in_string:
-			if escaped:
-				escaped = false
-			elif character == "\\":
-				escaped = true
-			elif character == "\"":
-				in_string = false
-			continue
-
-		if character == "\"":
-			in_string = true
-		elif character == "{":
-			depth += 1
-		elif character == "}":
-			depth -= 1
-			if depth == 0:
-				return index + 1
-	return -1
-
-
-func _block_text(text: String, block: Dictionary) -> String:
-	return text.substr(block["start"], block["end"] - block["start"])
+	var subresources: Dictionary = config.get_value("params", "_subresources", {})
+	var nodes: Dictionary = subresources.get("nodes", {})
+	var settings: Dictionary = nodes.get(COLLIDER_RETARGET_SKELETON_PATH, {})
+	var bone_map := settings.get("retarget/bone_map") as BoneMap
+	return (
+		bone_map != null and bone_map.resource_path == BONE_MAP_PATH
+		and settings.get("rest_pose/load_pose") == 1
+		and settings.get("rest_pose/selected_animation") == "AuthoredT"
+		and settings.get("rest_pose/selected_timestamp") == 0.5
+		and settings.get("retarget/rest_fixer/fix_silhouette/enable") == false
+		and not settings.has("retarget/rest_fixer/fix_silhouette/filter")
+	)
 
 
 func _save_collider_wrapper(collider_scene_path: String, wrapper_path: String) -> bool:

@@ -769,17 +769,21 @@ public sealed class OpticalGrabIntegrationTests
             fixture.Ball.GlobalPosition = new Vector3(10.0f, 10.0f, 10.0f);
             fixture.Stick.GlobalTransform = new Transform3D(fixture.Stick.GlobalTransform.Basis, _stickPendingGatePosition);
             fixture.Stick.ForceUpdateTransform();
-            SetExactOpticalWristWorld(
-                fixture.Runtime,
-                LimbSide.Right,
-                new Transform3D(Basis.Identity, _rightWristStickPendingGate));
+            var raisedWrist = new Transform3D(Basis.Identity, _rightWristStickPendingGate);
             InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, calibration.OpenFlex);
-            await WaitForPhysicsFramesAsync(sceneTree, 65);
+            // The input is a stationary world-space wrist, but the mock stores origin-space
+            // samples. Keep that same authored input through XR origin reconciliation.
+            for (int tick = 0; tick < 65; tick++)
+            {
+                SetExactOpticalWristWorld(fixture.Runtime, LimbSide.Right, raisedWrist);
+                await WaitForPhysicsFramesAsync(sceneTree, 1);
+            }
 
             GrabPointCandidate candidate = ((IGrabbable)fixture.Stick).GetGrabPoint(
                 LimbSide.Right,
                 fixture.RightHand.HandTargetNode?.GlobalTransform ?? Transform3D.Identity)
-                ?? throw new Xunit.Sdk.XunitException("Expected the raised fixture stick to remain reachable.");
+                ?? throw new Xunit.Sdk.XunitException($"Expected the raised fixture stick to remain reachable. " +
+                    $"Wrist={raisedWrist}; target={fixture.RightHand.HandTargetNode?.GlobalTransform}; stick={fixture.Stick.GlobalTransform}");
             Transform3D expectedAttachment = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
             Node itemsHolder = fixture.Stick.GetParent() ?? throw new InvalidOperationException("Stick has no initial items parent.");
             Transform3D stationaryStick = fixture.Stick.GlobalTransform;

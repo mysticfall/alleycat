@@ -148,18 +148,18 @@ public sealed class ReviewedRoleSampler
         return target;
     }
 
-    // Loaded only by the explicitly opted-in CTRL trial; NAV/default sampling never reads this metadata.
     internal string RoleSourceSHA256(string role) => _roles[role].SHA256;
 
     internal Transform3D[][] FiniteTurnTargets(string role, double now, int virtualFrame, int localPhase, double cycleStart, double scale, Vector3 ground)
     {
         _ = SetIntent(role, now);
+        _explicitTurnSelection = true;
         Content c = _active!;
         StationaryTurnReference reference = TurnReference(role);
         c.Source.CopyCycleWindow(c.Cycle, virtualFrame, _window);
         Transform3D root = _window[0];
         float rawYaw = Mathf.Atan2(root.Basis.Z.X, root.Basis.Z.Z);
-        double firstYaw = cycleStart + (reference.Sign * scale * reference.Angle(localPhase));
+        double firstYaw = AngularTurnCycle.MapYaw(reference, cycleStart, scale, localPhase);
         Basis placement = new(Vector3.Up, (float)firstYaw - rawYaw);
         var target = new Transform3D[4][];
         for (int i = 0; i < 4; i++)
@@ -168,7 +168,7 @@ public sealed class ReviewedRoleSampler
             Transform3D sample = target[i][0];
             Vector3 delta = sample.Origin - root.Origin;
             delta.Y = sample.Origin.Y;
-            double yaw = cycleStart + (reference.Sign * scale * reference.Angle(localPhase + i));
+            double yaw = AngularTurnCycle.MapYaw(reference, cycleStart, scale, localPhase + i);
             float sampleYaw = Mathf.Atan2(sample.Basis.Z.X, sample.Basis.Z.Z);
             target[i][0] = new(new Basis(Vector3.Up, (float)yaw - sampleYaw) * sample.Basis, ground + (placement * delta));
         }
@@ -202,41 +202,6 @@ public sealed class ReviewedRoleSampler
         return _turnReferences[role];
     }
 
-    /// <summary>CTRL trial explicit consecutive window; does not change the shared elapsed clock policy.</summary>
-    internal Transform3D[][] TurnTargets(Control.MetadataStationaryTurn.Snapshot snapshot, Vector3 ground)
-    {
-        Content c = _active ?? throw new InvalidOperationException("No selected turn role.");
-        StationaryTurnReference reference = TurnReference(snapshot.Role);
-        if (c.Role.Name != snapshot.Role)
-        {
-            throw new InvalidOperationException("Turn snapshot role is stale.");
-        }
-        c.Source.CopyCycleWindow(c.Cycle, snapshot.WindowStart, _window);
-        _explicitTurnSelection = true;
-        Transform3D root = _window[0];
-        float rootYaw = Mathf.Atan2(root.Basis.Z.X, root.Basis.Z.Z);
-        Basis placement = new(Vector3.Up, (float)snapshot.RootYaw - rootYaw);
-        var target = new Transform3D[4][];
-        for (int i = 0; i < 4; i++)
-        {
-            target[i] = _window.AsSpan(i * c.Source.JointCount, c.Source.JointCount).ToArray();
-            Transform3D sample = target[i][0];
-            Vector3 delta = sample.Origin - root.Origin;
-            delta.Y = sample.Origin.Y;
-            double yaw = reference.Sign * ((snapshot.Scale * reference.Angle(snapshot.SelectedPhase + i)) + snapshot.Offset);
-            float rawYaw = Mathf.Atan2(sample.Basis.Z.X, sample.Basis.Z.Z);
-            target[i][0] = new Transform3D(new Basis(Vector3.Up, (float)yaw - rawYaw) * sample.Basis,
-                ground + (placement * delta));
-        }
-        Selection = new SourcePhaseClock.Selection(snapshot.Epoch, c.Role.Variant + "/" + c.Role.Stage + "/" + c.Role.Name,
-            reference.First + snapshot.ClockPhase, snapshot.WindowStart, snapshot.WindowStart, true)
-        {
-            CycleIndex = (long)Math.Floor(snapshot.ClockPhase / reference.Period),
-            InCycleFrame = reference.First + (snapshot.ClockPhase % reference.Period)
-        };
-        return target;
-    }
-
     // Snapshot only when the opt-in recorder observes a real submission; no mutable sampler is handed to IO.
     internal object RecordingSnapshot() => new
     {
@@ -244,7 +209,7 @@ public sealed class ReviewedRoleSampler
         selection = Selection,
         fps = SourcePhaseClock.FramesPerSecond,
         initialPhaseFrames = _explicitTurnSelection ? 0 : _clock.InitialPhaseFrames,
-        policy = _explicitTurnSelection ? "CTRL-metadata-cue-debt; selected snapshot can lag elapsed intent" : "default-elapsed-clock",
+        policy = _explicitTurnSelection ? "allocated angular cycle; primary source lift" : "default-elapsed-clock",
         bundle = _active?.Bundle,
         bundleSHA256 = _active?.SHA256,
         metadata = _active is { } c ? new

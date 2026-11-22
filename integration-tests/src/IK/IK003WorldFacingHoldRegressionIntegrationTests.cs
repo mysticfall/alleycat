@@ -92,7 +92,7 @@ public sealed class IK003WorldFacingHoldRegressionIntegrationTests
             sceneTree.Root.AddChild(root);
             await WaitForPhysicsFramesAsync(sceneTree, 30);
 
-            Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             Node3D leftTarget = Assert.IsType<Node3D>(characterIK.LeftFootIKTarget, exactMatch: false);
             Node3D rightTarget = Assert.IsType<Node3D>(characterIK.RightFootIKTarget, exactMatch: false);
             int leftFoot = skeleton.FindBone("LeftFoot");

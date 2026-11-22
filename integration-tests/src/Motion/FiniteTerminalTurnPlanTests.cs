@@ -11,30 +11,55 @@ namespace AlleyCat.IntegrationTests.Motion;
 
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
-    private sealed class FiniteTurnSession : SomaInferenceWorker.ISession
+    private sealed class FiniteTurnSession(bool gateSuccessor) : SomaInferenceWorker.ISession
     {
+        internal readonly ManualResetEventSlim Release = new(false);
         internal int Calls;
         internal bool Disposed;
         public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
         {
             int count = Interlocked.Increment(ref Calls) % 2 == 1 ? 30 : 50;
-            return [.. Enumerable.Range(0, count).Select(f => context[3].Select((t, j) => SomaMotionData.Blend(t, target[0][j], f / (float)(count - 1))).ToArray())];
+            if (gateSuccessor && Calls == 2 && !Release.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new TimeoutException("Finite successor gate was not released.");
+            }
+            Transform3D[][] frames = [.. Enumerable.Range(0, count).Select(f => context[3].Select((t, j) => SomaMotionData.Blend(t, target[0][j], f / (float)(count - 1))).ToArray())];
+            if (Calls == 1)
+            {
+                foreach (Transform3D[] frame in frames)
+                {
+                    frame[0].Basis = new Basis(Vector3.Up, -.8f);
+                }
+            }
+            return frames;
         }
-        public void Dispose() => Disposed = true;
+        public void Dispose()
+        {
+            Release.Dispose();
+            Disposed = true;
+        }
     }
 
     /// <summary>Approved component alternative, not generated gait: all four ordered cues must actually finish.</summary>
     [Headless]
     [Fact]
-    public async Task FiniteNAVTurn_RecordedContextServicesAllCuesBeforeFiniteArrival()
+    public Task FiniteNAVTurn_RecordedContextServicesAllCuesBeforeFiniteArrival() => CheckFiniteRunAsync(false);
+
+    /// <summary>Cancellation during a successor hold must report acquired actor facing, not contrary hips.</summary>
+    [Headless]
+    [Fact]
+    public Task FiniteNAVTurn_CancelPendingSuccessorReportsHeldActor() => CheckFiniteRunAsync(true);
+
+    private static async Task CheckFiniteRunAsync(bool cancelSuccessor)
     {
         const string folder = "res://temp/motionbricks/nav-finite-turn-plan-01/";
-        var session = new FiniteTurnSession();
+        var session = new FiniteTurnSession(cancelSuccessor);
         SceneTree tree = TestUtils.GetSceneTree();
         var root = new ProbeGame();
         MotionBricksNavigation? nav = null;
         var submitted = new List<(long Ticket, Transform3D[][] Target)>();
         var endpoints = new List<long>();
+        double? firstProgress = null;
         void Configure(Node node)
         {
             if (node is not MotionBricksNavigation n)
@@ -46,6 +71,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             n.WindowSubmitted += (ticket, _, target) => submitted.Add((ticket, [.. target.Select(p => (Transform3D[])p.Clone())]));
             n.PlaybackObserved = (ticket, poses, frame) =>
             {
+                firstProgress = poses is not null && submitted.Count == 1 ? frame / (poses.Length - 1) : null;
                 if (poses is not null && frame >= poses.Length - 1 && !endpoints.Contains(ticket))
                 {
                     endpoints.Add(ticket);
@@ -85,11 +111,38 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             float[] command = [.. scenario.RootElement.GetProperty("command").GetProperty("data").GetProperty("data").GetProperty("requested").EnumerateArray().Select(v => v.GetSingle())];
             Assert.Equal((int)NavigationDestinationResult.Accepted, nav.SelectDestination(FeedbackTransform(command, 0), []));
             nav.SetPhysicsProcess(false);
+            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+            var world = new Transform3D[77];
+            data.WorldPose(context[3], world);
+            double begin = SomaInference.Heading(world[72].Origin, world[67].Origin) + Math.PI;
+            int checkedFrames = 0;
             for (int tick = 0; tick <= 866; tick++)
             {
                 nav._PhysicsProcess(1d / 60);
+                if (cancelSuccessor && submitted.Count == 2)
+                {
+                    _ = Assert.Single(endpoints);
+                    // Poll once with B pending after A's endpoint; ClearDestination consumes that cached observation.
+                    nav._PhysicsProcess(1d / 60);
+                    double actual = actor.GlobalRotation.Y;
+                    double held = nav.RecordingMeasuredTransform.Basis.GetEuler().Y;
+                    nav.ClearDestination();
+                    double reported = Assert.Single(nav.TerminalOutcomes).FinalTransform.YawRadians;
+                    Assert.InRange(Math.Abs(Math.IEEERemainder(reported - actual, Math.Tau)), 0, .00001);
+                    Assert.InRange(Math.Abs(Math.IEEERemainder(held - actual, Math.Tau)), 0, .00001);
+                    return;
+                }
+                if (firstProgress is { } fraction && submitted.Count == 1)
+                {
+                    double expected = begin - Math.PI + (fraction * 8.026955 * Math.PI / 180);
+                    Assert.InRange(Math.Abs(Math.IEEERemainder(actor.GlobalRotation.Y - expected, Math.Tau)), 0, .00001);
+                    checkedFrames++;
+                }
                 await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
             }
+            Assert.True(checkedFrames >= 50);
+            Assert.False(cancelSuccessor, "Did not observe a pending successor.");
+            Assert.InRange(Math.Abs(Math.IEEERemainder(actor.GlobalRotation.Y - FeedbackTransform(command, 0).Basis.GetEuler().Y, Math.Tau)), 0, .00001);
             File.WriteAllText(ProjectSettings.GlobalizePath("res://temp/motionbricks/anim002-regenerated-source-adoption-01/finite-result-" + Guid.NewGuid().ToString("N") + ".json"), JsonSerializer.Serialize(new
             {
                 session.Calls,
@@ -102,10 +155,6 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.Equal(submitted.Select(s => s.Ticket), endpoints);
             using var source = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/landing-ablation-01.json")));
             JsonElement samples = source.RootElement.GetProperty("samples");
-            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-            var world = new Transform3D[77];
-            data.WorldPose(context[3], world);
-            double begin = SomaInference.Heading(world[72].Origin, world[67].Origin) + Math.PI;
             double goal = Math.Atan2(-command[6], -command[8]);
             double angle = Math.IEEERemainder(goal - begin, Math.Tau);
             double span = samples[1005].GetProperty("heading_radians").GetDouble() - samples[945].GetProperty("heading_radians").GetDouble();
@@ -134,6 +183,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         }
         finally
         {
+            session.Release.Set();
             tree.NodeAdded -= Configure;
             Task? completion = nav?.WorkerCompletion;
             root.QueueFree();

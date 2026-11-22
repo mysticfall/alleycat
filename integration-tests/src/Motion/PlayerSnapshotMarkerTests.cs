@@ -35,7 +35,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             void Observe()
             {
                 _ = applied.Add(fixture.Motion.LastAppliedRequest);
-                if (phase == "released" && fixture.Motion.Phase == "settled-idle")
+                if (phase == "released" && fixture.Motion.Phase == "tracked-idle")
                 {
                     settledAt ??= clock.Elapsed.TotalSeconds;
                 }
@@ -115,7 +115,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 await WaitPresentedFrameAsync();
                 Assert.DoesNotContain(held, applied);
                 Assert.True(fixture.Motion.DiscardedResults >= 1);
-                Assert.Equal("settled-idle", fixture.Motion.Phase);
+                Assert.Equal("tracked-idle", fixture.Motion.Phase);
                 Assert.True(settledAt.HasValue && clock.Elapsed.TotalSeconds - settledAt.Value >= 3);
                 File.WriteAllText(Path.Combine(directory, "result.json"), JsonSerializer.Serialize(new
                 {

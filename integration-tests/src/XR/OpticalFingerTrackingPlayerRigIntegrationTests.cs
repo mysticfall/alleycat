@@ -1002,7 +1002,7 @@ public sealed class OpticalFingerTrackingPlayerRigIntegrationTests
             PlayerVRIK playerVrik = playerRoot.GetNode<PlayerVRIK>("VRIK");
             Assert.True(playerVrik.BindToXRServices(), "Expected the fixture player VRIK to bind to the mock runtime.");
 
-            Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
             OpticalFingerTrackingModifier modifier = Assert.IsType<OpticalFingerTrackingModifier>(
                 skeleton.GetNode("OpticalFingerTrackingModifier"),
                 exactMatch: false);

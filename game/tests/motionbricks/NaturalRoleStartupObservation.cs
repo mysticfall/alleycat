@@ -87,7 +87,7 @@ public partial class NaturalRoleStartupObservation : NaturalRoleObservation
         }
 
         _actor.Ready += () => Mark("npc-ready");
-        _skeleton = _actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        _skeleton = _actor.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
         _skeleton.SkeletonUpdated += ObserveStartup;
         Mark("startup-observers-attached");
     }

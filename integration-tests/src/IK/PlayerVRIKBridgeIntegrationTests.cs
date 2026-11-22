@@ -23,8 +23,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
     private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";
     private const string DynamicPhysicalRigScriptPath = "res://src/Rigging/Physics/DynamicPhysicalRig.cs";
-    private static NodePath ExpectedPlayerPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
-    private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
+    private static NodePath ExpectedPlayerPhysicalRigPath => new("../Female/SOMA/Native/GeneralSkeleton/DynamicPhysicalRig");
+    private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female/SOMA/Native/GeneralSkeleton/DynamicPhysicalRig");
 
     /// <summary>
     /// Native-free endpoint for the authored NPC navigation worker. IK wiring facts never verify locomotion;
@@ -65,7 +65,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             Node playerVRIK = player.GetNode<Node>("VRIK");
-            Node physicalRig = player.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
+            Node physicalRig = player.GetNode<Node>("Female/SOMA/Native/GeneralSkeleton/DynamicPhysicalRig");
             GodotObject configuredPhysicalRig = GetScriptProperty<GodotObject>(playerVRIK, "PhysicalRig")
                 ?? throw new Xunit.Sdk.XunitException("Expected player VRIK PhysicalRig to resolve to a node.");
 
@@ -98,7 +98,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             Node characterIK = npc.GetNode<Node>("CharacterIK");
-            Node physicalRig = npc.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
+            Node physicalRig = npc.GetNode<Node>("Female/SOMA/Native/GeneralSkeleton/DynamicPhysicalRig");
             GodotObject configuredPhysicalRig = GetScriptProperty<GodotObject>(characterIK, "PhysicalRig")
                 ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK PhysicalRig to resolve to a node.");
 
@@ -132,12 +132,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             Node playerVRIK = player.GetNode<Node>("VRIK");
-            Marker3D viewpoint = player.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            Marker3D viewpoint = player.GetNode<Marker3D>("Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint");
             GodotObject configuredViewpoint = GetGodotNodeProperty(playerVRIK, nameof(CharacterIK.Viewpoint), "viewpoint")
                 ?? throw new Xunit.Sdk.XunitException("Expected player VRIK Viewpoint to resolve to a marker.");
 
             Assert.Equal(viewpoint.GetInstanceId(), configuredViewpoint.GetInstanceId());
-            Assert.Equal(new NodePath("../Female/GeneralSkeleton/Head/Viewpoint"), playerVRIK.GetPathTo(viewpoint));
+            Assert.Equal(new NodePath("../Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint"), playerVRIK.GetPathTo(viewpoint));
         }
         finally
         {
@@ -164,12 +164,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             Node characterIK = npc.GetNode<Node>("CharacterIK");
-            Marker3D viewpoint = npc.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            Marker3D viewpoint = npc.GetNode<Marker3D>("Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint");
             GodotObject configuredViewpoint = GetGodotNodeProperty(characterIK, nameof(CharacterIK.Viewpoint), "viewpoint")
                 ?? throw new Xunit.Sdk.XunitException("Expected NPC CharacterIK Viewpoint to resolve to a marker.");
 
             Assert.Equal(viewpoint.GetInstanceId(), configuredViewpoint.GetInstanceId());
-            Assert.Equal(new NodePath("../Female/GeneralSkeleton/Head/Viewpoint"), characterIK.GetPathTo(viewpoint));
+            Assert.Equal(new NodePath("../Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint"), characterIK.GetPathTo(viewpoint));
         }
         finally
         {
@@ -200,10 +200,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         {
             Node player = fixture.GetNode("Actors/Player");
             Node playerVRIK = player.GetNode<Node>("VRIK");
-            Marker3D playerViewpoint = player.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            Marker3D playerViewpoint = player.GetNode<Marker3D>("Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint");
             Node npc = fixture.GetNode("Actors/Ally");
             Node npcIK = npc.GetNode<Node>("CharacterIK");
-            Marker3D npcViewpoint = npc.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            Marker3D npcViewpoint = npc.GetNode<Marker3D>("Female/SOMA/Native/GeneralSkeleton/Head/Viewpoint");
             Node npcEyes = npc.GetNode<Node>("Eyes");
             GodotObject playerConfiguredViewpoint = GetGodotNodeProperty(playerVRIK, nameof(CharacterIK.Viewpoint), "viewpoint")
                 ?? throw new Xunit.Sdk.XunitException("Expected reference-player fixture player VRIK Viewpoint to resolve to a marker.");

@@ -20,7 +20,7 @@ public partial class MotionBricksRouteObserver : Node
         _actor = (CharacterBody3D)actor;
         _nav = ((Character.Character)actor).Navigation as MotionBricksNavigation
             ?? throw new InvalidOperationException("Normal role did not expose MotionBricks navigation.");
-        _skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        _skeleton = actor.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
         _start = Time.GetTicksUsec();
         _skeleton.SkeletonUpdated += Observe;
         _nav.WindowSubmitted += Request;

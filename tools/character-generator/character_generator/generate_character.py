@@ -22,6 +22,7 @@ from typing import Any, cast
 import bpy
 
 from . import bake_subdivision_modifiers
+from .authored_rest import add_authored_rest
 from . import generate_body_colliders
 from . import forearm_twist_generator_run_ownership
 from . import forearm_twist_weights
@@ -3454,6 +3455,7 @@ def generate_character(config: CharacterConfig) -> Path:
                     "appended MPFB actions",
                 )
 
+    add_authored_rest(exported_animation_owner)
     bpy.ops.wm.save_as_mainfile(filepath=str(output_path), check_existing=False)
     generator_run_ownership_path = forearm_twist_generator_run_ownership.write_evidence(
         installed_config_dir,

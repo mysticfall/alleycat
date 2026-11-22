@@ -60,9 +60,22 @@ animation and prop `.blend` assets sharing their directories:
 python3 tools/character-generator/commands/check_character_import_retarget.py game/assets/characters/reference/female
 ```
 
-The check verifies every `/Skeleton3D` entry in the main sidecar and the `PATH:Ragdoll/Skeleton3D` entry in the
-collider sidecar for the three required retarget keys, prints per-file PASS/FAIL results with a summary, and reports
-missing sidecars with the run-import-then-helper remedy. Key presence is validated, not key values. Exit status is
+The final main blend includes a muted `AuthoredT` action derived from the generated armature: a T-body with its
+natural fingers, with location, native rotation and scale keyed on every bone. Collider hulls are generated in
+neutral, unchanged; after stripping other actions the collider armature receives its own muted `AuthoredT`, built by
+the same routine from the same rig. Before saving, each action is checked by a round trip: the keyed action must
+reproduce the derived pose, or generation fails. To migrate an **existing main or collider blend without this
+action** in place, run:
+
+```sh
+blender --factory-startup -b path/to/character.blend --python-exit-code 1 -P tools/character-generator/commands/add_authored_rest.py
+```
+
+Apply the existing sidecar updater before normal Godot reimport. Main skeleton entries require the MakeHuman map,
+named rest `AuthoredT` at 0.5 s, silhouette correction disabled and no exclusion filter. The collider
+`PATH:Ragdoll/Skeleton3D` requires the same settings and values; once it passes, repeated collider wrapper/profile
+regeneration is byte-identical. The command prints per-file PASS/FAIL results and reports missing sidecars with a
+remedy. Exit status is
 `0` when every sidecar passes, `1` for any validation failure, and `2` for unsupported targets. Its unit tests run
 through the standard unittest discovery command below; headless Godot integration coverage lives in
 `integration-tests/src/Characters/CharacterColliderRetargetGuardIntegrationTests.cs`.

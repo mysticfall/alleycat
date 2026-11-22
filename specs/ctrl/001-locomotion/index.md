@@ -22,21 +22,29 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
 1. Left-controller stick direction follows the existing player input convention; its magnitude supplies normalised
    speed intent. Different magnitudes request different speeds, not an exact measured-speed guarantee.
 2. Right-controller stick requests stationary avatar-body turning in either direction. Movement takes priority over
-   stationary turning; during travel, right input steers walking under UR7. The mapping is documented and tunable;
-   intensity-to-total-angle mapping, particular deadzones, and requested turn-angle limits are not prescribed.
-   The head/body divergence limit in UR4
-   is separate from this stick mapping.
+   stationary turning; during travel, right input steers walking under UR7. Full deflection requests about 120 degrees
+   per source cycle at source pace, continuing while held. Partial deflection requests proportionally smaller cycles
+   at the same pace. Changing strength in the same direction applies from the next cycle without cancelling or
+   restarting the current turn. The turn must not sustain rotation against the commanded direction or reverse
+   actor facing because of generated hip motion. The head/body divergence limit in UR4 is separate.
 3. Releasing movement or stationary-turn input immediately begins settling towards idle and discards remaining intent.
+   Releasing a stationary turn must not cause a visible snap in actor facing as settling begins.
    Releasing walking steering alone instead retains the acquired course under UR7. Do not require the
    full queued motion segment or stale turn to finish, or add recovery-step sequences. This is not instant inference.
+   MotionBricks generates the settle towards the selected idle stance without driving the collider along the ground.
+   Fresh movement or turn input interrupts the settle without resetting the displayed stance at the first replacement.
+   Release is distinct from tracked-idle entry: after settling, return to tracked idle only when both sticks are
+   neutral and no replacement movement or turn is pending.
 4. Tracked head motion stays live. Ordinary body turning must not simply rotate the view with the avatar. Introduce
    body/view separation with a tunable head/body yaw divergence limit defaulting to 100 degrees per side. This relaxed
    allowance accounts for physical hip turning that the avatar does not reproduce, avoiding premature disturbing
    compensation. Beyond the limit use existing XR-origin compensation, not a new body-stop policy. Retain existing
    positional/anatomical compensation within the existing physical scope in TR6; this is not an unconditional
    camera-lock or physical head-to-wall collision guarantee.
-5. MotionBricks generates movement, turning footwork, and idle transitions on the calibrated reference Female rig.
-   The player is not always animation-driven; current tracked and modified posing remains part of the experience.
+5. MotionBricks generates movement, turning footwork, and idle transitions on the reference Female player, presented
+   through native retargeting under the [shared animation contract](../../animation/index.md). The player is not
+   always animation-driven; tracked idle and modified posing remain part of the experience, and the player's observed
+   fingers are never overridden by generated motion.
 6. Provide a normal launch path, the implemented stick mapping, known limitations, and a short headset checklist.
    The user's headset judgement decides responsiveness and feel; synthetic input cannot establish comfort.
 7. Source-guided walking predicts near-cycle travel and supplies a separate farther generation
@@ -65,7 +73,8 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
    inferring missing startup from `empty.tscn`. Do not create another scene or adapt NPC destination navigation into
    stick control. Preserve NPC navigation and unrelated tracking, hands, gaze, and interaction functionality.
 2. The [shared animation contract](../../animation/index.md) is normative for content, inference helpers, conversion,
-   calibrated retargeting, source-proportioned feedback, licensing, and explicit missing-channel approximations.
+   native retargeting (ANIM TR4), final-target realised-pose feedback with its unobservable-channel policy (ANIM TR5)
+   and licensing.
    Reuse the in-process Godot/C# NVIDIA SOMA FP32 runtime. The
    [ANIM-002 source contract](../../animation/002-locomotive-animation-set/index.md) is normative for role/variant
    sources and dynamic sampling; external idle/action targets follow its compatibility boundary. Apply
@@ -73,35 +82,60 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
    selection:
    exported default `res://models/motionbricks/onnx/mmm_v6_soma_fp32.onnx`, with neither `MOTIONBRICKS_MODEL` nor
    `LD_PRELOAD` required for ordinary launch on the verified host. This does not import NPC route/arrival policy.
-3. Maintain one character-root movement owner, distinct from `PlayerVRIK`'s XR-origin authority. Realise generated root
-    motion through Godot's `MoveAndCollide` using the actual root collider, without bespoke predictive physics admission
+3. Maintain one character-root movement owner, distinct from `PlayerVRIK`'s XR-origin authority. Outside player
+    settling, realise generated planar travel through Godot's `MoveAndCollide` using the actual root collider. Follow
+    the [ANIM TR4 root and scale rule](../../animation/index.md#technical-requirements) for once-applied planar demand,
+    game-owned yaw and source-hips travel removal. Do this without bespoke predictive physics admission
     such as swept-body/clearance forecasts, support-floor proofs or `TestMove` preflights. External physics may block or
     limit realised movement; input targets do not guarantee physical clearance. Preserve actual collision handling and
-    truthful blocked/collision diagnostics, not a physics-aware planner. No procedural turn, teleport, foot-IK rescue,
-    authored-idle reset, or corrective locomotion may substitute for generated footwork.
+     truthful blocked/collision diagnostics, not a physics-aware planner. Applying planned actor yaw under TR10
+      does not replace generated footwork. No procedural turn, teleport, foot-IK rescue, authored-idle reset or
+      corrective locomotion may substitute for it.
+    During player settling, interpret generated planar hip motion as absolute local articulation in the release frame,
+    not collider demand. The articulation follows the actor; do not pin or teleport the actor against external
+    movement. Preserve ordinary collision handling and NPC movement policy.
 4. Condition generation on actual realised player poses after applicable tracking and skeleton modifiers, following
    ANIM TR5's normal-scheduling observation boundary and timestamped context. Do not use authored idle, pre-modifier
-   snapshots, or unplayed predictions as realised feedback. Validate the actual solved-skeleton boundary in production.
-   The player `AnimationTree` keeps its physics-callback update beneath the MotionBricks stage. Once a generated pose
-   exists, MotionBricks owns every mapped body bone and root motion; tree root motion is unused. Unmapped layers, such
-   as [INTR-003](../../interaction/003-hands/index.md) hand poses and eyes, stay live, including while idle.
-   Before the first generated pose, the player shows the tree's own posture: the IK-004 standing/crouching continuum
-   at standing head height, with no idle or locomotion loop.
+    snapshots, source-skeleton samples or unplayed predictions as realised feedback. Validate the actual final-target
+    boundary in production, after VRIK, hand tracking and the optical-last finger modifier.
+    Generate the settle towards the selected idle stance from the evaluated player `AnimationTree`, before native
+    retargeting and downstream modifiers. This destination is separate from the four realised history samples used
+    for conditioning. Where an outgoing generated pose is displayed, copy its pre-modifier input separately for
+    [presentation start correction](../../animation/index.md#technical-requirements), using the actual presented
+    source root in the actor's frame rather than the outgoing travel demand. It replaces only the start argument
+    of the existing endpoint pass after inference, not its destination or any realised history.
+   The player `AnimationTree` keeps its physics-callback update beneath the native retarget stage. While generated
+   motion owns the body, the player's `RetargetModifier3D` writes every mapped body bone including the wrist, and the
+   controller owns root motion; tree root motion is unused. The player profile never writes hand descendants while
+   actual fingers are observed: [INTR-003](../../interaction/003-hands/index.md) authored poses or
+   [XR-002](../../xr/002-optical-hand-tracking/index.md) optical tracking keep them. Eyes and other unmapped layers
+   stay live. Entering tracked idle is an explicit ownership transition that stops native body writes; holding the
+   source on its last sample does not relinquish ownership and is not tracked idle. Stick release and generated
+   settling towards idle are not themselves tracked-idle entry. Entry after generated motion follows this order:
+   record the settling segment's final visible target pose at `skeleton_updated` and retain it in conditioning
+   history; on the next physics tick, if both sticks are within their neutral deadzones and no replacement movement
+   or turn request is queued or in flight, disable the native retarget modifier. Otherwise ownership stays with
+   generated motion.
+   Reactivate the modifier only when applying a new generated pose, not on input or request submission.
+   The native retarget modifier starts inactive, so the player is in tracked idle before the first generated pose;
+   it activates only when that pose is applied. In tracked idle, the player shows the tree's own posture: the IK-004
+   standing/crouching continuum at standing head height, with no idle or locomotion loop.
 5. Current input owns movement/turn requests. Movement/stationary-turn release and incompatible trajectory changes
    invalidate superseded queued/in-flight intent; reject stale results and start the appropriate transition without
-   waiting for a whole stale segment, using realised context. TR9 retains compatible walking
-   work across small direction changes. Separately, stationary turning may retain live
-   active/pending work only with unchanged role, zero old/new movement and no settling. Old/latest requested turn and
-   each live submitted/active owner must be finite, same-sign and have exact processed absolute magnitude `0.95` or `1`.
-   Preserve ownership epoch, tickets, source phase, play time and immutable targets; latch the latest requested
-   magnitude for the next already-eligible submission without requiring another input change. Historical tickets
-   cannot confer or revive ownership. Release, reversal, other magnitude changes and movement/role changes still
-   retire immediately; `0.95→0.9` retires and `0.9→0.95` cannot resurrect old work. This grants no broader
-   input compatibility. Adapt only scheduling needed for responsiveness.
-    Under the ANIM-002 stationary-turn contract, intensity changes update prospective phase/facing intent without
-    rewinding intended phase or changing immutable owned work. This does not broaden the compatibility exception or
-    choose a new gain/replanning policy; release, reversal and material-change retirement remain mandatory.
-    Preserve copied requests,
+    waiting for a whole stale segment, using realised context. Fresh movement or turn input retires the active or
+    pending settle immediately. Hold the outgoing stance until the replacement applies and preserve it at the first
+    replacement pose using TR4's start correction and the held actor-local planar hip reference. Apply replacement
+    travel through collision once from the realised submission anchor, not from that local reference. Carry the
+    reference through ensuing travel; the next settle replaces it rather than adding another offset, and tracked-idle
+    entry clears it. TR9 retains compatible walking work across small direction changes. Separately, while stationary
+    turning owns the body (unchanged role, zero old/new movement, no settling), a finite same-direction magnitude
+    change above deadzone preserves the active segment and any pending request. Their ownership epoch, tickets,
+    source phase, play time, targets and submitted magnitudes remain immutable. Use the latest magnitude when
+   allocating the next uncommitted cycle under TR10, without requiring another input event.
+   Re-centring, reversal, or a movement/role change retires the incompatible
+   turn immediately; historical tickets and late returns cannot confer or revive ownership. Adapt only scheduling
+   needed for responsiveness.
+   Preserve copied requests,
    scene-thread submission/consumption, worker-exclusive native ownership and disposal, and graceful application-exit
    draining under the [shared worker contract](../../nav/001-npc-navigation/index.md#outcome-and-worker-contract).
    Those worker guarantees do not impose NPC destination outcomes. Report unavailable setup/inference explicitly;
@@ -182,7 +216,7 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
      universal horizon requirement or arrival-time promise. Native duration remains model-selected and variable.
      Tunable defaults remain a 0.2 s comparison interval, 0.08 m position difference, 10-degree heading difference,
      and 45-degree sharp-change boundary. These are tuning settings, not quality bounds or timing gates;
-     exact realised speed and comfort remain unproved. Stationary turning retains TR5's bounded compatible-work
+     exact realised speed and comfort remain unproved. Stationary turning follows TR5's same-direction retention
      policy; do not apply walking's 10/45-degree thresholds to stationary magnitude compatibility.
    - Optional diagnostics must distinguish VIRTUAL near-cycle prediction, immutable last SUBMITTED generation guide
      with request identity, and ACTIVE displayed-playback guide with identity/state, including held completion.
@@ -195,8 +229,8 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
     Own variant, state, role, virtual source phase, expected source foot phase and future consecutive-window selection.
     Resolve roles from player movement/turn and interaction-positioning intent; expose how non-crossing sidestepping
     is distinguished from crossing lateral travel without inventing an additional binding in this specification.
-    Use variant/stage physical metadata with input magnitude and placement horizon, including the backward ratio;
-    never treat a crawling/limping source as a walking-speed replacement. Apply ANIM-002 advance, loop, sample-ahead,
+     For travel, use variant/stage physical metadata with input magnitude, placement horizon and the backward ratio;
+     never treat a crawling/limping source as a walking-speed replacement. Apply ANIM-002 advance, loop, sample-ahead,
     role/stage/variant switch and overlapping-request rules. Snapshot source selection with request identity alongside
     actual realised context; compatible retention must not let a late result own phase progression. Release or
     interruption abandons old intended progression immediately and requests compatible external idle/action targets
@@ -204,75 +238,38 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
     availability failures under TR5, not permission for procedural fallback or authored-idle reset. Source foot phase
      is intended information only; no inferred displayed-foot matching, leading-foot variants or arc/transition clips
      are prerequisites. Keep existing input responsiveness, steering, tracking, collision and worker authority.
-     For stationary turns, use measured signed source angular span and ordered local progression with input intensity
-     and chosen rotation to coordinate phase/window selection and target facing. Preserve both ordered foot-lift
-     phases where present, including their asymmetric angular positions and cyclic boundaries; do not assume a single
-     global lift or a time/angular midpoint. Independent fixed source pace ignoring angular intent is insufficient.
-     Declare the intent-dependent phase policy separately from model-selected duration; neither four target poses
-     nor metadata alone guarantees displayed mid-turn footwork. No angular-waypoint planner, fixed two-subrequest
-      policy, one-episode-per-call rule or new native interface is prescribed by this requirement.
-     The source-bound policy below governs normal player stationary turns without redefining NAV's finite turn plan.
+     Apply the stationary-turn allocation and scheduling policy below through the shared ANIM-002 mapping.
 
 ### Stationary-Turn Conditioning
 
-Normal player stationary turns use four source-bound lift/recovery landmarks, with no pace compensation.
-Content repetition/recovery admission labels describe quality, not activation switches or an alternative controller.
+The ANIM-002 [stationary-turn angular mapping][turn-mapping] is normative for TR10. CTRL owns the stick-driven
+allocation and interruption policy, not a separate angular mapping. Apply the shared [actor-facing rule][turn-facing]:
+the game sets actor facing from planned cycle yaw, independently of generated articulation.
 
-- **Metadata and Clock:** load measured signed span, representative rate, source binding and both ordered primary
-  foot cues from `reviewed-feminine/turn-angular-reference.json`. Validate finite values, source hash/bounds/timing,
-  facing/measurement conventions, cue identities/order/angular associations and span/rate consistency. Toe annotations
-  do not add required endpoints. Keep `primaryFootEvents` authoritative for both feet; additive experimental
-  `recoveryTrial` binds four ordered full-pose landmarks to the same source hash, phase, angular association and
-  measurement convention. Validate primary agreement, stable unique IDs, typed `primary_lift|recovery`, subject foot
-  and four-original-pose recovery-window availability before the raw seam. Do not search for pose minima at runtime.
-  The current shared source selects left 947→951→961→1001 and right 1103→1107→1120→1152.
-  Read phases, angles and consecutive recovery windows from the source-bound metadata, not hard-coded time fractions.
-  Preserve full source geometry, including the late authored negative increment. These are content bindings, not
-  generic variant rules or sole/contact/support claims. Start source-relative phase `p=0`. Integrate
-  `p += F * abs(input) * dt`, where `F=30 Hz`; intensity changes affect only future advance. Output duration,
-  completion, actual yaw and displayed feet never advance or reset this clock. Retain `H=49/30 s` as planning horizon,
-  not requested native duration. Use first-guide angular cap
-  `B=abs(r) * abs(latest input) * H`, where `r` is the metadata representative angular rate.
-- **Selection and Lag:** at a stationary submission opportunity, forecast `q=p+F*abs(latest input)*H`. Select the next
-  unserved landmark or an interim phase before it, clipped by `floor(q)` and a nondecreasing submitted-phase floor,
-  subject to the overtake exception below. Copy four consecutive original 30 Hz poses with raw transforms at wraps.
-  Finish the current four-landmark group even when it lags `p`: the second primary lift does not end the group.
-  Complete its final recovery before choosing `kNext=max(kCurrent+1,floor(p/P))`, where `P` is the source period in
-  frames; only explicit passed-unplayed handling below may advance an overtaken landmark without completion.
-  Drop only intervening whole unstarted cycles and their prospective net yaw; do not move the actor, rewind `p`
-  or queue catch-up calls.
-- **Target Geometry:** anchor placement at actual actor-root yaw, distinct from anatomical heading and intended phase.
-  Use the preceding affine map to obtain remaining source-angle geometry. Uniformly scale only target root-yaw
-  variation to meet `B`, preserving ordered uneven angular shape; keep non-root articulation, consecutive timing and
-  existing positional placement unchanged. Record the scale and scaled local angular derivatives, distinct from
-  authored non-root derivatives and clock rate. No generated-output scaling, time warp or procedural actor yaw is
-  allowed. After matching-owner playback completion, rebase prospective geometry at actual root yaw with unit scale,
-  without resetting phase or replaying scaled-away rotation. Retain normal stationary completion cadence, not walking's
-  early splice. Only a landmark selected as first guide and completed through full playback by its matching owner is
-  serviced; interims and appearance in guides two to four do not count. Capped completion still services that source
-  event, without queueing unrealised yaw. Service receipts prove neither displayed lift/recovery nor whole gait/contact.
-- **Overtaken Landmarks:** distinguish authored holds/micro-reversals from backward catch-up to an already overtaken
-  forward lift or recovery. Mark the latter passed-unplayed, not serviced. If the forecast-clipped interim would also
-  chase backwards after such a pass, select the next unpassed ordered landmark even beyond forecast, under the same
-  cap, clock and immutable-owner rules. Bound the search to remaining landmarks in the current group plus the next
-  four-event group selected by the cycle/drop rule (at most eight candidates). Exhaustion is an explicit availability
-  failure, not arbitrary-cycle recovery, a new wait policy, silent re-anchoring or permission to rotate the actor.
-  Variable model duration guarantees neither strict future-only selection, realised angular pace nor natural footwork.
-- **Ownership and Input:** snapshot clock/forecast/selected phase, source indices, stable event ID/kind/subject foot,
-  magnitude, cap/map, context and owner identity immutably. Distinguish `IsLandmarkTarget` from `IsPrimaryLift`,
-  nullable primary `Foot` from `RecoveringFoot`, and primary/recovery completions from separate passed-unplayed counts.
-  Exact TR5 `0.95↔1` compatibility retains work; latest input controls the next eligible forecast/cap.
-  Material same-role changes retire the owner immediately but preserve clock, service cursor, submitted
-  floor and geometric lineage. A replacement uses fresh actual context; it cannot resurrect a retired owner or count
-  a cancelled landmark as serviced. `0.90` remains material; release abandons progression immediately and reversal/role
-  change starts the new role at entry with a fresh actual anchor. Recovery must delay neither. Preserve stale-result
-  rejection, actual post-modifier context, worker disposal, `CorrectEndpoints`, normal VRIK/XR and generated-root
-  `MoveAndCollide` ownership; targets are never realised feedback.
-- **Uncompensated Pace:** extra endpoint connections may roughly halve turning pace. The illustrative alternating
-  30/50-frame schedule increases group duration from 2.6 to 5.2 seconds; this is not measured native timing or a bound.
-  Accept and measure the cost without gain increases, retiming, shortened clips, output repair or procedural yaw.
-  Model duration remains variable; lower input does not guarantee linear realised speed. Four landmarks neither
-  prescribe exactly four calls nor provide timed interior constraints or guarantee coordinated steps within a clip.
+[turn-mapping]: ../../animation/002-locomotive-animation-set/index.md#stationary-turn-angular-mapping
+[turn-facing]: ../../animation/002-locomotive-animation-set/index.md#actor-facing-during-stationary-turns
+
+- **Allocation:** select the directional source from the stick sign and allocate `abs(stick) × 120 degrees` per
+  source cycle using the processed magnitude after the existing deadzone. Anchor a new turn at actual actor-root
+  yaw and repeat while held. Apply the latest same-direction magnitude at the next uncommitted cycle, retaining
+  active and pending ownership under TR5. Magnitude changes arc size, not phase advance or cycle duration.
+- **Scheduling:** use the source-paced cycle and mapped lift cues. Request granularity must not slow the turn below
+  source pacing or split a cycle into visibly separate small turns. Do not require a separate request per landmark
+  or additional recovery endpoints. Record planned and displayed cycle timings separately from returned model duration.
+- **Same-Owner Successor Presentation:** when a follow-on result takes over within the same stationary turn, start
+  playback from the last pose supplied in world space before modifiers and from the current actor heading. Blend
+  into the incoming motion without changing its endpoint or rotating the hips to match actor heading. This starting
+  pose is for presentation only: worker context still comes from actual post-modifier observations under TR4.
+  Measure planar movement from the realised root at submission and apply it through collision under TR3. This
+  rule changes neither turn gain nor walking splice eligibility.
+- **Release-to-Settling Facing:** keep actor facing continuous across the handoff from a released stationary turn
+  to settling. Do not snap the actor to generated hip heading. Keep the residual hip-to-actor yaw in the skeleton
+  and apply actor yaw only once. This does not prescribe how settling yaw is computed or change walking facing.
+- **Ownership:** snapshot the cycle allocation, stick magnitude and mapping with each request. Same-direction
+  retention does not permit stale results to regain ownership. Re-centring abandons progression immediately; reversal
+  or a movement/role change retires the turn immediately and starts the new intent from fresh realised context.
+  Preserve existing positional placement, `CorrectEndpoints`, VRIK/XR, `MoveAndCollide`, worker disposal and the
+  tracked-idle entry rule in TR4.
 
 ## In Scope
 
@@ -288,7 +285,7 @@ Content repetition/recovery admission labels describe quality, not activation sw
   terrain/contact adaptation and broad rig/hardware support. ANIM-002 role coverage and generic variant/stage support
    are required; normal feminine source adoption does not waive broader stage/default content or validation.
 - NPC pauses/small-step quality, physical foot sliding, and wrist refinement remain deferred unless a concrete issue
-   blocks this slice's core outcome. Preserve current calibrated approximations; do not claim full hand fidelity.
+   blocks this slice's core outcome. Preserve ANIM TR4 finger ownership; do not claim full hand fidelity.
 - Multi-character performance, model precision comparisons, exhaustive tests, and broad-suite repair.
 - Physics-aware planning, bespoke predictive physical admission, and new stall detection/recovery or rerouting.
   Actual engine collision handling and realised feedback remain required.
@@ -297,17 +294,23 @@ Content repetition/recovery admission labels describe quality, not activation sw
 
 ### User Requirement Acceptance
 
-1. **CTRL-UAC-001 (UR1–3, UR5):** Full temporal evidence through production input shows current tracked idle, movement
+1. **CTRL-UAC-001 (UR1–3, UR5):** Full temporal evidence in Godot native playback through production input shows
+   current tracked idle without held generated posture, observed fingers kept by their owner, movement
    start, differing stick magnitudes, direction changes and release, stationary turns both ways and turn release,
    and movement priority. Inspect the whole window, including inference holds and settling; stale intent must not
    finish after release. Show generated footwork, not only root displacement or isolated favourable frames.
-   For compatible stationary-turn retention, obtain a fresh manual full-turn observation after independent review,
-   including onset, the full held turn, release and settled tail. Playback continuity alone does not close slow-turn
-    or minimal-footwork outcomes; preserve the user's whole-window stepping-footwork judgement.
-   Include intensity changes and observe ordered left/right footwork across the full turn where source cues are
-    present, not only a terminal lift. Correct metadata, intended timing or four-pose targets do not prove cue transfer.
-   For stationary-turn conditioning, retain full pre-input/hold/intensity-change/release/settled observation both ways;
-   the user must judge consistent feet matching body turning and acceptable pace, not merely reached landmarks.
+    Show the return to tracked idle after settling with both sticks neutral, and that releasing one stick while the
+    other is held or a replacement is pending does not return the body to tracking.
+    Observe a settle towards the selected idle stance without generated planar collider travel. Interrupt an active
+    settle and inspect stance continuity at the first replacement. Keep manual headset snap and foot-contact
+    judgement separate from synthetic boundary continuity.
+   After independent review, observe a fresh manual turn in each direction from pre-input to settled idle.
+   Check continuous playback across same-owner handoffs and no visible facing snap when release hands off to settling.
+   Turning about 180 degrees with full stick then re-centring should read as one large turn plus a smaller
+   finishing portion of the next cycle, not several small turns. Verify proportionally smaller cycles at partial
+   stick, no cancellation or restart on same-direction strength changes, source-like pace and no sustained
+   counter-rotation or hip-driven reversal of actor facing. Inspect ordered footwork where source cues are present.
+   Playback continuity and reached landmarks alone do not establish coordinated stepping or acceptable pace.
 2. **CTRL-UAC-002 (UR4–5):** Observe ordinary body turning with an unconstrained, reachable tracked view inside the
    divergence limit, and existing constrained-head position/orientation compensation under positional/anatomical
    constraints and beyond the limit on both sides. Distinguish head translation with/without a wall from an exercised
@@ -345,7 +348,19 @@ Content repetition/recovery admission labels describe quality, not activation sw
 2. **CTRL-TAC-002 (TR3–6):** Focused checks and normal-scene traces demonstrate singular collision-root ownership,
    separate XR-origin ownership, submitted context from actual post-modifier observations, stale-result rejection on
    release/replacement, and safe worker shutdown/disposal. Verify the idle player's tree still evaluates hand-pose
-   layers beneath the MotionBricks stage without moving the root. Verify the 100-degree-per-side default,
+   layers beneath the native retarget stage without moving the root. With controller-owned and optically tracked
+    fingers, verify the final digits match their owner while the wrist follows generated motion, and that submitted
+    context carries the collision-realised root (travel applied once) and final-target poses. Verify that entering
+    tracked idle stops native body writes. Trace the evaluated tree destination, realised conditioning history and
+    separate outgoing presentation input across release; verify it changes only the endpoint pass's start argument,
+    not the inference inputs or destination. Verify no generated planar collider demand during settling and no root
+    pinning against external motion. At interruption, verify immediate retirement and stance retention, with
+    replacement travel applied once from the realised anchor. Check that the next settle replaces the local reference
+    and idle clears it. Verify that after tracked-idle entry no held source sample influences the wrist or spine.
+    Demonstrate two successive generated-motion → settling → tracked-idle transitions: the final settling observation
+    precedes relinquishment, the native modifier stays inactive through idle and request submission, and only applying
+   the next generated pose reactivates it. Verify that a non-neutral stick or a pending replacement prevents entry.
+   Verify the 100-degree-per-side default,
    configurability, unconstrained/reachable compensation skip inside the configured limit, and retained compensation
    outside it on both sides and under existing positional/anatomical constraints. Fixture expectations must respect
    RIG-001's head-collision exclusion; a wall-crossing assertion alone does not establish a product regression.
@@ -383,10 +398,11 @@ Content repetition/recovery admission labels describe quality, not activation sw
     rejection,
     actual post-modifier feedback, collision and worker ownership. NPC policy isolation remains required;
     measured reduction alone does not establish comfort or authorise quality thresholds.
-   For TR5's stationary exception, exercise same-sign exact processed `0.95↔1` changes in both directions with genuine
-   active and pending owners. Verify epoch/ticket, source-phase and play-time continuity, immutable targets and
-   latest-magnitude use at the next already-eligible submission without another input change. Check each live owner,
-   immediate release/reversal/incompatible-magnitude and movement/role retirement, non-resurrection and late-result
+   For TR5's stationary retention, exercise same-direction magnitude changes across partial magnitudes above
+   deadzone, increasing and decreasing in both turn directions, not only near-full values, with genuine active and
+   pending owners. Verify epoch/ticket, source-phase and play-time continuity, immutable targets and submitted
+   magnitudes, and latest-magnitude use at the next uncommitted cycle without another input event. Check each live
+   owner, immediate re-centre/release, reversal and movement/role retirement, non-resurrection and late-return
    rejection. Verify requested/submitted/adopted joins and unchanged-role/zero-movement/no-settling eligibility.
    Synthetic lifecycle checks establish ownership behaviour, not generated footwork or manual symptom resolution.
 5. **CTRL-TAC-005 (TR10, TR2–5, TR9):** Apply ANIM-002 lifecycle/metadata acceptance to production player input.
@@ -394,38 +410,42 @@ Content repetition/recovery admission labels describe quality, not activation sw
    context and generated duration. Check phase advance/wrap, role/variant switches, interrupted idle/action handoff,
    compatible overlap and stale-result rejection without clock rewind. Verify input/horizon placement uses physical
     reference metadata while preserving phase-local motion; preserve all existing release, XR and worker guarantees.
-   For stationary turns, validate the published angular/per-foot metadata against actual ordered sources under
-   ANIM-002, and trace intensity, chosen rotation, intended phase, target facing and immutable submitted/adopted owners.
-   Exercise intensity changes, both lift phases and wraps without phase rewind or target mutation; preserve TR5's
-   immediate release/reversal/material-change retirement and actual realised feedback. Full actual-rig turn/change/
-    release/settled evidence under CTRL-UAC-001 remains required independently of these technical checks.
-   Focused checks cover entry/clock and metadata-rate caps, both full four-landmark groups and the primary-lift
-    subsequence with intervening recoveries, source-derived angles/full poses, typed first-guide-only service versus
-    later-guide appearance, and interim/lagging selection. Preserve raw wraps and uniformly scaled root-yaw derivatives
-    with unchanged non-root poses. Verify separate primary/recovery completion and pass counters, immutable compatible
-    ownership/latest-next input, material lineage and stale completion rejection. Check capped recovery service without
-    queued unrealised yaw and final-recovery completion before whole-cycle drops without skipped yaw or clock/root
-    movement. Exercise the bounded eight-candidate beyond-forecast exception separately from authored reversal and
-    expose search exhaustion explicitly. Recoveries must not delay release/reversal; no pace compensation is permitted.
-   Synthetic endpoints establish component mechanics only, not generated footwork, realised pace or parent acceptance.
+   For stationary turns, verify CTRL uses the same mapping component as NAV under ANIM-002-TAC-001–002. Check
+   120 degrees allocated per held full-stick cycle, proportional partial-stick allocation, the signed yaw
+   scale, landmark placement from measured source yaw and unchanged non-root articulation and timing. Trace both
+   directions across wraps and magnitude changes; only the next uncommitted cycle changes. Compare full displayed
+   cycle duration with source duration, including request handoffs and inference holds; verify request granularity
+   does not slow or fragment the turn. Retain TR5's same-direction retention, immediate retirement on release,
+   reversal or role change, stale rejection and realised feedback. Apply ANIM-002-TAC-002's per-tick planned-yaw
+   check, including hip independence, once-applied yaw, unchanged endpoint and actual post-modifier worker context.
+   At a same-owner successor handoff, verify the first supplied world pose matches the preceding pre-modifier
+   pose, actor heading is retained, and the blend preserves the incoming endpoint without aligning the hips to
+   the actor. Check that worker context remains post-modifier and planar motion uses the realised submission
+   root and collision handling. On release with differing hip and actor headings, compare per-tick actor-yaw
+   changes across the release-to-settling boundary and verify no step attributable to hip heading within a
+   declared, tunable angular tolerance. Check residual yaw stays in the skeleton and actor yaw is applied once.
+   CTRL-UAC-001's actual-rig evidence remains required.
 
 ## Implementation Status
 
 Normal player installation uses all eight roles from `reviewed-feminine/set.json`, bound to
-`landing-ablation-01.json`, and the [stationary-turn policy](#stationary-turn-conditioning) above. Travel uses a stable
-input frame, source-rate placement, continuous steering, backward ratio and held chaining. Stationary turns use the
-current source's four typed landmarks, intensity-dependent phase, immutable owners and bounded overtake/group-drop
-policy. Idle remains externally supplied. No source/controller activation flag or prototype movement fallback exists.
-See [Player Motion](../../../game/src/Control/PLAYER-MOTION.md) and the
+`landing-ablation-01.json`. Travel uses a stable input frame, source-rate placement, continuous steering,
+backward ratio and held chaining. The [stationary-turn policy](#stationary-turn-conditioning), including planned-yaw
+facing and release continuity, is in progress and not yet verified. Idle remains externally supplied.
+No source/controller activation flag or prototype movement fallback exists.
+Migration to TR2/TR4 native presentation, final-target feedback and tracked-idle ownership is in progress and not
+yet verified. TR5 same-direction stationary-turn retention is implemented with focused checks, pending independent
+review and manual playtest. See [Player Motion](../../../game/src/Control/PLAYER-MOTION.md) and the
 [shared source data](../../../game/data/motionbricks/reviewed-feminine/README.md).
 
 The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records normal
-startup/source binding, all-role primary input, release/ownership, turn groups and native-free preservation checks,
+startup/source binding, all-role primary input, release/ownership and native-free preservation checks,
 with clean format/build results. These are technical migration evidence; combined independent review remains pending.
 No default-entrypoint GPU inference or fresh headset/visual quality acceptance was established by those checks.
 The user's source stepping/foot-sliding mitigation is accepted with initial twitch deferred, not a no-slip guarantee.
-Raw repetition quality, generated gait/contact, turning pace, settled release and headset/interaction suitability
-remain open. Masculine/default content and previews, native-shutdown and hand-origin risks remain unresolved.
+Raw repetition quality, generated gait and settling toe motion/contact, turning pace and headset/interaction
+suitability remain open. Synthetic release-boundary evidence does not resolve the settling pose snap in the headset.
+Masculine/default content and previews, native-shutdown and hand-origin risks remain unresolved.
 Normal-source code/spec alignment is updated; broader ANIM-002 completion remains deferred-with-risk. Plan steps 5/6
 remain open. No new generation or model-call budget follows from this documentation alignment.
 

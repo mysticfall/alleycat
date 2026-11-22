@@ -172,7 +172,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 
     private static void RebaseAnimationMixerRoots(AnimationTree animationTree, AnimationPlayer animationPlayer, Skeleton3D skeleton)
     {
-        Node modelRoot = skeleton.GetParent()
+        Node modelRoot = (skeleton.GetParent() is RetargetModifier3D native ? native.GetParent().GetParent() : skeleton.GetParent())
             ?? throw new InvalidOperationException(
                 $"Character runtime subsystem installer could not resolve a model root parent for skeleton '{skeleton.GetPath()}'.");
         NodePath modelRootPath = animationTree.GetPathTo(modelRoot);

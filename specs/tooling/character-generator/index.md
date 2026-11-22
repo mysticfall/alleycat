@@ -42,7 +42,13 @@ and acceptance.
 - Rigify retargeting accepts the current source action names and reports malformed, single-frame, or static/rest-pose
   clips before they can become generated character animations.
 - Collider generation follows the body mesh and maintains proper orientation.
+- Generated collider rigs carry an `AuthoredT` rest derived by the same procedure from the same rig as the main
+  character's, so imported colliders use the same skeleton rest as the presented body. Hulls stay generated from the
+  neutral body, so their hip fit at rest is unchanged from the earlier hull output.
 - Existing Godot import sidecars keep the MakeHuman retarget metadata needed for generated skeleton imports.
+- Generated characters carry a reproducible authored `AuthoredT` rest (T-pose body, natural MakeHuman hands) that
+  Godot loads as the actual skeleton rest, so native retargeting and rest-dependent consumers share one rest without
+  hand-editing the `.blend` or the import.
 - Existing main Godot import sidecars keep or regain the `CharacterBody3D` root import contract required by CHAR-002.
 - Generated characters import through a modular Godot post-import pipeline that assembles deterministic companion
   assets.
@@ -94,10 +100,24 @@ and acceptance.
   output. Static/rest-pose-only actions must fail with diagnostics naming the offending action.
 - Retarget and bake Rigify actions from the source onto the MPFB-generated armature.
 - After baking, remove Rigify source objects/actions; retain only persisted local/baked actions on the armature.
+- Add the named static action `AuthoredT` to the generated armature before saving: the authored T-pose body with the
+  natural MakeHuman hands, as required by the [shared animation contract](../../animation/index.md) TR4. Construct it
+  deterministically from the generated rig without posing the live armature, author it in each bone's native rotation
+  mode with every location, rotation and scale channel keyed, and persist it on the armature. Refuse to replace an
+  existing `AuthoredT`. Adding it must not displace the armature's existing active action or change existing
+  animation playback; the persistence mechanism is not prescribed. Generation fails if the keyed action does not
+  reproduce the derived rest pose before saving. For acceptance, evaluate `AuthoredT` on the saved and reopened
+  `.blend`. Modifiers stay unapplied.
 - Generate a sibling collider file using `<stem>.colliders.blend` through the tool-owned collider generator.
 - The collider generation process uses the generated `.body` mesh as input.
 - Reset armature/body pose state before collider mesh generation.
 - Strip animation actions and linked libraries from collider output.
+- Generate collider hulls from the neutral body using the existing hull method. After stripping source actions, add
+  a muted `AuthoredT` action to the collider armature, with location, native rotation and scale keyed on every bone.
+  Derive it by the same procedure and from the same rig as the main `AuthoredT`. Generation fails if the keyed
+  action does not reproduce the derived rest pose before saving. For acceptance, evaluate the collider `AuthoredT` on
+  the saved and reopened `.blend`. The muted action is consumed only by
+  the importer and does not change hull geometry.
 - Recalculate collider normals facing outward using `bpy.ops.mesh.normals_make_consistent(inside=False)`.
 - Provide a user-facing command that honours the `BLENDER_BIN` environment variable.
 - Generated Blender assets must use the configured character name for exported mesh names and must not require shared
@@ -118,7 +138,8 @@ and acceptance.
 - When `<stem>.colliders.blend` has an imported scene ready, the post-import pipeline must create or refresh:
   - `<stem>_colliders.tscn` as the character collider wrapper scene;
   - `body_collider_profile.tres` as the body collider profile resource for the generated character.
-- Collider wrapper/profile asset generation must be deterministic and idempotent across repeated imports.
+- Collider wrapper/profile asset generation must be deterministic and idempotent across repeated imports: repeated
+  generation produces byte-identical wrapper and profile assets.
 - Blender/Python generation and sidecar update tooling must not directly serialise Godot scenes/resources or fabricate
   Godot UID, remap, dependency, import, or imported-scene metadata.
 - Root import metadata updates must apply only to the main `.blend.import` sidecar, never to the
@@ -131,23 +152,27 @@ and acceptance.
 - Existing legacy main skeleton paths, such as `PATH:Female/Skeleton3D`, must be updated in place rather than replaced
   by an unused configured-name entry.
 - The collider import sidecar must apply MakeHuman retarget metadata to `PATH:Ragdoll/Skeleton3D`.
-- Required retarget keys are `retarget/bone_map`, `retarget/rest_fixer/fix_silhouette/enable`, and
-  `retarget/rest_fixer/fix_silhouette/filter`, matching the reference female import sidecars.
+- Main skeleton entries carry the native import recipe: `retarget/bone_map` set to the MakeHuman bone map,
+  `retarget/rest_fixer/fix_silhouette/enable` false, no `retarget/rest_fixer/fix_silhouette/filter` key, and
+  `rest_pose/load_pose=1` (load from a named animation), `rest_pose/selected_animation="AuthoredT"` and
+  `rest_pose/selected_timestamp=0.5`. The main sidecar keeps `blender/nodes/modifiers=0`.
+- The collider `PATH:Ragdoll/Skeleton3D` entry carries the same recipe: it retains the MakeHuman bone map, sets
+  `rest_pose/load_pose=1`, selects `AuthoredT` at `rest_pose/selected_timestamp=0.5`, sets
+  `retarget/rest_fixer/fix_silhouette/enable` false and omits `retarget/rest_fixer/fix_silhouette/filter`.
 - Missing sidecars must be reported with instructions to run Godot import and rerun the helper or generator.
   Tooling must not fabricate Godot UID or imported scene metadata.
 - The collider profile post-import module (`game/assets/characters/import/character_collider_profile_import.gd`)
-  must raise a loud error when the collider source's `.import` sidecar exists but lacks the required MakeHuman
-  retarget metadata under `PATH:Ragdoll/Skeleton3D`. The error must name the sidecar and the remedy (run
+  must raise a loud error when the collider source's `.import` sidecar exists but its `PATH:Ragdoll/Skeleton3D`
+  entry lacks or deviates from the collider recipe above. The error must name the sidecar and the remedy (run
   `tools/character-generator/commands/update_character_import_retarget_metadata.py`, then reimport), and the module
   must skip collider wrapper and profile generation for that source.
 - The retarget-metadata check command (`tools/character-generator/commands/check_character_import_retarget.py`)
-  validates character import sidecars on demand. It must verify that every `_subresources.nodes` entry ending in
-  `/Skeleton3D` in the main `<stem>.blend.import` sidecar carries the required retarget keys, and that, whenever a
-  `<stem>.colliders.blend` exists, the `<stem>.colliders.blend.import` sidecar exists and carries the required
-  retarget keys under `PATH:Ragdoll/Skeleton3D`. Missing sidecars are reported with the existing remedy instruction
-  (run Godot import and rerun the helper or generator), and any validation failure exits non-zero with per-file
-  results. Validation checks key presence, not key values; a main sidecar without `/Skeleton3D` entries passes the
-  per-entry check.
+  validates character import sidecars on demand. It must verify that the main `<stem>.blend.import` sidecar has at
+  least one `_subresources.nodes` entry ending in `/Skeleton3D` and that every such entry carries the native import
+  recipe values above with no silhouette filter key, and that, whenever a `<stem>.colliders.blend` exists, the
+  `<stem>.colliders.blend.import` sidecar exists and its `PATH:Ragdoll/Skeleton3D` entry carries the collider recipe
+  values with no silhouette filter key. Missing sidecars are reported with the existing remedy instruction (run Godot
+  import and rerun the helper or generator), and any validation failure exits non-zero with per-file results.
 - Root role installer scene/profile assignment remains a separate Scene Installer System (CORE-005) workflow unless a
   dedicated role-scene workflow handles it.
 - Godot role scene assembly is performed by downstream Scene Installer System (CORE-005) workflows that:
@@ -260,6 +285,8 @@ and acceptance.
 - The character generator's command, implementation, test, and README boundary.
 - Ensuring generated source assets provide names and collider outputs required by portable scene assembly.
 - Preserving and applying Godot import retarget metadata sidecars for generated character `.blend` outputs.
+- Authoring the main and collider `AuthoredT` rest actions and applying the import recipe that loads them as the
+  skeleton rest.
 - Preserving and applying the CHAR-002 main character root import metadata for generated character `.blend` outputs.
 - Preserving and applying the modular character import-script sidecar contract for generated character `.blend` outputs.
 - Godot post-import generation of eye animation libraries and collider wrapper/profile companion assets.
@@ -287,8 +314,8 @@ and acceptance.
 - Defining character-specific gameplay attributes or abilities.
 - Project management of character presets (the content creator's responsibility, not the project's), and MPFB
   source assets beyond the generic forearm-twist sources required by RIG-002.
-- Changing Godot glTF import sidecar modifier handling or retarget behaviour; `blender/nodes/modifiers=0` remains in
-  force, with subdivision delivered by the Blender-side bake rather than exporter modifier application.
+- Changing Godot glTF import sidecar modifier handling; `blender/nodes/modifiers=0` remains in force, with
+  subdivision delivered by the Blender-side bake rather than exporter modifier application.
 - Regenerating the committed male/female character assets to pick up baked subdivision (deferred asset work; the
   baking pipeline, its placement, and its validation contracts remain in scope).
 
@@ -309,9 +336,14 @@ and acceptance.
   - [ ] Generated assets use configured character names instead of requiring `Female` source names.
   - [ ] Generated assets can be consumed by downstream portable scene assembly without mesh or rig renaming.
   - [ ] Existing Godot import sidecars keep or receive the MakeHuman retarget metadata after generation.
+  - [ ] A regenerated reference character imports in Godot with `AuthoredT` as its actual skeleton rest, with no
+        manual `.blend` or import edit.
   - [ ] Existing main Godot import sidecars keep or receive the CHAR-002 character root metadata after generation.
   - [ ] Generated characters import through the modular character post-import pipeline, not an eye-only import script.
   - [ ] Generated characters import with the required `eyes` animation library for runtime eye and face systems.
+  - [ ] A regenerated reference character's collider import uses `AuthoredT` as its skeleton rest, matching the main
+        import, with no manual `.blend` or import edit. Hull hip fit at rest is reported as unchanged neutral-body
+        output, not as a new fit guarantee.
   - [ ] When the matching collider import is ready, generated characters receive refreshed collider wrapper/profile
         assets without a manually invoked Godot script.
   - [ ] Root role installer scene/profile assignment remains handled by the role scene workflow, not by the first
@@ -370,14 +402,29 @@ and acceptance.
         from the `<stem>.colliders.blend` convention only when collider import output is available.
   - [ ] Repeated imports refresh the generated wrapper/profile assets deterministically without requiring manual Godot
         script execution.
-  - [ ] Existing main `Skeleton3D` node entries, or the generated-name fallback when absent, and the collider
-        `Skeleton3D` entry contain the reference MakeHuman bone map and silhouette settings.
-  - [ ] With the collider sidecar present but missing a required retarget key under `PATH:Ragdoll/Skeleton3D`, the
-        collider profile post-import module errors naming the sidecar and the updater-and-reimport remedy and skips
-        wrapper/profile generation, while regeneration from a healthy collider sidecar leaves wrapper/profile assets
-        byte-for-byte unchanged.
-  - [ ] The retarget-metadata check command passes healthy main and collider sidecars, fails the empty-`_subresources`
-        collider sidecar and missing required retarget keys non-zero with the remedy instruction, and is proved by
+  - [ ] Existing main `Skeleton3D` node entries, or the generated-name fallback when absent, contain the MakeHuman
+        bone map, silhouette correction off with no filter key, `rest_pose/load_pose=1`,
+        `rest_pose/selected_animation="AuthoredT"` and `rest_pose/selected_timestamp=0.5`; the main sidecar keeps
+        `blender/nodes/modifiers=0`. The collider `PATH:Ragdoll/Skeleton3D` entry contains the same bone map,
+        rest-pose and silhouette values with no filter key.
+  - [ ] Collider hulls are generated from the neutral body by the existing hull method; the collider armature then
+        carries a muted `AuthoredT` with location, native rotation and scale keyed on every bone, derived by the same
+        procedure from the same rig as the main `AuthoredT`. A keyed action that does not reproduce the derived rest
+        pose fails generation before saving, and evaluating the collider `AuthoredT` on the saved and reopened
+        `.blend` reproduces that pose.
+  - [ ] Generated armatures persist one `AuthoredT` action in native rotation modes with every channel keyed; an
+        existing `AuthoredT` is not replaced. The existing active action and animation playback are unchanged.
+        A keyed action that does not reproduce the derived rest pose fails generation before saving, and evaluating
+        `AuthoredT` on the saved and reopened `.blend` reproduces that pose.
+  - [ ] With the collider sidecar present but its `PATH:Ragdoll/Skeleton3D` entry missing or deviating from the
+        collider recipe, the collider profile post-import module errors naming the sidecar and the
+        updater-and-reimport remedy and skips wrapper/profile generation, while repeated generation from a healthy
+        collider sidecar leaves wrapper/profile assets byte-for-byte unchanged.
+  - [ ] The retarget-metadata check command passes healthy main and collider sidecars, and fails non-zero with the
+        remedy instruction for the empty-`_subresources` collider sidecar, a main sidecar without skeleton entries,
+        and any main or collider skeleton entry that lacks the bone map, has a rest-pose load mode, animation or
+        timestamp differing from the recipe, has silhouette correction on or has a silhouette filter key. It is
+        proved by
         `tools/character-generator/tests/test_character_import_retarget.py` and the headless integration tests in
         `integration-tests/src/Characters/CharacterColliderRetargetGuardIntegrationTests.cs`.
   - [ ] Missing sidecars are reported without writing synthetic Godot remap, UID, dependency, or `.scn` data.
@@ -470,6 +517,8 @@ and acceptance.
   - Check command: `tools/character-generator/commands/check_character_template_bone_bindings.py`
 - Portable character contract: [CHAR-001](../../character/001-character-skeleton/index.md)
 - Character root import contract: [CHAR-002](../../character/002-character-root/index.md)
+- Native presentation and rest contract: [Shared Animation Contract](../../animation/index.md)
+- Authored rest construction: `tools/character-generator/character_generator/authored_rest.py`
 - Scene Installer System: [CORE-005](../../core/005-scene-installer-system/index.md)
 - Forearm twist: [RIG-002](../../rigging/002-forearm-twist/index.md)
 

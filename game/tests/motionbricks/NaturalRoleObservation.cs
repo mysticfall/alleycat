@@ -114,7 +114,7 @@ public partial class NaturalRoleObservation : Node
             throw new InvalidOperationException("Normal NPC navigation was not captured.");
         }
 
-        _skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        _skeleton = actor.GetNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
         _skeleton.SkeletonUpdated += Observe;
         float heading = Heading();
         Start = _actor.GlobalPosition;

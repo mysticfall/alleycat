@@ -13,20 +13,20 @@ public sealed partial class FootTargetSyncControllerIntegrationTests
 {
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
 
-    private const string SkeletonPath = "Female/GeneralSkeleton";
+    private const string SkeletonPath = "Female/SOMA/Native/GeneralSkeleton";
     private const string LeftFootTargetPath = "IKTargets/LeftFoot";
     private const string RightFootTargetPath = "IKTargets/RightFoot";
 
-    private const string FootTargetSyncControllerPath = "Female/GeneralSkeleton/FootTargetSyncController";
-    private const string CharacterIKBeginStagePath = "Female/GeneralSkeleton/CharacterIKBeginStage";
-    private const string CharacterIKFootProviderStagePath = "Female/GeneralSkeleton/CharacterIKFootProviderStage";
-    private const string HipReconciliationModifierPath = "Female/GeneralSkeleton/HipReconciliationModifier";
-    private const string LeftLegIKControllerPath = "Female/GeneralSkeleton/LeftLegIKController";
-    private const string RightLegIKControllerPath = "Female/GeneralSkeleton/RightLegIKController";
-    private const string LeftLegTwoBoneIKControllerPath = "Female/GeneralSkeleton/LeftLegTwoBoneIKController";
-    private const string RightLegTwoBoneIKControllerPath = "Female/GeneralSkeleton/RightLegTwoBoneIKController";
-    private const string CopyLeftFootRotationPath = "Female/GeneralSkeleton/CopyLeftFootRotation";
-    private const string CopyRightFootRotationPath = "Female/GeneralSkeleton/CopyRightFootRotation";
+    private const string FootTargetSyncControllerPath = "Female/SOMA/Native/GeneralSkeleton/FootTargetSyncController";
+    private const string CharacterIKBeginStagePath = "Female/SOMA/Native/GeneralSkeleton/CharacterIKBeginStage";
+    private const string CharacterIKFootProviderStagePath = "Female/SOMA/Native/GeneralSkeleton/CharacterIKFootProviderStage";
+    private const string HipReconciliationModifierPath = "Female/SOMA/Native/GeneralSkeleton/HipReconciliationModifier";
+    private const string LeftLegIKControllerPath = "Female/SOMA/Native/GeneralSkeleton/LeftLegIKController";
+    private const string RightLegIKControllerPath = "Female/SOMA/Native/GeneralSkeleton/RightLegIKController";
+    private const string LeftLegTwoBoneIKControllerPath = "Female/SOMA/Native/GeneralSkeleton/LeftLegTwoBoneIKController";
+    private const string RightLegTwoBoneIKControllerPath = "Female/SOMA/Native/GeneralSkeleton/RightLegTwoBoneIKController";
+    private const string CopyLeftFootRotationPath = "Female/SOMA/Native/GeneralSkeleton/CopyLeftFootRotation";
+    private const string CopyRightFootRotationPath = "Female/SOMA/Native/GeneralSkeleton/CopyRightFootRotation";
 
     private const float PositionToleranceMetres = 0.01f;
 

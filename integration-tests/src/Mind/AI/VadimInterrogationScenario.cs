@@ -549,7 +549,7 @@ internal sealed partial class VadimInterrogationScenario
     /// <summary>Replaces the authored AIVoice node at its authored path with a deterministic publishing voice.</summary>
     internal static void ReplaceAuthoredVoice(CharacterHub vadim, Node vadimNode)
     {
-        Node authored = vadimNode.GetNode("Male/GeneralSkeleton/Head/Voice");
+        Node authored = vadimNode.GetNode("Male/SOMA/Native/GeneralSkeleton/Head/Voice");
         Node parent = authored.GetParent();
         int index = authored.GetIndex();
         authored.Free();

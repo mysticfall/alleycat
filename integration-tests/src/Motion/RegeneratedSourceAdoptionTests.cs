@@ -35,7 +35,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 Assert.Equal("dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af", driver.ReviewedRoles.RoleSourceSHA256("right_cross"));
                 player.Motion.SetStick(false, new Vector2(-1, 0));
                 Assert.Equal([947, 951, 961, 1001], driver.MetadataTurn!.Reference.Landmarks.Select(e => e.Frame));
-                Assert.Equal(0, driver.MetadataTurn.Phase);
+                Assert.Equal(0, driver.MetadataTurn.Cycle);
                 player.Motion.ClearInput();
                 Assert.Null(driver.MetadataTurn);
             }

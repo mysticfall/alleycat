@@ -47,7 +47,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 fixture.Right.TriggerActionVector2InputChanged("primary", Vector2.Zero);
                 Assert.Equal(0, fixture.Motion.ContinuousDriver.SteeringYaw);
                 await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 240);
-                Assert.Equal("settled-idle", fixture.Motion.Phase);
+                Assert.Equal("tracked-idle", fixture.Motion.Phase);
             }
             finally
             {
@@ -117,7 +117,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 Assert.Null(fixture.Motion.ContinuousDriver!.VirtualTarget);
                 Assert.Equal(0, fixture.Motion.ContinuousDriver.SteeringYaw);
                 await TestUtils.WaitForPhysicsFramesAsync(fixture.Tree, 240);
-                Assert.Equal("settled-idle", fixture.Motion.Phase);
+                Assert.Equal("tracked-idle", fixture.Motion.Phase);
                 Assert.Equal("", fixture.Motion.Failure);
             }
             finally

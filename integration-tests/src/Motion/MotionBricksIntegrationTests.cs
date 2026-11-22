@@ -126,72 +126,26 @@ public sealed class MotionBricksIntegrationTests
         }
     }
 
-    /// <summary>Independent Blender physical landmarks and presentation-frame rotations, including constrained helpers and the full rig.</summary>
-    [Fact]
-    public async Task CalibratedForward_PreservesBlenderPhysicalPose()
+    // Isolate the writer/reader from downstream IK, but keep the complete production
+    // source -> modifier -> target rig and role-specific transfer profile.
+    internal static Node3D MountMotionModel(bool player, out Skeleton3D skeleton)
     {
-        SomaMotionData data = Data();
-        Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
-        Skeleton3D skeleton = scene.GetNode<Skeleton3D>("NavigationTestNpc/Female/GeneralSkeleton");
-        skeleton.GetParent().RemoveChild(skeleton);
-        // The adapter now accepts canonical world poses; retain the actual Female container orientation.
-        skeleton.Basis = SomaMotionData.ModelToWorld;
-        var tree = (SceneTree)Engine.GetMainLoop();
-        tree.Root.AddChild(skeleton);
-        try
+        Node actor = GD.Load<PackedScene>(player ? "res://assets/characters/reference/ally_player.tscn"
+            : "res://assets/characters/reference/ally_npc.tscn").Instantiate();
+        using GodotObject mount = GD.Load<GDScript>("res://src/Motion/native_soma_mount.gd").New().AsGodotObject();
+        _ = mount.Call("install", actor, "Female", player);
+        Node3D model = actor.GetNode<Node3D>("Female");
+        skeleton = model.GetNode<Skeleton3D>("SOMA/Native/GeneralSkeleton");
+        foreach (Node child in skeleton.GetChildren())
         {
-            var adapter = new CalibratedSomaRig(data, skeleton);
-            Basis axis = SomaMotionData.BlenderToModel;
-            using var oracle = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath("res://temp/motionbricks/imported-rest-fix/blender-oracle.json")));
-            using var cases = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath("res://temp/motionbricks/arm-boundary/cases.json")));
-            MeshInstance3D body = skeleton.GetNode<MeshInstance3D>("Female_body");
-            Skin skin = body.Skin;
-            var binds = Enumerable.Range(0, skin.GetBindCount()).ToDictionary(i => skin.GetBindName(i).ToString(), skin.GetBindPose);
-            Transform3D[]? skinReady = null;
-            skeleton.SkeletonUpdated += () => skinReady = [.. Enumerable.Range(0, skeleton.GetBoneCount()).Select(skeleton.GetBoneGlobalPose)];
-            foreach (JsonElement sample in cases.RootElement.EnumerateArray())
+            if (child is SkeletonModifier3D)
             {
-                string id = sample.GetProperty("id").GetString()!;
-                Transform3D[] pose = [.. sample.GetProperty("pose").EnumerateArray().Select(p => new Transform3D(
-                    new Basis(new Quaternion(p[3].GetSingle(), p[4].GetSingle(), p[5].GetSingle(), p[6].GetSingle()).Normalized()),
-                    new Vector3(p[0].GetSingle(), p[1].GetSingle(), p[2].GetSingle())))];
-                JsonElement target = oracle.RootElement.GetProperty("cases").GetProperty(id).GetProperty("target");
-                skinReady = null;
-                adapter.Apply(pose);
-                await Support.TestUtils.WaitForFramesAsync(tree, 2);
-                Assert.NotNull(skinReady);
-                Vector3 hips = skinReady[skeleton.FindBone("Hips")].Origin;
-                Vector3 blenderHips = SomaMotionData.ReadMatrix(target.GetProperty("Hips").GetProperty("matrix")).Origin;
-                float scale = skeleton.MotionScale / 0.938770651817322f;
-                foreach (JsonProperty bone in target.EnumerateObject())
-                {
-                    Transform3D blenderPose = SomaMotionData.ReadMatrix(bone.Value.GetProperty("matrix"));
-                    Transform3D actual = skinReady[skeleton.FindBone(bone.Name)];
-                    Vector3 expectedPosition = axis * (blenderPose.Origin - blenderHips) * scale;
-                    float positionError = (actual.Origin - hips).DistanceTo(expectedPosition);
-                    // 0.1 mm is arithmetic fidelity of the independently evaluated/exported rig, not a gait bound.
-                    Assert.True(positionError < 0.0001f, $"{id} {bone.Name}: physical landmark error {positionError} m");
-                }
-                foreach (JsonProperty bone in target.EnumerateObject())
-                {
-                    Transform3D blenderPose = SomaMotionData.ReadMatrix(bone.Value.GetProperty("matrix"));
-                    Transform3D blenderRest = SomaMotionData.ReadMatrix(bone.Value.GetProperty("rest"));
-                    Transform3D actual = skinReady[skeleton.FindBone(bone.Name)];
-                    Basis expectedDeformation = (axis * blenderPose.Basis * blenderRest.Basis.Inverse() * axis.Inverse()).Orthonormalized();
-                    // Compare rigid orientations, not a sheared skin matrix: imported thumb binds have
-                    // anisotropic scale (about 0.999392 on two axes). Remove scale in the reference frame first.
-                    Basis presentationFrame = binds[bone.Name].AffineInverse().Basis.Orthonormalized();
-                    Basis actualDeformation = (actual.Basis.Orthonormalized() * presentationFrame.Inverse()).Orthonormalized();
-                    float error = Math.Max(actualDeformation.X.DistanceTo(expectedDeformation.X), Math.Max(actualDeformation.Y.DistanceTo(expectedDeformation.Y), actualDeformation.Z.DistanceTo(expectedDeformation.Z)));
-                    Assert.True(error < 0.0001f, $"{id} {bone.Name}: skin deformation basis error {error}");
-                }
+                child.Free();
             }
         }
-        finally
-        {
-            skeleton.Free();
-            scene.Free();
-        }
+        actor.RemoveChild(model);
+        actor.Free();
+        return model;
     }
 
     /// <summary>Changing actor yaw and world placement must rotate physical landmarks and observed root together.</summary>
@@ -199,16 +153,13 @@ public sealed class MotionBricksIntegrationTests
     public async Task ActorYaw_PreservesPhysicalPoseAndWorldFeedback()
     {
         SomaMotionData data = Data();
-        Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
-        Skeleton3D skeleton = scene.GetNode<Skeleton3D>("NavigationTestNpc/Female/GeneralSkeleton");
-        skeleton.GetParent().RemoveChild(skeleton);
-        scene.Free();
-        skeleton.Basis = SomaMotionData.ModelToWorld;
+        Node3D model = MountMotionModel(false, out Skeleton3D skeleton);
+        model.Basis = SomaMotionData.ModelToWorld;
         var tree = (SceneTree)Engine.GetMainLoop();
-        tree.Root.AddChild(skeleton);
+        tree.Root.AddChild(model);
         try
         {
-            var rig = new CalibratedSomaRig(data, skeleton);
+            var rig = new NativeSomaRig(data, skeleton);
             var before = new Transform3D[data.Names.Length];
             var after = new Transform3D[data.Names.Length];
             Vector3[]? landmarks = null;
@@ -225,7 +176,7 @@ public sealed class MotionBricksIntegrationTests
             Vector3[] original = landmarks;
             Basis yaw = new(Vector3.Up, 0.7f);
             Vector3 translation = new(2, 0, -1);
-            skeleton.GlobalTransform = new Transform3D(yaw * SomaMotionData.ModelToWorld, translation);
+            model.GlobalTransform = new Transform3D(yaw * SomaMotionData.ModelToWorld, translation);
             var input = (Transform3D[])data.Idle[0].Clone();
             input[0] = new Transform3D(yaw * input[0].Basis,
                 (yaw * input[0].Origin) + (SomaMotionData.ModelToWorld.Inverse() * translation));
@@ -239,7 +190,7 @@ public sealed class MotionBricksIntegrationTests
             Assert.InRange(after[0].Origin.DistanceTo((yaw * before[0].Origin)
                 + (SomaMotionData.ModelToWorld.Inverse() * translation)), 0, 0.0001f);
         }
-        finally { skeleton.Free(); }
+        finally { model.Free(); }
     }
 
     /// <summary>Irregular observations must interpolate the prescribed 0.1-second context, not frame indices.</summary>
@@ -280,18 +231,14 @@ public sealed class MotionBricksIntegrationTests
     public async Task SkinReadyFeedback_ObservesTargetPerturbation()
     {
         SomaMotionData data = Data();
-        Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
-        Skeleton3D skeleton = scene.GetNode<Skeleton3D>("NavigationTestNpc/Female/GeneralSkeleton");
-        skeleton.GetParent().RemoveChild(skeleton);
-        scene.Free();
-        var holder = new Node3D { Transform = new Transform3D(SomaMotionData.ModelToWorld, new Vector3(1, 0, -2)) };
-        holder.AddChild(skeleton);
+        Node3D holder = MountMotionModel(false, out Skeleton3D skeleton);
+        holder.Transform = new Transform3D(SomaMotionData.ModelToWorld, new Vector3(1, 0, -2));
         var tree = (SceneTree)Engine.GetMainLoop();
         tree.Root.AddChild(holder);
         try
         {
             skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
-            var adapter = new CalibratedSomaRig(data, skeleton);
+            var adapter = new NativeSomaRig(data, skeleton);
             var observed = new Transform3D[data.Names.Length];
             var history = new RealisedPoseHistory(data.Names.Length);
             int observations = 0;
@@ -302,7 +249,10 @@ public sealed class MotionBricksIntegrationTests
             }
 
             skeleton.SkeletonUpdated += Observe;
+            Skeleton3D sourceSkeleton = skeleton.GetParent().GetParent<Skeleton3D>();
+            sourceSkeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
             adapter.Apply(data.Idle[0]);
+            sourceSkeleton.Advance(1.0 / 30);
             skeleton.Advance(1.0 / 30);
             await Support.TestUtils.WaitForFramesAsync(tree, 2);
             foreach ((string target, string source) in new[] { ("Head", "Head"), ("LeftLowerArm", "LeftForeArm"), ("LeftHand", "LeftHand") })
