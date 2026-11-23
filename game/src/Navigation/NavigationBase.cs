@@ -47,7 +47,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     {
         IsMovementAuthorityActive = false;
         _ = _requestLifecycle.Disable(
-            CreateLifecycleTerminalContext(_lastActorTransform, NavigationTerminalReason.Cancellation),
+            CreateLifecycleTerminalContext(CurrentRealisedTransform, NavigationTerminalReason.Cancellation),
             Engine.GetPhysicsFrames());
         ClearDestinationState();
     }
@@ -374,7 +374,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     {
         _ = _requestLifecycle.TryCancel(
             NavigationCancellationSource.ExplicitClear,
-            CreateLifecycleTerminalContext(_lastActorTransform, NavigationTerminalReason.Cancellation),
+            CreateLifecycleTerminalContext(CurrentRealisedTransform, NavigationTerminalReason.Cancellation),
             Engine.GetPhysicsFrames());
         ClearDestinationState();
     }
@@ -729,10 +729,19 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     }
 
     private Transform3D ResolveLifecycleTransform(Vector3 navigationStartPosition)
-        => _lastActorTransform.IsFinite()
-            && (_lastActorTransform != Transform3D.Identity || navigationStartPosition == Vector3.Zero)
-                ? _lastActorTransform
-                : new Transform3D(Basis.Identity, navigationStartPosition);
+    {
+        Transform3D realised = CurrentRealisedTransform;
+        return realised.IsFinite() && (realised != Transform3D.Identity || navigationStartPosition == Vector3.Zero)
+            ? realised
+            : new Transform3D(Basis.Identity, navigationStartPosition);
+    }
+
+    /// <summary>
+    /// Realised actor transform recorded as lifecycle terminal evidence when a request is cancelled, replaced or
+    /// deactivated between polls: by default the transform measured at the latest poll. A consumer that realises
+    /// motion after its poll overrides this with its current measurement, so the record matches the displayed pose.
+    /// </summary>
+    protected virtual Transform3D CurrentRealisedTransform => _lastActorTransform;
 
     /// <summary>Creates measured lifecycle evidence for cancellation and replacement transitions.</summary>
     protected virtual NavigationTerminalContext CreateLifecycleTerminalContext(

@@ -178,6 +178,18 @@ public sealed class SomaInferenceWorker : SharedModelHandle<SomaNativeSession>
         }
     }
 
+    /// <summary>Whether a current result awaits <see cref="TryTake" />; a non-consuming peek for deterministic tests.</summary>
+    internal bool HasResult
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _result is not null;
+            }
+        }
+    }
+
     /// <summary>Returns at most one current result. Poll on the same scene thread that submits/cancels requests.</summary>
     public bool TryTake(out Result? result)
     {

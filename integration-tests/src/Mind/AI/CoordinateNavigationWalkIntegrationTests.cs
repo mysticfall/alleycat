@@ -31,6 +31,9 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// polled by the in-tree mind. Realised facing is NAV-001's measured transform (realised root orientation, or actor yaw
 /// during a stationary-turn plan); an independent hip-line bearing from the skinned skeleton is traced as a
 /// cross-check but not gated, since idle hips need not align with the root to within the 3° facing tolerance.
+/// Native inference runs in lockstep with simulated time: each traced step holds the scene thread until the subject's
+/// submitted request is published, so these tool contracts do not depend on host inference speed or load. NAV-001's
+/// real-time overlap budget is not exercised here.
 /// </remarks>
 public sealed class CoordinateNavigationWalkIntegrationTests
 {
@@ -47,7 +50,8 @@ public sealed class CoordinateNavigationWalkIntegrationTests
 
     /// <summary>
     /// Outcome texts round position to 0.1 m (±0.05 m) and heading to a whole degree (±0.5°); the extra 0.02 m and 0.5°
-    /// absorb the at most one physics frame between the NAV-001 terminal commit and the mind's poll.
+    /// absorb the at most one physics frame between a NAV-001 terminal commit inside a physics tick and the observation
+    /// that follows it. A stop commits between ticks and is compared with the observation at that commit.
     /// </summary>
     private const float OutcomeTextPositionToleranceMetres = 0.07f;
 
@@ -194,6 +198,7 @@ public sealed class CoordinateNavigationWalkIntegrationTests
             {
                 Vector3 start = scene.Subject.GlobalPosition;
                 Vector3 destination = new((float)PaceRouteEndX, start.Y, start.Z);
+                trace.RecordRouteProbe(destination);
                 string started = await scene.InvokeAsync(WalkToTool.ProductionToolName, new()
                 {
                     ["x"] = PaceRouteEndX,
@@ -311,7 +316,12 @@ public sealed class CoordinateNavigationWalkIntegrationTests
                 "the walk to cover 1 m");
             Assert.Equal(0, trace.OutcomeCount);
             Vector3 stopPoint = scene.Subject.GlobalPosition;
+            ulong frameBeforeStop = Engine.GetPhysicsFrames();
             string stopped = await scene.InvokeAsync(StopTool.ProductionToolName, []);
+            // The cancellation commits its terminal record inside the call; observing before any further physics tick
+            // compares the outcome with the realised transform at that commit, not with later idle-transition motion.
+            Assert.Equal(frameBeforeStop, Engine.GetPhysicsFrames());
+            Sample atStop = trace.ObserveNow();
             Assert.Equal("Stopped: you stand still where you are.", stopped);
 
             ObservedNavigationOutcome outcome = await trace.AwaitSingleOutcomeAsync();
@@ -325,7 +335,7 @@ public sealed class CoordinateNavigationWalkIntegrationTests
             Assert.Equal(CoordinateMoveKind.Walk, outcome.Move);
             AssertWithin(drift, StopDriftBoundMetres, "drift after stop (m)");
             AssertWithin(lastSecondSpeed, StandingStillMetresPerSecond, "planar speed over the final second (m/s)");
-            AssertOutcomeTextMatches(outcome, trace.AtOutcome!.Value, scene.Subject);
+            AssertOutcomeTextMatches(outcome, atStop, scene.Subject);
         }
         finally
         {
@@ -375,7 +385,10 @@ public sealed class CoordinateNavigationWalkIntegrationTests
         double MeasuredBearing,
         double? HipBearing,
         string Phase,
-        int Outcomes)
+        int Outcomes,
+        string? Role = null,
+        bool Positioning = false,
+        int PathIndex = -1)
     {
         public float PlanarDistanceTo(float x, float z) => new Vector2(X - x, Z - z).Length();
     }
@@ -391,6 +404,7 @@ public sealed class CoordinateNavigationWalkIntegrationTests
         private readonly Dictionary<string, object?> _measurements = [];
         private readonly int _outcomesBefore;
         private readonly Stopwatch _wall = Stopwatch.StartNew();
+        private readonly ulong _startFrame = Engine.GetPhysicsFrames();
         private double _time;
 
         /// <summary>
@@ -549,12 +563,15 @@ public sealed class CoordinateNavigationWalkIntegrationTests
                 && sample.PlanarDistanceTo(destination.X, destination.Z) >= margin
                 && sample.Time <= AtOutcome!.Value.Time)];
             List<double> chunks = [];
-            int step = Math.Max(1, (int)Math.Round(CruiseChunkSeconds * Engine.PhysicsTicksPerSecond));
-            for (int index = 0; index + step < cruise.Length; index += step)
+            // Chunks span simulated time, not a sample count: a slow frame runs several physics ticks per sample.
+            int from = 0;
+            for (int to = 1; to < cruise.Length; to++)
             {
-                Sample from = cruise[index];
-                Sample to = cruise[index + step];
-                chunks.Add(to.PlanarDistanceTo(from.X, from.Z) / Math.Max(to.Time - from.Time, 1e-6));
+                if (cruise[to].Time - cruise[from].Time >= CruiseChunkSeconds - 1e-9)
+                {
+                    chunks.Add(cruise[to].PlanarDistanceTo(cruise[from].X, cruise[from].Z) / (cruise[to].Time - cruise[from].Time));
+                    from = to;
+                }
             }
 
             Assert.True(chunks.Count >= 3, "The walk never cruised between its departure and arrival margins.");
@@ -602,12 +619,24 @@ public sealed class CoordinateNavigationWalkIntegrationTests
                     new JsonSerializerOptions { WriteIndented = true, NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals }));
         }
 
+        /// <summary>Observes the subject now, without advancing or recording a trace sample.</summary>
+        public Sample ObserveNow() => _scene.Observe(SimulatedTime(), OutcomeCount);
+
+        /// <summary>
+        /// Advances to the next physics frame, then holds the scene thread until any submitted native request of the
+        /// subject is published, so inference completes within simulated time rather than wall-clock time: the result
+        /// is consumed at the next physics tick, as at ordinary inference speed, whatever the host's load. Time is the
+        /// engine's physics-frame count, so ticks run back-to-back after a slow frame are still counted.
+        /// </summary>
         private async Task StepAsync()
         {
             await TestUtils.WaitForNextPhysicsFrameAsync(WalkScene.Tree);
-            _time += 1d / Engine.PhysicsTicksPerSecond;
+            _scene.AwaitNativeDelivery();
+            _time = SimulatedTime();
             _samples.Add(_scene.Observe(_time, OutcomeCount));
         }
+
+        private double SimulatedTime() => (Engine.GetPhysicsFrames() - _startFrame) / (double)Engine.PhysicsTicksPerSecond;
     }
 
     /// <summary>
@@ -712,12 +741,29 @@ public sealed class CoordinateNavigationWalkIntegrationTests
         public async Task<string> InvokeAsync(string tool, AIFunctionArguments arguments)
             => (await _tools[tool].InvokeAsync(arguments))?.ToString() ?? string.Empty;
 
+        /// <summary>
+        /// Blocks the scene thread while the subject's submitted native request is unpublished, bounded by NAV-001's
+        /// 30-second request budget in wall-clock time; exceeding it is a genuine inference-availability failure.
+        /// </summary>
+        public void AwaitNativeDelivery()
+        {
+            MotionBricksNavigation navigation = Navigation;
+            Assert.True(
+                SpinWait.SpinUntil(() => !navigation.IsAwaitingNativeResult, TimeSpan.FromSeconds(NativeDeliveryBudgetSeconds)),
+                $"Native inference delivered no result within {NativeDeliveryBudgetSeconds} s.");
+        }
+
+        private const double NativeDeliveryBudgetSeconds = 30d;
+
         public Sample Observe(double time, int outcomes)
         {
             Transform3D measured = Navigation.RecordingMeasuredTransform;
             double measuredBearing = CompassBearing.TryFromWorldFacing(-measured.Basis.Z, out double bearing) ? bearing : double.NaN;
             Vector3 position = Subject.GlobalPosition;
-            return new Sample(time, position.X, position.Z, measuredBearing, HipBearing(), Navigation.Phase, outcomes);
+            // Role decision and native path cursor are traced diagnostics, not gated.
+            return new Sample(time, position.X, position.Z, measuredBearing, HipBearing(), Navigation.Phase, outcomes,
+                Navigation.RoleDecision?.Role, Navigation.RoleDecision?.Positioning ?? false,
+                Navigation.LastSampledPathIndex);
         }
 
         public async ValueTask DisposeAsync()

@@ -47,4 +47,51 @@ internal static class NativePathMotionTargets
         }
         return new(from, direction, true);
     }
+
+    /// <summary>
+    /// End of the straight native corridor ahead of the agent's active point: that point, extended through following
+    /// points at which the ordered polyline continues straight on (navigation-mesh subdivisions), up to the first real
+    /// corner. Every point passed lies in order within <paramref name="lateralTolerance" /> planar of the line from the
+    /// corridor's start to its end, so the corridor never leaves the native path or cuts a corner. The corridor starts
+    /// at the previous route point, or at <paramref name="origin" /> before the first.
+    /// </summary>
+    internal static Vector3 StraightCorridorEnd(IReadOnlyList<Vector3> path, int activeIndex, Vector3 origin, float lateralTolerance)
+    {
+        if (path.Count == 0 || !origin.IsFinite() || !float.IsFinite(lateralTolerance) || lateralTolerance < 0)
+        {
+            throw new InvalidDataException("Native corridor is unavailable or non-finite.");
+        }
+        int index = Math.Clamp(activeIndex, 0, path.Count - 1);
+        Vector3 from = index > 0 ? path[index - 1] : origin;
+        int end = index;
+        for (int candidate = index + 1; candidate < path.Count && PassesStraightThrough(path, from, index, candidate, lateralTolerance); candidate++)
+        {
+            end = candidate;
+        }
+        return path[end];
+    }
+
+    // Points first..candidate-1 must lie strictly ahead of one another on the planar line from 'from' to the candidate.
+    private static bool PassesStraightThrough(IReadOnlyList<Vector3> path, Vector3 from, int first, int candidate, float tolerance)
+    {
+        Vector2 start = new(from.X, from.Z), line = new Vector2(path[candidate].X, path[candidate].Z) - start;
+        float length = line.Length();
+        if (!float.IsFinite(length) || length <= tolerance)
+        {
+            return false;
+        }
+        Vector2 axis = line / length;
+        float previous = 0;
+        for (int index = first; index < candidate; index++)
+        {
+            Vector2 offset = new Vector2(path[index].X, path[index].Z) - start;
+            float along = offset.Dot(axis);
+            if (!float.IsFinite(along) || along <= previous || along >= length || Math.Abs(offset.Cross(axis)) > tolerance)
+            {
+                return false;
+            }
+            previous = along;
+        }
+        return true;
+    }
 }

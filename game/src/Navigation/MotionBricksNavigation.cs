@@ -364,6 +364,18 @@ public partial class MotionBricksNavigation : NavigationBase
         PoseObserved?.Invoke();
     }
 
+    /// <summary>
+    /// The current measured transform once a realised pose has been observed: a cancellation or replacement between
+    /// physics ticks records the pose the last tick displayed, not the one measured at that tick's earlier poll.
+    /// </summary>
+    protected override Transform3D CurrentRealisedTransform
+        => _actor is not null && IsInstanceValid(_actor) && SamplesRecorded > 0
+            ? MeasuredTransform()
+            : base.CurrentRealisedTransform;
+
+    // Lockstep test seam: a submitted native request whose result is not yet published for consumption.
+    internal bool IsAwaitingNativeResult => _pending && _worker is { HasResult: false };
+
     private Transform3D MeasuredTransform()
     {
         // Service is recorded only after the played endpoint is observed. It preserves facing ownership

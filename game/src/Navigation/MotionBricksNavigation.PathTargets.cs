@@ -35,7 +35,11 @@ public partial class MotionBricksNavigation
         {
             throw new InvalidDataException("Native path does not belong to the current request.");
         }
-        if (SubmitPositioning(context, start, next))
+        // Positioning fits its whole window to the corridor end; a straight-on subdivision point just ahead is not a
+        // corner and must not shrink the window into stepping in place short of a point the agent never reaches.
+        Vector3 corridor = PositioningCorridorEnd(route, start, next);
+        _submissionCorridorEnd = corridor;
+        if (SubmitPositioning(context, start, corridor))
         {
             _nativeDeparturePending = false;
             return;
@@ -88,6 +92,18 @@ public partial class MotionBricksNavigation
         _nativeDeparturePending = false;
         _submissionCorridorEnd = route.NextPathPoint;
         SubmitTarget(context, target);
+    }
+
+    /// <summary>Planar deviation within which a native route point continues the path straight on rather than turning.</summary>
+    internal const float StraightCorridorToleranceMetres = .01f;
+
+    // The agent's next point, extended along the native path only when it is that path's active point.
+    private static Vector3 PositioningCorridorEnd(NavigationRouteSnapshot route, Vector3 start, Vector3 next)
+    {
+        int active = Math.Clamp(route.ActivePathIndex, 0, route.PathPoints.Count - 1);
+        return route.PathPoints[active].DistanceTo(next) <= .0001f
+            ? NativePathMotionTargets.StraightCorridorEnd(route.PathPoints, active, start, StraightCorridorToleranceMetres)
+            : next;
     }
 
     // Kept at the placement boundary so frozen conditioning inputs can exercise the production adapter without inference.
