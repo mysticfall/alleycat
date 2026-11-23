@@ -21,7 +21,8 @@ public sealed class VisualContextCaptureTests
 
     /// <summary>
     /// The minimap settings bind exactly the fixed 0.25 m margin, the fixed documented 512×1024 portrait output
-    /// dimensions, and the TR-19 subject override — the fixed documented gold colour and the literal
+    /// dimensions, the fixed 40 px grid spacing override that resolves a 1 m step at the AI framing (AI-015 TR-17),
+    /// and the TR-19 subject override — the fixed documented gold colour and the literal
     /// <c>*You*</c> label replacing both label flavours — keyed by the subject's resolved FullId; every other
     /// setting stays unset so the renderer's documented service defaults apply, and the inclusion distance is
     /// never caller-settable (AI-013 TR-3).
@@ -36,7 +37,8 @@ public sealed class VisualContextCaptureTests
         Assert.Equal(1024, settings.Height);
         Assert.Equal(0.25f, settings.MarginMetres);
         Assert.Null(settings.GridTextSizePixels);
-        Assert.Null(settings.GridMinimumSpacingPixels);
+        // AI-015 TR-17: the fixed 1 m grid override.
+        Assert.Equal(40f, settings.GridMinimumSpacingPixels);
         KeyValuePair<string, MiniMapMarkerOverride> entry = Assert.Single(settings.MarkerOverrides!);
         Assert.Equal(SubjectFullId, entry.Key);
         Assert.Equal(Color.FromHtml("ffd700"), entry.Value.Colour);

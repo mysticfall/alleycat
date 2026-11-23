@@ -961,12 +961,15 @@ public sealed class VisualContextIntegrationTests
             {
                 // The marker's identity resolves to char:<SubjectId> through the character host's ancestry
                 // (SCN-002 TR-7), so the gold *You* override key matches the owning subject.
-                CharacterHub host = new()
+                // The host projects no components but, like every installed character, has its projection
+                // built before the mind's session prepares (AI-002 session start waits for it).
+                ComponentlessCharacterHost host = new()
                 {
                     Name = "VadimHost",
                     Id = SubjectId,
                     Position = _subjectPosition,
                 };
+                host.RefreshComponents();
                 host.AddChild(CreateSubjectMarker());
                 _fixtureRoot.AddChild(host);
                 _owner = host;

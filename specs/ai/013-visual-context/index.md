@@ -87,8 +87,11 @@ plumbing that SCN-002's Out Of Scope deferred.
    the subject character's live world position at call time; the inclusion distance is the renderer's documented
    service default (SCN-002 TR-9), never model-settable; the bounding margin is a fixed documented 0.25 metres — a
    small breathing border keeping the self-centred subject, its neighbours and their labels clear of the image
-   edge — and the output dimensions are a fixed documented 512×1024 pixels, portrait (Width 512, Height 1024);
-   neither margin nor dimensions is model-settable, and every other setting stays at its service default; framing
+   edge — and the output dimensions are a fixed documented 512×1024 pixels, portrait (Width 512, Height 1024); the
+   grid minimum pixel spacing (SCN-002 TR-14) is a fixed documented override chosen so the grid resolves to a 1 m
+   step at this framing, making coordinates legible for the
+   [AI-015 navigation tools](../015-coordinate-navigation-tools/index.md); none of margin, dimensions or grid
+   spacing is model-settable, and every other setting stays at its service default; framing
    is the SCN-002 TR-10 auto-scale viewport; and the request carries
    `MarkerOverrides` (SCN-002 TR-19) keyed by the subject's resolved `FullId`, with a fixed documented gold
    highlight colour and label text `*You*` — literal asterisks, replacing the text of both label flavours. A
@@ -275,7 +278,8 @@ plumbing that SCN-002's Out Of Scope deferred.
 - The `AI:VisualContextMode` configuration key: binding, validation, shipped documentation, and the session-fixed
   lifetime.
 - Tools mode: the two zero-argument, subject-bound visual tools with the fixed gold `*You*` minimap override, the
-  fixed 0.25-metre minimap margin and 512×1024 portrait minimap dimensions, and contained error results.
+  fixed 0.25-metre minimap margin, 512×1024 portrait minimap dimensions and 1 m grid override, and contained error
+  results.
 - Auto mode: the fabricated per-request visual-context exchange — capture, composition, placement, per-cycle reuse,
   rebuild, failure omission, and instructional label texts — with both tools remaining model-visible.
 - The per-kind delivered-text compositions shared by both modes — the view kind's subject head-direction line and
@@ -291,8 +295,8 @@ plumbing that SCN-002's Out Of Scope deferred.
 
 ## Out Of Scope
 
-- Movement tools such as `walk_to`: the minimap makes coordinates legible for a future movement revision (SCN-002
-  Goal).
+- Movement tools: coordinate navigation (`walk_to`, `turn_to`, `stop`) is specified by
+  [AI-015](../015-coordinate-navigation-tools/index.md).
 - Configurable highlight colour or label text: the gold `*You*` override is fixed (TR-3).
 - Model-supplied minimap framing — centre, radius, size, or margin arguments: rejected by design (TR-3).
 - Per-mind mode overrides, hot reload, and in-game mode switching; the mode is session-fixed (TR-1).
@@ -343,7 +347,8 @@ plumbing that SCN-002's Out Of Scope deferred.
    TR-13; AI-002 TR-13).
 3. Minimap tool tests verify the centre is the subject's live world position, the inclusion distance is the
    renderer's documented default, the bounding margin is the fixed documented 0.25 metres and the output
-   dimensions are the fixed 512×1024 portrait, with every other setting at its service default, the override is
+   dimensions are the fixed 512×1024 portrait, the grid spacing override resolves a 1 m step at the AI framing,
+   with every other setting at its service default, the override is
    keyed by the subject's `FullId` with the gold colour and `*You*` label replacing both label flavours, framing
    follows SCN-002 TR-10, a markerless subject still succeeds through the `UnusedOverride` diagnostic path, and no
    observations or world effects occur (TR-3).
@@ -417,7 +422,8 @@ Normative dependencies:
   transcript-image contracts (TR-26–TR-28); the toggle, storage layout, and containment are consumed unchanged.
 - [SCN-002: Spatial Minimap](../../scene/002-spatial-minimap/index.md) — consumed unchanged: the character-agnostic
   renderer (TR-4), per-request settings with the documented service default (TR-9; this spec pins only the bounding
-  margin and output dimensions, TR-3), auto-scale framing (TR-10), the glyph fallback text pipeline (TR-15) so
+  margin, output dimensions and grid minimum spacing, TR-3), auto-scale framing (TR-10), the grid with labels in
+  reserved gutters (TR-14), the glyph fallback text pipeline (TR-15) so
   Korean identity labels render in minimap captures, edge contracts (TR-16), `MarkerOverrides` (TR-19), and label
   collision handling (TR-20). Its deferred AI plumbing is delivered here.
 - [VISION-001: Eyes](../../vision/001-eyes/index.md) — consumed unchanged: `IVision.Camera` and `CaptureImage()` with

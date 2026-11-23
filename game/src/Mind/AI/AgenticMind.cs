@@ -13,6 +13,7 @@ using AlleyCat.Mind.AI.SceneStatus;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
+using AlleyCat.Navigation;
 using AlleyCat.Scene;
 using AlleyCat.Scene.MiniMap;
 using AlleyCat.Templating;
@@ -57,6 +58,7 @@ public partial class AgenticMind : MindBase
     private volatile AgentSessionRunner? _activeRunner;
     private volatile MindRequestContextSource? _activeRequestContextSource;
     private volatile bool _sessionStarted;
+    private volatile CoordinateNavigationController? _navigationController;
 
     /// <summary>
     /// Creates the mind with its session-scoped speech-turn and continuation correlation coordinator
@@ -202,6 +204,7 @@ public partial class AgenticMind : MindBase
             ObservationDeliverySignalled -= HandleObservationDeliverySignalled;
             SpeechSegmentLifecycleNotified -= HandleSpeechSegmentLifecycleNotified;
             _speechContinuations.ClearContinuationExpectations();
+            ReleaseNavigationController();
         }
     }
 
@@ -220,8 +223,9 @@ public partial class AgenticMind : MindBase
             ?? throw new InvalidOperationException("AgenticMind requires a configured CurrentSceneStatus prompt stack.");
 
         cancellationToken.ThrowIfCancellationRequested();
-        ISceneContext scene = GetCurrentSceneContext();
         ICharacter character = ResolveOwningCharacter();
+        await WaitForComponentProjectionAsync(character, cancellationToken);
+        ISceneContext scene = GetCurrentSceneContext();
 
         // Phase 1: core render context — every reserved key except 'scenario', including the unconditional player
         // context (AI-003 TR-7). Observations never enter the dictionary: they reach the model exclusively
@@ -292,6 +296,49 @@ public partial class AgenticMind : MindBase
             transcriptSink,
             visualContextMode,
             chatClientKind);
+    }
+
+    /// <summary>
+    /// Holds session preparation until the owning character has built its component projection, so that
+    /// composition-time capability checks — navigation tools (AI-015 TR-1), vision for visual context (AI-013) — see
+    /// the character's installed components. Role installation adds the mind, whose <c>_Ready</c> starts the session,
+    /// before the runtime subsystem installer refreshes the projection; a character that is not an
+    /// <see cref="IComponentProjectionNotifier" />, or is already projected, continues at once. The wait is
+    /// event-driven and ends with the session's cancellation (node lifetime).
+    /// </summary>
+    private static async Task WaitForComponentProjectionAsync(ICharacter character, CancellationToken cancellationToken)
+    {
+        if (character is not IComponentProjectionNotifier notifier || notifier.HasComponentProjection)
+        {
+            return;
+        }
+
+        // Asynchronous continuations keep the session from resuming inside the installer's refresh callback: it
+        // resumes asynchronously on the main thread after the callback has returned, never inside it.
+        TaskCompletionSource projected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnComponentsRefreshed()
+        {
+            _ = projected.TrySetResult();
+        }
+
+        notifier.ComponentsRefreshed += OnComponentsRefreshed;
+        try
+        {
+            // Re-check after subscribing so a refresh between the first check and the subscription is not missed.
+            if (notifier.HasComponentProjection)
+            {
+                return;
+            }
+
+            LogAwaitingComponentProjection(character);
+            await using CancellationTokenRegistration registration = cancellationToken.Register(
+                () => projected.TrySetCanceled(cancellationToken));
+            await projected.Task;
+        }
+        finally
+        {
+            notifier.ComponentsRefreshed -= OnComponentsRefreshed;
+        }
     }
 
     /// <summary>
@@ -445,6 +492,26 @@ public partial class AgenticMind : MindBase
             functions.Add(BindSessionParking(captureViewTool, captureViewTool.CreateFunction(context, this, dispatcher, sessionServices)));
         }
 
+        if (TryResolveNavigation(context.Character, out INavigation? navigation))
+        {
+            // AI-015 TR-1: the coordinate navigation tools join the inventory only for a subject exposing
+            // navigation at composition, bound to that navigation (trusted binding — the model supplies no
+            // identity); otherwise they are absent and a model call hits the generic unknown-tool rejection. Their
+            // outcomes travel through Mind's queue into the scene-update exchange (TR-14), polled each frame.
+            CoordinateNavigationController controller = new(
+                navigation!,
+                new GodotCoordinateNavigationEnvironment(context.Character, navigation!),
+                EnqueueObservation);
+            _navigationController = controller;
+            foreach (AgentTool navigationTool in (AgentTool[])
+                [new WalkToTool(controller), new TurnToTool(controller), new StopTool(controller)])
+            {
+                functions.Add(BindSessionParking(
+                    navigationTool,
+                    navigationTool.CreateFunction(context, this, dispatcher, sessionServices)));
+            }
+        }
+
         foreach (AgentTool? extra in Tools)
         {
             if (extra is not null)
@@ -465,6 +532,46 @@ public partial class AgenticMind : MindBase
     /// </summary>
     private static AIFunction BindSessionParking(AgentTool tool, AIFunction function)
         => tool.ParksSessionByDefault ? AgentSessionParkingPolicy.SessionParking.Bind(function) : function;
+
+    /// <summary>
+    /// Resolves the subject's navigation for AI-015 TR-1 composition: present only when the character, as an
+    /// <see cref="INavigator" />, resolves exactly one <see cref="INavigation" /> component at composition time.
+    /// </summary>
+    internal static bool TryResolveNavigation(ICharacter character, out INavigation? navigation)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return character.TryGetComponent(out navigation) && navigation is not null;
+    }
+
+    /// <summary>
+    /// Delivers the outcomes of moves started by this session's coordinate navigation tools (AI-015 TR-13–TR-14)
+    /// on the main thread, where NAV-001 commits its terminal records.
+    /// </summary>
+    public override void _Process(double delta)
+    {
+        base._Process(delta);
+        if (!IsNodeLifetimeEnded)
+        {
+            _navigationController?.Poll();
+        }
+    }
+
+    /// <summary>
+    /// Detaches the ended session's navigation controller and releases it on the main thread, where NAV-001 state is
+    /// owned: its active move is cancelled and its outcome records acknowledged (AI-015 TR-13 bounded store).
+    /// </summary>
+    private void ReleaseNavigationController()
+    {
+        CoordinateNavigationController? controller = _navigationController;
+        _navigationController = null;
+        if (controller is not null)
+        {
+            Callable.From(controller.Release).CallDeferred();
+        }
+    }
+
+    /// <summary>The navigation controller of the running session, or null when its subject cannot navigate.</summary>
+    internal CoordinateNavigationController? NavigationController => _navigationController;
 
     /// <summary>
     /// Creates the session's transcript sink (AI-011 TR-5): the filesystem recorder when session transcript logging
@@ -1012,6 +1119,16 @@ public partial class AgenticMind : MindBase
         if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
         {
             logger.LogError(exception, "AgenticMind agent session failed.");
+        }
+    }
+
+    private static void LogAwaitingComponentProjection(ICharacter character)
+    {
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
+        {
+            logger.LogInformation(
+                "Agent session preparation for character '{CharacterId}' is waiting for its component projection.",
+                character.Id);
         }
     }
 

@@ -1,0 +1,110 @@
+[gd_scene format=3]
+
+[ext_resource type="NavigationMesh" path="res://tests/agent_navigation/arena_navmesh.tres" id="1_navmesh"]
+
+[sub_resource type="StandardMaterial3D" id="Material_ground"]
+albedo_color = Color(0.55, 0.57, 0.55, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Material_crate"]
+albedo_color = Color(0.75, 0.52, 0.22, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Material_lamp"]
+albedo_color = Color(0.85, 0.68, 0.2, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Material_bench"]
+albedo_color = Color(0.45, 0.33, 0.2, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Material_wall"]
+albedo_color = Color(0.16, 0.22, 0.26, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_ground"]
+material = SubResource("Material_ground")
+size = Vector3(16, 0.1, 16)
+
+[sub_resource type="BoxShape3D" id="BoxShape_ground"]
+size = Vector3(16, 0.1, 16)
+
+[sub_resource type="BoxMesh" id="BoxMesh_crate"]
+material = SubResource("Material_crate")
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape_crate"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_lamp"]
+material = SubResource("Material_lamp")
+top_radius = 0.2
+bottom_radius = 0.2
+height = 2.5
+radial_segments = 24
+
+[sub_resource type="CylinderShape3D" id="CylinderShape_lamp"]
+height = 2.5
+radius = 0.2
+
+[sub_resource type="BoxMesh" id="BoxMesh_bench"]
+material = SubResource("Material_bench")
+size = Vector3(1.6, 0.45, 0.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape_bench"]
+size = Vector3(1.6, 0.45, 0.5)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall"]
+material = SubResource("Material_wall")
+size = Vector3(3, 1.5, 0.3)
+
+[sub_resource type="BoxShape3D" id="BoxShape_wall"]
+size = Vector3(3, 1.5, 0.3)
+
+[node name="Arena" type="NavigationRegion3D"]
+navigation_mesh = ExtResource("1_navmesh")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("BoxMesh_ground")
+
+[node name="Collision" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("BoxShape_ground")
+
+[node name="Crate" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0.5, -2)
+
+[node name="Mesh" type="MeshInstance3D" parent="Crate"]
+mesh = SubResource("BoxMesh_crate")
+
+[node name="Collision" type="CollisionShape3D" parent="Crate"]
+shape = SubResource("BoxShape_crate")
+
+[node name="Lamp" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 1.25, 4)
+
+[node name="Mesh" type="MeshInstance3D" parent="Lamp"]
+mesh = SubResource("CylinderMesh_lamp")
+
+[node name="Collision" type="CollisionShape3D" parent="Lamp"]
+shape = SubResource("CylinderShape_lamp")
+
+[node name="Bench" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.225, 4.5)
+
+[node name="Mesh" type="MeshInstance3D" parent="Bench"]
+mesh = SubResource("BoxMesh_bench")
+
+[node name="Collision" type="CollisionShape3D" parent="Bench"]
+shape = SubResource("BoxShape_bench")
+
+[node name="Wall" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0.75, -1.2)
+
+[node name="Mesh" type="MeshInstance3D" parent="Wall"]
+mesh = SubResource("BoxMesh_wall")
+
+[node name="Collision" type="CollisionShape3D" parent="Wall"]
+shape = SubResource("BoxShape_wall")

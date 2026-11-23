@@ -87,6 +87,19 @@ public abstract record Observation
     }
 
     /// <summary>
+    /// Determines whether this observation wakes the observing character's agent from a parked wait: when Mind
+    /// commits it while a wait — a model-called <c>wait</c> or the session park — is active, or before a later wait
+    /// begins while no provider request has presented it yet, that wait ends at once so the next turn runs and
+    /// receives it through ordinary delivery. A running turn is never interrupted; that is
+    /// <see cref="RequiresFreshTurn" />'s role. The default never wakes.
+    /// </summary>
+    public virtual bool WakesWaitingAgent(ObservationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return false;
+    }
+
+    /// <summary>
     /// Calculates the ordered attention effects this observation applies when Mind commits it.
     /// </summary>
     public virtual IReadOnlyList<AttentionEffect> GetAttentionEffects(ObservationContext context)

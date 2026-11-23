@@ -58,9 +58,19 @@ internal static class VisualContextCapture
     internal const int MinimapHeightPixels = 1024;
 
     /// <summary>
+    /// The fixed per-request grid minimum pixel spacing the composed settings pin (AI-013 TR-3, AI-015 TR-17):
+    /// 40 pixels instead of the renderer's 64-pixel default, chosen so SCN-002's unchanged adaptive 1-2-5 step
+    /// rule resolves to a 1 m grid at the AI framing — at the agent-navigation reference framing (about
+    /// 54 px/m inside the label gutters) the step is 1 m rather than 2 m — making coordinates legible for the
+    /// coordinate navigation tools. Never model-settable.
+    /// </summary>
+    internal const float GridMinimumSpacingPixels = 40f;
+
+    /// <summary>
     /// Composes the minimap render settings of one subject (AI-013 TR-3): the fixed per-request margin
     /// <see cref="MarginMetres" /> and the fixed documented 512×1024 portrait output dimensions
-    /// (<see cref="MinimapWidthPixels" /> × <see cref="MinimapHeightPixels" />), plus the TR-19 marker override keyed
+    /// (<see cref="MinimapWidthPixels" /> × <see cref="MinimapHeightPixels" />), the fixed 1 m grid override
+    /// <see cref="GridMinimumSpacingPixels" /> (AI-015 TR-17), plus the TR-19 marker override keyed
     /// by the subject's resolved <see cref="IIdentifiable.FullId" /> with the fixed documented gold colour and the
     /// literal <c>*You*</c> label text; every other setting stays unset so the renderer's documented service
     /// defaults apply — the inclusion distance is never caller-settable.
@@ -70,6 +80,7 @@ internal static class VisualContextCapture
             MarginMetres: MarginMetres,
             Width: MinimapWidthPixels,
             Height: MinimapHeightPixels,
+            GridMinimumSpacingPixels: GridMinimumSpacingPixels,
             MarkerOverrides: new Dictionary<string, MiniMapMarkerOverride>
             {
                 [subjectFullId] = new(SubjectHighlightColour, SubjectHighlightLabel),

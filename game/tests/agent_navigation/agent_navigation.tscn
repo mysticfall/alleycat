@@ -1,0 +1,131 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://tests/agent_navigation/arena.tscn" id="1_arena"]
+[ext_resource type="PackedScene" uid="uid://cktwyl5p5gfwx" path="res://assets/characters/templates/reference_male/reference_male_npc.tscn" id="3_male"]
+[ext_resource type="PackedScene" uid="uid://bx2i1qev0800s" path="res://assets/testing/test_environment.tscn" id="4_environment"]
+[ext_resource type="Script" uid="uid://j5nt48a08vbv" path="res://src/Scene/MiniMap/MiniMapMarker.cs" id="5_marker"]
+[ext_resource type="Script" uid="uid://d3glrq4n6cmiu" path="res://src/Scene/MiniMap/MiniMapRectangle.cs" id="6_rectangle"]
+[ext_resource type="Script" uid="uid://bdq4e5dko6vhv" path="res://src/Scene/MiniMap/MiniMapCircle.cs" id="7_circle"]
+[ext_resource type="Script" uid="uid://bi286ig2oimvg" path="res://src/Scene/MiniMap/MiniMapLabel.cs" id="8_label"]
+
+[sub_resource type="StandardMaterial3D" id="Material_rug"]
+albedo_color = Color(0.62, 0.2, 0.22, 1)
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_rug"]
+material = SubResource("Material_rug")
+size = Vector2(1.6, 1.2)
+
+[node name="AgentNavigation" type="Node3D"]
+
+[node name="TestEnvironment" parent="." instance=ExtResource("4_environment")]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8, 0.4115966, -0.438529, 0, 0.7295372, 0.6839411, 0.6, -0.5471529, 0.5836298, -3, 6, 4)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.42261827, 0.9063078, 0, -0.9063078, 0.42261827, 0, 11, 6)
+
+[node name="Arena" parent="." instance=ExtResource("1_arena")]
+
+[node name="RugMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.005, -1)
+mesh = SubResource("PlaneMesh_rug")
+
+[node name="Landmarks" type="Node3D" parent="."]
+
+[node name="Crate" type="Node3D" parent="Landmarks" node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0, -2)
+script = ExtResource("5_marker")
+DrawOrder = 1
+Primitives = [NodePath("Box"), NodePath("Caption")]
+
+[node name="Box" type="Node3D" parent="Landmarks/Crate"]
+script = ExtResource("6_rectangle")
+Width = 1.0
+Depth = 1.0
+FillColour = Color(0.75, 0.52, 0.22, 1)
+
+[node name="Caption" type="Node3D" parent="Landmarks/Crate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.9)
+script = ExtResource("8_label")
+Flavour = 0
+Text = "Crate"
+TextSize = 18
+FillColour = Color(0.24, 0.13, 0.02, 1)
+
+[node name="Lamp" type="Node3D" parent="Landmarks" node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0, 4)
+script = ExtResource("5_marker")
+DrawOrder = 1
+Primitives = [NodePath("Post"), NodePath("Caption")]
+
+[node name="Post" type="Node3D" parent="Landmarks/Lamp"]
+script = ExtResource("7_circle")
+Radius = 0.25
+FillColour = Color(0.85, 0.68, 0.2, 1)
+
+[node name="Caption" type="Node3D" parent="Landmarks/Lamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7)
+script = ExtResource("8_label")
+Flavour = 0
+Text = "Lamp"
+TextSize = 18
+FillColour = Color(0.4, 0.3, 0.05, 1)
+
+[node name="Bench" type="Node3D" parent="Landmarks" node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, 4.5)
+script = ExtResource("5_marker")
+DrawOrder = 1
+Primitives = [NodePath("Seat"), NodePath("Caption")]
+
+[node name="Seat" type="Node3D" parent="Landmarks/Bench"]
+script = ExtResource("6_rectangle")
+Width = 1.6
+Depth = 0.5
+FillColour = Color(0.45, 0.33, 0.2, 1)
+
+[node name="Caption" type="Node3D" parent="Landmarks/Bench"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7)
+script = ExtResource("8_label")
+Flavour = 0
+Text = "Bench"
+TextSize = 18
+FillColour = Color(0.24, 0.17, 0.1, 1)
+
+[node name="Rug" type="Node3D" parent="Landmarks" node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, -1)
+script = ExtResource("5_marker")
+DrawOrder = 0
+Primitives = [NodePath("Area"), NodePath("Caption")]
+
+[node name="Area" type="Node3D" parent="Landmarks/Rug"]
+script = ExtResource("6_rectangle")
+Width = 1.6
+Depth = 1.2
+FillColour = Color(0.62, 0.2, 0.22, 1)
+
+[node name="Caption" type="Node3D" parent="Landmarks/Rug"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.95)
+script = ExtResource("8_label")
+Flavour = 0
+Text = "Rug"
+TextSize = 18
+FillColour = Color(0.3, 0.05, 0.06, 1)
+
+[node name="Wall" type="Node3D" parent="Landmarks" node_paths=PackedStringArray("Primitives")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, -1.2)
+script = ExtResource("5_marker")
+DrawOrder = 0
+Primitives = [NodePath("Block")]
+
+[node name="Block" type="Node3D" parent="Landmarks/Wall"]
+script = ExtResource("6_rectangle")
+Width = 3.0
+Depth = 0.3
+FillColour = Color(0.16, 0.22, 0.26, 1)
+
+[node name="Companion" parent="." instance=ExtResource("3_male")]
+transform = Transform3D(-0.928486, 0, -0.371368, 0, 1, 0, 0.371368, 0, -0.928486, -1, 0, -3.5)
+Id = "reference_male"

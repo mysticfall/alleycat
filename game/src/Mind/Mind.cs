@@ -81,6 +81,7 @@ public abstract partial class Mind : Node
     private readonly Dictionary<long, AcceptedObservationEntry> _activeRetainedEntries = [];
     private readonly Dictionary<long, AcceptedObservationEntry> _expiringRetainedEntries = [];
     private readonly List<long> _pendingFreshSequenceIDs = [];
+    private readonly List<long> _pendingWakeSequenceIDs = [];
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private readonly AttentionPolicy _attention = new(GetStopwatchSeconds);
     private readonly Queue<PerceptionWork> _perceptionQueue = [];
@@ -102,7 +103,7 @@ public abstract partial class Mind : Node
     /// Identity marker of the single active observation wait: set while a wait runs, so delivery signalling knows
     /// a wait owns the window and a second concurrent wait is rejected.
     /// </summary>
-    private object? _activeWait;
+    private ActiveObservationWait? _activeWait;
     private SubjectSceneDecisions? _sceneDecisions;
     internal SubjectSceneDecisions GetSceneDecisions() => _sceneDecisions ??= new(this, _sceneDecisionClientLoader(), _logger);
     internal MindSessionTranscriptRecorder? DecisionTranscript
@@ -1292,6 +1293,7 @@ public abstract partial class Mind : Node
         List<AgentObservation> stampedObservations = [];
         List<RetainedObservationChange> retentionChanges = [];
         bool signalledFresh = false;
+        ActiveObservationWait? wokenWait = null;
 
         lock (_observationStateLock)
         {
@@ -1347,6 +1349,7 @@ public abstract partial class Mind : Node
 
                 // Scheduling is evaluated exactly once only after policy acceptance and before any state mutation.
                 bool requiresFreshTurn = observation.RequiresFreshTurn(context);
+                bool wakesWaitingAgent = observation.WakesWaitingAgent(context);
                 var scheduling = new ObservationSchedulingMetadata(
                     CalculateAndValidateImportance(observation, context),
                     requiresFreshTurn);
@@ -1366,7 +1369,8 @@ public abstract partial class Mind : Node
                 accepted.Add(new StagedAcceptance(
                     entry,
                     policy.IsEventEligible(stampedObservation),
-                    policy.HasFiniteLifetime));
+                    policy.HasFiniteLifetime,
+                    wakesWaitingAgent));
                 _ = activeEntries.RemoveAll(entry => decision.SupersededSequenceIDs.Contains(entry.SequenceID));
                 activeEntries.Add(entry);
                 if (commitIdentity is not null)
@@ -1420,6 +1424,14 @@ public abstract partial class Mind : Node
                 {
                     _persistentEventTimeline.Add(entry);
                 }
+
+                // A wake-worthy observation stays pending until a provider request presents it, so a wait that
+                // begins before then also ends at once; a wait already parked ends after this batch settles.
+                if (staged.WakesWaitingAgent)
+                {
+                    _pendingWakeSequenceIDs.Add(entry.SequenceID);
+                    wokenWait = _activeWait;
+                }
             }
 
             if (accepted.Count > 0)
@@ -1470,6 +1482,8 @@ public abstract partial class Mind : Node
         {
             SignalObservationDelivery();
         }
+
+        wokenWait?.Wake();
     }
 
     private static ObservationCommitIdentity? GetCommitIdentity(
@@ -1509,7 +1523,14 @@ public abstract partial class Mind : Node
     {
         lock (_observationStateLock)
         {
-            if (IsNodeLifetimeEnded || schedulingSequenceID <= 0 || _pendingFreshSequenceIDs.Count == 0)
+            if (IsNodeLifetimeEnded || schedulingSequenceID <= 0)
+            {
+                return;
+            }
+
+            // Presented wake-worthy observations no longer end a later wait.
+            _ = _pendingWakeSequenceIDs.RemoveAll(sequenceID => sequenceID <= schedulingSequenceID);
+            if (_pendingFreshSequenceIDs.Count == 0)
             {
                 return;
             }
@@ -1530,6 +1551,22 @@ public abstract partial class Mind : Node
             lock (_observationStateLock)
             {
                 return _activeWait is not null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether a committed wake-worthy observation (<see cref="AgentObservation.WakesWaitingAgent" />) has not yet
+    /// been presented by an accepted provider request, so a wait beginning now would end at once: deterministic
+    /// observation for fixtures (AI-002 TR-9).
+    /// </summary>
+    internal bool HasPendingWakeObservation
+    {
+        get
+        {
+            lock (_observationStateLock)
+            {
+                return _pendingWakeSequenceIDs.Count > 0;
             }
         }
     }
@@ -1690,8 +1727,10 @@ public abstract partial class Mind : Node
     /// model on a cadence and on speech/scene event nudges while the wait runs; an immediate verdict completes the
     /// wait at once, a deferred verdict arms its configured deadline under shorten-only rules, and an expired
     /// deadline completes the wait. The <c>wait</c> tool then returns its payload-free result and the runner
-    /// proceeds exactly as after any tool. Waiting is never an event-delivery or cursor-advancement channel; scene
-    /// events reach the model through the request-context timeline.
+    /// proceeds exactly as after any tool. A wake-worthy observation (<see cref="AgentObservation.WakesWaitingAgent" />)
+    /// committed while the wait is parked — or still unpresented when it begins — ends it at once with the same
+    /// immediate wake. Waiting is never an event-delivery or cursor-advancement channel; scene events reach the model
+    /// through the request-context timeline.
     /// </summary>
     /// <param name="cancellationToken">Cancellation that abandons the wait; node-lifetime cancellation is terminal
     /// and never surfaces a normal wait result (AI-001 TR-11).</param>
@@ -1713,7 +1752,8 @@ public abstract partial class Mind : Node
             NodeLifetimeCancellationToken);
         CancellationToken waitToken = waitCancellation.Token;
 
-        object wait;
+        ActiveObservationWait wait;
+        bool wakePending;
         lock (_observationStateLock)
         {
             if (IsNodeLifetimeEnded)
@@ -1726,11 +1766,21 @@ public abstract partial class Mind : Node
                 throw new InvalidOperationException($"Mind '{GetPath()}' supports exactly one active observation wait.");
             }
 
-            wait = _activeWait = new object();
+            wait = _activeWait = new ActiveObservationWait();
+            wakePending = _pendingWakeSequenceIDs.Count > 0;
         }
 
         try
         {
+            if (wakePending)
+            {
+                // A wake-worthy observation no request has presented yet: this wait is the session's pause, and it
+                // ends at once so the next turn delivers the observation.
+                onGateEntered?.Invoke();
+                _logger?.LogDebug("An undelivered wake-worthy observation ends the wait immediately.");
+                return new WaitOutcome(ObservationWaitWake.DecisionAct);
+            }
+
             DecisionWaitTimingSettings timing = _waitTimingLoader();
             var controller = new DecisionWaitController(
                 this,
@@ -1739,8 +1789,29 @@ public abstract partial class Mind : Node
                 _waitJitterSampler,
                 GetStopwatchSeconds,
                 _logger);
-            ObservationWaitWake wake = await controller.RunAsync(durationSeconds, waitToken, onGateEntered).ConfigureAwait(false);
-            return new WaitOutcome(wake);
+            using var gateCancellation = CancellationTokenSource.CreateLinkedTokenSource(waitToken);
+            Task<ObservationWaitWake> gate = controller.RunAsync(durationSeconds, gateCancellation.Token, onGateEntered);
+            Task first = await Task.WhenAny(gate, wait.Woken).ConfigureAwait(false);
+            if (ReferenceEquals(first, gate))
+            {
+                return new WaitOutcome(await gate.ConfigureAwait(false));
+            }
+
+            // A wake-worthy observation ended the wait: the gate stops, releasing its subscriptions, and the wait
+            // completes with the same immediate wake an act-now verdict gives (AI-015 TR-14).
+            gateCancellation.Cancel();
+            try
+            {
+                _ = await gate.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!waitToken.IsCancellationRequested)
+            {
+                // The gate's cancellation is the expected end of a woken wait.
+            }
+
+            waitToken.ThrowIfCancellationRequested();
+            _logger?.LogDebug("A wake-worthy observation ended the wait.");
+            return new WaitOutcome(ObservationWaitWake.DecisionAct);
         }
         finally
         {
@@ -1834,7 +1905,8 @@ public abstract partial class Mind : Node
     private readonly record struct StagedAcceptance(
         AcceptedObservationEntry Entry,
         bool IsEventEligible,
-        bool HasFiniteLifetime);
+        bool HasFiniteLifetime,
+        bool WakesWaitingAgent);
 
     /// <summary>
     /// One serialisable unit of perception work: either a percept fan-out or an observation awaiting atomic commit,
@@ -1848,6 +1920,19 @@ public abstract partial class Mind : Node
         AgentObservation Observation,
         Func<bool>? IsStillCurrent,
         SpeechObservationTransport? SpeechTransport) : PerceptionWork;
+
+    /// <summary>
+    /// One active observation wait: its wake signal completes when a wake-worthy observation is committed while the
+    /// wait is parked (<see cref="AgentObservation.WakesWaitingAgent" />).
+    /// </summary>
+    private sealed class ActiveObservationWait
+    {
+        private readonly TaskCompletionSource _woken = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Woken => _woken.Task;
+
+        public void Wake() => _woken.TrySetResult();
+    }
 
     /// <summary>Outcome of one observation wait, carrying its wake reason only.</summary>
     /// <param name="Wake">Reason the wait completed.</param>

@@ -79,6 +79,17 @@ persistent event timeline remains canonical memory; the provider transcript is d
 1. There is one logical session per AgenticMind, ending only on node exit or contained unrecoverable failure. The
    transient provider transcript is never Mind memory: it is derived presentation of Mind's canonical state, and
    time-based tasks read Mind's observation store, never the provider transcript.
+
+   Session preparation waits for the owning character's component projection before anything else is resolved,
+   because role installation can add the mind, whose ready step starts the session, before the character's
+   components are projected. Preparation therefore first awaits the character's projection signal
+   (`IComponentProjectionNotifier`: `HasComponentProjection`, then `ComponentsRefreshed`). The wait is event-driven
+   and is cancelled when the node's lifetime ends. Preparation resumes asynchronously on the main thread after the
+   refresh callback has returned, never inside it. A character that is already projected, or that provides no
+   projection notifier, proceeds at once. The composition-time navigation check (TR-13; AI-015 TR-1) and every
+   vision rig lookup for AI-013 visual context, from the first request onward, therefore see the character's
+   installed components. A character whose projection is never built, for example after a failed installation,
+   starts no session.
 2. The static system instruction is rendered once at session start under AI-003. Every logical provider request then
    uses, in order: the static system instruction; the bootstrap user input; every retained accepted exchange in
    chronological order, real and synthetic interleaved; and one fresh user current-scene message rendered last. In
@@ -106,8 +117,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
 
 7. AI-001's payload-free fresh-turn signal retains its role in invalidating stale conversational requests. While
    parked, freshness remains latched for the next request; neither freshness nor speech lifecycle signals cancel
-   or complete the wait. Existing conversational request cancellation, continuation, and playback hand-off
-   arbitration are otherwise unchanged.
+   or complete the wait. Only a wake-eligible observation (TR-18) ends a parked wait outside the wait gate's own
+   decisions and deadlines, and it does so without raising the fresh-turn signal. Existing conversational request
+   cancellation, continuation, and playback hand-off arbitration are otherwise unchanged.
 8. One Mind can run at most one active wait. A supplied `wait(seconds)` duration must be finite and positive and seeds
    an unjittered deadline on a monotonic wall clock; omitting it leaves the deadline unarmed until a decision.
    Explicit and automatic waits both report only why the wait ended, elapsed game time, and current game time.
@@ -134,7 +146,11 @@ persistent event timeline remains canonical memory; the provider transcript is d
      (minimap and view capture) composed at AgenticMind under AI-013; in `auto` mode a model-initiated call to
      either behaves exactly as in `tools` mode. In `off` visual-context mode those two
      tools are absent from the inventory, and a model attempt to call either is rejected as an unknown tool under
-     existing validation, mirroring the synthetic-delivery precedent (TR-18). The synthetic delivery tool (TR-18)
+     existing validation, mirroring the synthetic-delivery precedent (TR-18). When the subject character exposes
+     navigation at composition — after the TR-1 component-projection wait — the inventory also includes the
+     AI-015 coordinate navigation tools `walk_to`, `turn_to` and `stop`; for a subject without navigation they are
+     absent and a model attempt to call any of them is rejected as an unknown tool under existing validation. The
+     synthetic delivery tool (TR-18)
      is runtime-authored only: it is not offered to the model, and a model attempt to call it is rejected as an
      unknown tool under existing validation. Tool delegates send any
      resulting observations through Mind's atomic queue. Tool validation and typed tool binding occur only at
@@ -183,6 +199,26 @@ persistent event timeline remains canonical memory; the provider transcript is d
     distinct namespace, and session-wide duplicate-call-ID validation spans real and synthetic exchanges: a consumed
     call ID stays consumed for the whole session. The namespace also supplies the fabricated visual-context call IDs
     of AI-013's auto mode, which must never collide with a real tool call ID or a `scene_update` ID (AI-013 TR-8).
+    AI-015 navigation outcomes (arrived, failed, stopped, replaced) are event-timeline observations delivered through
+    this exchange like any other; they add no delivery path or exchange kind (AI-015 TR-13–TR-15).
+
+    Observation kinds may opt in to waking a parked agent, so the model reacts straight away, as to a late tool
+    result; the default is no wake. Only AI-015 `arrived` and `failed` navigation outcomes opt in, and every other
+    observation kind keeps its existing behaviour. The wake contract for such a wake-eligible observation:
+    - **Pending until presented:** it stays wake-pending from commit until an accepted provider request whose
+      confirmed watermark covers it has presented it (TR-5); failed, invalid, stale or cancelled work leaves it
+      pending.
+    - **Ending the wait:** while one is wake-pending, a parked wait — an explicit `wait` or automatic parking
+      (TR-39) — ends at once, regardless of any armed deadline or pending decision evaluation. A wait already
+      parked when it commits ends after that commit; a wait that begins while it is pending ends immediately,
+      without a decision evaluation. An observation already presented never ends a later wait.
+    - **Wait reason:** the ended wait reports the same act-now reason as an immediate `expecting_arrived` or
+      `must_act` verdict (TR-41); there is no new reason and no observation text (TR-8, TR-10). The next request
+      delivers the observation through this exchange.
+    - **No interruption:** waking never raises the fresh-turn signal (TR-7): a running turn or in-flight request is
+      neither interrupted nor invalidated, delivery follows the rules above, and nothing is delivered twice (TR-19).
+      An observation committed during a running turn therefore ends the session's next wait unless an accepted
+      request has already presented it.
 19. Scene delivery is marked irrevocably when the synthetic scene-update exchange is appended to the retained
     transcript. Exact transport retries, invalid-response recovery, and fresh replacement requests never redeliver
     an already-delivered observation. Rematerialisation after recovery or replacement consolidates only observations
@@ -371,8 +407,10 @@ persistent event timeline remains canonical memory; the provider transcript is d
     - `initiative`: how strongly the situation calls for action: `must_act`, `may_act`, or `no_reason`.
       The instructions remind the decision model that most moments in a group scene give no particular reason to act.
 41. Read both answers. `expecting_arrived` or `must_act` wakes immediately, even if a timer is armed or the other
-    answer is `expecting_pending`. Otherwise propose a deadline from `ResponsePendingTimeout` for `expecting_pending`,
-    `MayActTimeout` for `not_expecting` + `may_act`, or `NoReasonTimeout` for `not_expecting` + `no_reason`.
+    answer is `expecting_pending`. A wake-pending observation (TR-18) also ends the wait immediately, without
+    awaiting a decision evaluation, and the wait reports that same act-now reason. Otherwise propose a deadline
+    from `ResponsePendingTimeout` for `expecting_pending`, `MayActTimeout` for `not_expecting` + `may_act`, or
+    `NoReasonTimeout` for `not_expecting` + `no_reason`.
     These `DecisionWait` settings in `AlleyCat.yaml` default to 5, 3, and 10 real seconds respectively;
     `TimeoutJitter` defaults to ±20% of the configured delay. Use CORE-006 override precedence.
     A proposed deadline arms the timer only if none is armed or the proposal is earlier. Never extend or reset an
@@ -422,6 +460,9 @@ persistent event timeline remains canonical memory; the provider transcript is d
   (TR-13), their accurate descriptions (TR-15–TR-16), the scoped image-disposal exception to whole-exchange
   retention (TR-17), and the synthetic call-ID namespace covering fabricated visual calls (TR-18), specified
   normatively by AI-013.
+- AI-015 coordinate navigation integration: the navigation-conditional inventory of `walk_to`, `turn_to` and `stop`
+  (TR-13), navigation outcome delivery through the scene-update exchange, and wake-eligible `arrived` and `failed`
+  outcomes ending a parked wait (TR-7, TR-18, TR-41), specified normatively by AI-015.
 - User-configured chat client kind (`AI:ChatClientKind`): CORE-006 binding with trimmed case-insensitive values,
   config-over-resource precedence with unset or blank falling back to the provider resource property, local
   rejection of unrecognised nonblank values, and the effective kind driving chat client adapter selection and the
@@ -619,6 +660,18 @@ persistent event timeline remains canonical memory; the provider transcript is d
     verify the same perspective for the same scene; with neither, verify no capture or call. Register a third gate
     without editing dispatch. Exercise two NPCs with distinct histories, coalesced nudges, failure, teardown, and
     expiry and re-parking during a slow call: the old wait cannot wake the new one or cancel live gaze (TR-43–TR-45).
+27. Tests verify the opt-in wake contract (TR-7, TR-18, TR-41): the default observation does not wake; a
+    wake-eligible observation ends an explicit `wait` and automatic parking at once — with a timer armed and with a
+    decision evaluation pending — reporting the act-now reason, and the next request delivers it exactly once
+    through the scene-update exchange; one committed during a running turn raises no fresh-turn signal, leaves the
+    running turn and in-flight request uninvalidated, and ends the next wait immediately while no accepted request
+    has presented it; one already presented by an accepted request ends no later wait, while failed or invalid
+    work leaves it pending; and non-eligible observations keep their existing behaviour.
+28. Tests verify the TR-1 component-projection wait: preparation for a character whose projection is not yet built
+    composes nothing until the projection is built, then composes against the installed components; an
+    already-projected character, or one without a projection notifier, proceeds at once; node-lifetime cancellation
+    during the wait ends the session quietly, without a backend failure; and a role-installed reference NPC's first
+    request carries the navigation tools (AI-015 TR-20).
 
 ## References
 
@@ -633,6 +686,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
   owning the scoped TR-17 exception
 - [AI-013: Decision Payload Diagnostics][decision-dumps] — normative for wait-decision dumps.
 - [AI-014: Decision Model API][decision-api] — normative for typed choice questions, answers, and failures.
+- [AI-015: Coordinate Navigation Tools](../015-coordinate-navigation-tools/index.md) — the navigation-conditional
+  `walk_to`, `turn_to` and `stop` tools and their outcome observations (TR-13, TR-18)
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
 - [TEST-001: Integration Test Framework](../../testing/001-test-framework/index.md) — integration-session opt-in
   gate, `AITest` configuration boundary, live-LLM pathway, and framework-side acceptance coverage normative for

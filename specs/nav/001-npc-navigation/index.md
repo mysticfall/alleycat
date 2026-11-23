@@ -283,7 +283,8 @@ the game sets actor facing from planned cycle yaw, independently of generated ar
 - Player locomotion restoration, multi-NPC batching, broad hardware support, and ARDY integration.
 - Terrain/contact adaptation and a general action/idle catalogue. ANIM-002 role coverage, generic variants/stages,
   physical speed metadata and lifecycle remain required; pending migration is not an exclusion from delivery.
-- AgenticMind action selection and Smart Primitives.
+- Smart Primitives. AgenticMind coordinate navigation tools consume this navigation contract under
+  [AI-015](../../ai/015-coordinate-navigation-tools/index.md).
 - Physics-aware planning, bespoke predictive physical admission, and new stall detection/recovery or stall-triggered
   rerouting. Existing navigation-agent rerouting and actual engine collision handling remain in scope.
 - Wrist/finger fidelity refinement and a future evidence-derived endpoint quality gate. These do not waive gross-body
@@ -417,6 +418,7 @@ No new source generation, model-call budget or shutdown retry follows from this 
 ## References
 
 - [Project Specifications](../../index.md)
+- [AI-015: Coordinate Navigation Tools](../../ai/015-coordinate-navigation-tools/index.md)
 - [Shared Animation Contract](../../animation/index.md)
 - [ANIM-002: Locomotive Conditioning Sources](../../animation/002-locomotive-animation-set/index.md)
 - [Runtime Setup and Evidence Limits](../../../game/src/Motion/README.md)
