@@ -38,6 +38,12 @@ public sealed class RoleInstalledSessionToolCompositionIntegrationTests
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
 
     /// <summary>
+    /// Hang guard for installation, session start and session end: ten seconds of simulated time at the default 60 Hz
+    /// physics rate. It bounds no requirement; reaching it means the awaited step never happened.
+    /// </summary>
+    private const int SetupGuardPhysicsFrames = 600;
+
+    /// <summary>
     /// The first request a role-installed reference NPC's session sends carries the coordinate navigation tools, as
     /// its character exposes <see cref="INavigation" /> once installation completes (AI-015 TR-1).
     /// </summary>
@@ -63,9 +69,11 @@ public sealed class RoleInstalledSessionToolCompositionIntegrationTests
             tree.Root.AddChild(player);
             tree.Root.AddChild(npc);
 
-            for (int frame = 0; frame < 600 && !(npc.HasComponentProjection && provider.FirstRequestTools.IsCompleted); frame++)
+            // Session start completes off the scene thread, so its guard counts physics frames, which advance with
+            // simulated time; uncapped process frames would shrink the guard as rendering speeds up.
+            for (int frame = 0; frame < SetupGuardPhysicsFrames && !(npc.HasComponentProjection && provider.FirstRequestTools.IsCompleted); frame++)
             {
-                await WaitForNextFrameAsync(tree);
+                await WaitForNextPhysicsFrameAsync(tree);
             }
 
             // Setup guards: installation completed and the character does expose navigation, so a missing tool below
@@ -84,9 +92,9 @@ public sealed class RoleInstalledSessionToolCompositionIntegrationTests
         {
             Task? worker = npc.GetChildren().OfType<MotionBricksNavigation>().SingleOrDefault()?.WorkerCompletion;
             npc.GetParent()?.RemoveChild(npc);
-            for (int frame = 0; frame < 600 && mind?.ActiveRunner is not null; frame++)
+            for (int frame = 0; frame < SetupGuardPhysicsFrames && mind?.ActiveRunner is not null; frame++)
             {
-                await WaitForNextFrameAsync(tree);
+                await WaitForNextPhysicsFrameAsync(tree);
             }
 
             npc.QueueFree();
