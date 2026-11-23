@@ -9,15 +9,21 @@ namespace AlleyCat.Scene.MiniMap;
 /// Also carries the render's diagnostics so fragment builders can report transient skips, and the TR-20 label
 /// placement outcomes decided before composition so label fragments render at their placed positions.
 /// </summary>
-/// <param name="viewport">World X/Z rectangle mapped to the image.</param>
+/// <param name="viewport">World X/Z rectangle mapped to the plot area.</param>
 /// <param name="scale">Uniform pixels-per-metre scale.</param>
 /// <param name="imageSize">Output image size in pixels.</param>
+/// <param name="plotArea">Image-pixel rectangle inside the grid-label gutters that the viewport maps onto.</param>
 /// <param name="diagnostics">Diagnostic sink shared by the whole render.</param>
-public sealed class MiniMapProjection(Rect2 viewport, float scale, Vector2I imageSize, List<MiniMapDiagnostic> diagnostics)
+public sealed class MiniMapProjection(
+    Rect2 viewport,
+    float scale,
+    Vector2I imageSize,
+    Rect2 plotArea,
+    List<MiniMapDiagnostic> diagnostics)
 {
     private readonly Dictionary<string, MiniMapLabelPlacement> _labelPlacements = [];
 
-    /// <summary>World X/Z rectangle mapped to the image.</summary>
+    /// <summary>World X/Z rectangle mapped to the plot area.</summary>
     public Rect2 Viewport => viewport;
 
     /// <summary>Uniform pixels-per-metre scale.</summary>
@@ -26,10 +32,18 @@ public sealed class MiniMapProjection(Rect2 viewport, float scale, Vector2I imag
     /// <summary>Output image size in pixels.</summary>
     public Vector2I ImageSize => imageSize;
 
-    /// <summary>Projects an absolute world X/Z position to image pixels; <c>+X</c> right, <c>+Z</c> down.</summary>
+    /// <summary>
+    /// Image-pixel rectangle the viewport maps onto: the image minus the reserved grid-label gutters. Marker ink is
+    /// clipped to it and marker labels must place inside it.
+    /// </summary>
+    public Rect2 PlotArea => plotArea;
+
+    /// <summary>
+    /// Projects an absolute world X/Z position to image pixels inside the plot area; <c>+X</c> right, <c>+Z</c> down.
+    /// </summary>
     /// <param name="world">World X/Z position.</param>
     /// <returns>Image pixel position.</returns>
-    public Vector2 WorldToPixel(Vector2 world) => (world - viewport.Position) * scale;
+    public Vector2 WorldToPixel(Vector2 world) => plotArea.Position + ((world - viewport.Position) * scale);
 
     /// <summary>
     /// Records the TR-20 placement outcome for one marker label, decided by the placement pass before

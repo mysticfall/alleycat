@@ -126,7 +126,8 @@ public sealed class MiniMapFramingSweepIntegrationTests
                     float widthCover = wallsBounds.Size.X / result.Viewport.Size.X;
                     float heightCover = wallsBounds.Size.Y / result.Viewport.Size.Y;
                     float modelDelta = ModelViewportDelta(
-                        contentBounds.Size, margin, MiniMapRenderer.MinimumWorldExtentMetres, (float)width / height, result.Viewport.Size);
+                        contentBounds.Size, margin, MiniMapRenderer.MinimumWorldExtentMetres,
+                        result.PlotArea.Size.X / result.PlotArea.Size.Y, result.Viewport.Size);
                     maxModelDelta = MathF.Max(maxModelDelta, modelDelta);
 
                     variantRows.Add(

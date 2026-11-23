@@ -134,8 +134,9 @@ public sealed class MiniMapRendererFramingIntegrationTests
     }
 
     /// <summary>
-    /// The viewport is widened along exactly one axis to the image aspect ratio under one uniform pixels-per-metre
-    /// scale — never distortion (TR-10).
+    /// The viewport is widened along exactly one axis to the plot area's aspect ratio (the image minus the
+    /// grid-label gutters) under one uniform pixels-per-metre scale — never distortion (TR-10); the image keeps its
+    /// requested dimensions.
     /// </summary>
     [Fact]
     public async Task Viewport_MatchesImageAspectRatioUnderUniformScale()
@@ -156,9 +157,13 @@ public sealed class MiniMapRendererFramingIntegrationTests
 
             Assert.Equal(800, MiniMapTestHarness.Image(result).GetWidth());
             Assert.Equal(400, MiniMapTestHarness.Image(result).GetHeight());
-            Assert.Equal(800f / 400f, result.Viewport.Size.X / result.Viewport.Size.Y, 3);
-            Assert.Equal(800f / result.Viewport.Size.X, result.Scale, 2);
-            Assert.Equal(400f / result.Viewport.Size.Y, result.Scale, 2);
+            // The viewport fits the plot area — the image minus the grid-label gutters — under one uniform scale.
+            Rect2 plot = result.PlotArea;
+            Assert.True(plot.Size.X < 800f && plot.Size.Y < 400f && plot.End == new Vector2(800f, 400f),
+                $"The plot area {plot} must sit inside the image, flush with its right and bottom edges.");
+            Assert.Equal(plot.Size.X / plot.Size.Y, result.Viewport.Size.X / result.Viewport.Size.Y, 3);
+            Assert.Equal(plot.Size.X / result.Viewport.Size.X, result.Scale, 2);
+            Assert.Equal(plot.Size.Y / result.Viewport.Size.Y, result.Scale, 2);
         }
         finally
         {
@@ -289,7 +294,7 @@ public sealed class MiniMapRendererFramingIntegrationTests
             Assert.Equal(requested.Position.Y, result.Viewport.Position.Y, 2);
             Assert.Equal(requested.Size.X, result.Viewport.Size.X, 2);
             Assert.Equal(requested.Size.Y, result.Viewport.Size.Y, 2);
-            Assert.Equal(600f / requested.Size.X, result.Scale, 2);
+            Assert.Equal(Math.Min(result.PlotArea.Size.X / requested.Size.X, result.PlotArea.Size.Y / requested.Size.Y), result.Scale, 2);
             Assert.Contains("#287fa0", MiniMapTestHarness.Svg(result), StringComparison.Ordinal);
 
             MiniMapViewportRequest invalid = new(Vector2.Zero, new Rect2(Vector2.Zero, new Vector2(-1, 4)));

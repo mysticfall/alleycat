@@ -52,6 +52,24 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
     private const string GridTextFill = "#33424e";
     private const int MaximumGridLinesPerAxis = 4096;
 
+    /// <summary>
+    /// Clear space in pixels around grid labels inside their gutters: between a label's ink and the image edge, and
+    /// between the ink and the plot area.
+    /// </summary>
+    private const float GutterPaddingPixels = 6f;
+
+    /// <summary>
+    /// The gutters may take at most this fraction of either image dimension; a smaller image renders without
+    /// gutters or grid labels (grid lines remain), reported by the informational <c>GridLabelsOmitted</c> notice.
+    /// </summary>
+    private const float MaximumGutterFraction = 0.25f;
+
+    /// <summary>Maximum gutter-fitting passes; the left gutter only ever grows, so the passes are bounded.</summary>
+    private const int MaximumGutterPasses = 4;
+
+    /// <summary>Fixed id of the composed document's one internal clip path: the plot area.</summary>
+    internal const string PlotClipID = "minimap-plot";
+
     private static readonly float[] _gridStepMultipliers = [1f, 2f, 5f];
 
     /// <summary>Documented service defaults; tuning values may change, their structure may not (TR-9).</summary>
@@ -87,8 +105,8 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
                 + $"{DescribePoint(centre)}; rendered the background and grid over the default extent."));
         }
 
-        Rect2 viewport = ComputeViewport(ContentBounds(markers, centre), resolved);
-        return Compose(markers, viewport, resolved, diagnostics);
+        Rect2 content = ContentBounds(markers, centre);
+        return Compose(markers, plotSize => ComputeViewport(content, resolved, plotSize), resolved, diagnostics);
     });
 
     /// <summary>
@@ -110,7 +128,7 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
 
         List<MiniMapDiagnostic> diagnostics = [];
         ImmutableArray<MiniMapMarkerSnapshot> markers = CaptureMarkers(request.Centre, resolved, diagnostics);
-        return Compose(markers, viewport, resolved, diagnostics);
+        return Compose(markers, _ => viewport, resolved, diagnostics);
     });
 
     /// <summary>
@@ -132,8 +150,8 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
                 "No markers are authored in the discovery scope; rendered the background and grid over the default extent."));
         }
 
-        Rect2 viewport = ComputeViewport(ContentBounds(markers, null), resolved);
-        return Compose(markers, viewport, resolved, diagnostics);
+        Rect2 content = ContentBounds(markers, null);
+        return Compose(markers, plotSize => ComputeViewport(content, resolved, plotSize), resolved, diagnostics);
     });
 
     private static MiniMapRenderResult Guarded(Func<MiniMapRenderResult> render)
@@ -356,7 +374,7 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
         return any ? new Rect2(minimum, maximum - minimum) : new Rect2(-Vector2.One * (MinimumWorldExtentMetres / 2), Vector2.One * MinimumWorldExtentMetres);
     }
 
-    private static Rect2 ComputeViewport(Rect2 content, ResolvedSettings settings)
+    private static Rect2 ComputeViewport(Rect2 content, ResolvedSettings settings, Vector2 plotSize)
     {
         Rect2 grown = content.Grow(settings.MarginMetres);
         Vector2 centre = grown.GetCenter();
@@ -364,46 +382,127 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
             MathF.Max(grown.Size.X, MinimumWorldExtentMetres),
             MathF.Max(grown.Size.Y, MinimumWorldExtentMetres));
 
-        // Widen exactly one axis to the image aspect ratio; one uniform scale, never distortion (TR-10).
-        float target = (float)settings.Width / settings.Height;
+        // Widen exactly one axis to the plot area's aspect ratio; one uniform scale, never distortion (TR-10).
+        float target = plotSize.X / plotSize.Y;
         float ratio = size.X / size.Y;
         size = ratio < target ? new Vector2(size.Y * target, size.Y) : new Vector2(size.X, size.X / target);
         return new Rect2(centre - (size / 2), size);
     }
 
+    /// <summary>
+    /// The resolved render layout: the reserved grid-label gutters, the plot area inside them, the world viewport
+    /// mapped onto the plot area, its uniform scale and the adaptive grid step.
+    /// </summary>
+    private sealed record GridLayout(float LeftGutter, float TopGutter, Rect2 PlotArea, Rect2 Viewport, float Scale, float GridStep);
+
+    /// <summary>
+    /// Lays the image out as a reserved top gutter for X labels, a reserved left gutter for Z labels, and the plot
+    /// area inside them that the world viewport projects onto. The top gutter is one label row plus padding; the
+    /// left gutter fits the widest Z label the layout draws, so it is fitted iteratively: each pass projects with
+    /// the current width and widens it when a label needs more, never narrowing, for at most
+    /// <see cref="MaximumGutterPasses" /> passes. The adaptive step (TR-14) applies to the plot area's scale.
+    /// </summary>
+    private static GridLayout ResolveLayout(Func<Vector2, Rect2> viewportFor, ResolvedSettings settings)
+    {
+        float top = settings.GridTextSizePixels + (2 * GutterPaddingPixels);
+        float left = MathF.Ceiling(MiniMapGlyphs.InkBounds("-00", settings.GridTextSizePixels).Size.X + (2 * GutterPaddingPixels));
+        if (top > settings.Height * MaximumGutterFraction || left > settings.Width * MaximumGutterFraction)
+        {
+            return LayoutFor(viewportFor, settings, 0, 0);
+        }
+
+        GridLayout layout = LayoutFor(viewportFor, settings, left, top);
+        for (int pass = 1; pass < MaximumGutterPasses; pass++)
+        {
+            float needed = MathF.Ceiling(WidestZLabel(layout, settings) + (2 * GutterPaddingPixels));
+            if (needed <= left)
+            {
+                break;
+            }
+
+            left = needed;
+            if (left > settings.Width * MaximumGutterFraction)
+            {
+                return LayoutFor(viewportFor, settings, 0, 0);
+            }
+
+            layout = LayoutFor(viewportFor, settings, left, top);
+        }
+
+        return layout;
+    }
+
+    private static GridLayout LayoutFor(Func<Vector2, Rect2> viewportFor, ResolvedSettings settings, float left, float top)
+    {
+        Rect2 plot = new(left, top, settings.Width - left, settings.Height - top);
+        Rect2 viewport = viewportFor(plot.Size);
+        float scale = Math.Min(plot.Size.X / viewport.Size.X, plot.Size.Y / viewport.Size.Y);
+        return new GridLayout(left, top, plot, viewport, scale, SelectGridStep(scale, settings));
+    }
+
+    private static float WidestZLabel(GridLayout layout, ResolvedSettings settings)
+    {
+        float widest = 0;
+        (long first, long last) = GridRange(layout.Viewport.Position.Y, layout.Viewport.End.Y, layout.GridStep);
+        for (long z = first; z <= last; z++)
+        {
+            string text = DescribeNumber((float)(z * (double)layout.GridStep));
+            widest = MathF.Max(widest, MiniMapGlyphs.InkBounds(text, settings.GridTextSizePixels).Size.X);
+        }
+
+        return widest;
+    }
+
     private static MiniMapRenderResult Compose(
         ImmutableArray<MiniMapMarkerSnapshot> markers,
-        Rect2 viewport,
+        Func<Vector2, Rect2> viewportFor,
         ResolvedSettings settings,
         List<MiniMapDiagnostic> diagnostics)
     {
-        float scale = Math.Min(settings.Width / viewport.Size.X, settings.Height / viewport.Size.Y);
-        float gridStep = SelectGridStep(scale, settings);
-        var projection = new MiniMapProjection(viewport, scale, new Vector2I(settings.Width, settings.Height), diagnostics);
+        GridLayout layout = ResolveLayout(viewportFor, settings);
+        if (layout.LeftGutter == 0)
+        {
+            diagnostics.Add(new MiniMapDiagnostic("GridLabelsOmitted", string.Empty,
+                $"A {settings.Width}x{settings.Height} image is too small for grid-label gutters; rendered grid lines without labels."));
+        }
+
+        Rect2 plot = layout.PlotArea;
+        var projection = new MiniMapProjection(
+            layout.Viewport, layout.Scale, new Vector2I(settings.Width, settings.Height), plot, diagnostics);
 
         var svg = new StringBuilder();
         _ = svg.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{settings.Width}\" height=\"{settings.Height}\" "
             + $"viewBox=\"0 0 {settings.Width} {settings.Height}\">");
         _ = svg.Append($"<rect x=\"0\" y=\"0\" width=\"{settings.Width}\" height=\"{settings.Height}\" fill=\"{BackgroundFill}\"/>");
-        AppendGrid(svg, projection, gridStep, settings);
+        AppendGrid(svg, projection, layout, settings);
         // Marker labels place through the deterministic TR-20 pass before composition; grid labels never
-        // participate — their spacing is TR-14's adaptive rule alone.
+        // participate — their spacing is TR-14's adaptive rule alone, and they live in the gutters, which the
+        // placement treats as outside its bounds.
         PlaceMarkerLabels(markers, projection);
         // Markers paint in ascending draw order, tie-broken by node path; primitives in collection order (TR-12).
-        // Displacement moves only a label's rendered position — painting order is untouched (TR-20).
+        // Displacement moves only a label's rendered position — painting order is untouched (TR-20). All marker
+        // ink is clipped to the plot area through the document's single internal clip path (nested SVG viewports
+        // do not clip in the in-process rasteriser), so geometry beyond the world viewport never paints under a
+        // grid label. Marker fragments themselves stay reference-free (TR-5).
+        _ = svg.Append($"<clipPath id=\"{PlotClipID}\"><rect x=\"{MiniMapGlyphs.Number(plot.Position.X)}\" "
+            + $"y=\"{MiniMapGlyphs.Number(plot.Position.Y)}\" width=\"{MiniMapGlyphs.Number(plot.Size.X)}\" "
+            + $"height=\"{MiniMapGlyphs.Number(plot.Size.Y)}\"/></clipPath><g clip-path=\"url(#{PlotClipID})\">");
         foreach (MiniMapMarkerSnapshot marker in markers)
         {
             _ = svg.Append(marker.BuildSvgFragment(projection));
         }
 
-        _ = svg.Append("</svg>");
+        _ = svg.Append("</g></svg>");
         string source = svg.ToString();
 
         var image = new Image();
         return image.LoadSvgFromString(source) != Error.Ok || image.GetWidth() != settings.Width || image.GetHeight() != settings.Height
             ? throw new MiniMapRenderException("RasterisationFailed", string.Empty,
                 "In-process SVG rasterisation failed or returned incorrect dimensions.")
-            : new MiniMapRenderResult(MiniMapRenderStatus.Ready, source, image, viewport, scale, gridStep, projection.CollectDiagnostics());
+            : new MiniMapRenderResult(MiniMapRenderStatus.Ready, source, image, layout.Viewport, layout.Scale, layout.GridStep, projection.CollectDiagnostics())
+            {
+                PlotArea = plot,
+            };
     }
 
     /// <summary>
@@ -456,7 +555,7 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
         }
 
         foreach (KeyValuePair<MiniMapLabelPlacementRequest, MiniMapLabelPlacement> entry in MiniMapLabelPlacer.Place(
-                     requests, shapeInkBoxes, projection.ImageSize, LabelDisplacementStepPixels, LabelDisplacementDepth))
+                     requests, shapeInkBoxes, projection.PlotArea, LabelDisplacementStepPixels, LabelDisplacementDepth))
         {
             projection.SetLabelPlacement(entry.Key.PrimitivePath, entry.Value);
         }
@@ -497,37 +596,86 @@ public sealed class MiniMapRenderer(Node treeOwner, Node? discoveryScope = null)
             "No finite 1,2,5×10^n grid step meets the minimum spacing for this viewport.");
     }
 
-    private static void AppendGrid(StringBuilder svg, MiniMapProjection projection, float gridStep, ResolvedSettings settings)
+    private static (long First, long Last) GridRange(float start, float end, float gridStep)
+        => ((long)Math.Ceiling(start / gridStep), (long)Math.Floor(end / gridStep));
+
+    /// <summary>
+    /// Draws the world-zero-anchored grid (TR-14): lines span the plot area, and each line's number label sits in
+    /// its reserved gutter — X labels centred in the top band, Z labels centred in the left band.
+    /// </summary>
+    /// <remarks>
+    /// Deterministic label rule: an X label draws only when its ink lies fully right of the left gutter and inside
+    /// the image, and a Z label only when its ink lies fully below the top gutter and inside the image, so the shared
+    /// top-left corner cell is always empty and no X label can meet a Z label. Along each axis, labels are visited in
+    /// ascending coordinate order and a label whose ink would overlap the previously drawn one on that axis is
+    /// skipped. Lines are never skipped.
+    /// </remarks>
+    private static void AppendGrid(StringBuilder svg, MiniMapProjection projection, GridLayout layout, ResolvedSettings settings)
     {
-        // World-zero-anchored integer multiples spanning the viewport, negative coordinates included (TR-14).
-        long firstX = (long)Math.Ceiling(projection.Viewport.Position.X / gridStep);
-        long lastX = (long)Math.Floor(projection.Viewport.End.X / gridStep);
-        long firstZ = (long)Math.Ceiling(projection.Viewport.Position.Y / gridStep);
-        long lastZ = (long)Math.Floor(projection.Viewport.End.Y / gridStep);
+        float gridStep = layout.GridStep;
+        Rect2 plot = layout.PlotArea;
+        bool labelled = layout.LeftGutter > 0;
+        int size = settings.GridTextSizePixels;
+        (long firstX, long lastX) = GridRange(projection.Viewport.Position.X, projection.Viewport.End.X, gridStep);
+        (long firstZ, long lastZ) = GridRange(projection.Viewport.Position.Y, projection.Viewport.End.Y, gridStep);
         if (lastX - firstX > MaximumGridLinesPerAxis || lastZ - firstZ > MaximumGridLinesPerAxis)
         {
             throw new MiniMapRenderException("GridDensityExceeded", string.Empty,
                 $"The viewport would draw more than {MaximumGridLinesPerAxis} grid lines per axis at step {DescribeNumber(gridStep)} metres.");
         }
 
+        // Vertically centre the X-label row's ink in the top band, whatever the font's baseline offset.
+        float rowOffset = MiniMapProjection.TextInkBounds("-0123456789.", Vector2.Zero, size).GetCenter().Y;
+        float rowAnchor = (layout.TopGutter / 2f) - rowOffset;
+        Rect2? previous = null;
         for (long x = firstX; x <= lastX; x++)
         {
             float value = (float)(x * (double)gridStep);
             float pixel = projection.WorldToPixel(new Vector2(value, 0)).X;
             string stroke = x == 0 ? GridZeroStroke : GridStroke;
-            _ = svg.Append($"<path d=\"M{MiniMapGlyphs.Number(pixel)} 0V{settings.Height}\" stroke=\"{stroke}\"/>");
-            _ = svg.Append(projection.WriteText(
-                DescribeNumber(value), new Vector2(pixel, settings.GridTextSizePixels + 4), settings.GridTextSizePixels, GridTextFill, "grid"));
+            _ = svg.Append($"<path d=\"M{MiniMapGlyphs.Number(pixel)} {MiniMapGlyphs.Number(plot.Position.Y)}V{settings.Height}\" stroke=\"{stroke}\"/>");
+            string text = DescribeNumber(value);
+            Vector2 anchor = new(pixel, rowAnchor);
+            if (labelled && TryLabelBox(text, anchor, size, out Rect2 box)
+                && box.Position.X >= plot.Position.X && box.End.X <= settings.Width
+                && (previous is not { } prior || !prior.Intersects(box)))
+            {
+                _ = svg.Append(projection.WriteText(text, anchor, size, GridTextFill, "grid"));
+                previous = box;
+            }
         }
 
+        previous = null;
         for (long z = firstZ; z <= lastZ; z++)
         {
             float value = (float)(z * (double)gridStep);
             float pixel = projection.WorldToPixel(new Vector2(0, value)).Y;
             string stroke = z == 0 ? GridZeroStroke : GridStroke;
-            _ = svg.Append($"<path d=\"M0 {MiniMapGlyphs.Number(pixel)}H{settings.Width}\" stroke=\"{stroke}\"/>");
-            _ = svg.Append(projection.WriteText(
-                DescribeNumber(value), new Vector2(6 + (settings.GridTextSizePixels / 2f), pixel), settings.GridTextSizePixels, GridTextFill, "grid"));
+            _ = svg.Append($"<path d=\"M{MiniMapGlyphs.Number(plot.Position.X)} {MiniMapGlyphs.Number(pixel)}H{settings.Width}\" stroke=\"{stroke}\"/>");
+            string text = DescribeNumber(value);
+            Vector2 anchor = new(layout.LeftGutter / 2f, pixel);
+            if (labelled && TryLabelBox(text, anchor, size, out Rect2 box)
+                && box.Position.Y >= plot.Position.Y && box.End.Y <= settings.Height
+                && (previous is not { } prior || !prior.Intersects(box)))
+            {
+                _ = svg.Append(projection.WriteText(text, anchor, size, GridTextFill, "grid"));
+                previous = box;
+            }
+        }
+    }
+
+    private static bool TryLabelBox(string text, Vector2 anchor, int size, out Rect2 box)
+    {
+        try
+        {
+            box = MiniMapProjection.TextInkBounds(text, anchor, size);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            // Grid labels are ASCII digits; an unsupported glyph is reported by WriteText's own path if drawn.
+            box = default;
+            return false;
         }
     }
 

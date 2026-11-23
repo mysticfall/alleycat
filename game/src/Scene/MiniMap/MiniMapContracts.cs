@@ -91,7 +91,7 @@ public sealed record MiniMapViewportRequest(Vector2 Centre, Rect2 WorldViewport,
 /// <param name="Status">Ready or Failed.</param>
 /// <param name="Svg">Self-contained SVG text on success; <c>null</c> on failure.</param>
 /// <param name="Image">Rasterised image on success; <c>null</c> on failure.</param>
-/// <param name="Viewport">World X/Z viewport the image shows.</param>
+/// <param name="Viewport">World X/Z viewport the plot area shows.</param>
 /// <param name="Scale">Uniform pixels-per-metre scale of this render.</param>
 /// <param name="GridStep">Adaptive grid step in metres actually used.</param>
 /// <param name="Diagnostics">Deterministically ordered diagnostics; successful renders may carry non-fatal ones.</param>
@@ -104,6 +104,15 @@ public sealed record MiniMapRenderResult(
     float GridStep,
     ImmutableArray<MiniMapDiagnostic> Diagnostics)
 {
+    /// <summary>
+    /// Image-pixel rectangle the world viewport is projected into: the whole image minus the reserved grid-label
+    /// gutters (top band for X labels, left band for Z labels). Empty on failure.
+    /// </summary>
+    public Rect2 PlotArea
+    {
+        get; init;
+    }
+
     /// <summary>Constructs a failure carrying only diagnostics; never a stale or partial image.</summary>
     /// <param name="diagnostics">Diagnostics describing the failure.</param>
     /// <returns>Failed result.</returns>

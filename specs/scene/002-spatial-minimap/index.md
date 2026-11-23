@@ -9,15 +9,17 @@ title: Spatial Minimap
 
 Deliver a runtime minimap built from scene-authored markers: `MiniMapMarker` nodes are discovered by scene-group
 membership, and a standalone `MiniMapRenderer` service composes and rasterises an image of a requested area on demand,
-with an always-visible adaptive world-coordinate grid, marker labels kept legible through a bundled glyph fallback
+with an always-visible adaptive world-coordinate grid labelled in reserved edge gutters, marker labels kept legible
+through a bundled glyph fallback
 chain and deterministic collision displacement — clearing other labels and other markers' shapes, with omission
 only as a bounded last resort — plus optional per-request marker style overrides, editor preview and authoring
 tooling.
 
 ## Goal
 
-Give content creators and future tooling legible top-down layout context with absolute world coordinates. The map
-exists to make future movement targets — for example `walk_to(x, y)` coordinates — readable, not to filter knowledge.
+Give content creators and tooling legible top-down layout context with absolute world coordinates. The map exists to
+make movement targets — for example [AI-015](../../ai/015-coordinate-navigation-tools/index.md) `walk_to(x, z)`
+coordinates — readable, not to filter knowledge.
 Creators compose arbitrary legends from shape primitives; anything in the scene appears on the map by hosting a marker,
 with no character-specific or category-specific machinery.
 
@@ -33,8 +35,9 @@ with no character-specific or category-specific machinery.
    distance. The returned image reflects markers' current positions and headings, auto-scales to the included markers
    with a visible margin, and excludes markers beyond the distance.
 4. **UR-4 — Coordinates:** Every image carries an always-visible coordinate grid labelled in absolute world X/Z metres,
-   with +X right and +Z down. The map never rotates: an entity's heading shows as rotating marker geometry, so a
-   triangle parented under a character renders that character's heading for free.
+   with +X right and +Z down. Grid labels sit in reserved bands along the top and left edges that no map content
+   covers, so every drawn label stays readable. The map never rotates: an entity's heading shows as rotating marker
+   geometry, so a triangle parented under a character renders that character's heading for free.
 5. **UR-5 — Labels:** A label shows either authored text or the canonical `FullId` identity automatically resolved from
    the nearest identifiable ancestor, so a marker hosted under a character is labelled by that character's identity
    without configuration. Wherever the bundled fonts cover the identity's script, the label renders natively — a
@@ -129,28 +132,35 @@ with no character-specific or category-specific machinery.
    overrides (`MarkerOverrides`, default none). The TR-10 minimum world extent is the one exception — a fixed
    service guard of 2 metres, not a per-request setting. The guard is a degenerate-zoom floor for genuinely sparse
    scenes — a single or collinear marker set — so the map never extreme-zooms onto a lone marker; the breathing
-   space that separates included geometry such as walls from the image edge is the per-request margin's job, not
+   space that separates included geometry such as walls from the plot-area edge is the per-request margin's job, not
    the guard's. Tuning values stay configurable; their structure is fixed by
-   this specification.
+   this specification. A successful result reports the world viewport, the uniform scale, the grid step and the
+   plot area (`PlotArea`, TR-13) actually used.
 10. **TR-10:** A marker is included if and only if the X/Z-plane distance from the requested centre to the marker's
     world origin is at most the inclusion distance. The viewport is the axis-aligned bounding box of all included
     markers' projected footprints, unioned with the requested centre, expanded by the per-request margin on every side,
-    then widened along one axis to the image aspect ratio under a single uniform pixels-per-metre scale — never
-    distortion. A label's world anchor — its authored offset position under the marker — counts as footprint extent, so
-    included label content is never projected out of view. The fixed 2-metre minimum world extent (TR-9) floors
-    single or collinear marker sets against degenerate extreme zoom; separating included geometry from the image
-    edge is the margin's role, and markers contributing no geometry contribute no extent.
+    then widened along one axis to the plot area's aspect ratio (TR-14) under a single uniform pixels-per-metre
+    scale — never distortion. The viewport maps onto the plot area, not the whole image: world positions project to
+    the plot area's origin plus their viewport offset times the scale. A label's world anchor — its authored offset
+    position under the marker — counts as footprint extent, so included label content is never projected out of
+    view. The fixed 2-metre minimum world extent (TR-9) floors single or collinear marker sets against degenerate
+    extreme zoom; separating included geometry from the plot-area edge is the margin's role, and markers contributing
+    no geometry contribute no extent.
 11. **TR-11:** Capture runs on the Godot main thread in a single pass: live group membership, transforms and identity
     text are read once into an immutable snapshot before composition, so one result never mixes states. Markers freed
     or queued for deletion are excluded. Later requests capture anew; no live-pose caching.
-12. **TR-12:** Deterministic ordering: paint background, then the grid with its labels, then markers. Markers paint in
-    ascending authored draw-order ordinal, tie-broken by scene node path; a marker's primitives paint in authored
-    collection order. Composition must not depend on scene-group iteration order. Later markers may cover earlier
-    ones: overlap is creator-controlled through ordinals.
+12. **TR-12:** Deterministic ordering: paint background, then the grid with its labels, then markers. All marker ink —
+    shapes and marker labels alike — is clipped to the plot area (TR-14), so geometry beyond the viewport never paints
+    into the grid-label gutters. Markers paint in ascending authored draw-order ordinal, tie-broken by scene node
+    path; a marker's primitives paint in authored collection order. Composition must not depend on scene-group
+    iteration order. Later markers may cover earlier ones: overlap is creator-controlled through ordinals.
 13. **TR-13:** A successful render returns the self-contained SVG text and a rasterised image at exactly the requested
     dimensions, rasterised in-process. Identical snapshot state and settings produce byte-identical SVG — invariant
     numeric formatting, escaped strings, no timestamps or random identifiers — and identical decoded raster pixels;
-    PNG compression bytes need not be identical. Rendering performs no file writes and mutates no scene state.
+    PNG compression bytes need not be identical. The document's only reference is one internal clip path with the
+    fixed ID `minimap-plot`, covering the plot area and applied to the marker group (TR-12); marker fragments stay
+    reference-free (TR-5). The result exposes `PlotArea`, the image-pixel rectangle the viewport projects into
+    (empty on failure). Rendering performs no file writes and mutates no scene state.
     Requests supplying no `MarkerOverrides` (TR-19) render byte-identically to the same request without the override
     feature.
 
@@ -159,8 +169,22 @@ with no character-specific or category-specific machinery.
 14. **TR-14:** An adaptive coordinate grid in absolute world X/Z metres is always drawn. Grid lines sit at integer
     multiples of an adaptive step from the `1, 2, 5 × 10^n` metre sequence, anchored at world zero with negative
     coordinates included. The step is the smallest that meets the minimum pixel spacing — a per-request setting with a
-    documented default (TR-9). Grid lines carry absolute metre value labels along the image edges via the TR-15 text
-    pipeline. The map is never rotated or re-oriented; +X is right and +Z is down.
+    documented default (TR-9) — at the plot area's scale. Grid lines carry absolute metre value labels via the TR-15
+    text pipeline. The map is never rotated or re-oriented; +X is right and +Z is down.
+    - **Gutters and plot area:** the image reserves a top gutter for X labels — one label row plus padding — and a
+      left gutter for Z labels, fitted to the widest Z label the layout draws plus padding. The left gutter is
+      fitted in a bounded number of passes that only ever widen it. The plot area is the image minus both gutters;
+      the viewport (TR-10) projects onto it and grid lines span it. Padding and the pass bound are documented
+      tunable constants; image dimensions are unchanged.
+    - **Label rule:** each X label is centred on its line within the top gutter and draws only when its ink lies
+      fully right of the left gutter and inside the image; each Z label is centred on its line within the left
+      gutter and draws only when its ink lies fully below the top gutter and inside the image. The top-left corner
+      cell is therefore always empty and no X label meets a Z label. Along each axis, labels are visited in
+      ascending coordinate order and a label whose ink would overlap the previously drawn label on that axis is
+      skipped. Grid lines are never skipped.
+    - **Small images:** when either gutter would exceed a documented fraction of its image dimension (default one
+      quarter), the render reserves no gutters: the plot area is the whole image, grid lines are drawn without
+      labels, and the informational `GridLabelsOmitted` diagnostic (TR-16) is reported.
 
 ### Text Pipeline
 
@@ -193,13 +217,15 @@ with no character-specific or category-specific machinery.
       marker: the affected primitive is skipped for that render with a diagnostic; the render continues.
     - Label collision (TR-20): a marker label that exhausts the TR-20 candidate list without finding a position
       that clears all already-placed marker label boxes and all other markers' shape boxes, and fits inside the
-      image, is omitted for that render with the informational `LabelOverlaps` diagnostic naming the label and its
-      marker by scope-relative node path; the render continues. It is not a failure — the diagnostic fires only
-      after displacement is exhausted against both clearance checks, and extreme crowding is normal transient
-      scene state.
+      plot area (TR-14), is omitted for that render with the informational `LabelOverlaps` diagnostic naming the
+      label and its marker by scope-relative node path; the render continues. It is not a failure — the
+      diagnostic fires only after displacement is exhausted against both clearance checks, and extreme crowding is
+      normal transient scene state.
     - Unused marker override key: a `MarkerOverrides` (TR-19) key matching no discovered marker — group membership,
       considered before the distance filter — is reported as the informational `UnusedOverride` diagnostic and the
       render continues. A key matching a distance-excluded marker is not unused.
+    - Image too small for grid-label gutters (TR-14): the render succeeds with grid lines but no grid labels and
+      reports the informational `GridLabelsOmitted` diagnostic. It is not a failure.
     - Null marker override key or entry: a null key or a null override entry in `MarkerOverrides` (TR-19) fails the
       render loudly with a diagnostic.
 
@@ -274,15 +300,16 @@ with no character-specific or category-specific machinery.
       and glyph conversion — both flavours (TR-7) and `LabelText`-overridden text (TR-19) alike. A marker matched by
       any TR-19 override, colour-only included, confers placement priority on its labels. Labels already omitted for
       that render (`MissingIdentity`, `IdentityResolvesAtRuntime`, `UnsupportedGlyph`) are absent and inert, and
-      empty text (TR-16) renders no glyphs and owns no box. Grid labels never participate: their spacing is TR-14's
-      adaptive rule alone, and marker labels neither check against nor yield to grid labels.
+      empty text (TR-16) renders no glyphs and owns no box. Grid labels never participate: they live in the TR-14
+      gutters under TR-14's own label rule, and marker labels neither check against nor yield to grid labels — the
+      gutters are simply outside the placement bounds.
     - **Order:** labels of markers matched by a TR-19 override place first, then every remaining label; within each
       group, ascending marker draw-order ordinal tie-broken by scene node path (TR-12's order), then authored
       collection order among one marker's own labels.
     - **Rule:** placement proceeds in that order. A label places at the first candidate position from the fixed,
       bounded, ordered candidate list whose axis-aligned pixel bounding box — the box of its rendered glyph paths in
       image pixel space — intersects no already-placed marker label's box, intersects no other included marker's
-      shape box, and lies fully inside the image.
+      shape box, and lies fully inside the plot area (TR-14); the grid-label gutters are off-limits.
     - **Shape clearance:** a shape box is the axis-aligned pixel box of one projected shape primitive — the same
       projected footprint boxes that feed TR-10's viewport extent, taken from the snapshot. A candidate must
       intersect no shape box of any other included marker; the label's own marker's shapes are exempt, since the
@@ -308,13 +335,14 @@ with no character-specific or category-specific machinery.
     - **Determinism and boundaries:** one pass, no animation, no leader lines, no iterative optimisation — assigned
       positions are a pure function of the snapshot and settings (TR-11, TR-13), so identical inputs produce
       identical placements and byte-identical SVG. Displacement never alters the viewport: extent is still computed
-      from authored anchors (TR-10), so a label pushed closer to the image edge than its anchor changes no framing,
+      from authored anchors (TR-10), so a label pushed closer to the plot-area edge than its anchor changes no framing,
       and geometry, extent, inclusion and draw order are untouched in every case.
 
 ## In Scope
 
 - Marker, primitive, element and renderer contracts under `AlleyCat.Scene.MiniMap`, including group discovery,
-  distance filtering, auto-scale with margin, deterministic ordering, the adaptive grid, per-request marker style
+  distance filtering, auto-scale with margin, deterministic ordering, the adaptive grid with labels in reserved
+  gutters and marker ink clipped to the plot area, per-request marker style
   overrides, and deterministic label collision handling with bounded displacement (TR-20).
 - Self-contained text-to-glyph-path rendering with the bundled per-rune font fallback chain (TR-15), and in-process
   rasterisation.
@@ -323,14 +351,16 @@ with no character-specific or category-specific machinery.
 
 ## Out Of Scope
 
-- AI plumbing and tools, including `walk_to`: the grid only makes future coordinates legible.
+- AI plumbing and tools: the AI minimap is specified by [AI-013](../../ai/013-visual-context/index.md) and coordinate
+  navigation (`walk_to`, `turn_to`, `stop`) by [AI-015](../../ai/015-coordinate-navigation-tools/index.md).
 - Fog-of-war, exploration memory and visibility or occlusion filtering.
 - Multi-storey mapping and floor selection.
 - Runtime player-facing minimap UI.
 - New interaction-state subsystems.
 - Leader lines, animation, and dynamic or runtime-adaptive label placement beyond TR-20's fixed candidate list:
   displacement is bounded and deterministic, never interactive or self-optimising.
-- Grid-label collision handling: grid labels keep TR-14's adaptive spacing and never participate in TR-20.
+- Grid-label displacement: grid labels never participate in TR-20; TR-14 only skips a grid label that would overlap
+  its neighbour on the same axis.
 - Built-in rendered legends or category palettes: creators author their own.
 - Editor-preview override affordances: the preview passes no overrides (TR-17).
 - Per-primitive override granularity, overlay annotation elements, and path-keyed overrides for non-identifiable
@@ -351,7 +381,7 @@ with no character-specific or category-specific machinery.
   action/result observations, not static endpoints alone.
 - **UA-4 (UR-4):** Observe a character carrying a marker translating and rotating: the heading triangle rotates with
   the character while map orientation, grid anchoring and axis convention stay fixed. Verify the grid is present with
-  legible absolute metre labels at more than one scale.
+  legible absolute metre labels at more than one scale, sitting in top and left bands that no marker ink covers.
 - **UA-5 (UR-7):** In the editor, record an action/result sequence of opening the preview on whole authored coverage,
   panning by dragging, and zooming in and out, producing visibly distinct images. Verify gizmos reflect the authored
   primitives and editor and runtime fragments match for the same scene state.
@@ -372,21 +402,27 @@ with no character-specific or category-specific machinery.
   deregistration including tree re-entry, live per-render group discovery, rejection of duplicate primitive
   references, and that the renderer references neither `ISceneContext` nor character APIs and contains no central-root
   or character special-casing types.
-- **TA-2 (TR-5 – TR-8):** Tests verify fragment self-containment (no `<text>`, no external references), rectangle and
+- **TA-2 (TR-5 – TR-8):** Tests verify fragment self-containment (no `<text>`, no external references; the composed
+  document's single internal `minimap-plot` clip reference of TR-13 is allowed), rectangle and
   circle geometry including ellipse projection under non-uniform scale, triangle apex direction under marker yaw,
   authored-offset labels, and transform/projection behaviour including ignored Y translation.
 - **TA-3 (TR-9 – TR-11):** Tests verify DI-only renderer resolution, distance-filter boundary inclusion, the
-  bounding-box, centre-union, margin and minimum-extent viewport rules, uniform scale with aspect fit, main-thread
-  single-pass capture, and exclusion of freed or queued-for-deletion markers.
+  bounding-box, centre-union, margin and minimum-extent viewport rules, uniform scale with plot-area aspect fit,
+  projection onto the reported `PlotArea`, main-thread single-pass capture, and exclusion of freed or
+  queued-for-deletion markers.
 - **TA-4 (TR-12, TR-13):** Tests verify deterministic ordering independent of group iteration order (repeated renders
   of a stable scene produce byte-identical SVG; ordinal changes reorder predictably), exact output dimensions,
   escaping and invariant formatting.
 - **TA-5 (TR-14, TR-15):** Tests verify world-zero-anchored adaptive steps at more than one scale including negative
-  coordinates, minimum pixel spacing, grid labels, the Inter-first per-rune fallback chain — Latin metrics
+  coordinates, minimum pixel spacing at the plot scale, grid labels naming their lines' world coordinates, the
+  gutter rules — no marker ink in either gutter, including under an explicit viewport cutting through markers, an
+  empty top-left corner, no overlapping grid labels, unchanged image dimensions, and the small-image
+  `GridLabelsOmitted` path — the Inter-first per-rune fallback chain — Latin metrics
   unchanged, Hangul-covered runes supplied by the bundled fallback font — and whole-label `UnsupportedGlyph`
   omission with its diagnostic for a script no bundled font covers.
 - **TA-6 (TR-16):** Tests verify each edge contract behaves exactly as specified: zero-marker success with
-  diagnostic, empty label text, authored degenerate failure, and transient projection skip. For an identity label
+  diagnostic, empty label text, authored degenerate failure, transient projection skip, and the informational
+  `GridLabelsOmitted` success for an image too small for gutters. For an identity label
   with no instantiated `IIdentifiable` ancestor, tests verify the runtime `MissingIdentity` error naming the marker
   by scope-relative node path, and — in an editor-tool context, exercised through a test seam rather than by
   launching the Godot editor — the informational `IdentityResolvesAtRuntime` variant naming the label, its marker
@@ -412,7 +448,8 @@ with no character-specific or category-specific machinery.
 - **TA-10 (TR-20):** Tests verify placement order — labels of TR-19-matched markers first, then draw order with
   node-path tie-break, authored collection order among one marker's labels — the candidate walk in list order with
   its three checks: no intersection with already-placed marker label boxes, none with other included markers'
-  shape boxes (the label's own marker's shapes exempt), and fully inside the image — displaced labels keeping
+  shape boxes (the label's own marker's shapes exempt), and fully inside the plot area, never in a grid-label
+  gutter — displaced labels keeping
   their authored text, size, colour and draw order, last-resort omission after list exhaustion with the
   informational `LabelOverlaps` diagnostic naming the label and its marker by scope-relative node path, overridden
   labels never omitted and a lone one placing at its authored anchor whenever that anchor is clear of labels and

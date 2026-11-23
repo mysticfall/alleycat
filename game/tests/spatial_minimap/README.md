@@ -25,7 +25,8 @@ request, and quits. It also runs clean headless (`--headless --xr-mode off`).
 - **Distance filtering** — `FarBeacon` at `(60, 40)` appears in the whole-coverage render and is excluded from the
   8 m close-up request.
 - **Auto-scale with margin** — the close-up viewport is the bounding box of the included markers plus the requested
-  centre, grown by the margin and widened to the image aspect; compare its scale against the whole-coverage render.
+  centre, grown by the margin and widened to the plot area's aspect (the image minus the top and left grid-label
+  gutters); compare its scale against the whole-coverage render.
 - **Adaptive grid at two scales** — 5 m steps on the whole-coverage render, 2 m steps on the close-ups, anchored at
   world zero with negative metre labels.
 - **Per-request marker style overrides (TR-19)** — the fourth render repeats the moved close-up request with

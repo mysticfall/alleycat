@@ -117,7 +117,7 @@ public static partial class MiniMapTestHarness
     /// <param name="result">Render whose frame metadata is used.</param>
     /// <param name="world">World X/Z position.</param>
     /// <returns>Expected pixel position.</returns>
-    public static Vector2 ExpectedPixel(MiniMapRenderResult result, Vector2 world) => (world - result.Viewport.Position) * result.Scale;
+    public static Vector2 ExpectedPixel(MiniMapRenderResult result, Vector2 world) => result.PlotArea.Position + ((world - result.Viewport.Position) * result.Scale);
 
     /// <summary>Formats a coordinate the way fragments format numbers, for substring assertions.</summary>
     /// <param name="value">Coordinate value.</param>
@@ -162,6 +162,6 @@ public static partial class MiniMapTestHarness
     [GeneratedRegex(@"<path d=""M[^""]*V[0-9.]+"" stroke=""#[0-9a-fA-F]{6}""/>", RegexOptions.CultureInvariant)]
     private static partial Regex VerticalGridRegex();
 
-    [GeneratedRegex(@"<path d=""M0 [^""]*H[0-9.]+"" stroke=""#[0-9a-fA-F]{6}""/>", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"<path d=""M[0-9.]+ [^""]*H[0-9.]+"" stroke=""#[0-9a-fA-F]{6}""/>", RegexOptions.CultureInvariant)]
     private static partial Regex HorizontalGridRegex();
 }

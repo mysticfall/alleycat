@@ -54,7 +54,7 @@ internal sealed record MiniMapShapeInkBox(string MarkerPath, Rect2 Box);
 /// engine services — so identical inputs always produce identical placements. Labels place in the rule's order
 /// at the first candidate position whose box intersects no already-placed marker label's box, intersects no
 /// other included marker's shape box (the label's own marker's shapes are exempt), and lies fully inside the
-/// image; a priority label that exhausts the list places at its base position regardless, a plain label is
+/// placement bounds — the plot area, which excludes the grid-label gutters; a priority label that exhausts the list places at its base position regardless, a plain label is
 /// omitted.
 /// </summary>
 internal static class MiniMapLabelPlacer
@@ -107,6 +107,25 @@ internal static class MiniMapLabelPlacer
         Vector2I imageSize,
         float step,
         int depth)
+        => Place(requests, shapeInkBoxes, new Rect2(Vector2.Zero, imageSize), step, depth);
+
+    /// <summary>
+    /// Places every request as <see cref="Place(IEnumerable{MiniMapLabelPlacementRequest}, IReadOnlyList{MiniMapShapeInkBox}, Vector2I, float, int)" />
+    /// does, with an explicit placement rectangle: the renderer passes the plot area so marker labels never enter the
+    /// grid-label gutters.
+    /// </summary>
+    /// <param name="requests">All participating label placement requests, in any order.</param>
+    /// <param name="shapeInkBoxes">Projected shape-footprint pixel boxes of every included marker.</param>
+    /// <param name="bounds">Placement rectangle in image pixels; a box must lie fully inside it.</param>
+    /// <param name="step">Candidate step S in image pixels.</param>
+    /// <param name="depth">Stack/fan depth D.</param>
+    /// <returns>Placement outcome per request.</returns>
+    internal static IReadOnlyDictionary<MiniMapLabelPlacementRequest, MiniMapLabelPlacement> Place(
+        IEnumerable<MiniMapLabelPlacementRequest> requests,
+        IReadOnlyList<MiniMapShapeInkBox> shapeInkBoxes,
+        Rect2 bounds,
+        float step,
+        int depth)
     {
         List<MiniMapLabelPlacementRequest> ordered = [.. requests
             .OrderBy(request => request.Priority ? 0 : 1)
@@ -122,7 +141,7 @@ internal static class MiniMapLabelPlacer
             foreach (Vector2 offset in CandidateOffsets(step, depth))
             {
                 Rect2 candidate = new(request.BaseBox.Position + offset, request.BaseBox.Size);
-                if (IsInsideImage(candidate, imageSize)
+                if (IsInside(candidate, bounds)
                     && placedBoxes.All(box => !box.Intersects(candidate))
                     && shapeInkBoxes.All(ink => ink.MarkerPath == request.MarkerPath || !ink.Box.Intersects(candidate)))
                 {
@@ -156,6 +175,7 @@ internal static class MiniMapLabelPlacer
         return outcomes;
     }
 
-    private static bool IsInsideImage(Rect2 box, Vector2I imageSize) =>
-        box.Position.X >= 0 && box.Position.Y >= 0 && box.End.X <= imageSize.X && box.End.Y <= imageSize.Y;
+    private static bool IsInside(Rect2 box, Rect2 bounds) =>
+        box.Position.X >= bounds.Position.X && box.Position.Y >= bounds.Position.Y
+            && box.End.X <= bounds.End.X && box.End.Y <= bounds.End.Y;
 }

@@ -53,7 +53,9 @@ public sealed class MiniMapPrimitiveCompositionIntegrationTests
             Assert.Contains("aria-label=\"Crate\"", svg, StringComparison.Ordinal);
             Assert.DoesNotContain("<text", svg, StringComparison.Ordinal);
             Assert.DoesNotContain("href", svg, StringComparison.Ordinal);
-            Assert.DoesNotContain("url(#", svg, StringComparison.Ordinal);
+            // The only internal reference is the document's plot-area clip; marker fragments carry none.
+            _ = Assert.Single(System.Text.RegularExpressions.Regex.Matches(svg, @"url\(#"));
+            Assert.Contains($"clip-path=\"url(#{MiniMapRenderer.PlotClipID})\"", svg, StringComparison.Ordinal);
             Assert.DoesNotContain("<script", svg, StringComparison.Ordinal);
         }
         finally

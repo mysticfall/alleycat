@@ -255,13 +255,14 @@ public sealed partial class MiniMapProductionNpcIdentityIntegrationTests
             Assert.DoesNotContain(dissent.Diagnostics, diagnostic => diagnostic.Code == "UnsupportedGlyph");
 
             // The pinned 512×1024 portrait frames the cell at the composed 0.25 m margin with the TR-9 2 m guard
-            // inert (the content's width dominates): the viewport keeps the exact 1:2 image aspect and matches the
-            // engine-observed extent for this scene state (measured 4.429 × 8.859 m, x-span 3.93 m + 2 × 0.25 m).
+            // inert (the content's width dominates): the viewport keeps the plot area's aspect (the image minus the
+            // grid-label gutters) and matches the engine-observed width for this scene state (x-span 3.93 m +
+            // 2 × 0.25 m = 4.43 m).
             Assert.Equal(512, MiniMapTestHarness.Image(dissent).GetWidth());
             Assert.Equal(1024, MiniMapTestHarness.Image(dissent).GetHeight());
-            Assert.Equal(0.5f, dissent.Viewport.Size.X / dissent.Viewport.Size.Y, 3);
+            float plotAspect = dissent.PlotArea.Size.X / dissent.PlotArea.Size.Y;
+            Assert.Equal(plotAspect, dissent.Viewport.Size.X / dissent.Viewport.Size.Y, 3);
             Assert.InRange(dissent.Viewport.Size.X, 4.33f, 4.53f);
-            Assert.InRange(dissent.Viewport.Size.Y, 8.76f, 8.96f);
         }
         finally
         {
