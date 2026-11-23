@@ -203,7 +203,19 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
                 TestNode inProgressNode = CreateTestNode(uid, method, InProgressTestNodeStateProperty.CachedInstance);
                 await publishNodeAsync(inProgressNode, cancellationToken);
 
+                bool isolated = IsIsolatedProcessTest(method);
+                if (isolated)
+                {
+                    // No other session process may run alongside an isolated test, and it needs a fresh one.
+                    await ShutdownSessionsAsync(sessionsByHeadlessMode);
+                }
+
                 TestNode completedNode = await ExecuteTestInSessionAsync(sessionsByHeadlessMode, uid, method, cancellationToken);
+                if (isolated)
+                {
+                    await ShutdownSessionsAsync(sessionsByHeadlessMode);
+                }
+
                 await publishNodeAsync(completedNode, cancellationToken);
             }
         }
@@ -291,7 +303,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
     private async Task ShutdownSessionsAsync(Dictionary<bool, GodotSessionClient?> sessionsByHeadlessMode)
     {
-        foreach ((bool headless, GodotSessionClient? session) in sessionsByHeadlessMode)
+        foreach ((bool headless, GodotSessionClient? session) in sessionsByHeadlessMode.ToArray())
         {
             if (session is null)
             {
@@ -370,7 +382,8 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
         return candidates
             .Where(candidate => _cliSelector.Matches(candidate.Method))
-            .Where(candidate => _liveLlmEnabled || !IsLiveLlmTest(candidate.Method));
+            .Where(candidate => _liveLlmEnabled || !IsLiveLlmTest(candidate.Method))
+            .Where(candidate => !IsIsolatedProcessTest(candidate.Method) || _cliSelector.NamesMethod(candidate.Method));
     }
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
@@ -548,6 +561,14 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private static bool IsLiveLlmTest(MethodInfo method)
         => method.GetCustomAttribute<LiveLlmAttribute>() is not null
             || method.DeclaringType?.GetCustomAttribute<LiveLlmAttribute>() is not null;
+
+    /// <summary>
+    /// Resolves whether a test method needs its own fresh Godot process by checking for a method-level or
+    /// class-level <see cref="IsolatedProcessAttribute"/>.
+    /// </summary>
+    private static bool IsIsolatedProcessTest(MethodInfo method)
+        => method.GetCustomAttribute<IsolatedProcessAttribute>() is not null
+            || method.DeclaringType?.GetCustomAttribute<IsolatedProcessAttribute>() is not null;
 
     private async Task CleanupTimedOutProcessAsync(IGodotProcess process)
     {

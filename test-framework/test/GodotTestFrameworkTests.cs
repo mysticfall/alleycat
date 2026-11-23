@@ -522,6 +522,72 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
+    /// Ensures an isolated-process test is excluded from a default run, even when its UID is filtered, and
+    /// launches no process.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_ExcludesIsolatedTests_WithoutExactMethodSelector()
+    {
+        var factory = new FakeGodotProcessFactory();
+        GodotTestFramework framework = CreateFramework(factory);
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(
+            CreateTestSessionContext(),
+            new TestNodeUidListFilter([GetLiveLlmFixtureUid(typeof(IsolatedClassMarkedFixture), nameof(IsolatedClassMarkedFixture.IsolatedTest))]));
+
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+        Assert.Empty(messageBus.Published);
+        Assert.Empty(factory.Invocations);
+    }
+
+    /// <summary>
+    /// Ensures a <c>--test-class</c> selection runs the class's ordinary tests but not its isolated ones.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteRequestAsync_Discovery_ClassSelectorExcludesIsolatedTests()
+    {
+        GodotTestFramework framework = CreateFramework(
+            new FakeGodotProcessFactory(),
+            selector: GodotCliTestSelector.ForClass(typeof(IsolatedMethodMarkedFixture).FullName!));
+        var messageBus = new RecordingMessageBus();
+        var request = new DiscoverTestExecutionRequest(CreateTestSessionContext());
+
+        await framework.ExecuteRequestAsync(CreateRequestContext(request, messageBus));
+
+        TestNode discoveredNode = Assert.Single(NodesOf(messageBus));
+        AssertNodeState(
+            discoveredNode,
+            GetLiveLlmFixtureUid(typeof(IsolatedMethodMarkedFixture), nameof(IsolatedMethodMarkedFixture.OrdinaryTest)),
+            IsDiscoveredState);
+    }
+
+    /// <summary>
+    /// Ensures an exact <c>--test-method</c> selector opts an isolated test in.
+    /// </summary>
+    [Fact]
+    public void ExecuteRequestAsync_Run_ExactMethodSelectorRunsIsolatedTest()
+    {
+        TestNodeUid isolatedUid = GetLiveLlmFixtureUid(typeof(IsolatedClassMarkedFixture), nameof(IsolatedClassMarkedFixture.IsolatedTest));
+        var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(isolatedUid)]);
+        var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
+        GodotTestFramework framework = CreateFramework(
+            factory,
+            selector: GodotCliTestSelector.ForMethod(
+                typeof(IsolatedClassMarkedFixture).FullName!,
+                nameof(IsolatedClassMarkedFixture.IsolatedTest)));
+        var messageBus = new RecordingMessageBus();
+        var request = new RunTestExecutionRequest(CreateTestSessionContext());
+
+        ExecuteRequest(framework, CreateRequestContext(request, messageBus));
+
+        Assert.Equal([isolatedUid.Value], GetRunRequestIds(session));
+        List<TestNode> nodes = NodesOf(messageBus);
+        Assert.Equal(2, nodes.Count);
+        AssertNodeState(nodes[1], isolatedUid, IsPassedState);
+    }
+
+    /// <summary>
     /// Ensures the builder policy fails closed for every flag when the command-line service is absent.
     /// </summary>
     [Fact]
@@ -924,6 +990,29 @@ public sealed class GodotTestFrameworkTests
     {
         [Fact]
         public static void DerivedLiveTest()
+        {
+        }
+    }
+
+    private sealed class IsolatedMethodMarkedFixture
+    {
+        [Fact]
+        [IsolatedProcess]
+        public static void IsolatedTest()
+        {
+        }
+
+        [Fact]
+        public static void OrdinaryTest()
+        {
+        }
+    }
+
+    [IsolatedProcess]
+    private sealed class IsolatedClassMarkedFixture
+    {
+        [Fact]
+        public static void IsolatedTest()
         {
         }
     }

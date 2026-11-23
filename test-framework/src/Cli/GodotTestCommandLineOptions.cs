@@ -208,6 +208,19 @@ internal sealed record GodotCliTestSelector(
             : ClassNames is null || ClassNames.Contains(declaringTypeFullName, StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// Returns <c>true</c> only when an exact <c>--test-method</c> selector names the method; default and class
+    /// selections never name a method.
+    /// </summary>
+    public bool NamesMethod(MethodInfo method)
+    {
+        string? declaringTypeFullName = method.DeclaringType?.FullName;
+        return declaringTypeFullName is not null
+            && MethodTypeNames is not null
+            && MethodNames is not null
+            && MatchesMethod(declaringTypeFullName, method.Name);
+    }
+
     private bool MatchesMethod(string declaringTypeFullName, string methodName)
     {
         for (int index = 0; index < MethodTypeNames!.Length; index++)

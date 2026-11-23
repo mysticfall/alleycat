@@ -158,6 +158,54 @@ public sealed class GodotSessionTests
         AssertNode(published[3], second.uid, IsPassed);
     }
 
+    /// <summary>
+    /// Ensures each isolated-process test runs in a session of its own with no other session alive: live sessions
+    /// of either mode are shut down before it, its session is shut down after it, and the next test starts afresh.
+    /// </summary>
+    [Fact]
+    public async Task RunTests_RunsEachIsolatedTestInItsOwnFreshSession()
+    {
+        (TestNodeUid uid, MethodInfo method) windowed = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.FirstTest));
+        (TestNodeUid uid, MethodInfo method) headless = CreateTest(typeof(HeadlessSessionFixture), nameof(HeadlessSessionFixture.FirstTest));
+        (TestNodeUid uid, MethodInfo method) first = CreateTest(typeof(IsolatedSessionFixture), nameof(IsolatedSessionFixture.FirstTest));
+        (TestNodeUid uid, MethodInfo method) second = CreateTest(typeof(IsolatedSessionFixture), nameof(IsolatedSessionFixture.SecondTest));
+        (TestNodeUid uid, MethodInfo method) after = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.SecondTest));
+
+        var windowedSession = FakeGodotProcess.CreateSession(commandStages: [ResultStage(windowed.uid, "passed")]);
+        var headlessSession = FakeGodotProcess.CreateSession(commandStages: [ResultStage(headless.uid, "passed")]);
+        var firstSession = FakeGodotProcess.CreateSession(commandStages: [ResultStage(first.uid, "passed")]);
+        var secondSession = FakeGodotProcess.CreateSession(commandStages: [ResultStage(second.uid, "passed")]);
+        var afterSession = FakeGodotProcess.CreateSession(commandStages: [ResultStage(after.uid, "passed")]);
+        var factory = new FakeGodotProcessFactory(windowedSession, headlessSession, firstSession, secondSession, afterSession);
+        GodotTestFramework framework = CreateFramework(factory);
+        List<TestNode> published = [];
+        List<bool> priorSessionsExited = [];
+
+        await framework.RunSelectedTestsAsync(
+            [windowed, headless, first, second, after],
+            (node, _) =>
+            {
+                if (node.Uid == first.uid && node.Properties.Single<IProperty>() is PassedTestNodeStateProperty)
+                {
+                    priorSessionsExited.Add(windowedSession.HasExited && headlessSession.HasExited && firstSession.HasExited);
+                }
+
+                published.Add(node);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.Equal([windowedSession, headlessSession, firstSession, secondSession, afterSession], factory.CreatedProcesses);
+        Assert.Equal([true], priorSessionsExited);
+        Assert.Equal([first.uid.Value], ParseCommands(firstSession.WrittenLines, "run").Select(c => c.GetProperty("RequestId").GetString()));
+        Assert.Equal([second.uid.Value], ParseCommands(secondSession.WrittenLines, "run").Select(c => c.GetProperty("RequestId").GetString()));
+        _ = Assert.Single(ParseCommands(firstSession.WrittenLines, "shutdown"));
+        _ = Assert.Single(ParseCommands(secondSession.WrittenLines, "shutdown"));
+        Assert.Contains("--headless", factory.Invocations[2]);
+        Assert.Equal(10, published.Count);
+        Assert.All(published.Where((_, index) => index % 2 == 1), node => IsPassed(node.Properties.Single<IProperty>()));
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Outcome publication and correlation
     // ---------------------------------------------------------------------------------------------
@@ -1227,6 +1275,19 @@ public sealed class GodotSessionTests
     private sealed class HeadlessSessionFixture
     {
         public static void FirstTest()
+        {
+        }
+    }
+
+    [Headless]
+    [IsolatedProcess]
+    private sealed class IsolatedSessionFixture
+    {
+        public static void FirstTest()
+        {
+        }
+
+        public static void SecondTest()
         {
         }
     }

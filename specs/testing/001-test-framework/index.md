@@ -16,7 +16,9 @@ start themselves, so default scene composition cannot make a billable provider c
 scripted Mind coverage, and only the opted-in `AITest` pathway contacts real providers. The same opt-in boundary
 authorises live LLM
 experiment harnesses: bounded, caller-declared scenarios that may make several provider requests and offer tools,
-capture inspectable evidence traces, and aggregate a fixed trial batch into one reported outcome.
+capture inspectable evidence traces, and aggregate a fixed trial batch into one reported outcome. Integration tests that
+need a fresh Godot process of their own, for example to configure process-wide native state or to observe host-wide
+process activity, are likewise opt-in and run only when named exactly.
 
 ## Goal
 
@@ -55,6 +57,10 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 14. Default integration scene composition must never make a billable provider call: a mind that a test scene starts
     itself cannot construct a production AI client in an integration session, regardless of selection or flags,
     while offline scripted providers keep covering real session dispatch and completion.
+15. Tests that need a fresh process of their own must stay out of default and class-wide runs, producing no result
+    at all, and run only when a contributor names each one exactly.
+16. When such a test runs, no other Godot test session process runs alongside it, and several of them named in one
+    run each get their own process.
 
 ## Technical Requirements
 
@@ -148,6 +154,16 @@ evidence to design production APIs, then lock behaviour down with deterministic 
     and complete real Mind sessions in integration runs, and the explicit live `AITest` factory keeps its separate
     static construction path (TR-20). Wholesale provider suppression in the harness is not an acceptable substitute
     for the scoped guard.
+31. Integration tests that need a fresh Godot process must carry `[IsolatedProcess]` on the method or its declaring
+    class (inherited; either marker marks the test) and are governed by the gate defined in
+    [Isolated Process Tests](#isolated-process-tests).
+32. The isolated-process gate must apply to both discovery and execution with eligibility defined as: existing UID/CLI
+    selection AND the live-LLM gate (TR-18) AND (test not isolated-marked OR an exact `--test-method` entry names it).
+    Default runs, `--test-class` selection and MTP UID filters alone never name a method, and an excluded isolated
+    test must produce no discovered, in-progress, terminal or skipped node.
+33. Before an isolated test runs, the host must shut down every live session; the test runs in a newly started
+    session, which the host shuts down afterwards. Routing, wire protocol, outcomes and restart semantics are
+    otherwise unchanged.
 
 ## In Scope
 
@@ -165,6 +181,8 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 - The integration-session production AI boundary: fail-closed rejection of production client construction in
   integration contexts (normative contract in AI-002), preserved offline injected-provider coverage, and no
   `--live-llm` bypass of the production guard.
+- Opt-in gated discovery and execution for `[IsolatedProcess]` integration tests, each in a fresh session process
+  with no other session process alive.
 
 ## Out Of Scope
 
@@ -174,7 +192,9 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 - Load and performance benchmarking infrastructure.
 - Collection-level fixtures (`IClassFixture`, `ICollectionFixture`).
 - Parallel execution within a session; execution is strictly serial.
-- OS-process and CLR isolation between tests within a session.
+- OS-process and CLR isolation between tests within a session; tests that need it opt into `[IsolatedProcess]`.
+- Guarding against Godot processes that the framework did not launch; isolated tests that observe host-wide activity
+  require the contributor to run them with no other Godot process running.
 - Provisioning, distributing, or storing live LLM credentials; each contributor supplies a private local override.
 - Result caching, dashboards, or hosted reporting for live experiments beyond the per-test MTP nodes, the in-fact
   batch report, and the local trace artefacts.
@@ -472,11 +492,39 @@ live-LLM experiment methodology in the `llm-experiment-driven-development` skill
   the evaluator's built-in greater-than-or-equal-to-4 interpretation. Its text-only, single-request shape is a
   fixture choice, not a harness limit.
 
+## Isolated Process Tests
+
+This section is a normative dependency for TR-31–TR-33. Some integration tests cannot share a process: they configure
+process-wide native state that can be set only once, or they observe every process's activity on the host. Session
+reuse would make their results depend on earlier tests, so they opt into a fresh process instead.
+
+### Opt-In Gate
+
+- `[IsolatedProcess]` (`test-framework/src/IsolatedProcessAttribute.cs`) is valid on methods and classes, is
+  inherited, and marks a test when either the method or its declaring type carries it.
+- One gate in `GodotTestFramework.FilteredTests` serves both discovery and execution, after the live-LLM gate. An
+  isolated test is eligible only when an exact `--test-method` entry names it (`GodotCliTestSelector.NamesMethod`).
+- Default runs, `--test-class` runs, `--list-tests` without a method selector, and MTP UID filters alone never select
+  an isolated test. An excluded isolated test produces no discovered, in-progress, terminal or skipped node, so a green
+  default run never implies isolated coverage.
+- The gate only adds a condition. A `[LiveLlm]` isolated test also needs `--live-llm`, and ordinary tests named in the
+  same command run as usual.
+
+### Process Isolation
+
+- Before each isolated test, the host shuts down every live session, headless and windowed, through the normal
+  graceful shutdown contract. The test then runs in a newly started session routed by its effective headless mode.
+- After the test, the host shuts that session down, so no session outlives it. Several isolated tests named in one
+  command each get their own process; later ordinary tests lazily start a replacement session.
+- Isolation covers only session processes the framework launches. A test that observes host-wide activity documents
+  that contributors must run it with no other Godot process running.
+
 ## Supported CLI Options
 
 - `--test-class <Fully.Qualified.TypeName[,...]>` — narrows selection to tests whose declaring type exactly matches
   any listed fully qualified class name.
 - `--test-method <Fully.Qualified.TypeName.MethodName[,...]>` — narrows selection to the listed exact test methods.
+  It is the only selector that admits `[IsolatedProcess]` tests; see [Isolated Process Tests](#isolated-process-tests).
 - `--headless` — forces all tests to run in headless mode. Overrides per-test and per-class `HeadlessAttribute`
   settings. Intended for tests known to be safe without renderer-backed behaviour.
 - `--live-llm` — permits integration tests marked `[LiveLlm]` to run; live-marked tests stay excluded without this
@@ -566,15 +614,27 @@ all-empty list (for example `","`) is rejected during validation.
 26. Deterministic tests prove live-marked tests stay excluded without `--live-llm` and are admitted only with it,
     opted-in execution still cannot construct a production AI client, and the explicit `AITest` factory remains
     constructible through deterministic local seams with no billable call.
-27. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-23
+27. Without an exact `--test-method` entry naming it, an `[IsolatedProcess]` test is absent from discovery and
+    execution — including default runs, `--test-class` runs, `--list-tests` and MTP UID filters — producing no
+    discovered, in-progress, terminal or skipped node; a named isolated test still respects the live-LLM gate.
+28. A named isolated test runs with no other framework session process alive, in a newly started session that is
+    shut down afterwards; several isolated tests named in one command run in distinct processes, and ordinary tests
+    in the same command keep their selector, headless, session and result semantics.
+29. Deterministic framework tests, without a real Godot runtime, prove that UID-filtered and class-selected runs
+    exclude isolated tests, that an exact method selector admits them, and that each isolated test gets its own
+    freshly started session.
+30. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-23
     additionally verify User Requirements 7-13 and Technical Requirements 17-28. Criteria 24-26 verify User
-    Requirement 14 and Technical Requirements 29-30.
+    Requirement 14 and Technical Requirements 29-30. Criteria 27-29 verify User Requirements 15-16 and Technical
+    Requirements 31-33.
 
 ## References
 
 - @test-framework/src/TestingPlatformBuilderHook.cs
 - @test-framework/src/GodotTestFramework.cs
 - @test-framework/src/LiveLlmAttribute.cs
+- @test-framework/src/IsolatedProcessAttribute.cs
+- @test-framework/src/Cli/GodotTestCommandLineOptions.cs
 - @test-framework/AlleyCat.TestFramework.csproj
 - @test-framework/AlleyCat.TestFramework.Tests.csproj
 - @integration-tests/AlleyCat.IntegrationTests.csproj
