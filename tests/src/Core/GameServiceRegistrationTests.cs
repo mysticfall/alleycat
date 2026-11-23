@@ -56,6 +56,24 @@ public sealed class GameServiceRegistrationTests
         Assert.Contains("AddSingleton<IGameClock>(new GameClock())", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// CORE-004 TR12 / CORE-011 TR5 and TR24: Game registers the exact registry instance it owns, before the provider
+    /// is built, and stops it at the application-shutdown boundary.
+    /// </summary>
+    [Fact]
+    public void GameRegistersOwnedSharedModelRegistryAndStopsItAtShutdown()
+    {
+        string source = ReadGameSource();
+
+        Assert.Contains("internal SharedModelRegistry SharedModels", source, StringComparison.Ordinal);
+        Assert.Contains("AddSingleton<ISharedModelRegistry>(SharedModels)", source, StringComparison.Ordinal);
+        Assert.Contains("Task.WhenAll(MotionWorkers.Stop(), SharedModels.Stop())", source, StringComparison.Ordinal);
+
+        int registryIndex = source.IndexOf("AddSingleton<ISharedModelRegistry>(SharedModels)", StringComparison.Ordinal);
+        int buildProviderIndex = source.IndexOf("BuildServiceProvider();", StringComparison.Ordinal);
+        Assert.True(registryIndex < buildProviderIndex, "The registry must be registered before the provider is built.");
+    }
+
     private static string ReadGameSource() =>
         File.ReadAllText(RepositoryPath.Get("game", "src", "Game.cs"));
 }

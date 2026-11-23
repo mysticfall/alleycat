@@ -1,6 +1,7 @@
 using System.Reflection;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
+using AlleyCat.Models;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.Generation.Supertonic;
 using AlleyCat.Speech.Voice;
@@ -112,7 +113,8 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
         }
 
-        Assert.True(pipeline.IsDisposed);
+        // The test-owned registry disposes its pipeline asynchronously once the generator leaves the tree.
+        await pipeline.Disposal.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     /// <summary>
@@ -169,7 +171,8 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
         }
 
-        Assert.True(pipeline.IsDisposed);
+        // The test-owned registry disposes its pipeline asynchronously once the generator leaves the tree.
+        await pipeline.Disposal.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     /// <summary>
@@ -234,7 +237,8 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
         }
 
-        Assert.True(pipeline.IsDisposed);
+        // The test-owned registry disposes its pipeline asynchronously once the generator leaves the tree.
+        await pipeline.Disposal.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     /// <summary>
@@ -295,7 +299,8 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
         }
 
-        Assert.True(pipeline.IsDisposed);
+        // The test-owned registry disposes its pipeline asynchronously once the generator leaves the tree.
+        await pipeline.Disposal.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     /// <summary>
@@ -375,7 +380,8 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             await WaitForFramesAsync(sceneTree, 2);
         }
 
-        Assert.True(pipeline.IsDisposed);
+        // The test-owned registry disposes its pipeline asynchronously once the generator leaves the tree.
+        await pipeline.Disposal.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     /// <summary>
@@ -600,6 +606,143 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         Assert.Equal("ko", generator.EffectiveLanguage);
     }
 
+    /// <summary>
+    /// Several generators with the same model directory and execution backend share one loaded pipeline, keep their
+    /// own language per request, and log the CUDA fallback warning once for the shared backend; a later request after
+    /// one generator leaves does not reload the pipeline (SPCH-007 TR-16, AC18).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task Generate_WithSharedRegistry_SharesOnePipeline_KeepsPerGeneratorLanguage_AndWarnsOnce()
+    {
+        const string failureReason = "Deterministic shared fallback.";
+
+        SceneTree sceneTree = GetSceneTree();
+        using RecordingLoggerProvider loggerProvider = new();
+        var registry = new SharedModelRegistry();
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cpu, failureReason);
+        string[] languages = ["en", "ko", "en"];
+        var generators = new List<SupertonicSpeechGenerator>();
+        var overrides = new List<IDisposable>();
+
+        try
+        {
+            for (int i = 0; i < languages.Length; i++)
+            {
+                SupertonicSpeechGenerator generator = CreatePipelineBackedGenerator($"shared-generator-{i}", languages[i]);
+                generator.ExecutionBackend = SupertonicExecutionBackend.Cuda;
+                generator.OverrideSharedModelsForTesting(registry);
+                overrides.Add(generator.OverridePipelineFactoryForTesting(
+                    (modelDirectory, requestedBackend) =>
+                    {
+                        lock (pipeline)
+                        {
+                            pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                        }
+
+                        return pipeline;
+                    }));
+                sceneTree.Root.AddChild(generator);
+                generators.Add(generator);
+            }
+
+            await WaitForFramesAsync(sceneTree, 2);
+            foreach (SupertonicSpeechGenerator generator in generators)
+            {
+                overrides.Add(generator.OverrideLoggerForTesting(
+                    loggerProvider.CreateLogger<SupertonicSpeechGenerator>()));
+            }
+
+            byte[][] audio = await Task.WhenAll(generators.Select(g => g.Generate("Hello there, friend.")));
+            Assert.All(audio, clip => AssertPcm16MonoWave(clip, FakeSampleRate));
+            AssertPipelineInitialised(pipeline, SupertonicExecutionBackend.Cuda);
+            Assert.Equal(
+                languages.Order(StringComparer.Ordinal),
+                pipeline.SynthesisRequests.Select(r => r.Language).Order(StringComparer.Ordinal));
+
+            CapturedLogEntry warning = Assert.Single(loggerProvider.Entries, e => e.Level == LogLevel.Warning);
+            Assert.Contains(failureReason, warning.Message, StringComparison.Ordinal);
+
+            await FreeGeneratorsAsync(sceneTree, generators[0]);
+            _ = await generators[1].Generate("Second request.");
+            Assert.Equal(1, pipeline.InitialisationCount);
+            Assert.Equal(4, pipeline.SynthesisRequests.Count);
+            Assert.Equal("ko", pipeline.SynthesisRequests[^1].Language);
+            Assert.False(pipeline.IsDisposed);
+        }
+        finally
+        {
+            foreach (IDisposable item in overrides)
+            {
+                item.Dispose();
+            }
+
+            await FreeGeneratorsAsync(sceneTree, [.. generators.Where(GodotObject.IsInstanceValid)]);
+        }
+
+        await registry.Stop().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(pipeline.IsDisposed);
+    }
+
+    /// <summary>
+    /// A failed shared pipeline load is cached: every generator sharing the key reports it through the failure signal
+    /// and no request retries the load (SPCH-007 TR-16; CORE-011 TR8).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task GenerateSpeech_WithFailedSharedLoad_ReportsCachedFailureToEveryGenerator_WithoutRetry()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        var registry = new SharedModelRegistry();
+        int loadAttempts = 0;
+        var generators = new List<SupertonicSpeechGenerator>();
+        var overrides = new List<IDisposable>();
+        var failures = new List<string>();
+
+        try
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                SupertonicSpeechGenerator generator = CreatePipelineBackedGenerator($"failing-generator-{i}", "en");
+                generator.OverrideSharedModelsForTesting(registry);
+                overrides.Add(generator.OverridePipelineFactoryForTesting((_, _) =>
+                {
+                    _ = Interlocked.Increment(ref loadAttempts);
+                    throw new InvalidOperationException("Injected shared Supertonic load failure.");
+                }));
+                _ = generator.Connect(
+                    SpeechGenerator.SignalName.SpeechGenerationFailed,
+                    Callable.From<string>(failures.Add));
+                sceneTree.Root.AddChild(generator);
+                generators.Add(generator);
+            }
+
+            await WaitForFramesAsync(sceneTree, 2);
+            foreach (SupertonicSpeechGenerator generator in generators)
+            {
+                await InvokeGenerationAsync(generator, "Hello there, friend.");
+            }
+
+            await InvokeGenerationAsync(generators[0], "Second request.");
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.Equal(3, failures.Count);
+            Assert.All(failures, f => Assert.Contains("Injected shared Supertonic load failure.", f, StringComparison.Ordinal));
+            Assert.Equal(1, loadAttempts);
+            Assert.All(generators, g => Assert.False(g.IsGenerating));
+        }
+        finally
+        {
+            foreach (IDisposable item in overrides)
+            {
+                item.Dispose();
+            }
+
+            await FreeGeneratorsAsync(sceneTree, [.. generators]);
+            await registry.Stop().WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
     private static SupertonicSpeechGenerator CreatePipelineBackedGenerator(string name, string exportedLanguage)
         => new()
         {
@@ -703,10 +846,11 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
 
         public List<SupertonicSynthesisRequest> SynthesisRequests { get; } = [];
 
-        public bool IsDisposed
-        {
-            get; private set;
-        }
+        public bool IsDisposed => Disposal.IsCompleted;
+
+        public Task Disposal => _disposal.Task;
+
+        private readonly TaskCompletionSource _disposal = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public void RecordInitialisation(string modelDirectory, SupertonicExecutionBackend requestedBackend)
         {
@@ -718,11 +862,15 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         public float[] Synthesise(SupertonicSynthesisRequest request)
         {
             ObjectDisposedException.ThrowIf(IsDisposed, this);
-            SynthesisRequests.Add(request);
+            lock (SynthesisRequests)
+            {
+                SynthesisRequests.Add(request);
+            }
+
             return [.. _samples];
         }
 
-        public void Dispose() => IsDisposed = true;
+        public void Dispose() => _disposal.TrySetResult();
     }
 
     /// <summary>

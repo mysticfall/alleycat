@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/shared-ai-models/SharedModelShutdownProbe.cs" id="1_probe"]
+
+[node name="SharedModelShutdownProbe" type="Node3D"]
+script = ExtResource("1_probe")

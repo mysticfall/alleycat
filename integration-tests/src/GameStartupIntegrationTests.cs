@@ -2,6 +2,7 @@ using System.Reflection;
 using AlleyCat.Core;
 using AlleyCat.Core.Threading;
 using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Models;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using AlleyCat.Testing;
@@ -229,7 +230,8 @@ public sealed partial class GameStartupIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the global game node exposes the scene-owned XR manager through service resolution.
+    /// Verifies the global game node exposes the scene-owned XR manager and its shared model registry through service
+    /// resolution.
     /// </summary>
     [Fact]
     public async Task GameEnterTree_RegistersSceneXRManagerAsGlobalService()
@@ -252,6 +254,8 @@ public sealed partial class GameStartupIntegrationTests
             _ = Assert.IsType<GodotMainThreadDispatcher>(resolvedDispatcher);
             Assert.False(Game.Instance is IMainThreadDispatcher);
             _ = Assert.IsType<SceneContextProvider>(sceneContextProvider);
+            // CORE-011 TR5: consumers resolving the registry through Game share the single Game-owned instance.
+            Assert.Same(fixture.Game.SharedModels, Game.Instance.GetRequiredService<ISharedModelRegistry>());
         }
         finally
         {

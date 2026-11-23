@@ -14,7 +14,9 @@ stationary-turn roles come from `ReviewedRoleSampler`, not fixed prototype walk 
   `model/kernels.py` and endpoint transforms in `utils/pose_utils.py`.
 - `NativeSomaRig`: absolute canonical source writer and post-modifier target readback.
 - `RealisedPoseHistory`: four 30 Hz context samples from displayed post-modifier observations.
-- `SomaInferenceWorker`: bounded latest-request ownership with Game-owned shutdown.
+- `SomaInferenceWorker`: per-consumer handle with latest-request ownership and codec state over the shared
+  `SomaNativeSession` backend (CORE-011), which the Game-owned shared model registry loads once per model key and
+  disposes at shutdown.
 
 Adapted MotionBricks software: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES, Apache-2.0.
 The original licence is retained in `LICENSE-MotionBricks`. This is modified software, not an official NVIDIA

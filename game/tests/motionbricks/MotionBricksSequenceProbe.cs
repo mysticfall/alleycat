@@ -30,6 +30,8 @@ public partial class MotionBricksSequenceProbe : Node
     private SomaMotionData? _data;
     private SomaInference? _engine;
     private Task<SomaInference>? _loading;
+    // Standalone probe: owns its native session directly instead of sharing one through a registry.
+    private SomaNativeSession? _native;
     private Task<Transform3D[][]>? _generation;
     private CharacterBody3D? _actor;
     private Skeleton3D? _skeleton;
@@ -84,7 +86,11 @@ public partial class MotionBricksSequenceProbe : Node
             ?? throw new InvalidOperationException("Set MOTIONBRICKS_MODEL to the external SOMA FP32 ONNX file.");
         string frames = System.Environment.GetEnvironmentVariable("MOTIONBRICKS_FRAMES")
             ?? throw new InvalidOperationException("Set MOTIONBRICKS_FRAMES to the source Kimodo frame calibration JSON.");
-        _loading = Task.Run(() => new SomaInference(_data, model, frames));
+        _loading = Task.Run(() =>
+        {
+            _native = SomaNativeSession.Load(model);
+            return new SomaInference(_data, _native, frames);
+        });
         SampleClip(_data.Idle, 0, Vector3.Zero);
         _rig.Apply(_pose);
         SetPhysicsProcess(true);
@@ -290,5 +296,7 @@ public partial class MotionBricksSequenceProbe : Node
             _skeleton.SkeletonUpdated -= Observe;
         }
         _engine?.Dispose();
+        // Disposing during an in-flight Task.Run generation was already unsupported by this probe.
+        _native?.Dispose();
     }
 }

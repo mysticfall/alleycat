@@ -16,6 +16,7 @@
 - [CORE-008: Content Pack Resolution](core/008-content-pack-resolution/index.md)
 - [CORE-009: Identifiable Identity](core/009-identifiable-identity/index.md)
 - [CORE-010: Main-Thread Dispatcher](core/010-main-thread-dispatcher/index.md)
+- [CORE-011: Shared Model Services](core/011-shared-model-services/index.md)
 
 ## AI
 

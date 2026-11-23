@@ -7,7 +7,10 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace AlleyCat.Motion;
 
-/// <summary>Single-request SOMA codec and in-process CUDA inference. Call on a worker, not the scene thread.</summary>
+/// <summary>
+/// Per-consumer SOMA codec (model frames, rest pose and index maps) over a shared <see cref="SomaNativeSession" />.
+/// Single-request; call on a worker, not the scene thread. It never owns or disposes the native session.
+/// </summary>
 public sealed class SomaInference : SomaInferenceWorker.ISession
 {
     // Optional passive test observer. Runs on the owning worker; it must never access scene nodes or mutate poses.
@@ -22,7 +25,7 @@ public sealed class SomaInference : SomaInferenceWorker.ISession
     }
     /// <summary>Joint order from the SOMA N1 model manifest.</summary>
     public static readonly string[] ModelNames = ["Hips", "Spine1", "Spine2", "Chest", "Neck1", "Neck2", "Head", "Jaw", "LeftEye", "RightEye", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "LeftHandThumbEnd", "LeftHandMiddleEnd", "RightShoulder", "RightArm", "RightForeArm", "RightHand", "RightHandThumbEnd", "RightHandMiddleEnd", "LeftLeg", "LeftShin", "LeftFoot", "LeftToeBase", "RightLeg", "RightShin", "RightFoot", "RightToeBase"];
-    private readonly InferenceSession _session;
+    private readonly SomaNativeSession _session;
     private readonly SomaMotionData _data;
     private readonly SomaModelFrames _frames;
     private readonly Transform3D[] _modelRest;
@@ -40,13 +43,15 @@ public sealed class SomaInference : SomaInferenceWorker.ISession
         get; private set;
     }
 
-    /// <inheritdoc/>
-    public SomaInference(SomaMotionData data, string modelPath, string modelFramesPath, Action<string>? nativeObservation = null)
+    /// <summary>Builds this consumer's codec state. Fails without touching the shared native session.</summary>
+    /// <param name="data">Consumer pose layout.</param>
+    /// <param name="session">Shared native session; borrowed, never disposed here.</param>
+    /// <param name="modelFramesPath">Absolute model-frames path.</param>
+    /// <param name="nativeObservation">Optional passive phase observer; it must not access scene nodes.</param>
+    public SomaInference(SomaMotionData data, SomaNativeSession session, string modelFramesPath, Action<string>? nativeObservation = null)
     {
-        if (!File.Exists(modelPath))
-        {
-            throw new FileNotFoundException("MotionBricks SOMA FP32 model is missing. Provision game/models/motionbricks/onnx or set ModelPath/MOTIONBRICKS_MODEL.", modelPath);
-        }
+        ArgumentNullException.ThrowIfNull(session);
+        _session = session;
         _nativeObservation = nativeObservation;
         _data = data;
         _frames = new SomaModelFrames(data, modelFramesPath);
@@ -66,14 +71,6 @@ public sealed class SomaInference : SomaInferenceWorker.ISession
                 _poseToModel[j] = i;
             }
         }
-        using var options = new SessionOptions();
-        options.AppendExecutionProvider_CUDA(0);
-        _nativeObservation?.Invoke("load-enter");
-        try
-        {
-            _session = new InferenceSession(modelPath, options);
-        }
-        finally { _nativeObservation?.Invoke("load-exit"); }
     }
 
     /// <inheritdoc/>
@@ -239,15 +236,11 @@ public sealed class SomaInference : SomaInferenceWorker.ISession
         values[i + 1] = v.Y;
         values[i + 2] = v.Z;
     }
-    /// <inheritdoc/>
+    /// <summary>Releases this consumer's codec state. The shared native session stays loaded.</summary>
     public void Dispose()
     {
         _nativeObservation?.Invoke("dispose-enter");
-        try
-        {
-            _session.Dispose();
-        }
-        finally { _nativeObservation?.Invoke("dispose-exit"); }
+        _nativeObservation?.Invoke("dispose-exit");
     }
 
     private IDisposableReadOnlyCollection<DisposableNamedOnnxValue> RunNative(NamedOnnxValue[] inputs)

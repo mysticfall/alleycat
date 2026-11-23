@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using AlleyCat.Common;
+using AlleyCat.Models;
 using AlleyCat.Motion;
 using AlleyCat.TestFramework;
 using Godot;
@@ -101,7 +102,10 @@ public sealed class MotionBricksIntegrationTests
             pose[0].Origin += new Vector3(0, 0, 0.9f);
         }
         SomaInference? engine = null;
-        using var worker = new SomaInferenceWorker(() => engine = new SomaInference(data, path, frames));
+        // A test-owned registry stands in for Game's: the native session is shared, the codec is per handle.
+        var registry = new SharedModelRegistry();
+        using var worker = new SomaInferenceWorker(registry.Resolve(new SomaModelDefinition(path)),
+            backend => engine = new SomaInference(data, backend, frames));
         try
         {
             long request = worker.Submit(context, target);
@@ -128,6 +132,7 @@ public sealed class MotionBricksIntegrationTests
         {
             worker.Dispose();
             await worker.Completion.WaitAsync(TimeSpan.FromSeconds(30));
+            await registry.Stop().WaitAsync(TimeSpan.FromSeconds(30));
         }
     }
 

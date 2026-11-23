@@ -136,8 +136,9 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
    turn immediately; historical tickets and late returns cannot confer or revive ownership. Adapt only scheduling
    needed for responsiveness.
    Preserve copied requests,
-   scene-thread submission/consumption, worker-exclusive native ownership and disposal, and graceful application-exit
-   draining under the [shared worker contract](../../nav/001-npc-navigation/index.md#outcome-and-worker-contract).
+   scene-thread submission/consumption, shared native ownership and disposal under
+   [CORE-011](../../core/011-shared-model-services/index.md), and graceful application-exit draining under the
+   [shared worker contract](../../nav/001-npc-navigation/index.md#outcome-and-worker-contract).
    Those worker guarantees do not impose NPC destination outcomes. Report unavailable setup/inference explicitly;
    preserve a safe pose without concealing it through fallback locomotion.
 6. Preserve `PlayerVRIK` head-target, post-solve and XR-origin ownership, body/view separation and the

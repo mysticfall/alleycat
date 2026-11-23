@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using AlleyCat.Core.Logging;
+using AlleyCat.Models;
 using AlleyCat.Speech.Generation.Supertonic;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Speech.Generation;
@@ -9,6 +11,11 @@ namespace AlleyCat.Speech.Generation;
 /// <summary>
 /// Fully offline speech generator backed by local Supertonic ONNX inference.
 /// </summary>
+/// <remarks>
+/// The inference pipeline is a shared backend under CORE-011 (SPCH-007 TR-16): generators with the same globalised
+/// model directory and requested <see cref="ExecutionBackend" /> share one loaded pipeline through per-generator
+/// handles, while voice, language, speed and quality steps travel with each request.
+/// </remarks>
 [GlobalClass]
 public partial class SupertonicSpeechGenerator : SpeechGenerator
 {
@@ -17,8 +24,11 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     private readonly Lock _pipelineLock = new();
 
     private ILogger<SupertonicSpeechGenerator>? _logger;
-    private ISupertonicInferencePipeline? _pipeline;
+    private SupertonicPipelineHandle? _pipeline;
     private Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> _pipelineFactory = CreatePipeline;
+    private bool _pipelineFactoryOverridden;
+    private ISharedModelRegistry? _sharedModels;
+    private SharedModelRegistry? _ownedSharedModels;
     private string? _suppliedContentLanguage;
     private string? _globalisedModelDirectory;
     private string? _globalisedVoiceStylesDirectory;
@@ -175,7 +185,10 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     /// </summary>
     /// <remarks>
     /// This hook must be installed before the first generation request, so cached production pipelines cannot be
-    /// replaced. It is internal to keep test doubles out of production scene configuration.
+    /// replaced. Unless a registry was injected through <see cref="OverrideSharedModelsForTesting" />, an overridden
+    /// factory loads into a registry owned by this generator, so test pipelines never enter the session-wide registry;
+    /// that owned registry is shut down, disposing its pipeline, when the generator leaves the tree. It is internal to
+    /// keep test doubles out of production scene configuration.
     /// </remarks>
     internal IDisposable OverridePipelineFactoryForTesting(
         Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> pipelineFactory)
@@ -192,8 +205,33 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
             }
 
             Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> previousFactory = _pipelineFactory;
+            bool previousOverridden = _pipelineFactoryOverridden;
             _pipelineFactory = pipelineFactory;
-            return new PipelineFactoryOverride(this, previousFactory, pipelineFactory);
+            _pipelineFactoryOverridden = true;
+            return new PipelineFactoryOverride(this, previousFactory, previousOverridden, pipelineFactory);
+        }
+    }
+
+    /// <summary>
+    /// Supplies the shared model registry this generator resolves its pipeline from, instead of the
+    /// <see cref="Game" />-owned registry (CORE-011 TR5). Must be called before the first generation request; the
+    /// caller owns the registry's lifetime.
+    /// </summary>
+    /// <param name="sharedModels">Registry to resolve the shared pipeline from.</param>
+    internal void OverrideSharedModelsForTesting(ISharedModelRegistry sharedModels)
+    {
+        ArgumentNullException.ThrowIfNull(sharedModels);
+
+        lock (_pipelineLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (_pipeline is not null)
+            {
+                throw new InvalidOperationException("The Supertonic inference pipeline has already been created.");
+            }
+
+            _sharedModels = sharedModels;
         }
     }
 
@@ -202,12 +240,19 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     {
         base._ExitTree();
 
+        SharedModelRegistry? ownedSharedModels;
         lock (_pipelineLock)
         {
             _disposed = true;
+            // Releasing the handle never unloads the shared pipeline (CORE-011 TR10, TR22).
             _pipeline?.Dispose();
             _pipeline = null;
+            ownedSharedModels = _ownedSharedModels;
+            _ownedSharedModels = null;
         }
+
+        // Only a test-owned private registry is shut down here; Stop never blocks the scene thread.
+        _ = ownedSharedModels?.Stop();
     }
 
     /// <inheritdoc />
@@ -223,20 +268,21 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
 
         Stopwatch backendStopwatch = PipelineDebugLog.StartTimer();
 
-        byte[] wavAudio = await Task.Run(() =>
-        {
-            ISupertonicInferencePipeline pipeline = GetOrCreatePipeline(modelDirectory);
-            SupertonicVoiceStyle voiceStyle = LoadVoiceStyle(voiceStylesDirectory);
+        // Resolving the handle never blocks: the shared pipeline loads off the calling thread on first request.
+        SupertonicPipelineHandle pipeline = GetOrCreatePipeline(modelDirectory);
+        int qualitySteps = QualitySteps;
+        float speedRatio = SpeedRatio;
 
-            float[] samples = pipeline.Synthesise(new SupertonicSynthesisRequest(
-                text,
-                effectiveLanguage,
-                voiceStyle,
-                QualitySteps,
-                SpeedRatio));
+        // A pipeline load failure, including a cached one, surfaces before any per-request work and faults this call;
+        // the inherited failure path reports it.
+        SupertonicSynthesisResult synthesis = await pipeline.SynthesiseWhenLoadedAsync(() => new SupertonicSynthesisRequest(
+            text,
+            effectiveLanguage,
+            LoadVoiceStyle(voiceStylesDirectory),
+            qualitySteps,
+            speedRatio));
 
-            return SupertonicWaveWriter.Write(samples, pipeline.SampleRate);
-        });
+        byte[] wavAudio = await Task.Run(() => SupertonicWaveWriter.Write(synthesis.Samples, synthesis.SampleRate));
 
         if (PipelineDebugLog.IsEnabled)
         {
@@ -249,52 +295,72 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
         return wavAudio;
     }
 
-    private ISupertonicInferencePipeline GetOrCreatePipeline(string modelDirectory)
+    private SupertonicPipelineHandle GetOrCreatePipeline(string modelDirectory)
     {
         lock (_pipelineLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_pipeline is null)
+            if (_pipeline is not null)
             {
-                _pipeline = _pipelineFactory(modelDirectory, ExecutionBackend);
-                LogExecutionBackend(modelDirectory, _pipeline);
+                return _pipeline;
             }
 
-            return _pipeline;
+            ISharedModelRegistry registry = ResolveSharedModels();
+            var definition = new SupertonicPipelineDefinition(
+                SupertonicPipelineKey.Create(modelDirectory, ExecutionBackend),
+                _pipelineFactory,
+                CreateLoadDiagnostics(_logger));
+            ISharedModel<ISupertonicInferencePipeline> model = registry.Resolve(definition);
+            // The registry logs load and execution events per key; the handle adds no per-generator load diagnostics.
+            return _pipeline = new SupertonicPipelineHandle(model, Name);
         }
     }
 
-    private void LogExecutionBackend(
-        string modelDirectory,
-        ISupertonicInferencePipeline pipeline)
-    {
-        if (ExecutionBackend != pipeline.ActiveBackend)
-        {
-            _logger?.LogWarning(
-                "Supertonic speech pipeline initialised from '{ModelDirectory}'; the {RequestedBackend} " +
-                "execution backend was requested but could not be initialised, falling back to " +
-                "{ActiveBackend}. Reason: {FallbackReason}",
-                modelDirectory,
-                ExecutionBackend,
-                pipeline.ActiveBackend,
-                pipeline.BackendFallbackReason);
-        }
-        else
-        {
-            _logger?.LogInformation(
-                "Supertonic speech pipeline initialised from '{ModelDirectory}' with the {ActiveBackend} execution backend.",
-                modelDirectory,
-                pipeline.ActiveBackend);
-        }
+    private ISharedModelRegistry ResolveSharedModels()
+        => _sharedModels
+            ?? (_pipelineFactoryOverridden
+                ? _ownedSharedModels ??= new SharedModelRegistry(ResolveRegistryLogger)
+                : _sharedModels = Game.Instance.GetRequiredService<ISharedModelRegistry>());
 
-        if (PipelineDebugLog.IsEnabled)
+    private static ILogger? ResolveRegistryLogger()
+        => GameLoggerResolver.TryResolveFactory(out ILoggerFactory? factory)
+            ? factory!.CreateLogger<SharedModelRegistry>()
+            : null;
+
+    /// <summary>
+    /// Creates the once-per-backend load diagnostics. Only the definition that actually loads the shared pipeline runs
+    /// it, so the CUDA fallback warning is logged once per shared backend rather than once per generator.
+    /// </summary>
+    private static Action<SupertonicPipelineKey, ISupertonicInferencePipeline> CreateLoadDiagnostics(ILogger? logger)
+        => (key, pipeline) =>
         {
-            PipelineDebugLog.Stage(
-                "TTS backend engaged",
-                $"{BackendDescription} backend {pipeline.ActiveBackend.ToString().ToLowerInvariant()}");
-        }
-    }
+            if (key.RequestedBackend != pipeline.ActiveBackend)
+            {
+                logger?.LogWarning(
+                    "Supertonic speech pipeline initialised from '{ModelDirectory}'; the {RequestedBackend} " +
+                    "execution backend was requested but could not be initialised, falling back to " +
+                    "{ActiveBackend}. Reason: {FallbackReason}",
+                    key.ModelDirectory,
+                    key.RequestedBackend,
+                    pipeline.ActiveBackend,
+                    pipeline.BackendFallbackReason);
+            }
+            else
+            {
+                logger?.LogInformation(
+                    "Supertonic speech pipeline initialised from '{ModelDirectory}' with the {ActiveBackend} execution backend.",
+                    key.ModelDirectory,
+                    pipeline.ActiveBackend);
+            }
+
+            if (PipelineDebugLog.IsEnabled)
+            {
+                PipelineDebugLog.Stage(
+                    "TTS backend engaged",
+                    $"{BackendDescription} backend {pipeline.ActiveBackend.ToString().ToLowerInvariant()}");
+            }
+        };
 
     private SupertonicVoiceStyle LoadVoiceStyle(string voiceStylesDirectory)
     {
@@ -344,6 +410,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     private sealed class PipelineFactoryOverride(
         SupertonicSpeechGenerator generator,
         Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> previousFactory,
+        bool previousOverridden,
         Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> installedFactory) : IDisposable
     {
         private SupertonicSpeechGenerator? _generator = generator;
@@ -360,6 +427,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
                 if (ReferenceEquals(generator._pipelineFactory, installedFactory))
                 {
                     generator._pipelineFactory = previousFactory;
+                    generator._pipelineFactoryOverridden = previousOverridden;
                 }
             }
 

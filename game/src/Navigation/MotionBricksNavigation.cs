@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using AlleyCat.Core.Logging;
+using AlleyCat.Models;
 using AlleyCat.Motion;
 using Godot;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,11 @@ public partial class MotionBricksNavigation : NavigationBase
     }
     // Deterministic production-route contract tests only; never exported or set by gameplay.
     internal Func<SomaInferenceWorker.ISession>? SessionFactory
+    {
+        get; set;
+    }
+    // Registry injection seam for tests and standalone fixtures; gameplay resolves the Game-owned registry.
+    internal ISharedModelRegistry? SharedModelRegistry
     {
         get; set;
     }
@@ -145,24 +151,32 @@ public partial class MotionBricksNavigation : NavigationBase
             ILogger<MotionBricksNavigation> logger = _logger!;
             Func<SomaInferenceWorker.ISession, SomaInferenceWorker.ISession>? decorate = SessionDecorator;
             Func<SomaInferenceWorker.ISession>? factory = SessionFactory;
-            _worker = Game.Instance.MotionWorkers.Create(() =>
+            if (factory is not null)
             {
-                if (factory is not null)
-                {
-                    return factory();
-                }
-                var session = new SomaInference(data, model, frames, phase =>
+                _worker = Game.Instance.MotionWorkers.Create(factory, ReturnedMotion);
+            }
+            else
+            {
+                void ObserveNative(string phase)
                 {
                     Volatile.Write(ref nativePhase.Value, phase);
                     logger.LogInformation("Motion native {Phase}, clock {Clock}, thread {Thread}",
                         phase, System.Diagnostics.Stopwatch.GetTimestamp(), System.Environment.CurrentManagedThreadId);
-                });
-                try
-                {
-                    return decorate is null ? session : decorate(session);
                 }
-                catch { session.Dispose(); throw; }
-            }, ReturnedMotion);
+                ISharedModelRegistry registry = SharedModelRegistry
+                    ?? Game.Instance.GetService<ISharedModelRegistry>()
+                    ?? throw new InvalidOperationException("The shared model registry is not registered.");
+                ISharedModel<SomaNativeSession> shared = registry.Resolve(new SomaModelDefinition(model));
+                _worker = Game.Instance.MotionWorkers.Create(shared, backend =>
+                {
+                    var session = new SomaInference(data, backend, frames, ObserveNative);
+                    try
+                    {
+                        return decorate is null ? session : decorate(session);
+                    }
+                    catch { session.Dispose(); throw; }
+                }, ReturnedMotion, ObserveNative, _actor.Name.ToString());
+            }
             _skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Physics;
             _skeleton.SkeletonUpdated += Observe;
             _idleGround = SomaMotionData.ModelToWorld.Inverse() * _actor.GlobalPosition;

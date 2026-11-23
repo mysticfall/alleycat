@@ -1,3 +1,4 @@
+using AlleyCat.Models;
 using AlleyCat.Motion;
 using Godot;
 
@@ -20,6 +21,11 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
     private readonly Func<SomaInferenceWorker.ISession, SomaInferenceWorker.ISession> _decorate = decorate;
     private readonly string _model = model;
     internal Func<SomaInferenceWorker.ISession>? SessionFactory
+    {
+        get; init;
+    }
+    // Registry injection seam for tests and standalone fixtures; gameplay resolves the Game-owned registry.
+    internal ISharedModelRegistry? SharedModelRegistry
     {
         get; init;
     }
@@ -632,15 +638,21 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         if (_worker is null)
         {
             string frames = ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json");
-            _worker = Game.Instance.MotionWorkers.Create(() =>
+            if (SessionFactory is { } factory)
             {
-                SomaInferenceWorker.ISession session = SessionFactory?.Invoke() ?? new SomaInference(_data, _model, frames);
-                try
-                {
-                    return _decorate(session);
-                }
-                catch { session.Dispose(); throw; }
-            }, ReturnedObserved);
+                _worker = Game.Instance.MotionWorkers.Create(() => Decorate(factory()), ReturnedObserved);
+            }
+            else
+            {
+                ISharedModelRegistry registry = SharedModelRegistry
+                    ?? Game.Instance.GetService<ISharedModelRegistry>()
+                    ?? throw new InvalidOperationException("The shared model registry is not registered.");
+                ISharedModel<SomaNativeSession> shared = registry.Resolve(new SomaModelDefinition(_model));
+                SomaMotionData data = _data;
+                _worker = Game.Instance.MotionWorkers.Create(shared,
+                    backend => Decorate(new SomaInference(data, backend, frames)), ReturnedObserved,
+                    consumerName: _actor.Name.ToString());
+            }
             _worker.TraceWorkerEvent = TraceWorkerEvent;
         }
         Transform3D[][] context = _history.Context();
@@ -726,6 +738,15 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
     }
 
     public void Stop() => _worker?.Dispose();
+
+    private SomaInferenceWorker.ISession Decorate(SomaInferenceWorker.ISession session)
+    {
+        try
+        {
+            return _decorate(session);
+        }
+        catch { session.Dispose(); throw; }
+    }
     internal void ReadTreeDestination()
     {
         if (_request && _settling && !_destinationReady)

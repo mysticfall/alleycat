@@ -1,6 +1,8 @@
 using System.Text;
 using AlleyCat.Core.Logging;
+using AlleyCat.Core.Threading;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Speech.LipSync;
@@ -231,6 +233,8 @@ public abstract partial class LipSyncPlayer : Node
     private bool _backendDisposalPending;
     private StreamingPlaybackSession? _activeStreamingSession;
     private StreamingPlaybackSession? _lastStreamingSession;
+    private Task? _pendingBackendLoad;
+    private int _initialisationGeneration;
     private int _streamingFramesBufferedAtStart;
     private int _streamingMaxStarvedFrameGap;
     private bool _streamingStarving;
@@ -541,6 +545,19 @@ public abstract partial class LipSyncPlayer : Node
     protected abstract void InitialiseBackend();
 
     /// <summary>
+    /// Returns the asynchronous part of backend initialisation started by <see cref="InitialiseBackend" />, such as a
+    /// shared model load, or <see langword="null" /> when initialisation is synchronous (the default).
+    /// </summary>
+    /// <remarks>
+    /// When a pending task is returned, <see cref="IsInitialised" /> stays false until it completes. Its outcome is
+    /// marshalled back to the scene thread through the main-thread dispatcher: success sets
+    /// <see cref="IsInitialised" />, and a failure sets <see cref="InitialisationError" /> exactly as a synchronous
+    /// initialisation failure does. The task must never be waited for on the scene thread.
+    /// </remarks>
+    /// <returns>The pending backend load, or <see langword="null" />.</returns>
+    protected virtual Task? GetPendingBackendLoad() => null;
+
+    /// <summary>
     /// Executes backend inference and returns normalised playback data.
     /// </summary>
     protected abstract LipSyncInferenceResult RunBackendInference(
@@ -736,6 +753,12 @@ public abstract partial class LipSyncPlayer : Node
             return true;
         }
 
+        if (_pendingBackendLoad is not null)
+        {
+            PlaybackError = "LipSyncPlayer: backend initialisation is still in progress.";
+            return false;
+        }
+
         TryInitialise();
         if (IsInitialised)
         {
@@ -752,6 +775,12 @@ public abstract partial class LipSyncPlayer : Node
 
     private void TryInitialise()
     {
+        if (_pendingBackendLoad is not null)
+        {
+            // A backend load is already in flight; its completion settles the initialisation state.
+            return;
+        }
+
         // Resolve the logger up front on the main thread so background streaming read loops can use it
         // without touching the Godot service provider off-thread.
         _logger ??= GameLoggerResolver.ResolveRequired<LipSyncPlayer>();
@@ -763,16 +792,81 @@ public abstract partial class LipSyncPlayer : Node
         try
         {
             Initialise();
-            IsInitialised = true;
+            Task? pendingLoad = GetPendingBackendLoad();
+            if (pendingLoad is null || pendingLoad.IsCompletedSuccessfully)
+            {
+                IsInitialised = true;
+                return;
+            }
+
+            if (pendingLoad.IsCompleted)
+            {
+                // Already failed, for example with a cached shared-model load failure: fail synchronously.
+                pendingLoad.GetAwaiter().GetResult();
+                throw new OperationCanceledException("LipSyncPlayer: backend load was cancelled.");
+            }
+
+            int generation = ++_initialisationGeneration;
+            _pendingBackendLoad = pendingLoad;
+            IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
+            _ = CompleteBackendLoadAsync(pendingLoad, generation, dispatcher, _preparationLifetimeCancellation.Token);
         }
         catch (Exception ex)
         {
-            DisposeBackend();
-            IsInitialised = false;
-            InitialisationError = ex.ToString();
-            GD.PushError($"LipSyncPlayer: initialisation failed: {InitialisationError}");
-            SetProcess(false);
+            FailInitialisation(ex);
         }
+    }
+
+    private async Task CompleteBackendLoadAsync(
+        Task pendingLoad,
+        int generation,
+        IMainThreadDispatcher dispatcher,
+        CancellationToken lifetime)
+    {
+        try
+        {
+            await pendingLoad.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Observed here and reported on the scene thread below.
+        }
+
+        try
+        {
+            await dispatcher.InvokeAsync(() => SettleBackendLoad(pendingLoad, generation), lifetime);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // The node left the tree or the dispatcher shut down; nothing is left to initialise.
+        }
+    }
+
+    private void SettleBackendLoad(Task pendingLoad, int generation)
+    {
+        if (generation != _initialisationGeneration || IsLifetimeEnded || !IsInstanceValid(this))
+        {
+            return;
+        }
+
+        _pendingBackendLoad = null;
+        if (pendingLoad.IsCompletedSuccessfully)
+        {
+            IsInitialised = true;
+            return;
+        }
+
+        FailInitialisation(pendingLoad.Exception?.GetBaseException()
+            ?? new OperationCanceledException("LipSyncPlayer: backend load was cancelled."));
+    }
+
+    private void FailInitialisation(Exception error)
+    {
+        DisposeBackend();
+        IsInitialised = false;
+        InitialisationError = error.ToString();
+        GD.PushError($"LipSyncPlayer: initialisation failed: {InitialisationError}");
+        SetProcess(false);
     }
 
     private void Initialise()

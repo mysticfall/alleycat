@@ -63,11 +63,10 @@ public sealed class MotionBricksDeliveryIntegrationTests
     [Fact]
     public void MissingModel_ReportsResolvedPathBeforeNativeLoad()
     {
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
         string missing = ProjectSettings.GlobalizePath("res://models/motionbricks/missing-model-test.onnx");
         bool nativeEntered = false;
-        FileNotFoundException error = Assert.Throws<FileNotFoundException>(() => new SomaInference(data, missing,
-            ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json"), _ => nativeEntered = true));
+        FileNotFoundException error = Assert.Throws<FileNotFoundException>(
+            () => SomaNativeSession.Load(missing, _ => nativeEntered = true));
         Assert.Equal(missing, error.FileName);
         Assert.Contains("SOMA FP32 model is missing", error.Message);
         Assert.False(nativeEntered);

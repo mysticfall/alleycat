@@ -137,6 +137,18 @@ remains the deliberate standalone and fixture path.
     (default `en`) remains authoritative, preserving the deliberate standalone
     path. Both paths supply one canonical language code; no per-character
     language variants and no automatic language detection are introduced.
+16. Shared pipeline: the inference sessions are a shared backend under
+    [CORE-011](../../core/011-shared-model-services/index.md), keyed by the
+    globalised model directory and the requested `ExecutionBackend`. Lazy
+    pipeline init obtains a per-generator handle implementing
+    `ISupertonicInferencePipeline` instead of constructing sessions. The
+    CUDA → CPU fallback in TR-3 runs once per shared backend, so its warning is
+    logged once per backend rather than once per generator. A failed shared
+    pipeline load is cached and reported to every request through the TR-14
+    failure path without retry (CORE-011 TR8); generators do not retry
+    pipeline creation on later requests. Voice style,
+    language, speed and quality steps travel with each request; the generator
+    keeps them and its other per-generator state.
 
 ## In Scope
 
@@ -160,6 +172,7 @@ remains the deliberate standalone and fixture path.
 - Error handling via `ILogger` with failure signalling.
 - Model and voice-style asset layout under game/models/supertonic-3/.
 - Unit tests (Godot-free) and integration test coverage at the specified paths.
+- Obtaining the inference pipeline as a shared backend handle under CORE-011.
 - Automatic effective language from the selected content pack (CORE-008):
   precedence over the exported `Language` property during gameplay, with the
   standalone-component path preserved.
@@ -233,6 +246,11 @@ general PCK packaging solution is deferred.
     producing playable speech in the respective language, with retained audio
     and listening evidence that identifies the listener and any linguistic
     validation limitations (user layer, UR-5).
+18. Several generators with the same model directory and `ExecutionBackend`
+    share one loaded pipeline, each keeps its own voice and language, and a
+    CUDA fallback warning is logged once per shared backend; sharing behaviour
+    is verified under CORE-011-TAC-002 and CORE-011-TAC-007 (technical layer,
+    TR-16).
 
 ## References
 
@@ -250,6 +268,7 @@ general PCK packaging solution is deferred.
 - SPCH-005: Voice Component
 - CORE-007: Microsoft Logging Integration
 - CORE-008: Content Pack Resolution
+- [CORE-011: Shared Model Services](../../core/011-shared-model-services/index.md)
 - SPCH-001: Wav2Arkit LipSync Player
 - SPCH-002: Audio2Face LipSync Player
 

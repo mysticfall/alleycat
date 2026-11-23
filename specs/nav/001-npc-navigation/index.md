@@ -148,11 +148,13 @@ The following clauses refine TR5–8 and are covered by NAV-TAC-002:
 - Replacement invalidates old ownership and uses current displayed context without an idle reset. Copy submitted pose
   arrays; retain only the latest queued request and reject stale results. Worker factories/callbacks must not access
   live scene nodes. Submission, cancellation and result consumption belong to the scene thread; native work does not.
-- One worker owns model construction, generation and disposal. Ordinary scene exit signals shutdown without waiting
-  and observes completion/faults asynchronously without retaining scene nodes. Dispose only after an in-flight native
-  call returns, never concurrently with it. `Game` retains pending workers even after their scene is removed. Menu exit
-  and root-window close share one application-shutdown boundary: reject new MotionBricks work, signal all workers,
-  and asynchronously await every worker's completion, including native disposal, before final application quit.
+- The MotionBricks model is a shared backend under [CORE-011](../../core/011-shared-model-services/index.md), which
+  is normative for its loading, scheduling, failure caching and disposal. Each NPC's worker is a per-consumer handle:
+  it owns its codec state, request ownership and latest-wins supersession, not model construction or native disposal.
+  Ordinary scene exit releases the handle without waiting and observes completion/faults asynchronously without
+  retaining scene nodes. The shared native session is disposed only at `Game` shutdown, after any in-flight native call
+  returns, never concurrently with it. Menu exit and root-window close share one application-shutdown boundary: reject
+  new MotionBricks work, and asynchronously await completion, including native disposal, before final application quit.
   Cancellation and the 30-second request budget are logical: they cannot interrupt native load/CUDA calls. A native
   call that never returns prevents graceful application exit indefinitely; do not promise bounded native shutdown.
   Forced process termination and direct `SceneTree.Quit` bypass this boundary and are not supported graceful-exit paths.
@@ -355,9 +357,9 @@ player readiness. A broken NPC playtest is not a delivered prototype.
     Source/composition review confirms no parallel legacy runtime or foot-IK rescue is installed.
     Verify sequence completion independently of convergence, preserving diagnostics outside configured tolerances and
     the unchanged convergence API. Check copied latest-request ownership, stale rejection, and nonblocking ordinary
-    scene exit during actual native load/generation with worker-exclusive disposal after native return. Verify menu
-    exit and OS root-window close through actual process exit without a crash, with all worker completion/disposal
-    preceding final quit, including pending workers retained after scene removal. Check rejection of new work once
+    scene exit during actual native load/generation, with shared-session disposal only after native return under
+    CORE-011-TAC-008. Verify menu exit and OS root-window close through actual process exit without a crash, with
+    shared backend disposal preceding final quit after NPC scenes are removed. Check rejection of new work once
     shutdown starts. Do not treat direct `SceneTree.Quit` or forced termination as graceful-exit evidence, or successful
     representative exits as universal provider safety. Verify timeout/failure handling separately;
     successful calls or model-load exceptions do not prove timeout handling or failure during moving generation.
@@ -421,6 +423,7 @@ No new source generation, model-call budget or shutdown retry follows from this 
 - [AI-015: Coordinate Navigation Tools](../../ai/015-coordinate-navigation-tools/index.md)
 - [Shared Animation Contract](../../animation/index.md)
 - [ANIM-002: Locomotive Conditioning Sources](../../animation/002-locomotive-animation-set/index.md)
+- [CORE-011: Shared Model Services](../../core/011-shared-model-services/index.md)
 - [Runtime Setup and Evidence Limits](../../../game/src/Motion/README.md)
 - [Navigation Recorder Workflow and Schema](../../../game/src/Navigation/Recording/README.md)
 - [Character Root](../../character/002-character-root/index.md)

@@ -54,6 +54,9 @@ game and replacing ad-hoc static accessors.
 11. `Game` must register its dedicated owned dispatcher under `IMainThreadDispatcher`, so resolving that interface
     returns the exact dispatcher instance and never the `Game` singleton. The dispatcher behaviour is normatively
     defined by [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md).
+12. `Game` must register the exact shared model registry instance it owns under the registry's service contract, so
+    resolving that contract returns that instance. The type name is implementation-defined; registry behaviour is
+    normatively defined by [CORE-011: Shared Model Services](../011-shared-model-services/index.md).
 
 ## In Scope
 
@@ -127,6 +130,8 @@ hard-coded node paths or names.
    with detailed behaviour delegated to CORE-006 and CORE-007.
 10. Resolving `IMainThreadDispatcher` returns the exact dispatcher instance owned by `Game`, not the `Game` singleton,
     with detailed dispatcher behaviour verified under CORE-010.
+11. Resolving the shared model registry contract returns the exact registry instance owned by `Game`, verified under
+    CORE-011-TAC-002 (Technical Requirement 12).
 
 ## References
 
@@ -143,6 +148,7 @@ hard-coded node paths or names.
 - [CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md)
 - [CORE-007: Microsoft Logging Integration](../007-microsoft-logging-integration/index.md)
 - [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md)
+- [CORE-011: Shared Model Services](../011-shared-model-services/index.md)
 
 ### External
 

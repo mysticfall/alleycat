@@ -7,6 +7,7 @@ using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
 using AlleyCat.Mind.AI.Decision;
 using AlleyCat.Mind.AI.Lore;
+using AlleyCat.Models;
 using AlleyCat.Motion;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
@@ -34,6 +35,7 @@ public partial class Game : Node, IServiceProvider
     public Game()
     {
         MainThreadDispatcher = new GodotMainThreadDispatcher(ScheduleDeferred, null, null, IsOnGodotMainThread);
+        SharedModels = new SharedModelRegistry(ResolveSharedModelLogger);
     }
 
     internal Game(Action? beforeWorkItemStart)
@@ -43,7 +45,19 @@ public partial class Game : Node, IServiceProvider
             beforeWorkItemStart,
             null,
             IsOnGodotMainThread);
+        SharedModels = new SharedModelRegistry(ResolveSharedModelLogger);
     }
+
+    /// <summary>
+    /// Session-wide shared model registry owned for the autoload lifetime and registered as
+    /// <see cref="ISharedModelRegistry" />. It is shut down only at the application-shutdown boundary.
+    /// </summary>
+    internal SharedModelRegistry SharedModels
+    {
+        get;
+    }
+
+    private ILogger? ResolveSharedModelLogger() => GetService<ILogger<SharedModelRegistry>>();
 
     internal GodotMainThreadDispatcher MainThreadDispatcher
     {
@@ -116,6 +130,7 @@ public partial class Game : Node, IServiceProvider
         if (_serviceProvider is null)
         {
             _ = _services.AddSingleton<IMainThreadDispatcher>(MainThreadDispatcher);
+            _ = _services.AddSingleton<ISharedModelRegistry>(SharedModels);
             RegisterInfrastructureServices(_services);
             RegisterServices(_services);
             RegisterConfiguredServices(_services);
@@ -392,7 +407,9 @@ public partial class Game : Node, IServiceProvider
     internal void RegisterDiagnosticDrain(Func<Task> drain) => _diagnosticDrains.Add(drain);
 
     // Shared with the focused shutdown integration check, which must not quit the reusable test process.
-    internal Task DrainMotionAndDiagnosticsAsync() => DrainDiagnosticsAsync(MotionWorkers.Stop(), [.. _diagnosticDrains]);
+    // Both stops return immediately; native disposal completes on the thread pool after in-flight calls return.
+    internal Task DrainMotionAndDiagnosticsAsync() =>
+        DrainDiagnosticsAsync(Task.WhenAll(MotionWorkers.Stop(), SharedModels.Stop()), [.. _diagnosticDrains]);
 
     private async Task DrainDiagnosticsAsync(Task workers, Func<Task>[] drains)
     {
@@ -421,11 +438,11 @@ public partial class Game : Node, IServiceProvider
         }
         catch (Exception error)
         {
-            GetService<ILogger<Game>>()?.LogError(error, "MotionBricks worker shutdown failed");
+            GetService<ILogger<Game>>()?.LogError(error, "Model worker shutdown failed");
         }
         ScheduleDeferred(() =>
         {
-            GetService<ILogger<Game>>()?.LogInformation("MotionBricks workers completed before application quit");
+            GetService<ILogger<Game>>()?.LogInformation("Model workers completed before application quit");
             GetTree().Quit(exitCode);
         });
     }

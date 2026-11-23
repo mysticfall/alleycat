@@ -1,5 +1,6 @@
 using AlleyCat.Common;
 using AlleyCat.Core.Logging;
+using AlleyCat.Models;
 using AlleyCat.Motion;
 using Godot;
 using Microsoft.Extensions.Logging;
@@ -65,13 +66,19 @@ public partial class PlayerMotionBricks : Node
     private long _inputEpoch;
     private Vector2 _rawLeft, _rawRight;
 
-    // Instance-local diagnostic seam, captured before worker creation. Native ownership remains with the worker.
+    // Instance-local diagnostic seam over the per-consumer session, captured before worker creation. The shared
+    // native session stays owned by the shared model registry.
     internal Func<SomaInferenceWorker.ISession, SomaInferenceWorker.ISession>? SessionDecorator
     {
         get; set;
     }
     // Native-free component tests bind this before Ready; gameplay leaves it null.
     internal Func<SomaInferenceWorker.ISession>? SessionFactory
+    {
+        get; set;
+    }
+    // Registry injection seam for tests and standalone fixtures; gameplay resolves the Game-owned registry.
+    internal ISharedModelRegistry? SharedModelRegistry
     {
         get; set;
     }
@@ -155,6 +162,7 @@ public partial class PlayerMotionBricks : Node
                 {
                     Reconcile = true,
                     SessionFactory = SessionFactory,
+                    SharedModelRegistry = SharedModelRegistry,
                     ReturnedObserved = PlayerPoseRecording.ObserveReturns(_poseRecordingLink),
                     BackwardSpeedRatio = BackwardSpeedRatio,
                     SnapshotSeconds = VirtualSnapshotSeconds,

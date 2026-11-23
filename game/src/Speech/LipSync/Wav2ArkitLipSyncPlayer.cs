@@ -1,14 +1,19 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AlleyCat.Models;
 using Godot;
-using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlleyCat.Speech.LipSync;
 
 /// <summary>
 /// wav2arkit_cpu-backed <see cref="LipSyncPlayer"/> implementation.
 /// </summary>
+/// <remarks>
+/// The inference session is a shared backend under CORE-011 (SPCH-001 TR9), keyed by the globalised model path:
+/// initialisation requests it without blocking the scene thread, and <see cref="LipSyncPlayer.IsInitialised"/> becomes
+/// true only after the config is validated and the shared load completes.
+/// </remarks>
 [GlobalClass]
 public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
 {
@@ -34,18 +39,51 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
 
     private const float DefaultOutputFps = 30f;
 
-    private InferenceSession? _session;
+    private Wav2ArkitSessionHandle? _session;
     private Wav2ArkitConfig _config = Wav2ArkitConfig.CreateDefault();
+    private ISharedModelRegistry? _sharedModels;
+    private Func<string, IWav2ArkitInferenceSession> _sessionFactory = Wav2ArkitOnnxSession.Load;
 
     /// <inheritdoc />
     protected override int BackendSampleRate => _config.Preprocessing.SampleRate;
+
+    /// <summary>
+    /// Supplies the shared model registry and, optionally, the session factory used when this player's key is first
+    /// loaded, instead of the <see cref="Game" />-owned registry and the ONNX loader (CORE-011 TR5, TR23). Must be
+    /// called before the node becomes ready; the caller owns the registry's lifetime.
+    /// </summary>
+    /// <param name="sharedModels">Registry to resolve the shared session from.</param>
+    /// <param name="sessionFactory">Optional session factory receiving the absolute model path.</param>
+    internal void OverrideSharedModelsForTesting(
+        ISharedModelRegistry sharedModels,
+        Func<string, IWav2ArkitInferenceSession>? sessionFactory = null)
+    {
+        ArgumentNullException.ThrowIfNull(sharedModels);
+        if (_session is not null)
+        {
+            throw new InvalidOperationException("The Wav2Arkit session handle has already been created.");
+        }
+
+        _sharedModels = sharedModels;
+        _sessionFactory = sessionFactory ?? _sessionFactory;
+    }
 
     /// <inheritdoc />
     protected override void InitialiseBackend()
     {
         _config = LoadConfig(ConfigPath);
-        _session = BuildSession(ModelPath);
+
+        // Godot-dependent inputs are resolved here on the scene thread; the shared load runs off it.
+        var key = Wav2ArkitModelKey.Create(ProjectSettings.GlobalizePath(ModelPath));
+        ISharedModelRegistry registry = _sharedModels ??= Game.Instance.GetRequiredService<ISharedModelRegistry>();
+        _session?.Dispose();
+        _session = new Wav2ArkitSessionHandle(
+            registry.Resolve(new Wav2ArkitModelDefinition(key, _sessionFactory)),
+            Name);
     }
+
+    /// <inheritdoc />
+    protected override Task? GetPendingBackendLoad() => _session?.Loaded;
 
     /// <inheritdoc />
     protected override LipSyncInferenceResult RunBackendInference(
@@ -53,11 +91,16 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        InferenceSession session = _session
+        Wav2ArkitSessionHandle session = _session
             ?? throw new InvalidOperationException("LipSyncPlayer: backend session was not initialised.");
 
         float[] monoWaveform = LoadAudioWaveform(speech, _config.Preprocessing.SampleRate);
-        float[][] frames = RunInference(session, _config, monoWaveform);
+        // Preparation runs off the scene thread; the synchronous Play path keeps its documented blocking inference.
+        float[][] frames = monoWaveform.Length == 0
+            ? []
+            : session.InferAsync(monoWaveform, _config.InputSpec.Name, _config.OutputSpec.Name, cancellationToken)
+                .GetAwaiter()
+                .GetResult();
         cancellationToken.ThrowIfCancellationRequested();
         return new LipSyncInferenceResult(frames, _config.BlendshapeNames, _config.OutputSpec.Fps);
     }
@@ -65,6 +108,7 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
     /// <inheritdoc />
     protected override void DisposeBackend()
     {
+        // Releasing the handle never unloads the shared session (CORE-011 TR10, TR22).
         _session?.Dispose();
         _session = null;
         _config = Wav2ArkitConfig.CreateDefault();
@@ -82,74 +126,6 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
             : config.BlendshapeNames.Count == 0
             ? throw new InvalidOperationException("LipSyncPlayer: config blendshape_names is empty.")
             : config;
-    }
-
-    private static InferenceSession BuildSession(string modelPath)
-    {
-        string absoluteModelPath = ProjectSettings.GlobalizePath(modelPath);
-        if (!File.Exists(absoluteModelPath))
-        {
-            throw new FileNotFoundException($"LipSyncPlayer: ONNX model not found at '{modelPath}'.", absoluteModelPath);
-        }
-
-        var sessionOptions = new SessionOptions
-        {
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING
-        };
-
-        return new InferenceSession(absoluteModelPath, sessionOptions);
-    }
-
-    private static float[][] RunInference(InferenceSession session, Wav2ArkitConfig config, float[] monoWaveform)
-    {
-        if (monoWaveform.Length == 0)
-        {
-            return [];
-        }
-
-        string inputName = !string.IsNullOrWhiteSpace(config.InputSpec.Name)
-            ? config.InputSpec.Name
-            : session.InputMetadata.Keys.First();
-
-        var inputTensor = new DenseTensor<float>(monoWaveform, [1, monoWaveform.Length]);
-        using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results = session.Run([
-            NamedOnnxValue.CreateFromTensor(inputName, inputTensor)
-        ]);
-
-        string outputName = !string.IsNullOrWhiteSpace(config.OutputSpec.Name)
-            ? config.OutputSpec.Name
-            : session.OutputMetadata.Keys.First();
-
-        DisposableNamedOnnxValue? outputValue = results.FirstOrDefault(result => string.Equals(result.Name,
-            outputName,
-            StringComparison.Ordinal));
-
-        outputValue ??= results[0];
-
-        Tensor<float> outputTensor = outputValue.AsTensor<float>();
-        int[] dimensions = outputTensor.Dimensions.ToArray();
-        if (dimensions.Length != 3)
-        {
-            throw new InvalidOperationException(
-                $"LipSyncPlayer: expected output tensor rank 3, got rank {dimensions.Length}.");
-        }
-
-        int frameCount = dimensions[1];
-        int blendshapeCount = dimensions[2];
-        float[] outputData = [.. outputTensor];
-
-        float[][] frames = new float[frameCount][];
-        for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
-        {
-            float[] frame = new float[blendshapeCount];
-            int sourceOffset = frameIndex * blendshapeCount;
-            Array.Copy(outputData, sourceOffset, frame, 0, blendshapeCount);
-            frames[frameIndex] = frame;
-        }
-
-        return frames;
     }
 
     private static float[] LoadAudioWaveform(AudioStreamWav audioStream, int targetSampleRate)

@@ -95,7 +95,7 @@ internal sealed class PlayerInputTrace
         }
     }
 
-    // Native disposal already runs off the scene thread and is drained by Game.MotionWorkers.
+    // Per-consumer session release already runs off the scene thread and is drained by Game.MotionWorkers.
     // Finish the associated recorder there too; do not add a blocking exit wait on the VR thread.
     public SomaInferenceWorker.ISession Wrap(SomaInferenceWorker.ISession inner) => new DrainSession(inner, this);
     private sealed class DrainSession(SomaInferenceWorker.ISession inner, PlayerInputTrace trace) : SomaInferenceWorker.ISession
