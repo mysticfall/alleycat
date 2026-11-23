@@ -1,7 +1,3 @@
-using System.Diagnostics;
-using System.Reflection;
-using System.Text.Json;
-using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Motion;
 using AlleyCat.Navigation;
 using AlleyCat.TestFramework;
@@ -12,316 +8,105 @@ namespace AlleyCat.IntegrationTests.Motion;
 
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
-    /// <summary>The actual normal-scene detour must complete, not merely refuse without poisoning inference.</summary>
+    /// <summary>A native detour and a later outgoing request must both reach their owned arrival endpoints.</summary>
     [Headless]
     [Fact]
-    public async Task ActualDetourCompletesAndOutgoingSuccessorRemainsResponsive()
+    public async Task NativeDetourCompletesAndOutgoingSuccessorRemainsResponsive()
     {
-        const string output = "res://temp/motionbricks/source-pipeline-09/detour-following-01/";
-        using var input = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath(output + "user-diagnostic.json")));
-        using var preflight = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath(output + "successor-preflight.json")));
-        static Vector3 Vector(JsonElement p)
+        Vector3 start = new(-1.5f, 0, -.4f);
+        Vector3 goal = NavigationFixedStepFixture.CornerGoal;
+        Vector3 corner = NavigationFixedStepFixture.Corner;
+        Vector3 successor = new(.75f, 0, -3.85f);
+        await using NavigationFixedStepFixture fixture = await NavigationFixedStepFixture.CreateAsync(start, -.8f);
+        MotionBricksNavigation nav = fixture.Navigation;
+        var tickets = new List<long>();
+        int released = 0;
+        bool outgoingFromCorner = false;
+        bool finalNativeLegObserved = false;
+        Vector3 previous = start;
+        // This response models safe generated travel across the known physical corner, not model quality.
+        // Its first and last poses are still the live submitted realised and conditioning endpoints.
+        fixture.Provider.Response = (context, target, count) =>
         {
-            return new(p[0].GetSingle(), p[1].GetSingle(), p[2].GetSingle());
-        }
-
-        static float[] Pack(Vector3 p)
-        {
-            return [p.X, p.Y, p.Z];
-        }
-
-        Vector3 start = Vector(input.RootElement.GetProperty("actorStart")), goal = Vector(input.RootElement.GetProperty("requestedTarget"));
-        Vector3 successor = Vector(preflight.RootElement.GetProperty("target"));
-        Vector3 corner = Vector(input.RootElement.GetProperty("route").GetProperty("path").GetProperty("points")[4]);
-        Vector3 incoming = (corner - start).Normalized();
-        SceneTree tree = TestUtils.GetSceneTree();
-        var root = new ProbeGame { Name = "ActualDetourDelivery" };
-        Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
-        AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
-        Assert.False(actor.IsInsideTree());
-        actor.Position = start;
-        // Capture the authored target before tree entry; the role reparents this same object on entry.
-        Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
-        NavigationMesh mesh = scene.GetNode<NavigationRegion3D>("NavigationRegion3D").NavigationMesh;
-        Vector3[] vertices = mesh.GetVertices();
-        var rectangles = new List<(Vector2 Low, Vector2 High)>();
-        for (int i = 0; i < mesh.GetPolygonCount(); i++)
-        {
-            int[] polygon = mesh.GetPolygon(i);
-            if (polygon.Length != 4)
+            Vector3 from = SomaMotionData.ModelToWorld * context[3][0].Origin;
+            Vector3 to = SomaMotionData.ModelToWorld * target[0][0].Origin;
+            Vector3 pivot = new(corner.X, (from.Y + to.Y) / 2, corner.Z);
+            return [.. Enumerable.Range(0, count).Select(i =>
             {
-                continue;
-            }
-
-            Vector3[] p = [.. polygon.Select(index => vertices[index])];
-            rectangles.Add((new(p.Min(v => v.X), p.Min(v => v.Z)), new(p.Max(v => v.X), p.Max(v => v.Z))));
-        }
-        static Vector2 Flat(Vector3 p)
-        {
-            return new(p.X, p.Z);
-        }
-
-        bool OnMap(Vector2 p)
-        {
-            return rectangles.Any(r => p.X >= r.Low.X && p.X <= r.High.X && p.Y >= r.Low.Y && p.Y <= r.High.Y);
-        }
-
-        bool SegmentOnMap(Vector2 a, Vector2 b)
-        {
-            var fractions = new SortedSet<double> { 0, 1 };
-            Vector2 d = b - a;
-            foreach ((Vector2 Low, Vector2 High) in rectangles)
-            {
-                foreach (float x in new[] { Low.X, High.X })
+                float fraction = i / (float)(count - 1);
+                Transform3D[] pose = [.. context[3].Select((bone, joint) => SomaMotionData.Blend(bone, target[0][joint], fraction))];
+                if (from.X < 0 && to.Z < -1)
                 {
-                    if (d.X != 0 && (x - a.X) / d.X is > 0 and < 1)
-                    {
-                        _ = fractions.Add((x - a.X) / d.X);
-                    }
+                    float division = from.DistanceTo(pivot) / (from.DistanceTo(pivot) + pivot.DistanceTo(to));
+                    Vector3 world = fraction < division ? from.Lerp(pivot, fraction / division) :
+                        pivot.Lerp(to, (fraction - division) / (1 - division));
+                    pose[0].Origin = SomaMotionData.ModelToWorld.Inverse() * world;
                 }
-                foreach (float z in new[] { Low.Y, High.Y })
+                return pose;
+            })];
+        };
+        nav.WindowSubmitted += (ticket, context, _) =>
+        {
+            tickets.Add(ticket);
+            if (tickets.Count == 1)
+            {
+                Assert.Contains(fixture.Route.PathPoints, p => p.IsEqualApprox(corner));
+            }
+            Assert.Equal(fixture.NavigationField<RealisedPoseHistory>("_history").Context().SelectMany(p => p),
+                context.SelectMany(p => p));
+        };
+
+        static bool OnMap(Vector3 p)
+        {
+            return (p.X is >= -.005f and <= 1.005f && p.Z is >= -4.005f and <= .005f) ||
+                (p.X is >= -3.005f and <= .005f && p.Z is >= -1.005f and <= .005f);
+        }
+
+        static bool SweepOnMap(Vector3 from, Vector3 to)
+        {
+            // Each rectangle is convex. A segment crossing the shared Z boundary must cross in the overlap.
+            const float boundary = -1.005f;
+            return ((from.Z < boundary) == (to.Z < boundary)) ||
+                from.Lerp(to, (boundary - from.Z) / (to.Z - from.Z)).X >= -.005f;
+        }
+        Assert.False(OnMap(start.Lerp(goal, .5f)));
+
+        async Task ObserveAsync(int ticks)
+        {
+            for (int i = 0; i < ticks; i++)
+            {
+                await fixture.StepAsync();
+                Vector3 actual = fixture.Actor.GlobalPosition;
+                Assert.True(OnMap(actual) && SweepOnMap(previous, actual),
+                    $"The realised root left the authored corridor on {previous} → {actual}.");
+                previous = actual;
+                outgoingFromCorner |= actual.X > .05f && actual.Z < -1.25f;
+                if (outgoingFromCorner && nav.CurrentStatus.ActiveRequest?.RequestID == 1)
                 {
-                    if (d.Y != 0 && (z - a.Y) / d.Y is > 0 and < 1)
-                    {
-                        _ = fractions.Add((z - a.Y) / d.Y);
-                    }
+                    finalNativeLegObserved |= nav.GetCurrentNavigationPathIndex() == nav.GetCurrentNavigationPath().Length - 1;
+                }
+                if (released < tickets.Count)
+                {
+                    await fixture.ReleaseAsync(tickets[released++]);
                 }
             }
-            double[] f = [.. fractions];
-            return OnMap(a) && OnMap(b) && f.Zip(f.Skip(1)).All(pair => OnMap(a.Lerp(b, (float)((pair.First + pair.Second) / 2))));
-        }
-        var provider = new LifecycleProviderState();
-        MotionBricksNavigation? nav = null;
-        var clock = Stopwatch.StartNew();
-        var samples = new List<object>();
-        var events = new List<object>();
-        var windows = new List<object>();
-        var contexts = new List<bool>();
-        var safety = new List<string>();
-        var payloads = new List<JsonElement>();
-        Vector2? last = null;
-        bool passedCorner = false;
-        bool firstFinalLegObserved = false;
-        T Field<T>(string name)
-        {
-            return (T)typeof(MotionBricksNavigation).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav)!;
         }
 
-        float Heading()
-        {
-            Transform3D[][] history = Field<RealisedPoseHistory>("_history").Context();
-            return (float)typeof(MotionBricksNavigation).GetMethod("AnatomicalHeading", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(nav, [history[3]])! + Mathf.Pi;
-        }
-        object State()
-        {
-            return new
-            {
-                wall = clock.Elapsed.TotalSeconds,
-                tick = Engine.GetPhysicsFrames(),
-                nav!.Phase,
-                nav.Failure,
-                nav.Requests,
-                nav.ObservationTime,
-                actor = Pack(actor.GlobalPosition),
-                heading = Heading(),
-                observedRoot = Pack(nav.ObservedRoot.Origin),
-                nav.HasDestination,
-                nav.CurrentStatus,
-                route = nav.CurrentPath.Select(Pack).ToArray(),
-                nav.CurrentPathIndex,
-                selection = Field<ReviewedRoleSampler>("_reviewed").Selection,
-                nav.ReviewedRole,
-                nav.SourceRateCurveIntent,
-                unavailable = Field<bool>("_unavailable"),
-                nativeRevision = Field<long>("_nativeRevision"),
-                outcomes = nav.TerminalOutcomes.ToArray(),
-                calls = provider.Calls,
-                faults = provider.Faults,
-                workerCompleted = nav.WorkerCompletion?.IsCompleted
-            };
-        }
-
-        void Observe()
-        {
-            Vector2 now = Flat(actor.GlobalPosition);
-            if (last is Vector2 before)
-            {
-                if (!SegmentOnMap(before, now))
-                {
-                    safety.Add("Observed centre sweep left NAV");
-                }
-
-            }
-            last = now;
-            if (nav!.CurrentStatus.ActiveRequest?.RequestID == 1 && (actor.GlobalPosition - corner).Dot(incoming) >= 0 && actor.GlobalPosition.X > corner.X)
-            {
-                passedCorner = true;
-            }
-            NavigationRouteSnapshot? route = RefusalRoute(nav!);
-            if (nav.CurrentStatus.ActiveRequest?.RequestID == 1 && passedCorner && route is not null && route.ActivePathIndex == route.PathPoints.Count - 1)
-            {
-                firstFinalLegObserved = true;
-            }
-
-            samples.Add(State());
-        }
-        void Configure(Node node)
-        {
-            if (node is not MotionBricksNavigation n)
-            {
-                return;
-            }
-
-            nav = n;
-            n.SessionFactory = () => new LifecycleSession(provider, false);
-            n.WindowSubmitted += (ticket, context, target) =>
-            {
-                Transform3D[][] history = Field<RealisedPoseHistory>("_history").Context();
-                bool actual = context.Zip(history).All(p => p.First.SequenceEqual(p.Second)) && context[3][0].Origin == n.ObservedRoot.Origin;
-                contexts.Add(actual);
-                windows.Add(new
-                {
-                    ticket,
-                    actual,
-                    state = State(),
-                    roots = target.Select(p => Pack(SomaMotionData.ModelToWorld * p[0].Origin)).ToArray()
-                });
-            };
-        }
-        async Task TerminalAndSettle(int count)
-        {
-            for (int tick = 0; tick < 600 && (nav!.TerminalOutcomes.Count < count || nav.Phase is not ("settled-idle" or "failed")); tick++)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-        }
-        async Task Tail(int request)
-        {
-            double began = clock.Elapsed.TotalSeconds;
-            events.Add(new
-            {
-                kind = "tail-start",
-                request,
-                state = State()
-            });
-            while (clock.Elapsed.TotalSeconds - began < 3)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-
-            events.Add(new
-            {
-                kind = "tail-end",
-                request,
-                elapsed = clock.Elapsed.TotalSeconds - began,
-                state = State()
-            });
-        }
-        void Save()
-        {
-            File.WriteAllText(ProjectSettings.GlobalizePath(output + "latest.json"), JsonSerializer.Serialize(new
-            {
-                nativeCalls = 0,
-                injectedRouteContextPosePhaseFailure = false,
-                events,
-                samples,
-                windows,
-                contexts,
-                safety,
-                passedCorner,
-                firstFinalLegObserved,
-                payloads,
-                final = nav is null ? null : State()
-            }, new JsonSerializerOptions { IncludeFields = true, WriteIndented = true }));
-        }
-
-        tree.NodeAdded += Configure;
-        root.AddChild(scene);
-        tree.Root.AddChild(root);
-        try
-        {
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 40);
-            Assert.NotNull(nav);
-            Assert.Same(nav, actor.Navigation);
-            typeof(MotionBricksNavigation).GetField("_logger", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(nav, new RefusalLogger(line =>
-            {
-                using var json = JsonDocument.Parse(line["Navigation refusal diagnostic: ".Length..]);
-                payloads.Add(json.RootElement.Clone());
-            }));
-            skeleton.SkeletonUpdated += Observe;
-            last = Flat(actor.GlobalPosition);
-            events.Add(new
-            {
-                kind = "initial-actual",
-                state = State()
-            });
-            int first = nav.SelectDestination(new(Basis.Identity, goal), []);
-            double began = clock.Elapsed.TotalSeconds;
-            ulong tickStart = Engine.GetPhysicsFrames();
-            events.Add(new
-            {
-                kind = "first-selected",
-                selection = first,
-                state = State()
-            });
-            while (clock.Elapsed.TotalSeconds - began < 30)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-
-            double fullWindow = clock.Elapsed.TotalSeconds - began;
-            events.Add(new
-            {
-                kind = "full-window-end",
-                elapsed = fullWindow,
-                physicsTicks = Engine.GetPhysicsFrames() - tickStart,
-                state = State()
-            });
-            await TerminalAndSettle(1);
-            await Tail(1);
-            int second = nav.SelectDestination(new(Basis.Identity, successor), []);
-            events.Add(new
-            {
-                kind = "successor-selected",
-                selection = second,
-                state = State()
-            });
-            await TerminalAndSettle(2);
-            await Tail(2);
-            Save();
-            Assert.True(fullWindow >= 30, "The complete real observation window must be retained.");
-            Assert.Equal((int)NavigationDestinationResult.Accepted, first);
-            Assert.Equal((int)NavigationDestinationResult.Accepted, second);
-            Assert.False(SegmentOnMap(Flat(start), Flat(goal)));
-            Assert.False(SegmentOnMap(Flat(start), Flat(goal)));
-            Assert.Equal(2, nav.TerminalOutcomes.Count);
-            Assert.Equal(NavigationTerminalOutcome.Completed, nav.TerminalOutcomes[0].Outcome);
-            Assert.Equal(NavigationTerminalReason.ArrivalSequenceCompleted, nav.TerminalOutcomes[0].Reason);
-            Assert.Equal(NavigationTerminalOutcome.Completed, nav.TerminalOutcomes[1].Outcome);
-            Assert.Equal(NavigationTerminalReason.ArrivalSequenceCompleted, nav.TerminalOutcomes[1].Reason);
-            Assert.True(passedCorner);
-            Assert.True(firstFinalLegObserved);
-            Assert.Empty(safety);
-            Assert.All(contexts, Assert.True);
-            Assert.NotEmpty(windows);
-            Assert.Equal("settled-idle", nav.Phase);
-            Assert.False(Field<bool>("_unavailable"));
-            Assert.Equal(0, provider.Faults);
-            Assert.False(nav.WorkerCompletion!.IsCompleted);
-        }
-        finally
-        {
-            Save();
-            skeleton.SkeletonUpdated -= Observe;
-            tree.NodeAdded -= Configure;
-            Task? completion = nav?.WorkerCompletion;
-            root.QueueFree();
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 2);
-            if (completion is not null)
-            {
-                await completion.WaitAsync(TimeSpan.FromSeconds(30));
-            }
-
-        }
+        Assert.Equal(NavigationDestinationResult.Accepted, nav.SetDestination(new(Basis.Identity, goal), []));
+        await ObserveAsync(30 * 60);
+        Assert.True(outgoingFromCorner);
+        Assert.True(finalNativeLegObserved);
+        Assert.Equal(NavigationTerminalReason.ArrivalSequenceCompleted, Assert.Single(nav.TerminalOutcomes).Reason);
+        Assert.InRange(fixture.Actor.GlobalPosition.DistanceTo(goal), 0, nav.DestinationReachedDistance);
+        await ObserveAsync(3 * 60);
+        Assert.Equal(NavigationDestinationResult.Accepted, nav.SetDestination(new(Basis.Identity, successor), []));
+        // Allow three full 49/30-second synthetic segments, then observe the original three-second tail.
+        await ObserveAsync(6 * 60);
+        Assert.Equal("settled-idle", nav.Phase);
+        await ObserveAsync(3 * 60);
+        Assert.Equal(2, nav.TerminalOutcomes.Count);
+        Assert.All(nav.TerminalOutcomes, outcome => Assert.Equal(NavigationTerminalReason.ArrivalSequenceCompleted, outcome.Reason));
+        Assert.Equal("settled-idle", nav.Phase);
+        Assert.InRange(fixture.Actor.GlobalPosition.DistanceTo(successor), 0, nav.DestinationReachedDistance);
     }
 }

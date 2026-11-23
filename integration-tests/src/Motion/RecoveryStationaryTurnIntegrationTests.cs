@@ -21,77 +21,57 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 
     private static async Task CheckPrimaryGroupAsync(float magnitude)
     {
-        var evidence = new List<object>();
         var observations = new List<(int[] Frames, float[] Angles, bool RawNonRoots)>();
+        foreach (int sign in new[] { -1, 1 })
         {
-            foreach (int sign in new[] { -1, 1 })
+            await using StationaryTurnFixture fixture = await StationaryTurnFixture.CreateAsync();
+            WalkingExperimentDriver driver = fixture.Driver;
+            SomaInferenceWorker worker = fixture.UseSession(new MetadataTurnEndpointSession());
+            var starts = new List<int>();
+            var angles = new List<float>();
+            bool rawNonRoots = true;
+            string directory = ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine");
+            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+            var source = new ReviewedMotionSource(Path.Combine(directory, "landing-ablation-01.json"), data);
+            string role = sign < 0 ? "left_turn" : "right_turn";
+            using var set = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "set.json")));
+            JsonElement cycleData = set.RootElement.GetProperty("roles").EnumerateArray()
+                .Single(e => e.GetProperty("cycle").GetProperty("role").GetString() == role).GetProperty("cycle");
+            ReviewedMotionSource.ExperimentalCycle cycle = source.LoadExperimentalCycle(cycleData, source.GetRole("feminine", "normal", role));
+            var raw = new Transform3D[77 * 4];
+            driver.WindowSubmitted += (_, _, target) =>
             {
-                await using ClosureFixture fixture = await ClosureFixture.CreateAsync(.75f);
-                fixture.Player.ProcessMode = Node.ProcessModeEnum.Disabled;
-                WalkingExperimentDriver driver = fixture.Motion.ContinuousDriver!;
-                Assert.Null(driver.Completion);
-                ExhaustionField("_worker").SetValue(driver, fixture.Root.MotionWorkers.Create(() => new MetadataTurnEndpointSession()));
-                var starts = new List<int>();
-                var angles = new List<float>();
-                bool rawNonRoots = true;
-                string directory = ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine");
-                var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-                var source = new ReviewedMotionSource(Path.Combine(directory, "landing-ablation-01.json"), data);
-                string role = sign < 0 ? "left_turn" : "right_turn";
-                using var set = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "set.json")));
-                JsonElement cycleData = set.RootElement.GetProperty("roles").EnumerateArray()
-                    .Single(e => e.GetProperty("cycle").GetProperty("role").GetString() == role).GetProperty("cycle");
-                ReviewedMotionSource.ExperimentalCycle cycle = source.LoadExperimentalCycle(cycleData, source.GetRole("feminine", "normal", role));
-                var raw = new Transform3D[77 * 4];
-                driver.WindowSubmitted += (_, _, target) =>
+                int start = driver.LastReviewedRequest!.Value.WindowStart;
+                starts.Add(start);
+                angles.Add(Mathf.RadToDeg(Mathf.Atan2(target[0][0].Basis.Z.X, target[0][0].Basis.Z.Z)));
+                source.CopyCycleWindow(cycle, start, raw);
+                for (int i = 0; i < 4; i++)
                 {
-                    int start = driver.LastReviewedRequest!.Value.WindowStart;
-                    starts.Add(start);
-                    angles.Add(Mathf.RadToDeg(Mathf.Atan2(target[0][0].Basis.Z.X, target[0][0].Basis.Z.Z)));
-                    source.CopyCycleWindow(cycle, start, raw);
-                    for (int i = 0; i < 4; i++)
+                    for (int joint = 1; joint < 77; joint++)
                     {
-                        for (int joint = 1; joint < 77; joint++)
-                        {
-                            rawNonRoots &= raw[(i * 77) + joint] == target[i][joint];
-                        }
-                    }
-                };
-                fixture.Motion.SetStick(false, new Vector2(sign * magnitude, 0));
-                for (int tick = 0; tick < 1600 && starts.Count < 5; tick++)
-                {
-                    driver.Advance(1.0 / 120, fixture.Motion.MovementIntent, Basis.Identity, fixture.Motion.TurnIntent);
-                    driver.Observe();
-                    if (driver.RecordingPending)
-                    {
-                        await Task.Delay(1); // Worker yield only, no physical/gait settling assumption.
+                        rawNonRoots &= raw[(i * 77) + joint] == target[i][joint];
                     }
                 }
-                evidence.Add(new
-                {
-                    role,
-                    magnitude,
-                    starts,
-                    angles,
-                    rawNonRoots
-                });
-                observations.Add(([.. starts], [.. angles], rawNonRoots));
-                Assert.Equal("", fixture.Motion.Failure);
+            };
+            fixture.Motion.SetStick(false, new Vector2(sign * magnitude, 0));
+            for (int tick = 0; tick < 1600 && starts.Count < 5; tick++)
+            {
+                await fixture.TickThroughPublicationAsync(worker);
             }
-            string path = ProjectSettings.GlobalizePath($"res://temp/motionbricks/anim002-regenerated-source-adoption-01/driver-{magnitude}-{Guid.NewGuid():N}.json");
-            File.WriteAllText(path, JsonSerializer.Serialize(evidence));
-            Assert.Equal([947, 961, 1007, 1021, 1067], observations[0].Frames);
-            Assert.Equal([1103, 1120, 1163, 1180, 1223], observations[1].Frames);
-            // Absolute primary-lift headings for 120 degrees, from independently exported source angles.
-            double[][] expected = [[8.02696, 69.82212, 128.02696, 189.82212, 248.02696],
+            observations.Add(([.. starts], [.. angles], rawNonRoots));
+            Assert.Equal("", fixture.Motion.Failure);
+        }
+        Assert.Equal([947, 961, 1007, 1021, 1067], observations[0].Frames);
+        Assert.Equal([1103, 1120, 1163, 1180, 1223], observations[1].Frames);
+        // Absolute primary-lift headings for 120 degrees, from independently exported source angles.
+        double[][] expected = [[8.02696, 69.82212, 128.02696, 189.82212, 248.02696],
                 [-27.46443, -108.14307, -147.46443, -228.14307, -267.46443]];
-            for (int role = 0; role < 2; role++)
+        for (int role = 0; role < 2; role++)
+        {
+            Assert.True(observations[role].RawNonRoots);
+            for (int i = 0; i < 5; i++)
             {
-                Assert.True(observations[role].RawNonRoots);
-                for (int i = 0; i < 5; i++)
-                {
-                    Assert.InRange(Math.Abs(Math.IEEERemainder(observations[role].Angles[i] - (magnitude * expected[role][i]), 360)), 0, .001);
-                }
+                Assert.InRange(Math.Abs(Math.IEEERemainder(observations[role].Angles[i] - (magnitude * expected[role][i]), 360)), 0, .001);
             }
         }
     }

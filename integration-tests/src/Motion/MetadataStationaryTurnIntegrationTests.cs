@@ -34,7 +34,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         await using ClosureFixture fixture = await ClosureFixture.CreateAsync(.75f);
         fixture.Player.ProcessMode = Node.ProcessModeEnum.Disabled;
         WalkingExperimentDriver driver = fixture.Motion.ContinuousDriver!;
-        ExhaustionField("_worker").SetValue(driver, fixture.Root.MotionWorkers.Create(() => new ContraryTurnSession()));
+        SomaInferenceWorker worker = fixture.Root.MotionWorkers.Create(() => new ContraryTurnSession());
+        ExhaustionField("_worker").SetValue(driver, worker);
         Skeleton3D source = fixture.Skeleton.GetParent().GetParent<Skeleton3D>();
         double entry = fixture.Player.GlobalRotation.Y;
         fixture.Motion.SetStick(false, new Vector2(-1, 0));
@@ -43,9 +44,9 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         {
             driver.Advance(1.0 / 120, Vector2.Zero, Basis.Identity, fixture.Motion.TurnIntent);
             driver.Observe();
-            if (driver.RecordingPending)
+            if (driver.RecordingPending && !driver.IsPlaying)
             {
-                await Task.Delay(1);
+                await WaitForMotionPublicationAsync(fixture.Tree, worker);
             }
             if (!driver.RecordingAdvanced)
             {
@@ -75,7 +76,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             driver.Observe();
             if (driver.RecordingPending)
             {
-                await Task.Delay(1);
+                await WaitForMotionPublicationAsync(fixture.Tree, worker);
             }
             if (driver.RecordingAdvanced && driver.Phase == "settling")
             {
@@ -95,12 +96,9 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     public async Task MetadataTurn_ProductionFirstPairUsesMeasuredCuesAndAngles()
     {
         {
-            await using ClosureFixture fixture = await ClosureFixture.CreateAsync(.75f);
-            fixture.Player.ProcessMode = Node.ProcessModeEnum.Disabled;
-            WalkingExperimentDriver driver = fixture.Motion.ContinuousDriver!;
-            Assert.Null(driver.Completion);
-            SomaInferenceWorker worker = fixture.Root.MotionWorkers.Create(() => new MetadataTurnEndpointSession());
-            ExhaustionField("_worker").SetValue(driver, worker);
+            await using StationaryTurnFixture fixture = await StationaryTurnFixture.CreateAsync();
+            WalkingExperimentDriver driver = fixture.Driver;
+            SomaInferenceWorker worker = fixture.UseSession(new MetadataTurnEndpointSession());
             var targets = new List<(int Frame, float Angle)>();
             driver.WindowSubmitted += (_, _, target) =>
             {
@@ -110,16 +108,9 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             fixture.Motion.SetStick(false, new Vector2(-1, 0));
             for (int i = 0; i < 600 && targets.Count < 2; i++)
             {
-                driver.Advance(1.0 / 120, fixture.Motion.MovementIntent, Basis.Identity, fixture.Motion.TurnIntent);
-                driver.Observe();
-                if (driver.RecordingPending)
-                {
-                    await Task.Delay(1); // Yield to the injected worker only; no scene/motion settling assumption.
-                }
+                await fixture.TickThroughPublicationAsync(worker);
             }
             Assert.True(targets.Count >= 2);
-            string evidence = ProjectSettings.GlobalizePath("res://temp/motionbricks/anim002-regenerated-source-adoption-01/first-pair-" + Guid.NewGuid().ToString("N") + ".json");
-            File.WriteAllText(evidence, JsonSerializer.Serialize(targets.Select(t => new { t.Frame, t.Angle })));
             Assert.Equal(947, targets[0].Frame);
             Assert.InRange(Math.Abs(targets[0].Angle - 8.026955038153414), 0, .001);
             Assert.Equal(961, targets[1].Frame);
@@ -133,11 +124,9 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     public async Task MetadataTurn_InputSnapshotsRetirementAndLagStayCoordinated()
     {
         {
-            await using ClosureFixture fixture = await ClosureFixture.CreateAsync(.75f);
-            fixture.Player.ProcessMode = Node.ProcessModeEnum.Disabled;
-            WalkingExperimentDriver driver = fixture.Motion.ContinuousDriver!;
-            Assert.Null(driver.Completion);
-            ExhaustionField("_worker").SetValue(driver, fixture.Root.MotionWorkers.Create(() => new MetadataTurnEndpointSession()));
+            await using StationaryTurnFixture fixture = await StationaryTurnFixture.CreateAsync();
+            WalkingExperimentDriver driver = fixture.Driver;
+            SomaInferenceWorker worker = fixture.UseSession(new MetadataTurnEndpointSession());
             var submissions = new List<MetadataStationaryTurn.Snapshot>();
             long submittedTicket = 0;
             driver.WindowSubmitted += (ticket, _, _) =>
@@ -150,21 +139,12 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             };
             fixture.Motion.SetStick(false, new Vector2(-1, 0));
             MetadataStationaryTurn state = driver.MetadataTurn!;
-            async Task TickAsync()
-            {
-                driver.Advance(1.0 / 120, fixture.Motion.MovementIntent, Basis.Identity, fixture.Motion.TurnIntent);
-                driver.Observe();
-                if (driver.RecordingPending)
-                {
-                    await Task.Delay(1);
-                }
-            }
             async Task NextSubmissionAsync()
             {
                 int previous = driver.Requests;
                 for (int tick = 0; tick < 210 && driver.Requests == previous; tick++)
                 {
-                    await TickAsync();
+                    await fixture.TickThroughPublicationAsync(worker);
                 }
                 Assert.Equal(previous + 1, driver.Requests);
             }
@@ -205,18 +185,12 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.NotSame(state, driver.MetadataTurn);
             Assert.Equal("right_turn", driver.MetadataTurn!.Reference.Role);
             Assert.Equal(0, driver.MetadataTurn.Cycle);
-            await TickAsync();
+            await fixture.TickThroughPublicationAsync(worker);
             Assert.Equal(1103, driver.LastMetadataTurnRequest!.WindowStart);
             Assert.Equal("RightFoot", driver.LastMetadataTurnRequest.Foot);
             Assert.Equal("", fixture.Motion.Failure);
         }
     }
-
-    /// <summary>Reuse the gated late-return fixture; no native session can be created.</summary>
-    [Headless]
-    [Fact]
-    public async Task MetadataTurn_RetirementRejectsActualLateWorkerResult() =>
-        await CompatibleTurn_IncompatibleChangesRetireAndLateReturnStaysStale();
 
     /// <summary>Explicit windows retain raw articulation, uneven30Hz yaw variation and source order across the boundary.</summary>
     [Headless]

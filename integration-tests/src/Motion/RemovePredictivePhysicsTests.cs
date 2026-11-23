@@ -1,7 +1,7 @@
-using System.Text.Json;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Navigation;
 using AlleyCat.Navigation.Recording;
+using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 
@@ -10,12 +10,14 @@ namespace AlleyCat.IntegrationTests.Motion;
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
     /// <summary>An external obstacle absent from NAV is handled by actual engine movement, not prediction.</summary>
+    [Headless]
     [Fact]
     public async Task NpcActualCollisionStillClampsAndAcceptsSuccessor()
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var root = new ProbeGame();
         Node scene = GD.Load<PackedScene>(NavigationPlaytestRecorder.PlaytestScene).Instantiate();
+        DeactivateNavigationRecording(scene);
         AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
         actor.Position = new(-2, 0, -2);
         var wall = new StaticBody3D { Position = new(-2, .5f, -2.6f) };
@@ -43,8 +45,13 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         tree.Root.AddChild(root);
         try
         {
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 40);
+            // Jolt contact and realised skeleton feedback are deliberately engine-ticked.
+            for (int i = 0; i < 40 && (nav?.SamplesRecorded ?? 0) < 8; i++)
+            {
+                await TestUtils.WaitForNextPhysicsFrameAsync(tree);
+            }
             Assert.NotNull(nav);
+            Assert.True(nav.SamplesRecorded >= 8);
             Assert.Equal(0, scene.Call("_submit_destination", new Transform3D(Basis.Identity, new(-2, 0, -3.5f)), Array.Empty<Vector3>()).AsInt32());
             for (int i = 0; i < 360 && (nav.TerminalOutcomes.Count == 0 || nav.Phase != "settled-idle"); i++)
             {
@@ -66,15 +73,6 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             }
             Assert.True(nav.Requests > requests);
             Assert.Equal("", nav.Failure);
-            File.WriteAllText(ProjectSettings.GlobalizePath("res://temp/motionbricks/native-agent-path-following-01/npc-collision.json"), JsonSerializer.Serialize(new
-            {
-                minimumZ,
-                front,
-                radius = sphere.Radius,
-                slop,
-                successorResponsive = true,
-                nativeCalls = 0
-            }));
         }
         finally
         {

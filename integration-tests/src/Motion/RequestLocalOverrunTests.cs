@@ -1,8 +1,3 @@
-using System.Collections.Concurrent;
-using System.Reflection;
-using System.Text.Json;
-using AlleyCat.IntegrationTests.Support;
-using AlleyCat.Motion;
 using AlleyCat.Navigation;
 using AlleyCat.TestFramework;
 using Godot;
@@ -12,242 +7,132 @@ namespace AlleyCat.IntegrationTests.Motion;
 
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
-    private sealed class RequestLocalSession(bool providerError, ConcurrentQueue<long> returned) : SomaInferenceWorker.ISession
-    {
-        public readonly ManualResetEventSlim FirstRelease = new(false);
-        private int _calls;
-        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
-        {
-            if (Interlocked.Increment(ref _calls) == 1 && !FirstRelease.Wait(TimeSpan.FromSeconds(10)))
-            {
-                throw new TimeoutException("Test-owned first-return gate exceeded its bound.");
-            }
-            returned.Enqueue(1);
-            if (providerError)
-            {
-                throw new InvalidOperationException("request-local-fixture-provider-error");
-            }
-            // Each future is newly constructed from this request, never an archived future for a changed context.
-            return [.. Enumerable.Range(0, 50).Select(i => context[3].Select((t, j) =>
-                t.InterpolateWith(target[0][j], i / 49f)).ToArray())];
-        }
-        public void Dispose() => FirstRelease.Dispose();
-    }
-
-    /// <inheritdoc/>
+    /// <summary>A missed overlap fails only the active request and leaves idle and later commands usable.</summary>
     [Headless]
     [Fact]
-    public Task TemporalOverrun_AllRecordedLaterCommandsRemainUsableThroughOriginalTail() => RunRequestLocalOverrunAsync(false);
+    public Task TemporalOverrunLeavesLaterRequestsUsable() => RunNavigationOverrunAsync(false);
 
-    /// <inheritdoc/>
+    /// <summary>A real provider exception at the same boundary retains its cause for each later command.</summary>
     [Headless]
     [Fact]
-    public Task TemporalOverrun_TrueProviderErrorStillLatchesAcrossRecordedCommands() => RunRequestLocalOverrunAsync(true);
+    public Task ProviderErrorAtOverlapRemainsLatched() => RunNavigationOverrunAsync(true);
 
-    private static async Task RunRequestLocalOverrunAsync(bool providerError)
+    private static async Task RunNavigationOverrunAsync(bool providerError)
     {
-        const string sourceFolder = "res://temp/motionbricks/nav-overrun-request-local-01/";
-        string folder = $"res://temp/motionbricks/anim002-regenerated-source-adoption-01/overrun-{Guid.NewGuid():N}/";
-        _ = Directory.CreateDirectory(ProjectSettings.GlobalizePath(folder));
-        using var scenario = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath(sourceFolder + "original-scenario.json")));
-        JsonElement original = scenario.RootElement;
-        double failureTime = original.GetProperty("failureNavTime").GetDouble();
-        int failedTick = original.GetProperty("failedTick").GetInt32();
-        int tailTicks = original.GetProperty("lastTick").GetInt32() - failedTick;
-        JsonElement[] commands = [.. original.GetProperty("laterCommands").EnumerateArray()];
-        SceneTree tree = TestUtils.GetSceneTree();
-        var root = new ProbeGame { Name = "RequestLocalOverrun" };
-        Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
-        AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
-        MotionBricksNavigation? nav = null;
-        var returned = new ConcurrentQueue<long>();
-        var session = new RequestLocalSession(providerError, returned);
-        var submissions = new List<long>();
-        var consumed = new List<long>();
-        var played = new HashSet<long>();
+        Vector3 start = new(.5f, 0, -.3f);
+        await using NavigationFixedStepFixture fixture = await NavigationFixedStepFixture.CreateAsync(start, 0);
+        MotionBricksNavigation nav = fixture.Navigation;
+        var submitted = new List<long>();
         var handoffs = new List<MotionBricksNavigation.NativeHandoffObservation>();
-        var attempts = new List<object>();
-        bool idleAccepted = false;
-        void Configure(Node node)
+        var played = new Dictionary<long, double>();
+        fixture.Provider.Response = (context, _, count) => [.. Enumerable.Repeat(context[3], count)];
+        nav.WindowSubmitted += (ticket, _, _) => submitted.Add(ticket);
+        nav.NativeHandoffObserved = handoffs.Add;
+        nav.PlaybackObserved = (ticket, _, frame) => played[ticket] = frame;
+        Transform3D destination = new(Basis.Identity, NavigationFixedStepFixture.CornerGoal);
+        Assert.Equal(NavigationDestinationResult.Accepted, nav.SetDestination(destination, []));
+        await fixture.StepAsync();
+        await fixture.ReleaseAsync(Assert.Single(submitted));
+        await fixture.StepAsync();
+        Assert.True(Assert.Single(handoffs).Accepted);
+
+        // One 50-frame response supplies 49/30 seconds. Schedule a genuine early overlap and hold its
+        // publication until the previous response has exhausted, still inside the incoming response.
+        for (int tick = 0; tick < 100 && submitted.Count < 2; tick++)
         {
-            if (node is not MotionBricksNavigation n)
-            {
-                return;
-            }
-            nav = n;
-            n.SessionFactory = () => session;
-            n.WindowSubmitted += (_, _, _) => submissions.Add(n.CurrentStatus.ActiveRequest?.RequestID ?? 0);
-            n.PlaybackObserved = (ticket, _, _) => played.Add(ticket);
-            n.NativeHandoffObserved = h =>
-            {
-                handoffs.Add(h);
-                if (h.Accepted)
-                {
-                    consumed.Add(n.CurrentStatus.ActiveRequest?.RequestID ?? 0);
-                    idleAccepted |= !h.Arrival && n.CurrentStatus.ActiveRequest is null;
-                }
-            };
+            await fixture.StepAsync();
         }
-        tree.NodeAdded += Configure;
-        root.AddChild(scene);
-        tree.Root.AddChild(root);
-        try
+        Assert.Equal(2, submitted.Count);
+        long expired = submitted[1];
+        await fixture.Provider.WaitForStartAsync(); // In-flight overlap.
+        for (int tick = 0; tick < 24; tick++)
         {
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 40); // Existing scene/nav-map and skin-history prerequisite.
-            Assert.NotNull(nav);
-            nav.SetPhysicsProcess(false); // One explicit production tick per observed engine physics boundary below.
-            byte[] bytes = File.ReadAllBytes(ProjectSettings.GlobalizePath(sourceFolder + "original-boundary-context.f32"));
-            float[] values = new float[bytes.Length / sizeof(float)];
-            Buffer.BlockCopy(bytes, 0, values, 0, bytes.Length);
-            Transform3D[][] context = [.. Enumerable.Range(0, 4).Select(f => Enumerable.Range(0, 77)
-                .Select(j => FeedbackTransform(values, ((f * 77) + j) * 12)).ToArray())];
-            var history = new RealisedPoseHistory(77);
-            for (int i = 0; i < 8; i++)
-            {
-                history.Record(failureTime - .3 + (i / 30.0), context[Math.Min(i, 3)]);
-            }
-            void Field(string name, object? value)
-            {
-                typeof(MotionBricksNavigation).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(nav, value);
-            }
+            await fixture.StepAsync();
+        }
+        fixture.Provider.FailNext = providerError;
+        await fixture.ReleaseAsync(expired, alreadyStarted: true);
+        await fixture.StepAsync();
+        Assert.False(played.ContainsKey(expired));
+        NavigationTerminalOutcomeRecord failed = Assert.Single(nav.TerminalOutcomes);
+        if (providerError)
+        {
+            Assert.Equal(NavigationTerminalReason.MotionUnavailable, failed.Reason);
+            Assert.Contains("Navigation fixture provider failure", nav.Failure);
+        }
+        else
+        {
+            MotionBricksNavigation.NativeHandoffObservation rejected = Assert.Single(handoffs, h => h.Request == expired);
+            Assert.False(rejected.Accepted);
+            Assert.Equal("native-overrun-safe-hold", rejected.Reason);
+            Assert.NotEqual(NavigationTerminalReason.MotionUnavailable, failed.Reason);
+            await fixture.StepAsync();
+            Assert.Equal(3, submitted.Count);
+            await fixture.ReleaseAsync(submitted[^1]);
+            await fixture.StepAsync();
+            Assert.Contains(handoffs, h => h.Request == submitted[^1] && h.Accepted && !nav.HasDestination);
+            fixture.Provider.Response = null; // Later work has travel, unlike the isolated hold used to impose the overrun.
+        }
 
-            object? Get(string name)
-            {
-                return typeof(MotionBricksNavigation).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav);
-            }
-
-            void Time(double value)
-            {
-                typeof(MotionBricksNavigation).GetProperty(nameof(MotionBricksNavigation.ObservationTime), BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(nav, value);
-            }
-
-            Field("_history", history);
-            Field("_pose", (Transform3D[])context[3].Clone());
-            Field("_observed", (Transform3D[])context[3].Clone());
-            Field("_lastGround", new Vector3(context[3][0].Origin.X, 0, context[3][0].Origin.Z));
-            actor.GlobalPosition = new Vector3(original.GetProperty("actorOrigin")[0].GetSingle(), 0,
-                original.GetProperty("actorOrigin")[2].GetSingle());
-            Time(failureTime - .1);
-            float[] first = [.. original.GetProperty("initialCommand").GetProperty("requested").EnumerateArray().Select(e => e.GetSingle())];
-            Assert.Equal((int)NavigationDestinationResult.Accepted, nav.SelectDestination(FeedbackTransform(first, 0), []));
-            nav.SetPhysicsProcess(false); // AcceptDestination enables processing; this fixture owns each explicit tick.
-            nav._PhysicsProcess(1.0 / 60);
-            _ = Assert.Single(submissions);
-            object packet = Get("_nativePending")!;
-            ConstructorInfo constructor = packet.GetType().GetConstructors().Single(c => c.GetParameters().Any(p => p.Name == "Overlap"));
-            object?[] arguments = [.. constructor.GetParameters().Select(parameter => parameter.Name switch
-            {
-                "Overlap" => true,
-                "ContextAt" => failureTime - original.GetProperty("turnBoundary").GetProperty("handoff").GetProperty("Age").GetDouble(),
-                _ => packet.GetType().GetProperty(parameter.Name!)!.GetValue(packet)
-            })];
-            Field("_nativePending", constructor.Invoke(arguments));
-            Field("_segment", null); // Recorded outgoing endpoint: OldRemaining=0, not a generated scheduling claim.
-            Field("_endpoint", false);
-            Field("_record", false); // Keep the recorded initial realised context until the imposed expiry is consumed.
-            Time(failureTime - (1.0 / 60));
-            session.FirstRelease.Set();
-            var worker = (SomaInferenceWorker)Get("_worker")!;
-            bool Published()
-            {
-                return typeof(SomaInferenceWorker).GetField("_result", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(worker) is not null;
-            }
-
-            for (int i = 0; i < 120 && !Published(); i++)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1); // Worker publication only; no generated motion is advanced.
-            }
-            Assert.True(Published(), "The synthetic result must be published before imposing the recorded consumption boundary.");
-            Time(failureTime - (1.0 / 60));
-            nav._PhysicsProcess(1.0 / 60);
-            long expiredTicket = (long)packet.GetType().GetProperty("Ticket")!.GetValue(packet)!;
-            if (!providerError && handoffs.Count == 0)
-            {
-                File.WriteAllText(ProjectSettings.GlobalizePath(folder + "fixture-boundary-diagnostic.json"), JsonSerializer.Serialize(new
-                {
-                    packet,
-                    nav.RoleDecision,
-                    nav.SubmittedRole,
-                    route = typeof(NavigationBase).GetProperty("CurrentRouteSnapshot", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav),
-                    roleRevision = Get("_roleRevision"),
-                    pending = Get("_pending"),
-                    packetNow = Get("_nativePending"),
-                    nav.Failure,
-                    nav.Phase,
-                    returned = returned.Count
-                }));
-            }
-            if (!providerError)
-            {
-                Assert.Equal(original.GetProperty("turnBoundary").GetProperty("handoff").GetProperty("Age").GetDouble(),
-                    Assert.Single(handoffs).Age, 8);
-            }
-            for (int tick = 1; tick <= tailTicks; tick++)
-            {
-                foreach (JsonElement command in commands.Where(c => c.GetProperty("tick").GetInt32() - failedTick == tick))
-                {
-                    float[] transform = [.. command.GetProperty("requested").EnumerateArray().Select(e => e.GetSingle())];
-                    int result = nav.SelectDestination(FeedbackTransform(transform, 0), []);
-                    nav.SetPhysicsProcess(false);
-                    attempts.Add(new
-                    {
-                        tick,
-                        result,
-                        active = nav.CurrentStatus.ActiveRequest
-                    });
-                }
-                nav._PhysicsProcess(1.0 / 60);
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-            bool unavailable = (bool)Get("_unavailable")!;
-            File.WriteAllText(ProjectSettings.GlobalizePath(folder + (providerError ? "provider-result.json" : "component-result.json")),
-                JsonSerializer.Serialize(new
-                {
-                    providerError,
-                    tailTicks,
-                    attempts,
-                    submissions,
-                    consumed,
-                    played,
-                    idleAccepted,
-                    unavailable,
-                    nav.Failure,
-                    nav.Phase,
-                    handoffs = handoffs.Select(h => new { h.Request, h.Accepted, h.Reason, h.Age, h.OldRemaining })
-                }));
-            Assert.Equal(3, attempts.Count);
+        foreach (float z in new[] { -2.8f, -3, -3.2f })
+        {
+            int before = submitted.Count;
+            Assert.Equal(NavigationDestinationResult.Accepted, nav.SetDestination(new(Basis.Identity, new(.5f, 0, z)), []));
+            await fixture.StepAsync();
             if (providerError)
             {
-                Assert.True(unavailable);
-                Assert.Contains("request-local-fixture-provider-error", nav.Failure);
-                _ = Assert.Single(submissions);
-                Assert.Empty(consumed);
-                Assert.Equal(4, nav.TerminalOutcomes.Count);
+                Assert.Equal(before, submitted.Count);
+                Assert.Equal(NavigationTerminalReason.MotionUnavailable, nav.TerminalOutcomes[^1].Reason);
+                Assert.Contains("Navigation fixture provider failure", nav.Failure);
             }
             else
             {
-                Assert.Contains(handoffs, h => h.Request == expiredTicket && !h.Accepted && h.Reason == "native-overrun-safe-hold");
-                Assert.DoesNotContain(expiredTicket, played);
-                Assert.False(unavailable, "A valid temporal expiry must not latch lifetime MotionUnavailable across all later commands.");
-                Assert.True(idleAccepted, "The existing generated-idle path must consume an owned fresh result.");
-                foreach (long request in new long[] { 2, 3, 4 })
-                {
-                    Assert.Contains(request, submissions);
-                    Assert.Contains(request, consumed);
-                }
+                Assert.Equal(before + 1, submitted.Count);
+                await fixture.ReleaseAsync(submitted[^1]);
+                await fixture.StepAsync();
+                Assert.Contains(handoffs, h => h.Request == submitted[^1] && h.Accepted);
             }
         }
-        finally
+
+        // This authored tail covers a full 49/30-second response and enough time to observe its
+        // successor play. It is not a reconstruction of the unavailable recorded command schedule.
+        int submissionsAtTailStart = submitted.Count;
+        int released = submissionsAtTailStart;
+        Vector3 tailStart = fixture.Actor.GlobalPosition;
+        Vector3 recoveryDirection = Vector3.Forward; // All three successor goals lie down the straight aisle.
+        int outcomesAtTailStart = nav.TerminalOutcomes.Count;
+        string retainedCause = nav.Failure;
+        for (int tick = 0; tick < 2 * 60; tick++)
         {
-            session.FirstRelease.Set();
-            tree.NodeAdded -= Configure;
-            Task? completion = nav?.WorkerCompletion;
-            root.QueueFree();
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 2);
-            if (completion is not null)
+            await fixture.StepAsync();
+            if (providerError)
             {
-                await completion.WaitAsync(TimeSpan.FromSeconds(30));
+                Assert.Equal(submissionsAtTailStart, submitted.Count);
+                Assert.Equal(outcomesAtTailStart, nav.TerminalOutcomes.Count);
+                Assert.Equal(retainedCause, nav.Failure);
+                Assert.Equal(tailStart, fixture.Actor.GlobalPosition);
+            }
+            else if (released < submitted.Count)
+            {
+                await fixture.ReleaseAsync(submitted[released++]);
             }
         }
+        if (providerError)
+        {
+            Assert.Equal(NavigationDestinationResult.Accepted, nav.SetDestination(destination, []));
+            await fixture.StepAsync();
+            Assert.Equal(outcomesAtTailStart + 1, nav.TerminalOutcomes.Count);
+            Assert.Equal(NavigationTerminalReason.MotionUnavailable, nav.TerminalOutcomes[^1].Reason);
+            Assert.Equal(retainedCause, nav.Failure);
+            Assert.Equal(submissionsAtTailStart, submitted.Count);
+        }
+        else
+        {
+            Assert.Equal(outcomesAtTailStart, nav.TerminalOutcomes.Count);
+            Assert.Equal("", nav.Failure);
+            Assert.Contains(submitted.Skip(submissionsAtTailStart), ticket => played.TryGetValue(ticket, out double frame) && frame > 0 &&
+                handoffs.Any(h => h.Request == ticket && h.Accepted));
+            Assert.True((fixture.Actor.GlobalPosition - tailStart).Dot(recoveryDirection) > nav.DestinationReachedDistance);
+        }
+        Assert.False(played.ContainsKey(expired));
     }
 }

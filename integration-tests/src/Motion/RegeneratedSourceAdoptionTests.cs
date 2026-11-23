@@ -12,6 +12,8 @@ namespace AlleyCat.IntegrationTests.Motion;
 
 public sealed partial class PlayerMotionBricksIntegrationTests
 {
+    private const string ApprovedMotionBundleSHA256 = "dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af";
+
     /// <summary>Normal installers require no source flags; both controllers bind the same approved bundle.</summary>
     [Headless]
     [Fact]
@@ -27,12 +29,11 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         }
         try
         {
-            CheckRegeneratedSource(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine"));
             await using (ClosureFixture player = await ClosureFixture.CreateAsync(null, motion => motion.SessionFactory = () => new TargetEndpointSession(true)))
             {
                 WalkingExperimentDriver driver = Assert.IsType<WalkingExperimentDriver>(player.Motion.ContinuousDriver);
                 Assert.Null(driver.Completion);
-                Assert.Equal("dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af", driver.ReviewedRoles.RoleSourceSHA256("right_cross"));
+                Assert.Equal(ApprovedMotionBundleSHA256, driver.ReviewedRoles.RoleSourceSHA256("right_cross"));
                 player.Motion.SetStick(false, new Vector2(-1, 0));
                 Assert.Equal([947, 951, 961, 1001], driver.MetadataTurn!.Reference.Landmarks.Select(e => e.Frame));
                 Assert.Equal(0, driver.MetadataTurn.Cycle);
@@ -61,7 +62,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 Assert.Equal("", nav.Failure);
                 var sampler = (ReviewedRoleSampler)typeof(MotionBricksNavigation).GetField("_reviewed",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(nav)!;
-                Assert.Equal("dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af", sampler.RoleSourceSHA256("left_turn"));
+                Assert.Equal(ApprovedMotionBundleSHA256, sampler.RoleSourceSHA256("left_turn"));
                 Assert.Equal([1103, 1120], sampler.TurnReference("right_turn").Feet.Select(e => e.Frame));
             }
             finally
@@ -85,50 +86,44 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         }
     }
 
-    /// <summary>Real runtime readers validate the coordinated sibling layout before active publication.</summary>
+    /// <summary>Runtime readers bind the committed approved ANIM-002 take, roles, cycles and angular metadata.</summary>
     [Headless]
     [Fact]
-    public void RegeneratedSource_StagedSetAndAngularMetadataBindApprovedTake()
+    public void RegeneratedSource_CommittedSetAndAngularMetadataBindApprovedTake()
     {
-        string folder = ProjectSettings.GlobalizePath("res://temp/motionbricks/anim002-regenerated-source-adoption-01/staged");
-        CheckRegeneratedSource(folder);
-    }
-
-    private static void CheckRegeneratedSource(string folder)
-    {
+        string folder = ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine");
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
         var sampler = new ReviewedRoleSampler(Path.Combine(folder, "set.json"), data);
         string path = Path.Combine(folder, "landing-ablation-01.json");
-        using var bundle = JsonDocument.Parse(File.ReadAllText(path));
-        JsonElement source = bundle.RootElement.GetProperty("descriptor").GetProperty("source");
+        Assert.Equal(ApprovedMotionBundleSHA256, Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))));
+        var reader = new ReviewedMotionSource(path, data);
+        JsonElement source = reader.Manifest.GetProperty("descriptor").GetProperty("source");
         Assert.Equal("3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a", source.GetProperty("sha256").GetString());
         Assert.Equal("source_feminine_landing_ablation_01", source.GetProperty("action").GetString());
         Assert.Equal("OBKimodo", source.GetProperty("slot").GetString());
-        Assert.Equal(1200, bundle.RootElement.GetProperty("samples").GetArrayLength());
-        string hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
-        var reader = new ReviewedMotionSource(path, data);
+        Assert.Equal(1200, reader.FrameCount);
         string[] roles = ["forward", "backward", "left_noncross", "right_noncross", "left_cross", "right_cross", "left_turn", "right_turn"];
         int[] first = [58, 207, 346, 496, 646, 796, 946, 1096], period = [36, 39, 30, 30, 30, 30, 60, 60];
         using var set = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "set.json")));
+        var raw = new Transform3D[4 * data.Names.Length];
         for (int i = 0; i < roles.Length; i++)
         {
             ReviewedMotionSource.Role role = reader.GetRole("feminine", "normal", roles[i]);
             Assert.Equal(46 + (i * 150), role.First);
             Assert.Equal(106 + (i * 150), role.Last);
-            Assert.Equal(hash, sampler.RoleSourceSHA256(roles[i]));
+            Assert.Equal(ApprovedMotionBundleSHA256, sampler.RoleSourceSHA256(roles[i]));
             JsonElement cycle = set.RootElement.GetProperty("roles")[i].GetProperty("cycle");
-            Assert.Equal(first[i], cycle.GetProperty("first").GetInt32());
-            Assert.Equal(period[i], cycle.GetProperty("period_frames").GetInt32());
+            ReviewedMotionSource.ExperimentalCycle bound = reader.LoadExperimentalCycle(cycle, role);
+            Assert.Equal(first[i], bound.First);
+            Assert.Equal(period[i], bound.PeriodFrames);
+
+            // Only root placement may differ from the unpositioned source, for every installed role.
             _ = sampler.SetIntent(roles[i], 0);
-            Transform3D[][] window = sampler.Targets(0, 0, Basis.Identity, Vector3.Zero);
-            var raw = new Transform3D[4 * data.Names.Length];
+            Transform3D[][] target = sampler.Targets(0, 0, Basis.Identity, Vector3.Zero);
             reader.CopyWindow(role, first[i], raw);
             for (int frame = 0; frame < 4; frame++)
             {
-                for (int joint = 1; joint < data.Names.Length; joint++)
-                {
-                    Assert.Equal(raw[(frame * data.Names.Length) + joint], window[frame][joint]);
-                }
+                Assert.Equal(raw.AsSpan((frame * data.Names.Length) + 1, data.Names.Length - 1).ToArray(), target[frame][1..]);
             }
         }
         Assert.InRange(sampler.TurnReference("left_turn").SignedSpan, 1.16660, 1.16662);

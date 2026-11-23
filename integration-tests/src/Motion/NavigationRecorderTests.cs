@@ -68,13 +68,17 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         string path = "";
         try
         {
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 40);
+            // Keep real scene/UI/skeleton ticks, but start once this recorder and the actual pose stream have bound.
+            for (int i = 0; i < 40 && (recorder.SessionPath.Length == 0 || (nav?.SamplesRecorded ?? 0) < 8); i++)
+            {
+                await TestUtils.WaitForNextPhysicsFrameAsync(tree);
+            }
             Assert.NotNull(nav);
             path = recorder.SessionPath;
             Assert.NotEmpty(path);
             Assert.Equal("not-started", nav.NativePhase); // No real native session constructed.
             Assert.Same(nav, actor.Navigation);
-            Assert.True(nav.SamplesRecorded > 0);
+            Assert.True(nav.SamplesRecorded >= 8);
             Label statusLabel = scene.FindChildren("RecordingStatus", "Label", true, false).OfType<Label>().Single();
             Assert.True(statusLabel.IsVisibleInTree());
             Assert.DoesNotContain(path, statusLabel.Text);
@@ -165,17 +169,6 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             using var final = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(path, "manifest.json")));
             Assert.Equal(0, final.RootElement.GetProperty("droppedRecords").GetInt64());
             Assert.Equal("complete-through-checkpoint", final.RootElement.GetProperty("integrity").GetString());
-            string report = ProjectSettings.GlobalizePath("res://temp/motionbricks/navigation-recorder-01/e2e.json");
-            File.WriteAllText(report, JsonSerializer.Serialize(new
-            {
-                path,
-                commands = commands.Length,
-                poses = poses.Length,
-                windows = windows.Count,
-                returnedChunks = provider.Outputs.Count,
-                nativeCalls = 0,
-                status = "PASS: actual inputs/provider/skin/camera/checkpoint/continuation/finalisation"
-            }));
             var outside = new NavigationPlaytestRecorder();
             root.AddChild(outside);
             Assert.Empty(outside.SessionPath);

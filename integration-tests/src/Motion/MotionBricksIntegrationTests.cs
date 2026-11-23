@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Text.Json;
+using AlleyCat.Common;
 using AlleyCat.Motion;
 using AlleyCat.TestFramework;
 using Godot;
@@ -6,20 +8,23 @@ using Xunit;
 
 namespace AlleyCat.IntegrationTests.Motion;
 
-/// <summary>Bounded prototype contracts; requires the protected-source extraction, not upstream sample motions.</summary>
+/// <summary>SOMA conversion, runtime presentation and inference contracts on repository inputs.</summary>
 [Headless]
 public sealed class MotionBricksIntegrationTests
 {
-    private static SomaMotionData Data() => new(ProjectSettings.GlobalizePath("res://temp/motionbricks/sequence-data.json"));
+    private static SomaMotionData Data() => new(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
 
-    /// <summary>Actual Kimodo conversion on authored, realised and rest poses; tolerances cover arithmetic only.</summary>
+    /// <summary>Kimodo 1.0.0 conversion on committed reviewed, idle and rest inputs; tolerances cover arithmetic only.</summary>
     [Fact]
     public void ModelFrames_MatchExecutedKimodoAndPreserveJointPositions()
     {
         SomaMotionData data = Data();
-        string directory = ProjectSettings.GlobalizePath("res://temp/motionbricks/frame-conversion");
-        var conversion = new SomaModelFrames(data, Path.Combine(directory, "model-frames.json"));
-        using var oracle = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "conversion-oracle.json")));
+        var conversion = new SomaModelFrames(data, ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json"));
+        using FileStream file = File.OpenRead(ProjectSettings.GlobalizePath(
+            "res://../integration-tests/fixtures/motion-frame-oracles/kimodo-rotations.json.gz"));
+        using var stream = new GZipStream(file, CompressionMode.Decompress);
+        using var oracle = JsonDocument.Parse(stream);
+        Assert.Equal("1.0.0", oracle.RootElement.GetProperty("kimodo_version").GetString());
         string[] names = oracle.RootElement.GetProperty("names").Deserialize<string[]>()!;
         foreach (JsonProperty fixture in oracle.RootElement.GetProperty("fixtures").EnumerateObject())
         {
@@ -153,24 +158,44 @@ public sealed class MotionBricksIntegrationTests
     public async Task ActorYaw_PreservesPhysicalPoseAndWorldFeedback()
     {
         SomaMotionData data = Data();
-        Node3D model = MountMotionModel(false, out Skeleton3D skeleton);
-        model.Basis = SomaMotionData.ModelToWorld;
-        var tree = (SceneTree)Engine.GetMainLoop();
-        tree.Root.AddChild(model);
+        var model = new Node3D { Basis = SomaMotionData.ModelToWorld };
+        SceneTree tree = Support.TestUtils.GetSceneTree();
         try
         {
+            (Skeleton3D source, RetargetModifier3D retarget, Skeleton3D skeleton) = AddSkinFeedbackRig(model);
+            tree.Root.AddChild(model);
             var rig = new NativeSomaRig(data, skeleton);
             var before = new Transform3D[data.Names.Length];
             var after = new Transform3D[data.Names.Length];
             Vector3[]? landmarks = null;
             string[] names = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"];
+            int[] bones = [.. names.Select(skeleton.FindBone)];
+            Assert.All(bones, bone => Assert.True(bone >= 0));
+            int transfers = 0;
+            int observations = 0;
+            retarget.ModificationProcessed += () => transfers++;
             skeleton.SkeletonUpdated += () =>
             {
                 rig.Observe(after);
-                landmarks = [.. names.Select(n => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(skeleton.FindBone(n)).Origin)];
+                landmarks = [.. bones.Select(b => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(b).Origin)];
+                observations++;
             };
-            rig.Apply(data.Idle[0]);
-            await Support.TestUtils.WaitForFramesAsync(tree, 2);
+
+            async Task PresentAsync(Transform3D[] pose, int expectedTransfers)
+            {
+                rig.Apply(pose);
+                source.Advance(1.0 / 30);
+                skeleton.Advance(1.0 / 30);
+                // Manual steps still publish through Godot's deferred modifier/skin updates.
+                for (int boundary = 0; boundary < 2 && (transfers < expectedTransfers || observations < expectedTransfers); boundary++)
+                {
+                    await Support.TestUtils.WaitForNextFrameAsync(tree);
+                }
+                Assert.Equal(expectedTransfers, transfers);
+                Assert.Equal(expectedTransfers, observations);
+            }
+
+            await PresentAsync(data.Idle[0], 1);
             Assert.NotNull(landmarks);
             after.CopyTo(before, 0);
             Vector3[] original = landmarks;
@@ -180,8 +205,7 @@ public sealed class MotionBricksIntegrationTests
             var input = (Transform3D[])data.Idle[0].Clone();
             input[0] = new Transform3D(yaw * input[0].Basis,
                 (yaw * input[0].Origin) + (SomaMotionData.ModelToWorld.Inverse() * translation));
-            rig.Apply(input);
-            await Support.TestUtils.WaitForFramesAsync(tree, 2);
+            await PresentAsync(input, 2);
             for (int i = 0; i < original.Length; i++)
             {
                 Assert.InRange(landmarks![i].DistanceTo((yaw * original[i]) + translation), 0, 0.0001f);
@@ -230,31 +254,47 @@ public sealed class MotionBricksIntegrationTests
     [Fact]
     public async Task SkinReadyFeedback_ObservesTargetPerturbation()
     {
-        SomaMotionData data = Data();
-        Node3D holder = MountMotionModel(false, out Skeleton3D skeleton);
-        holder.Transform = new Transform3D(SomaMotionData.ModelToWorld, new Vector3(1, 0, -2));
-        var tree = (SceneTree)Engine.GetMainLoop();
-        tree.Root.AddChild(holder);
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        var holder = new Node3D { Transform = new Transform3D(SomaMotionData.ModelToWorld, new Vector3(1, 0, -2)) };
+        SceneTree tree = Support.TestUtils.GetSceneTree();
         try
         {
-            skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+            (Skeleton3D sourceSkeleton, RetargetModifier3D retarget, Skeleton3D skeleton) = AddSkinFeedbackRig(holder);
+            tree.Root.AddChild(holder);
+
             var adapter = new NativeSomaRig(data, skeleton);
             var observed = new Transform3D[data.Names.Length];
             var history = new RealisedPoseHistory(data.Names.Length);
             int observations = 0;
+            int transfers = 0;
+            int transfersAtObservation = 0;
             void Observe()
             {
+                transfersAtObservation = transfers;
                 adapter.Observe(observed);
                 history.Record(++observations / 60.0, observed);
             }
 
+            async Task AdvanceTargetAsync(int expectedObservations)
+            {
+                skeleton.Advance(1.0 / 30);
+                // Godot defers modifier/skin updates to the node's process group. A ProcessFrame signal
+                // can arrive before that group is serviced, so allow that frame to complete if needed.
+                for (int boundary = 0; boundary < 2 && observations < expectedObservations; boundary++)
+                {
+                    await Support.TestUtils.WaitForNextFrameAsync(tree);
+                }
+                Assert.Equal(expectedObservations, observations);
+            }
+
+            int neck2 = Array.IndexOf(data.Names, "Neck2");
+            Assert.False(data.Idle[0][neck2].Basis.IsEqualApprox(Basis.Identity));
+            retarget.ModificationProcessed += () => transfers++;
             skeleton.SkeletonUpdated += Observe;
-            Skeleton3D sourceSkeleton = skeleton.GetParent().GetParent<Skeleton3D>();
-            sourceSkeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
             adapter.Apply(data.Idle[0]);
             sourceSkeleton.Advance(1.0 / 30);
-            skeleton.Advance(1.0 / 30);
-            await Support.TestUtils.WaitForFramesAsync(tree, 2);
+            await AdvanceTargetAsync(1);
+            Assert.Equal(1, transfersAtObservation);
             foreach ((string target, string source) in new[] { ("Head", "Head"), ("LeftLowerArm", "LeftForeArm"), ("LeftHand", "LeftHand") })
             {
                 var before = new Transform3D[data.Names.Length];
@@ -263,8 +303,7 @@ public sealed class MotionBricksIntegrationTests
                 int parent = skeleton.GetBoneParent(bone);
                 Basis changed = new Basis(Vector3.Up, 0.125f) * skeleton.GetBoneGlobalPose(bone).Basis;
                 skeleton.SetBonePoseRotation(bone, (skeleton.GetBoneGlobalPose(parent).Basis.Inverse() * changed).GetRotationQuaternion());
-                skeleton.Advance(1.0 / 30);
-                await Support.TestUtils.WaitForFramesAsync(tree, 2);
+                await AdvanceTargetAsync(observations + 1);
                 var after = new Transform3D[data.Names.Length];
                 data.WorldPose(observed, after);
                 int sourceBone = Array.IndexOf(data.Names, source);
@@ -275,13 +314,55 @@ public sealed class MotionBricksIntegrationTests
                     Math.Max(after[sourceBone].Basis.Y.DistanceTo(before[sourceBone].Basis.Y), after[sourceBone].Basis.Z.DistanceTo(before[sourceBone].Basis.Z))) > 0.05f);
                 AssertBasis(history.Context()[3][sourceBone].Basis, observed[sourceBone].Basis);
             }
-            Assert.True(observed[Array.IndexOf(data.Names, "Neck2")].Basis.IsEqualApprox(Basis.Identity));
+            Assert.True(observed[neck2].Basis.IsEqualApprox(Basis.Identity));
             Assert.InRange(observed[0].Origin.Z, 1.9f, 2.1f);
+            Assert.Equal(1, transfers);
             skeleton.SkeletonUpdated -= Observe;
         }
         finally
         {
             holder.Free();
+        }
+    }
+
+    private static (Skeleton3D Source, RetargetModifier3D Retarget, Skeleton3D Target) AddSkinFeedbackRig(Node3D holder)
+    {
+        // Match the local position/rotation NPC transfer in native_soma_mount.gd, without an actor or AnimationPlayer.
+        Skeleton3D source = GD.Load<PackedScene>("res://data/motionbricks/source-rest/female.tscn").Instantiate<Skeleton3D>();
+        holder.AddChild(source);
+        source.ResetBonePoses();
+        source.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+        var retarget = new RetargetModifier3D
+        {
+            Profile = new SkeletonProfileHumanoid(),
+            Enable = RetargetModifier3D.TransformFlag.Position | RetargetModifier3D.TransformFlag.Rotation,
+            Active = false
+        };
+        source.AddChild(retarget);
+
+        // Take only the authored target skeleton and its body skin from the imported asset; the asset never enters the tree.
+        const string rigPath = "res://assets/characters/reference/female/reference_female.blend";
+        Node rigAsset = GD.Load<PackedScene>(rigPath).Instantiate();
+        try
+        {
+            Skeleton3D target = rigAsset.RequireNode<Skeleton3D>("Female/GeneralSkeleton");
+            MeshInstance3D body = target.RequireNode<MeshInstance3D>("Female_body");
+            Assert.NotNull(body.Skin);
+            Assert.Same(target, body.RequireNode<Skeleton3D>(body.Skeleton));
+            foreach (Node child in target.GetChildren())
+            {
+                if (child != body)
+                {
+                    child.Free();
+                }
+            }
+            target.Reparent(retarget, keepGlobalTransform: false);
+            target.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+            return (source, retarget, target);
+        }
+        finally
+        {
+            rigAsset.Free();
         }
     }
 }

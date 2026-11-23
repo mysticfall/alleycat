@@ -1,9 +1,8 @@
-using System.Diagnostics;
 using System.Reflection;
-using System.Text.Json;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Motion;
 using AlleyCat.Navigation;
+using AlleyCat.Navigation.Recording;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -17,274 +16,215 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     [Fact]
     public async Task NearbyLeftPositioningSelectsNonCrossingBeforeTargetConstruction()
     {
-        const string output = "res://temp/motionbricks/source-pipeline-09/natural-navigation-roles-01/latest.json";
-        SceneTree tree = TestUtils.GetSceneTree();
-        var root = new ProbeGame { Name = "NearbyNaturalRole" };
-        Node scene = GD.Load<PackedScene>("res://assets/testing/navigation/navigation_test.tscn").Instantiate();
-        AlleyCat.Character.Character actor = scene.GetNode<AlleyCat.Character.Character>("NavigationTestNpc");
-        Assert.False(actor.IsInsideTree());
-        actor.Position = new(-2, 0, -2);
-        // Capture the authored target before tree entry; the role reparents this same object on entry.
-        Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
-        NavigationRegion3D region = scene.GetNode<NavigationRegion3D>("NavigationRegion3D");
-        NavigationMesh mesh = region.NavigationMesh;
-        Vector3[] vertices = mesh.GetVertices();
-        var rectangles = new List<(Vector2 Low, Vector2 High)>();
-        for (int i = 0; i < mesh.GetPolygonCount(); i++)
-        {
-            int[] polygon = mesh.GetPolygon(i);
-            if (polygon.Length != 4)
-            {
-                continue;
-            }
-
-            Vector3[] p = [.. polygon.Select(index => vertices[index])];
-            rectangles.Add((new(p.Min(v => v.X), p.Min(v => v.Z)), new(p.Max(v => v.X), p.Max(v => v.Z))));
-        }
-        static Vector2 Flat(Vector3 p)
-        {
-            return new(p.X, p.Z);
-        }
-
-        static float[] Pack(Vector3 p)
-        {
-            return [p.X, p.Y, p.Z];
-        }
-
-        bool OnMap(Vector2 p)
-        {
-            return rectangles.Any(r => p.X >= r.Low.X && p.X <= r.High.X && p.Y >= r.Low.Y && p.Y <= r.High.Y);
-        }
-
-        bool SegmentOnMap(Vector2 a, Vector2 b)
-        {
-            var fractions = new SortedSet<double> { 0, 1 };
-            Vector2 delta = b - a;
-            foreach ((Vector2 Low, Vector2 High) in rectangles)
-            {
-                foreach (float x in new[] { Low.X, High.X })
-                {
-                    if (delta.X != 0 && (x - a.X) / delta.X is > 0 and < 1)
-                    {
-                        _ = fractions.Add((x - a.X) / delta.X);
-                    }
-                }
-
-                foreach (float z in new[] { Low.Y, High.Y })
-                {
-                    if (delta.Y != 0 && (z - a.Y) / delta.Y is > 0 and < 1)
-                    {
-                        _ = fractions.Add((z - a.Y) / delta.Y);
-                    }
-                }
-            }
-            double[] cuts = [.. fractions];
-            return OnMap(a) && OnMap(b) && cuts.Zip(cuts.Skip(1)).All(p => OnMap(a.Lerp(b, (float)((p.First + p.Second) / 2))));
-        }
-        var provider = new LifecycleProviderState();
-        MotionBricksNavigation? nav = null;
-        var clock = Stopwatch.StartNew();
-        var samples = new List<object>();
-        var events = new List<object>();
-        var windows = new List<object>();
+        await using PositioningNavigationFixture fixture = await PositioningNavigationFixture.CreateAsync();
+        MotionBricksNavigation nav = fixture.Navigation;
+        Assert.Same(nav, fixture.Actor.Navigation);
         var roles = new List<string>();
         var contextChecks = new List<bool>();
-        var safety = new List<string>();
-        bool ready = false;
-        Vector2? last = null;
-        Vector3 start = default, goal = default;
-        float initialHeading = 0;
-        double fullSeconds = 0, tailSeconds = 0;
-        T Field<T>(string name)
+        var unsafeSweeps = new List<(Vector3 From, Vector3 To)>();
+        Vector3 start = fixture.Actor.GlobalPosition;
+        float heading = fixture.Heading;
+        Vector3 goal = start + new Vector3(Mathf.Cos(heading), 0, -Mathf.Sin(heading));
+        Assert.True(fixture.OnMapSegment(start, goal));
+        Vector3 prior = start;
+        nav.PoseObserved += () =>
         {
-            return (T)typeof(MotionBricksNavigation).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav)!;
-        }
-
-        float Heading()
-        {
-            return (float)typeof(MotionBricksNavigation).GetMethod("AnatomicalHeading", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .Invoke(nav, [Field<RealisedPoseHistory>("_history").Context()[3]])! + Mathf.Pi;
-        }
-
-        object State()
-        {
-            return new
+            Vector3 current = fixture.Actor.GlobalPosition;
+            if (!fixture.OnMapSegment(prior, current))
             {
-                wall = clock.Elapsed.TotalSeconds,
-                tick = Engine.GetPhysicsFrames(),
-                nav!.ObservationTime,
-                actor = Pack(actor.GlobalPosition),
-                heading = Heading(),
-                nav.Phase,
-                nav.Failure,
-                nav.HasDestination,
-                nav.CurrentStatus,
-                nav.ReviewedRole,
-                selection = Field<ReviewedRoleSampler>("_reviewed").Selection,
-                route = typeof(NavigationBase).GetProperty("CurrentRouteSnapshot", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(nav),
-                nav.SourceRateCurveIntent,
-                observedRoot = Pack(nav.ObservedRoot.Origin),
-                outcomes = nav.TerminalOutcomes.ToArray(),
-                provider.Calls,
-                provider.Faults,
-                unavailable = Field<bool>("_unavailable"),
-                workerCompleted = nav.WorkerCompletion?.IsCompleted
+                unsafeSweeps.Add((prior, current));
+            }
+            prior = current;
+        };
+        nav.WindowSubmitted += (_, context, _) =>
+        {
+            contextChecks.Add(fixture.MatchesHistory(context) && context[3][0].Origin == nav.ObservedRoot.Origin);
+            if (nav.ReviewedRole.Length > 0)
+            {
+                roles.Add(nav.ReviewedRole);
+            }
+        };
+
+        await fixture.SelectDestinationAsync(new(new Basis(Vector3.Up, heading - Mathf.Pi), goal));
+        // Preserve the original 12 s observation, up to 600 ticks to terminate, and 3 s post-request tail.
+        await fixture.StepAsync(12 * PositioningNavigationFixture.TicksPerSecond);
+        for (int i = 0; i < 600 && (nav.TerminalOutcomes.Count == 0 || nav.Phase is not ("settled-idle" or "failed")); i++)
+        {
+            await fixture.StepAsync(1);
+        }
+        await fixture.StepAsync(3 * PositioningNavigationFixture.TicksPerSecond);
+        Assert.Equal(0, fixture.Provider.Faults);
+        Assert.False(fixture.ReadField<bool>("_unavailable"));
+        Assert.Empty(unsafeSweeps);
+        Assert.NotEmpty(contextChecks);
+        Assert.All(contextChecks, Assert.True);
+        Assert.NotEmpty(roles);
+        Assert.Equal("left_noncross", roles[0]);
+    }
+
+    /// <summary>The actual playtest floor and map, with only the native motion rig and navigation component.</summary>
+    private sealed class PositioningNavigationFixture : IAsyncDisposable
+    {
+        internal const int TicksPerSecond = 60;
+        private const double Delta = 1.0 / TicksPerSecond;
+        private readonly SceneTree _tree = TestUtils.GetSceneTree();
+        private readonly int _originalPhysicsTicks = Engine.PhysicsTicksPerSecond;
+        private readonly ProbeGame _root = new() { Name = "PositioningNavigationFixture" };
+        private readonly Rid _map = NavigationServer3D.MapCreate();
+        private readonly Skeleton3D _source;
+        private readonly Skeleton3D _target;
+        private readonly NavigationRegion3D _region;
+        private readonly Vector2[][] _floorPolygons;
+        private readonly SomaMotionData _data = new(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+
+        private PositioningNavigationFixture()
+        {
+            Node playtest = GD.Load<PackedScene>(NavigationPlaytestRecorder.PlaytestScene).Instantiate();
+            _region = playtest.GetNode<NavigationRegion3D>("NavigationRegion3D");
+            StaticBody3D floor = playtest.GetNode<StaticBody3D>("ClickTargetGround");
+            playtest.RemoveChild(_region);
+            playtest.RemoveChild(floor);
+            playtest.Free(); // No recorder, camera or role installer is entered into the tree.
+            _root.AddChild(_region);
+            _root.AddChild(floor);
+            NavigationMesh mesh = _region.NavigationMesh;
+            Vector3[] vertices = mesh.GetVertices();
+            _floorPolygons = [.. Enumerable.Range(0, mesh.GetPolygonCount())
+                .Select(i => mesh.GetPolygon(i)).Where(p => p.Length == 4)
+                .Select(p => p.Select(i => Flat(vertices[i])).ToArray())];
+
+            Actor = new()
+            {
+                Position = new(-2, 0, -2)
             };
-        }
-
-        void Observe()
-        {
-            Vector2 now = Flat(actor.GlobalPosition);
-            if (last is Vector2 before)
+            Actor.AddChild(MotionBricksIntegrationTests.MountMotionModel(false, out _target));
+            _source = _target.GetParent().GetParent<Skeleton3D>();
+            typeof(AlleyCat.Character.Character).GetField("_motionTarget", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(Actor, _target);
+            Actor.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = .2f }, Position = new(0, .2f, 0) });
+            Navigation = new()
             {
-                if (!SegmentOnMap(before, now))
-                {
-                    safety.Add("Observed centre sweep left NAV");
-                }
-
-            }
-            last = now;
-            samples.Add(State());
-        }
-        void Configure(Node node)
-        {
-            if (node is not MotionBricksNavigation n)
-            {
-                return;
-            }
-
-            nav = n;
-            n.SessionFactory = () => new LifecycleSession(provider, false);
-            n.WindowSubmitted += (ticket, context, target) =>
-            {
-                Transform3D[][] actual = Field<RealisedPoseHistory>("_history").Context();
-                bool fromActual = context.Zip(actual).All(p => p.First.SequenceEqual(p.Second)) && context[3][0].Origin == n.ObservedRoot.Origin;
-                contextChecks.Add(fromActual);
-                if (n.ReviewedRole.Length != 0)
-                {
-                    roles.Add(n.ReviewedRole);
-                }
-
-                windows.Add(new
-                {
-                    ticket,
-                    fromActual,
-                    state = State(),
-                    roots = target.Select(p => Pack(SomaMotionData.ModelToWorld * p[0].Origin)).ToArray()
-                });
+                SessionFactory = () => new LifecycleSession(Provider, false)
             };
-        }
-        void Save()
-        {
-            File.WriteAllText(ProjectSettings.GlobalizePath(output), JsonSerializer.Serialize(new
-            {
-                nativeCalls = 0,
-                injectedRouteContextPosePhaseRoleTargetFailure = false,
-                scenario = "One-metre pure-left positioning from actual Ready orientation, same requested facing",
-                start = Pack(start),
-                goal = Pack(goal),
-                initialHeading,
-                fullSeconds,
-                tailSeconds,
-                expectedFirstMovementRole = "left_noncross",
-                observedMovementRoles = roles,
-                events,
-                windows,
-                samples,
-                contextChecks,
-                safety,
-                final = ready ? State() : null
-            }, new JsonSerializerOptions { IncludeFields = true, WriteIndented = true }));
+            Navigation.Ready += () => Navigation.SetPhysicsProcess(false);
+            Actor.Navigation = Navigation;
+            Actor.AddChild(Navigation);
+            _root.AddChild(Actor);
         }
 
-        tree.NodeAdded += Configure;
-        root.AddChild(scene);
-        tree.Root.AddChild(root);
-        try
+        internal AlleyCat.Character.Character Actor
         {
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 40);
-            Assert.NotNull(nav);
-            Assert.Same(nav, actor.Navigation);
-            ready = true;
-            start = actor.GlobalPosition;
-            initialHeading = Heading();
-            goal = start + new Vector3(Mathf.Cos(initialHeading), 0, -Mathf.Sin(initialHeading));
-            Assert.True(SegmentOnMap(Flat(start), Flat(goal)));
-            skeleton.SkeletonUpdated += Observe;
-            last = Flat(start);
-            events.Add(new
-            {
-                kind = "idle-actual",
-                state = State()
-            });
-            int accepted = nav.SelectDestination(new(new Basis(Vector3.Up, initialHeading - Mathf.Pi), goal), []);
-            events.Add(new
-            {
-                kind = "request-selected",
-                accepted,
-                state = State()
-            });
-            double began = clock.Elapsed.TotalSeconds;
-            while (clock.Elapsed.TotalSeconds - began < 12)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-
-            fullSeconds = clock.Elapsed.TotalSeconds - began;
-            events.Add(new
-            {
-                kind = "full-window-end",
-                elapsed = fullSeconds,
-                state = State()
-            });
-            for (int tick = 0; tick < 600 && (nav.TerminalOutcomes.Count == 0 || nav.Phase is not ("settled-idle" or "failed")); tick++)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-
-            began = clock.Elapsed.TotalSeconds;
-            events.Add(new
-            {
-                kind = "tail-start",
-                state = State()
-            });
-            while (clock.Elapsed.TotalSeconds - began < 3)
-            {
-                await TestUtils.WaitForPhysicsFramesAsync(tree, 1);
-            }
-
-            tailSeconds = clock.Elapsed.TotalSeconds - began;
-            events.Add(new
-            {
-                kind = "tail-end",
-                elapsed = tailSeconds,
-                state = State()
-            });
-            Save();
-            Assert.Equal((int)NavigationDestinationResult.Accepted, accepted);
-            Assert.True(fullSeconds >= 12 && tailSeconds >= 3);
-            Assert.NotEmpty(windows);
-            Assert.All(contextChecks, Assert.True);
-            Assert.Equal(0, provider.Faults);
-            Assert.False(Field<bool>("_unavailable"));
-            Assert.Empty(safety);
-            Assert.NotEmpty(roles);
-            // NAV user policy supplies this oracle, not the existing forward-only geometry or classifier output.
-            Assert.Equal("left_noncross", roles[0]);
+            get;
         }
-        finally
+        internal MotionBricksNavigation Navigation
         {
-            Save();
-            skeleton.SkeletonUpdated -= Observe;
-            tree.NodeAdded -= Configure;
-            Task? completion = nav?.WorkerCompletion;
-            root.QueueFree();
-            await TestUtils.WaitForPhysicsFramesAsync(tree, 2);
-            if (completion is not null)
-            {
-                await completion.WaitAsync(TimeSpan.FromSeconds(30));
-            }
+            get;
+        }
+        internal LifecycleProviderState Provider { get; } = new();
+        internal float Heading => Hip(History.Context()[3]) + Mathf.Pi;
+        private RealisedPoseHistory History => ReadField<RealisedPoseHistory>("_history");
+        private SomaInferenceWorker Worker => ReadField<SomaInferenceWorker>("_worker");
 
+        internal T ReadField<T>(string name) =>
+            (T)typeof(MotionBricksNavigation).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(Navigation)!;
+
+        internal bool MatchesHistory(Transform3D[][] context) =>
+            context.Zip(History.Context()).All(pair => pair.First.SequenceEqual(pair.Second));
+
+        internal float Hip(Transform3D[] pose)
+        {
+            int left = Array.IndexOf(_data.Names, "LeftLeg"), right = Array.IndexOf(_data.Names, "RightLeg");
+            return SomaInference.Heading(pose[0] * pose[right].Origin, pose[0] * pose[left].Origin);
+        }
+
+        internal static async Task<PositioningNavigationFixture> CreateAsync()
+        {
+            var fixture = new PositioningNavigationFixture();
+            try
+            {
+                fixture._tree.Root.AddChild(fixture._root);
+                NavigationServer3D.MapSetActive(fixture._map, true);
+                fixture._region.SetNavigationMap(fixture._map);
+                fixture.Navigation.SetNavigationMap(fixture._map);
+                for (int i = 0; i < 40 && NavigationServer3D.MapGetClosestPointOwner(fixture._map, fixture.Actor.GlobalPosition) != fixture._region.GetRid(); i++)
+                {
+                    await TestUtils.WaitForNextPhysicsFrameAsync(fixture._tree);
+                }
+                Assert.Equal(fixture._region.GetRid(), NavigationServer3D.MapGetClosestPointOwner(fixture._map, fixture.Actor.GlobalPosition));
+                Assert.Equal("", fixture.Navigation.Failure);
+                fixture._source.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+                fixture._target.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+                // The native agent and skeleton use distinct engine tick boundaries; only the
+                // scheduling is accelerated, not the explicit controller or skeleton delta.
+                Engine.PhysicsTicksPerSecond = 600;
+                await fixture.StepAsync(16);
+                Assert.True(fixture.Navigation.SamplesRecorded >= 8);
+                return fixture;
+            }
+            catch
+            {
+                await fixture.DisposeAsync();
+                throw;
+            }
+        }
+
+        internal async Task SelectDestinationAsync(Transform3D goal)
+        {
+            // Agent target assignment wakes automatic processing. Keep controller and rig time test-owned.
+            Assert.Equal((int)NavigationDestinationResult.Accepted, Navigation.SelectDestination(goal, []));
+            Navigation.SetPhysicsProcess(false);
+            await TestUtils.WaitForNextPhysicsFrameAsync(_tree);
+        }
+
+        internal async Task StepAsync(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                await TestUtils.WaitForNextPhysicsFrameAsync(_tree);
+                int requests = Navigation.Requests;
+                Navigation._PhysicsProcess(Delta);
+                _source.Advance(Delta);
+                _target.Advance(Delta);
+                if (Navigation.Requests != requests && ReadField<bool>("_pending"))
+                {
+                    await WaitForMotionPublicationAsync(_tree, Worker);
+                }
+            }
+        }
+
+        private static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
+
+        internal bool OnMapSegment(Vector3 from, Vector3 to)
+        {
+            Vector2 a = Flat(from), b = Flat(to), delta = b - a;
+            var cuts = new SortedSet<float> { 0, 1 };
+            foreach (Vector2 p in _floorPolygons.SelectMany(p => p))
+            {
+                if (delta.X != 0 && (p.X - a.X) / delta.X is > 0 and < 1)
+                {
+                    _ = cuts.Add((p.X - a.X) / delta.X);
+                }
+                if (delta.Y != 0 && (p.Y - a.Y) / delta.Y is > 0 and < 1)
+                {
+                    _ = cuts.Add((p.Y - a.Y) / delta.Y);
+                }
+            }
+            bool OnMap(Vector2 p)
+            {
+                return _floorPolygons.Any(poly => p.X >= poly.Min(v => v.X) && p.X <= poly.Max(v => v.X) &&
+                    p.Y >= poly.Min(v => v.Y) && p.Y <= poly.Max(v => v.Y));
+            }
+            return OnMap(a) && OnMap(b) && cuts.Zip(cuts.Skip(1)).All(c => OnMap(a.Lerp(b, (c.First + c.Second) / 2)));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            Navigation.SetPhysicsProcess(false);
+            Engine.PhysicsTicksPerSecond = _originalPhysicsTicks;
+            await _root.DrainMotionAndDiagnosticsAsync();
+            _root.QueueFree();
+            await TestUtils.WaitForPhysicsFramesAsync(_tree, 2);
+            NavigationServer3D.FreeRid(_map);
         }
     }
 }

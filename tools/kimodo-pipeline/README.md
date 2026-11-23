@@ -417,6 +417,22 @@ Runtime-library SHA-256 bindings use deterministic `ResourceSaver` text while ex
 `uid="uid://..."` annotation that Godot adds when importing the resource at its durable path. Producer and validators
 apply the same canonicalisation; subresource IDs and all animation payload bytes remain covered.
 
+## Independent Motion Frame Oracles
+
+From the repository root, use Blender 5.3.0 and a Python environment with Kimodo 1.0.0, PyTorch and SciPy:
+
+```sh
+blender --background --factory-startup --python-exit-code 1 \
+  --python tools/kimodo-pipeline/commands/regenerate_motion_frame_oracles.py -- blender
+python tools/kimodo-pipeline/commands/regenerate_motion_frame_oracles.py kimodo
+```
+
+The commands read the committed MotionBricks poses and the approved source action (verified against its SHA-256).
+They replace the compressed expected outputs in `integration-tests/fixtures/motion-frame-oracles/`, independently
+of the C# runtime. Use them only for intentional fixture updates, record upstream versions and source identity,
+and rerun the MotionBricks and reviewed-motion-source integration tests. They do not reproduce historical
+playtest recordings or verify displayed motion quality.
+
 ## Verification Boundary
 
 The MotionBricks exporters (`export_motionbricks.py` and `export_motionbricks_frames.py`) validate complete
