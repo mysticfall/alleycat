@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://cj3oy7ip62yac"]
+
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="PackedScene" uid="uid://wjbf7fhvijmr" path="res://tests/ik/bone_attachment_fixture/bone_attachment_role_installer.tscn" id="2_installer"]
+[ext_resource type="PackedScene" uid="uid://c1vv6wqbnak3w" path="res://tests/ik/bone_attachment_fixture/bone_attachment_npc_template.tscn" id="3_template"]
+
+[node name="Ally" groups=["Actors"] instance=ExtResource("1_blend")]
+Id = "ally"
+
+[node name="NPCCharacterInstaller" parent="." instance=ExtResource("2_installer")]
+Template = ExtResource("3_template")

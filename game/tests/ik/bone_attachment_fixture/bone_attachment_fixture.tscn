@@ -1,0 +1,5 @@
+[gd_scene format=3 uid="uid://c84tjbg2i10ad"]
+
+[node name="BoneAttachmentFixture" type="Node3D"]
+
+[node name="Actors" type="Node3D" parent="."]

@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://wjbf7fhvijmr"]
+
+[ext_resource type="Script" uid="uid://cnc3kfkhjn7qf" path="res://src/Rigging/Installation/RigRoleTemplateSceneInstaller.cs" id="1_role"]
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="2_baseline"]
+[ext_resource type="Script" uid="uid://b6purqid0hate" path="res://src/Rigging/Installation/RigTemplateSubtreeInstaller.cs" id="3_subtree"]
+[ext_resource type="Script" uid="uid://dfuyjv41fcmsi" path="res://src/Rigging/Installation/RigTemplateSkeletonSubtreeInstaller.cs" id="4_skeleton"]
+[ext_resource type="Script" uid="uid://31cfhn1u2aw1" path="res://src/Rigging/Physics/BodyPartsInstaller.cs" id="5_body"]
+[ext_resource type="Script" uid="uid://btv3tfkqsrnpy" path="res://src/Rigging/Physics/DynamicPhysicalRigTemplateInstaller.cs" id="6_rig"]
+[ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="7_profile"]
+
+[node name="RoleInstaller" type="Node" node_paths=PackedStringArray("Installers")]
+script = ExtResource("1_role")
+TemplateBaseline = ExtResource("2_baseline")
+Installers = [NodePath("TemplateRootSubtreesInstaller"), NodePath("TemplateSkeletonSubtreesInstaller"), NodePath("BodyPartsInstaller"), NodePath("DynamicPhysicalRigInstaller")]
+AutoInstallOnReady = true
+editor_description = "Mirrors the rig installers (and their InstallMode values) of res://assets/characters/templates/installers/npc_installer.tscn and player_installer.tscn, without the runtime, IK, mind, speech and navigation installers. Keep in sync when production attachment installation changes."
+metadata/_custom_type_script = "uid://cnc3kfkhjn7qf"
+
+[node name="TemplateRootSubtreesInstaller" type="Node" parent="."]
+script = ExtResource("3_subtree")
+InstallMode = 1
+metadata/_custom_type_script = "uid://b6purqid0hate"
+
+[node name="TemplateSkeletonSubtreesInstaller" type="Node" parent="."]
+script = ExtResource("4_skeleton")
+InstallMode = 3
+metadata/_custom_type_script = "uid://dfuyjv41fcmsi"
+
+[node name="BodyPartsInstaller" type="Node" parent="."]
+script = ExtResource("5_body")
+metadata/_custom_type_script = "uid://31cfhn1u2aw1"
+
+[node name="DynamicPhysicalRigInstaller" type="Node" parent="."]
+script = ExtResource("6_rig")
+ColliderProfile = ExtResource("7_profile")
+InstallMode = 2
+metadata/_custom_type_script = "uid://btv3tfkqsrnpy"

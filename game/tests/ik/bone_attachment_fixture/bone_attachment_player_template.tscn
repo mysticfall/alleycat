@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://b2tqd7a26pivc"]
+
+[ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_base"]
+[ext_resource type="Script" uid="uid://df2cuf0s4w2v" path="res://src/Character/PlayerCharacter.cs" id="2_player"]
+
+[node name="Player" groups=["Player"] instance=ExtResource("1_base")]
+script = ExtResource("2_player")
+MotionModel = ""
+metadata/_custom_type_script = "uid://df2cuf0s4w2v"

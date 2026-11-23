@@ -7,12 +7,16 @@ using Xunit;
 namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
-/// Captures the native Godot engine transcript while each reference role enters the minimal fixture independently.
+/// Captures the native Godot engine transcript while reference female player and NPC roles independently enter a
+/// dedicated attachment-only fixture. The roles keep the production rig role installer and its template-subtree, body
+/// parts, and dynamic physical rig installers, but omit MotionBricks, navigation, mind, speech, and voice wiring.
 /// </summary>
 public sealed class BoneAttachmentEngineTranscriptIntegrationTests
 {
     private const string RunnerPath = "res://tests/ik/bone_attachment_role_transcript_runner.gd";
     private const string TranscriptRelativePath = "test-results/ik/bone-attachment-role-engine-transcript.log";
+    private static readonly TimeSpan _runnerTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan _outputDrainTimeout = TimeSpan.FromSeconds(10);
     private static readonly Regex[] _invalidBoneIndexPatterns =
     [
         new(@"p_bone\s*=\s*-1", RegexOptions.CultureInvariant),
@@ -27,10 +31,10 @@ public sealed class BoneAttachmentEngineTranscriptIntegrationTests
 
     /// <summary>
     /// Verifies the actual engine transcript is clean while the fixture loads, then player and NPC roles are each
-    /// instantiated and attached before initial native physics frames run.
+    /// instantiated, attached, and installed before initial native physics frames run.
     /// </summary>
     [Fact]
-    public async Task ReferencePlayerFixture_IndependentRoleAttachment_EmitsNoInvalidBoneIndexEngineOutput()
+    public async Task MinimalRoleFixture_IndependentRoleAttachment_EmitsNoInvalidBoneIndexEngineOutput()
         => await AssertCleanEngineTranscriptAsync(
             RunnerPath,
             TranscriptRelativePath,
@@ -66,6 +70,10 @@ public sealed class BoneAttachmentEngineTranscriptIntegrationTests
         await File.WriteAllTextAsync(transcriptPath, transcript, Encoding.UTF8);
         string retainedTranscript = await File.ReadAllTextAsync(transcriptPath, Encoding.UTF8);
 
+        Assert.False(
+            runResult.TimedOut,
+            $"The direct Godot transcript runner did not exit within {_runnerTimeout.TotalSeconds:0} s and was killed. "
+            + $"Partial transcript:{System.Environment.NewLine}{transcript}");
         Assert.Equal(0, runResult.ExitCode);
         Assert.Equal(transcript, retainedTranscript);
         AssertStageSequence(retainedTranscript, expectedStages);
@@ -104,24 +112,46 @@ public sealed class BoneAttachmentEngineTranscriptIntegrationTests
 
         Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
         Task<string> standardErrorTask = process.StandardError.ReadToEndAsync();
+        bool timedOut = false;
         try
         {
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(90));
+            await process.WaitForExitAsync().WaitAsync(_runnerTimeout);
         }
         catch (TimeoutException)
         {
-            process.Kill(entireProcessTree: true);
-            throw;
+            // Keep the partial output: killing the tree closes its pipes so the pending reads complete.
+            timedOut = true;
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The process exited between the timeout and the kill; its pipes are already closing.
+            }
         }
 
         return new DirectGodotRunResult(
-            process.ExitCode,
-            await standardOutputTask,
-            await standardErrorTask);
+            timedOut ? null : process.ExitCode,
+            timedOut,
+            await DrainAsync(standardOutputTask),
+            await DrainAsync(standardErrorTask));
+    }
+
+    private static async Task<string> DrainAsync(Task<string> readTask)
+    {
+        try
+        {
+            return await readTask.WaitAsync(_outputDrainTimeout);
+        }
+        catch (TimeoutException)
+        {
+            return "<output stream did not close after the runner exited>";
+        }
     }
 
     private static string BuildTranscript(DirectGodotRunResult runResult)
-        => $"ExitCode: {runResult.ExitCode}{System.Environment.NewLine}"
+        => $"ExitCode: {(runResult.TimedOut ? "timed out" : runResult.ExitCode)}{System.Environment.NewLine}"
             + $"=== Standard Output ==={System.Environment.NewLine}{runResult.StandardOutput}"
             + $"{System.Environment.NewLine}=== Standard Error ==={System.Environment.NewLine}{runResult.StandardError}";
 
@@ -155,5 +185,5 @@ public sealed class BoneAttachmentEngineTranscriptIntegrationTests
             + string.Join(System.Environment.NewLine, unexpectedDiagnostics));
     }
 
-    private sealed record DirectGodotRunResult(int ExitCode, string StandardOutput, string StandardError);
+    private sealed record DirectGodotRunResult(int? ExitCode, bool TimedOut, string StandardOutput, string StandardError);
 }

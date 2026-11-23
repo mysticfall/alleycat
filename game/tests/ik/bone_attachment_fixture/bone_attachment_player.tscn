@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://d4tld06fyjfu"]
+
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="Script" uid="uid://df2cuf0s4w2v" path="res://src/Character/PlayerCharacter.cs" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://wjbf7fhvijmr" path="res://tests/ik/bone_attachment_fixture/bone_attachment_role_installer.tscn" id="3_installer"]
+[ext_resource type="PackedScene" uid="uid://b2tqd7a26pivc" path="res://tests/ik/bone_attachment_fixture/bone_attachment_player_template.tscn" id="4_template"]
+
+[node name="Player" groups=["Actors", "Player"] instance=ExtResource("1_blend")]
+script = ExtResource("2_player")
+Id = "reference_player"
+metadata/_custom_type_script = "uid://df2cuf0s4w2v"
+
+[node name="PlayerCharacterInstaller" parent="." instance=ExtResource("3_installer")]
+Template = ExtResource("4_template")
