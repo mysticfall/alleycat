@@ -129,7 +129,6 @@ public sealed class ProductionDownwardFoldOriginIntegrationTests
         double maxStep = 0;
         double crossingStep = 0;
         double finalYaw = double.NaN;
-        List<string> _yawCrossDebug = [];
         Vector3 previous = rig.Controller.LastRequestedAimTargetGlobal;
         double sweepStart = Time.GetTicksMsec() / 1000d;
         while ((Time.GetTicksMsec() / 1000d) - sweepStart < sweepSeconds)
@@ -149,10 +148,7 @@ public sealed class ProductionDownwardFoldOriginIntegrationTests
 
             previous = requested;
             finalYaw = yaw;
-            _yawCrossDebug.Add($"t={Time.GetTicksMsec()} yaw={yaw:F4} pitch={rig.Controller.LastPublishedAim.VerticalRadians * 180d / Math.PI:F3} status={rig.Controller.LastFoldStatus} step={step:F3} req={requested}");
         }
-
-        File.WriteAllLines("/tmp/opencode/yawcross_debug.txt", _yawCrossDebug);
 
         Assert.True(
             Math.Abs(finalYaw) > 3d,
