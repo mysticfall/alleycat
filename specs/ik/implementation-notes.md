@@ -105,6 +105,10 @@ does not choose a stale/invalid-hand fallback interpretation.
   binds only after XR initialisation succeeds.
 - Use XRManager late-subscriber state (`InitialisationAttempted`,
   `InitialisationSucceeded`) so binding remains correct when startup order varies.
+- `CharacterIK` completes its runtime setup (target activity gates, actuators, and stage skeleton modifiers) on the
+  first physics tick after its bindings resolve. Setup must not depend on when a subclass resolves nodes or binds
+  external services; for example, `PlayerVRIK` binding to XR before the first tick must still yield active hand IK.
+  `ResetRuntimeBindings` re-arms setup so it runs again once bindings resolve.
 
 ### Bridge Node Contract
 
@@ -254,6 +258,9 @@ Acceptance must cover user-visible outcomes and technical delivery at the linked
 - **Lower-limb evidence:** [IK-003 acceptance](003-leg-feet-ik/index.md#acceptance-criteria) and
   [technical requirements](003-leg-feet-ik/index.md#technical-requirements) define required evidence within its stated
   adoption scope.
+- **Runtime setup timing:** whether `PlayerVRIK` binds before or after its first physics tick, every `CharacterIK`
+  stage modifier is present after subsequent ticks and the hand tracks a reachable controller wrist, per the
+  [Startup Binding Contract](#startup-binding-contract).
 
 ## References
 

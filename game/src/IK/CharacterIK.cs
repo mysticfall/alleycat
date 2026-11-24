@@ -16,6 +16,10 @@ public partial class CharacterIK : Node3D
 
     private Skeleton3D? _skeleton;
 
+    // Runtime setup (activity gates, actuators and stage modifiers) completes separately from node resolution:
+    // subclasses may resolve nodes early, for example when binding XR services before the first physics tick.
+    private bool _runtimeBindingsInitialised;
+
     private IKTargetBodyActuator? _headActuator;
     private IKTargetAnimatableActuator? _leftHandActuator;
     private IKTargetAnimatableActuator? _rightHandActuator;
@@ -396,6 +400,7 @@ public partial class CharacterIK : Node3D
         _hipReconciliationModifiers.Clear();
         _lowerLegConsumers.Clear();
 
+        _runtimeBindingsInitialised = false;
         _skeleton = null;
         _headActuator = null;
         _leftHandActuator = null;
@@ -536,7 +541,7 @@ public partial class CharacterIK : Node3D
             return;
         }
 
-        if (_skeleton is null && !TryInitialiseRuntimeBindings())
+        if (!_runtimeBindingsInitialised && !TryInitialiseRuntimeBindings())
         {
             return;
         }
@@ -553,6 +558,7 @@ public partial class CharacterIK : Node3D
             EnsureActuators();
             EnsureStageModifiers();
 
+            _runtimeBindingsInitialised = true;
             _warnedWaitingForBindings = false;
             _runtimeBindingAttempts = 0;
             SetPhysicsProcess(true);
