@@ -173,7 +173,7 @@ public sealed class ForearmTwistAuthorityIntegrationTests
         root.AddChild(leftTarget);
         root.AddChild(ik);
         sceneTree.Root.AddChild(root);
-        await WaitForFramesAsync(sceneTree, 6);
+        await WaitForCharacterIKStageBindingAsync(sceneTree, skeleton);
 
         try
         {
@@ -331,7 +331,7 @@ public sealed class ForearmTwistAuthorityIntegrationTests
         root.AddChild(headSolveTarget);
         root.AddChild(ik);
         sceneTree.Root.AddChild(root);
-        await WaitForFramesAsync(sceneTree, 2);
+        await WaitForCharacterIKStageBindingAsync(sceneTree, skeleton);
 
         try
         {
@@ -422,6 +422,23 @@ public sealed class ForearmTwistAuthorityIntegrationTests
         {
             root.QueueFree();
             await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Waits until CharacterIK has installed its stage modifiers. CharacterIK binds them on its first physics tick,
+    /// and process frames run uncapped with vsync off, so a fixed process-frame wait can elapse without any tick.
+    /// Every binding is supplied before the fixture enters the tree, so one tick suffices; the bound only stops a
+    /// broken binding from hanging the test, and the caller's assertion then reports the missing stage.
+    /// </summary>
+    private static async Task WaitForCharacterIKStageBindingAsync(SceneTree sceneTree, Skeleton3D skeleton)
+    {
+        const int MaximumPhysicsTicks = 30;
+        for (int tick = 0;
+             tick < MaximumPhysicsTicks && skeleton.GetNodeOrNull("CharacterIKHandAuthorityStage") is null;
+             tick++)
+        {
+            await WaitForNextPhysicsFrameAsync(sceneTree);
         }
     }
 
