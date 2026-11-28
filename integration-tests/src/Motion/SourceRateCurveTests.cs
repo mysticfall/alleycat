@@ -47,8 +47,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.NotNull(submitted);
             Assert.Equal("backward", nav.ReviewedRole);
             Assert.True(((SomaMotionData.ModelToWorld * submitted[0][0].Origin) - start).Dot(goal - start) > 0);
-            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-            var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), data);
+            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+            var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json"), data);
             _ = sampler.SetIntent("backward", nav.ObservationTime);
             Transform3D[][] source = sampler.Targets(nav.ObservationTime, 49.0 / 30, Basis.Identity, Vector3.Zero);
             for (int i = 0; i < 4; i++)

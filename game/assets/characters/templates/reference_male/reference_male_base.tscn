@@ -543,5 +543,5 @@ metadata/_custom_type_script = "uid://cmp8jqdcl6ebv"
 
 [node name="Default" type="Node" parent="AnimationCatalogue"]
 script = ExtResource("anim003_pack")
-Manifest = "res://data/animations/default/pack.json"
+Manifest = "res://assets/animations/packs/default/pack.json"
 metadata/_custom_type_script = "uid://ckh63vxcukg3p"

@@ -45,8 +45,8 @@ namespace AlleyCat.IntegrationTests.Control;
 public sealed class HandGrabInputCoordinatorIntegrationTests
 {
     private const string MockRuntimeScenePath = "res://assets/xr/mock_runtime.tscn";
-    private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
-    private const string GrabPipeAnimationPath = "res://assets/characters/reference/female/animations/Grab-pipe-10.tres";
+    private const string GrabBallAnimationPath = "res://assets/animations/reference/female/Grab-ball-40.tres";
+    private const string GrabPipeAnimationPath = "res://assets/animations/reference/female/Grab-pipe-10.tres";
 
     private const int TrackedJointCount = 20;
 

@@ -15,10 +15,10 @@ public sealed class StationaryTurnPhaseLifecycleTests
     public void AngularEntry_ContinuesThroughWrapReactivationAndTravelWithoutPlacementJump()
     {
         const double horizon = 49.0 / 30;
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-        string set = ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json");
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+        string set = ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json");
         var sampler = new ReviewedRoleSampler(set, data);
-        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/landing-ablation-01.json"), data);
+        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"), data);
         ReviewedMotionSource.Role role = source.GetRole("feminine", "normal", "left_turn");
         using var document = JsonDocument.Parse(File.ReadAllText(set));
         JsonElement receipt = document.RootElement.GetProperty("roles").EnumerateArray()

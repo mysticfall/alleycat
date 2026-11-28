@@ -52,15 +52,15 @@ missing inputs without confusing generated outputs with protected source assets 
 
 ### Repository Source Asset Contract
 
-1. **KIMODO-SRC-001:** `game/assets/characters/animations/source/kimodo_source.blend` is the repository-fixed
+1. **KIMODO-SRC-001:** `game/assets/animations/source/kimodo_source.blend` is the repository-fixed
    clean Kimodo rig, containing `Kimodo_Source` without actions, meshes, or materials. Preserve it byte-for-byte.
    `bootstrap_paths.py` owns its path; `bootstrap_workspace.py` owns its approved baseline. Replacement requires
    deliberate baseline re-approval and coordinated path, validation, and test updates.
-2. **KIMODO-SRC-002:** `game/assets/characters/animations/source/locomotion/locomotion_template.blend` is the
+2. **KIMODO-SRC-002:** `game/assets/animations/source/locomotion/locomotion_template.blend` is the
    character-neutral bootstrap template with pose references, root waypoints, and neutral reference actions.
    Preserve it byte-for-byte. Its path and baseline have the same owners as the canonical rig; replacement requires
    baseline re-approval and coordinated composition, validation, and test updates.
-3. **KIMODO-SRC-003:** `game/assets/characters/animations/source/locomotion/locomotion.blend` is the read-only
+3. **KIMODO-SRC-003:** `game/assets/animations/source/locomotion/locomotion.blend` is the read-only
    monolithic bootstrap/extraction input, owned by `bootstrap_extraction.py`. Never save over it. Retirement requires
    an approved replacement for extraction and every reproducibility/provenance dependency; runtime replacement alone
    does not authorise source deletion.
@@ -74,11 +74,13 @@ missing inputs without confusing generated outputs with protected source assets 
    under KIMODO-SRC-006.
 5. **KIMODO-SRC-005:** Required missing inputs fail clearly. Checks cover path ownership, structure, baseline or
    before/after byte integrity, provenance, and replacement/retirement gates, separately from behavioural evidence.
-6. **KIMODO-SRC-006:** Per-character authored inputs are protected, not derivatives: the calibrated setup at `[character
-   asset root]/animations/source/kimodo_retarget_setup.blend` and animated idle sources at `[character asset
-   root]/animations/source/idle/<variant>.blend`, authored on `Kimodo_Source` under the [ANIM-003 Kimodo
-   path](../../animation/003-animation-catalogue/authoring.md#kimodo-path). `bootstrap_paths.py` owns path derivation;
-   approval is per character. The pipeline never modifies these inputs.
+6. **KIMODO-SRC-006:** Per-character authored inputs are protected, not derivatives. The reference source directories
+   are `game/assets/animations/source/reference/{female,male}/`. Resolve `kimodo_retarget_setup.blend` and
+   `idle/<variant>.blend` directly under the selected animation source directory, not the character model directory.
+   Idle sources are authored on `Kimodo_Source` under the [ANIM-003 Kimodo path][idle-authoring].
+   `bootstrap_paths.py` owns path derivation; approval is per character. The pipeline never modifies these inputs.
+
+[idle-authoring]: ../../animation/003-animation-catalogue/authoring.md#kimodo-path
 
 ### Character Setup and Calibration Contract
 
@@ -179,8 +181,8 @@ presentation, preview authority or published runtime data; the
 
 1. The [shared animation contract](../../animation/index.md) and
    [ANIM-002](../../animation/002-locomotive-animation-set/index.md) own runtime role/variant/stage and dynamic-window
-   needs. CTRL/NAV load the reviewed set resolved by the ANIM-003 locomotion view (default `feminine`, binding
-   `reviewed-feminine/set.json`), without source activation switches or a prototype movement fallback. Tooling
+   needs. CTRL/NAV load the reviewed set resolved by the ANIM-003 locomotion view (`feminine` from the default pack),
+   without source activation switches or a prototype movement fallback. Tooling
    publishes no stitch table or clip-seam repair data (ANIM-002 TR7).
 2. Retained outputs identify character, source, variant, canonical skeleton, coordinates, units, and provenance
    truthfully.
@@ -201,16 +203,18 @@ presentation, preview authority or published runtime data; the
    exports named `SOMASkeleton77.global_rot_offsets` from the approved Kimodo installation. It does not export
    evaluation motions or replace source-authoritative offsets with USD rests.
 7. Export `poses.json` (canonical skeleton only, with no `clips` section, which publication validation rejects) and
-   `model-frames.json` (skeleton frame offsets) under `game/data/motionbricks/`.
-   The default locomotion entry's `reviewed-feminine/set.json` binds all eight movement roles to
-   `landing-ablation-01.json` and its angular sidecar. The durable approved source/authoring/descriptor/provenance
-   prefix is `game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01`. Preserve
+   `model-frames.json` (skeleton frame offsets) under `game/assets/animations/motionbricks/`, alongside the runtime
+   `source-rest/` scenes. The default set at `game/assets/animations/packs/default/locomotion/feminine/set.json`
+   binds all eight movement roles to `landing-ablation-01.json` and its angular sidecar. The durable approved
+   source, authoring files, descriptor and provenance use the prefix
+   `game/assets/animations/source/locomotion/locomotion_feminine_landing_ablation_01`. Preserve
    full 1–1200 at 30 Hz chronology and source/action/slot identity. Validate bundle/set/angular metadata together before
    coordinated replacement with consumers stopped and rollback bytes available; per-file atomic publication is not
    multi-file hot publication. Current ranges/cues are bound by
    [ANIM-002](../../animation/002-locomotive-animation-set/index.md#implementation-status) and the [source-data
-   guide](../../../game/data/motionbricks/reviewed-feminine/README.md), not duplicated nominal angles. Runtime must not
-   depend on diagnostic JSON; independent validation oracles may retain separate fixtures.
+   guide][feminine-set], not duplicated nominal angles. Runtime must not depend on diagnostic JSON; independent
+   validation oracles may retain separate fixtures. Preserve the shipped review bindings and reproduce ingestion
+   using the [scratch-only replay][feminine-replay], not by editing receipts or restoring the old checkout layout.
 8. Document Blender, the approved Kimodo Python environment, source inputs and export commands in the operational
     [MotionBricks export instructions](../../../tools/animation-pipeline/README.md#motionbricks-exports).
     Link the separately provisioned [SOMA FP32 model setup](../../../game/models/motionbricks/README.md) and
@@ -218,6 +222,9 @@ presentation, preview authority or published runtime data; the
     model weights. ANIM TR6 owns ignored root-project weights and worktree sharing; NAV-001 TR2 owns runtime path
     selection and host-qualified launch requirements. Provisioning evidence must distinguish a reused local setup
     from clean-checkout reproducibility.
+
+[feminine-set]: ../../../game/assets/animations/packs/default/locomotion/feminine/README.md
+[feminine-replay]: ../../../tools/animation-pipeline/README.md#shipped-feminine-source-replay
 
 ## In Scope
 
@@ -260,8 +267,9 @@ These exclusions do not defer required idle/walk source verification, conversion
    verify read-only export/input integrity, named frame provenance, set/action-window loading from runtime data paths
    and documented external prerequisites. Verify that published data and reviewed-source ingestion neither contain nor
    require helper, `LOOK` or `targetRest` calibration rows while retaining canonical skeleton identity, model frames and
-   provenance, with no idle samples or frames. Reused exports or an existing import cache alone do not satisfy
-   clean-checkout acceptance.
+   provenance, with no idle samples or frames. Check scratch-only ingestion of the shipped feminine source against
+   the preserved bundle's payload; this does not reconstruct its historical review. Reused exports or an existing
+   import cache alone do not satisfy clean-checkout acceptance.
 4. **KIMODO-TAC-004 (KIMODO-PROD-001–006, UR2/4/6):** Verify externally authored source/reference provenance,
    whole-pose boundary placement, multiple intended cycles and predeclared extraction policy, without requiring
    repository source-generation machinery. Test essential identity, format/range and claimed-complete coverage failures,
@@ -287,8 +295,9 @@ Source Production Contract. NAV-001 owns final playable evidence; source and gam
 
 The maintained reviewed-action ingestion and set publisher deliver the complete feminine
 `source_feminine_landing_ablation_01` action, with protected durable source/authoring copies, descriptor, approval and
-provenance receipts. `reviewed-feminine/set.json` binds every role to `landing-ablation-01.json`; the angular sidecar
-uses actual exported headings/FK measurements and current primary/recovery landmarks, including authored reversal.
+provenance receipts. The [default feminine set][feminine-set] binds every role to `landing-ablation-01.json`.
+Its angular sidecar uses actual exported headings/FK measurements and current primary/recovery landmarks,
+including authored reversal.
 Source ranges remain non-cyclic and raw repetitions `EXPERIMENTAL_NOT_ADMITTED`; these are quality-admission labels,
 not feature switches. No source poses are repaired or regenerated by normal runtime loading.
 

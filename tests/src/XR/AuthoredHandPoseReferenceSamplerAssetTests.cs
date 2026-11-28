@@ -15,9 +15,9 @@ namespace AlleyCat.Tests.XR;
 /// </summary>
 public sealed class AuthoredHandPoseReferenceSamplerAssetTests
 {
-    private const string GrabBallPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
+    private const string GrabBallPath = "res://assets/animations/reference/female/Grab-ball-40.tres";
 
-    private const string GrabPipePath = "res://assets/characters/reference/female/animations/Grab-pipe-10.tres";
+    private const string GrabPipePath = "res://assets/animations/reference/female/Grab-pipe-10.tres";
 
     private const float QuaternionUnitTolerance = 0.001f;
 

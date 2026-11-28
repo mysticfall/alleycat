@@ -133,7 +133,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 }
                 Assert.Equal(2, submissions.Count);
                 using var angular = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath(
-                    "res://data/motionbricks/reviewed-feminine/turn-angular-reference.json")));
+                    "res://assets/animations/packs/default/locomotion/feminine/turn-angular-reference.json")));
                 JsonElement firstCue = angular.RootElement.GetProperty("right_turn").GetProperty("recoveryTrial").GetProperty("events")[0];
                 float firstYaw = (float)(firstCue.GetProperty("sourceAngularProgressRadians").GetDouble() * 180 / Math.PI);
                 float mappedYaw = firstYaw * 114 / 91.3519f;

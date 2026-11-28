@@ -7,14 +7,14 @@
       "category": "idle",
       "tags": ["sad", "slumped", "downcast"],
       "description": "stands with slumped shoulders and a lowered gaze, shifting weight listlessly",
-      "clip": "data/animations/default/idle/sad.tres"
+      "clip": "assets/animations/packs/default/idle/sad.tres"
     },
     {
       "id": "feminine",
       "category": "locomotion",
       "tags": ["relaxed", "feminine"],
       "description": "walks with an easy, relaxed feminine gait",
-      "set": "data/motionbricks/reviewed-feminine/set.json"
+      "set": "assets/animations/packs/default/locomotion/feminine/set.json"
     }
   ]
 }

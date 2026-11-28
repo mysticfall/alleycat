@@ -29,7 +29,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument(
         "--character-root",
         default=None,
-        help=f"Character asset root for the setup artefact; defaults to {default_character_asset_root()}.",
+        help=f"Character authoring root for the setup artefact; defaults to {default_character_asset_root()}.",
     )
     parser.add_argument(
         "--variant", required=True, help="Lower-case snake_case variant key for path derivation."

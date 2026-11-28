@@ -41,13 +41,14 @@ VALIDATOR = TOOL_ROOT / "godot" / "commands" / "validate_animation_pack.gd"
 FIXTURE_BUILDER = TOOL_ROOT / "tests" / "build_control_rig_fixture.py"
 WORK = ROOT / "game" / "temp" / "anim003-idle-clip-tests"
 FEMALE = ROOT / "game/assets/characters/reference/female"
+FEMALE_AUTHORING = ROOT / "game/assets/animations/source/reference/female"
 FEMALE_SCENE = "res://assets/characters/reference/female/reference_female.blend"
 MALE_SCENE = "res://assets/characters/reference/male/reference_male.blend"
 FEMALE_TEMPLATE = "res://assets/characters/templates/reference_female/reference_female_npc.tscn"
 MALE_TEMPLATE = "res://assets/characters/templates/reference_male/reference_male_npc.tscn"
-SAD_SOURCE = FEMALE / "animations/source/idle/sad.blend"
+SAD_SOURCE = FEMALE_AUTHORING / "idle/sad.blend"
 SAD_ACTION = "kimodo_m0a3dyf0"
-SETUP = FEMALE / "animations/source/kimodo_retarget_setup.blend"
+SETUP = FEMALE_AUTHORING / "kimodo_retarget_setup.blend"
 FIXTURES = "res://tests/animation/catalogue/"
 # The exported clip must reproduce the Blender-evaluated joints it was sampled from; 1 mm is far below visible
 # difference and far above float round-off (observed ~3e-5 m).
@@ -146,7 +147,7 @@ class KimodoPathTests(unittest.TestCase):
     def test_sad_reexports_matching_the_blender_preview_without_touching_sources(self) -> None:
         before = {path: _sha256(path) for path in (SETUP, SAD_SOURCE)}
         result = _export(
-            "kimodo", "--character-root", str(FEMALE), "--source", str(SAD_SOURCE), "--action", SAD_ACTION,
+            "kimodo", "--character-root", str(FEMALE_AUTHORING), "--source", str(SAD_SOURCE), "--action", SAD_ACTION,
             "--skeleton-scene", FEMALE_SCENE, "--check-skeleton-scene", MALE_SCENE,
             "--output", str(WORK / "kimodo" / "sad.tres"), "--temp-root", str(WORK / "kimodo"), "--stage-only",
         )
@@ -169,7 +170,7 @@ class KimodoPathTests(unittest.TestCase):
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(STAGED_HEADER, encoding="utf-8")
         result = _export(
-            "kimodo", "--character-root", str(FEMALE), "--source", str(SAD_SOURCE), "--action", "no_such_action",
+            "kimodo", "--character-root", str(FEMALE_AUTHORING), "--source", str(SAD_SOURCE), "--action", "no_such_action",
             "--skeleton-scene", FEMALE_SCENE, "--output", str(output), "--temp-root", str(WORK / "kimodo-missing"),
         )
         self.assertEqual(result.returncode, 1)
@@ -246,7 +247,7 @@ class ControlRigPathTests(unittest.TestCase):
 
 class ValidatorCommandTests(unittest.TestCase):
     def test_valid_packs_pass(self) -> None:
-        default = _validate("--pack=res://data/animations/default/pack.json", f"--template={FEMALE_TEMPLATE}",
+        default = _validate("--pack=res://assets/animations/packs/default/pack.json", f"--template={FEMALE_TEMPLATE}",
                             f"--template={MALE_TEMPLATE}", "--require-compatible")
         self.assertEqual(default.returncode, 0, default.stdout + default.stderr)
         fixture = _validate(f"--pack={FIXTURES}fixture/pack.json", f"--content-root={FIXTURES}fixture/")
@@ -294,7 +295,7 @@ class ValidatorCommandTests(unittest.TestCase):
         )
 
     def test_bad_arguments_are_refused(self) -> None:
-        result = _validate("--packs=res://data/animations/default/pack.json")
+        result = _validate("--packs=res://assets/animations/packs/default/pack.json")
         self.assertEqual(result.returncode, 2)
         self.assertIn("unknown argument '--packs=", result.stderr)
 

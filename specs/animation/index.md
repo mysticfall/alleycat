@@ -122,12 +122,15 @@ special cases or treating source availability and retargeting as already proven.
    Preserve source assets and authoring inputs; missing content is an explicit delivery issue, not permission
    to use evaluation-only samples or claim source readiness.
     Runtime content must not depend on diagnostic fixtures under `game/temp`.
-    - **MotionBricks data:** under `game/data/motionbricks/`, runtime reads `poses.json` (canonical skeleton identity
-      and provenance), `model-frames.json` (named model frames) and reviewed sets with their angular metadata. None
-      of these files carries idle samples or frames.
+    - **MotionBricks data:** `game/assets/animations/motionbricks/` contains runtime `poses.json` (canonical skeleton
+      identity and provenance), `model-frames.json` (named model frames) and `source-rest/` scenes. Calibration and
+      reviewed set data carry no idle samples or frames.
     - **Catalogue packs:** [ANIM-003](003-animation-catalogue/index.md) packs reference idle clips and reviewed
-      sets. The default `feminine` entry binds `reviewed-feminine/set.json`, and all eight of its movement roles bind
-      to `landing-ablation-01.json`.
+      sets. The default `feminine` entry binds `assets/animations/packs/default/locomotion/feminine/set.json`, relative
+      to `res://`. The set, adjacent `landing-ablation-01.json` (used by all eight roles) and angular metadata stay
+      together.
+    - **Authoring inputs:** animation-only inputs and review material live under `game/assets/animations/source/`.
+      Its `.gdignore` excludes that subtree, not the runtime assets. Dedicated test assets stay with their fixtures.
     - **Loading:** no prototype movement catalogue is a fallback. Quality-admission metadata does not turn normal
       source loading into an opt-in mode.
     Read-only source extraction and frame export belong to
@@ -191,8 +194,10 @@ special cases or treating source availability and retargeting as already proven.
     connect submitted context to preceding actual `skeleton_updated` observations of the final target.
    Numerical fidelity does not replace actual-rig temporal evidence or the user's motion-suitability judgement.
 3. **ANIM-TAC-003 (TR6–7):** Source/licence/setup records and independent review confirm protected inputs, complete
-    temporal evidence, runtime loading without diagnostic fixtures, reproducible export prerequisites, and absence of
-     corrective foot-IK rescue. NAV-001 and CTRL-001 own their respective playable evaluation and diagnostics.
+   temporal evidence, runtime loading from the documented layout without authoring or diagnostic files, reproducible
+   export prerequisites, and absence of corrective foot-IK rescue. Confirm `.gdignore` excludes only the authoring
+   subtree within the animation asset layout. NAV-001 and CTRL-001 own their respective playable evaluation and
+   diagnostics.
 
 [stationary-turn-facing]: 002-locomotive-animation-set/index.md#actor-facing-during-stationary-turns
 
@@ -219,6 +224,7 @@ hand-origin risks remain open. Broader ANIM delivery remains deferred-with-risk;
 - [Project Specifications](../index.md)
 - [ANIM-002: Locomotive Conditioning Sources](002-locomotive-animation-set/index.md)
 - [ANIM-003: Animation Catalogue](003-animation-catalogue/index.md)
+- [Animation Asset and Pack Guide](../../game/assets/animations/README.md)
 - [NAV-001: NPC Navigation](../nav/001-npc-navigation/index.md)
 - [Kimodo Motion Sources](../tooling/kimodo-pipeline/locomotive-animation-set.md)
 - [Player Character Control](../ctrl/index.md)

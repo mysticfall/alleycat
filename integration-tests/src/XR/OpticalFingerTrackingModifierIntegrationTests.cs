@@ -38,7 +38,7 @@ public sealed class OpticalFingerTrackingModifierIntegrationTests
         "res://assets/characters/templates/reference_female/reference_female_player.tscn";
     private const string CalibrationProfilePath =
         "res://assets/xr/calibration/fingers_calibration_quest3.tres";
-    private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
+    private const string GrabBallAnimationPath = "res://assets/animations/reference/female/Grab-ball-40.tres";
 
     private const float RotationToleranceRadians = 1e-3f;
 

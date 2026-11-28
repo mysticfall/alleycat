@@ -38,7 +38,7 @@ class BootstrapPathTests(unittest.TestCase):
         )
         self.assertEqual(
             paths.authoring_workspace,
-            CHARACTER_ROOT / "animations/source/locomotion" / f"locomotion_{VARIANT}_authoring.blend",
+            CHARACTER_ROOT / "locomotion" / f"locomotion_{VARIANT}_authoring.blend",
         )
 
     def test_repository_fixed_artefacts_are_independent_of_character_and_variant(self) -> None:
@@ -79,7 +79,7 @@ class BootstrapPathTests(unittest.TestCase):
         )
         self.assertEqual(
             derive_idle_source_path(CHARACTER_ROOT, VARIANT),
-            CHARACTER_ROOT / "animations/source/idle" / f"{VARIANT}.blend",
+            CHARACTER_ROOT / "idle" / f"{VARIANT}.blend",
         )
         self.assertNotEqual(
             derive_idle_source_path(CHARACTER_ROOT, "calm"),

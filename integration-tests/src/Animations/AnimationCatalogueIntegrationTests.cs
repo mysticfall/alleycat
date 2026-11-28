@@ -14,7 +14,7 @@ namespace AlleyCat.IntegrationTests.Animations;
 /// </summary>
 public sealed class AnimationCatalogueIntegrationTests
 {
-    private const string DefaultPack = "res://data/animations/default/pack.json";
+    private const string DefaultPack = "res://assets/animations/packs/default/pack.json";
     private const string ExtensionPack = "res://tests/animation/catalogue/extension/pack.json";
     private const string FixtureRoot = "res://tests/animation/catalogue/fixture/";
     private const string FemaleBase = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
@@ -31,8 +31,8 @@ public sealed class AnimationCatalogueIntegrationTests
         Assert.Same(ContentContext.Default, context);
         Assert.Equal("default", manifest.ID);
         Assert.Collection(manifest.Entries,
-            sad => Assert.Equal((AnimationCategory.Idle, "sad", "res://data/animations/default/idle/sad.tres"), (sad.Category, sad.ID, sad.ResourcePath)),
-            feminine => Assert.Equal((AnimationCategory.Locomotion, "feminine", "res://data/motionbricks/reviewed-feminine/set.json"),
+            sad => Assert.Equal((AnimationCategory.Idle, "sad", "res://assets/animations/packs/default/idle/sad.tres"), (sad.Category, sad.ID, sad.ResourcePath)),
+            feminine => Assert.Equal((AnimationCategory.Locomotion, "feminine", "res://assets/animations/packs/default/locomotion/feminine/set.json"),
                 (feminine.Category, feminine.ID, feminine.ResourcePath)));
     }
 
@@ -71,7 +71,7 @@ public sealed class AnimationCatalogueIntegrationTests
         Assert.Contains(rig.Logger.Messages, m => m == "Animation catalogue: idle entry 'sad' from pack 'extension' overrides pack 'default'");
         Assert.Equal(["feminine", "stroll"], catalogue.Locomotion.Entries.Select(e => e.ID));
         Assert.Equal("feminine", catalogue.Locomotion.Effective.ID);
-        var calibration = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        var calibration = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         Assert.NotSame(catalogue.Locomotion.CreateSampler(calibration), catalogue.Locomotion.CreateSampler(calibration, "stroll"));
         catalogue.Free();
     }
@@ -129,7 +129,7 @@ public sealed class AnimationCatalogueIntegrationTests
         {
             Skeleton3D skeleton = male.FindChild("GeneralSkeleton", true, false) as Skeleton3D
                 ?? throw new InvalidOperationException("Male base has no GeneralSkeleton.");
-            Animation clip = GD.Load<Animation>("res://data/animations/default/idle/sad.tres");
+            Animation clip = GD.Load<Animation>("res://assets/animations/packs/default/idle/sad.tres");
             Assert.True(skeleton.FindBone("breast_l") < 0);
             Assert.Contains(Enumerable.Range(0, clip.GetTrackCount()), i => clip.TrackGetPath(i).GetSubName(0) == "breast_l");
 
@@ -177,7 +177,7 @@ public sealed class AnimationCatalogueIntegrationTests
     {
         var humanoid = new SkeletonProfileHumanoid();
         HashSet<string> profile = [.. Enumerable.Range(0, humanoid.BoneSize).Select(i => humanoid.GetBoneName(i).ToString())];
-        Skeleton3D source = TestUtils.LoadPackedScene("res://data/motionbricks/source-rest/female.tscn").Instantiate<Skeleton3D>();
+        Skeleton3D source = TestUtils.LoadPackedScene("res://assets/animations/motionbricks/source-rest/female.tscn").Instantiate<Skeleton3D>();
         try
         {
             HashSet<string> mapped = [.. Enumerable.Range(0, source.GetBoneCount()).Select(source.GetBoneName).Where(profile.Contains)];

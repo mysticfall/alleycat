@@ -14,9 +14,9 @@ namespace AlleyCat.Tests.XR;
 /// </summary>
 public sealed class AuthoredReferenceAssetTests
 {
-    private const string NeutralPath = "res://assets/characters/reference/female/animations/Reset.tres";
+    private const string NeutralPath = "res://assets/animations/reference/female/Reset.tres";
 
-    private const string FlexionPath = "res://assets/characters/reference/female/animations/Grab-pipe-10.tres";
+    private const string FlexionPath = "res://assets/animations/reference/female/Grab-pipe-10.tres";
 
     private const float AngularEpsilonDegrees = 0.1f;
 

@@ -426,7 +426,7 @@ The test pipe prop configuration:
 - **Pipe Length**: 50 cm (0.5 m)
 - **Pipe Diameter**: 2 cm (0.02 m), 1 cm radius (0.01 m)
 - **Grab Point Length**: 40 cm (0.4 m) — provides 5 cm margin at each end
-- **Grab Animation**: `res://assets/characters/reference/female/animations/Grab-pipe-10.tres`
+- **Grab Animation**: `res://assets/animations/reference/female/Grab-pipe-10.tres`
 - **Palm Facing Minimum Dot**: `-1.0` for the current test pipe only, as prop
   tuning until the runtime hand/controller palm axis is calibrated. This does
   not change the component default.

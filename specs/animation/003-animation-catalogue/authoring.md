@@ -32,7 +32,8 @@ catalogue only wraps a published set in an entry.
 
 1. Author on the SOMA `Kimodo_Source` rig in a verified copy of the character's calibrated setup, under
    [KIMODO-SET-001–002][kimodo-set].
-   The animated source lives at the KIMODO-SRC-006 idle source path.
+   The animated source lives under `idle/` in the character's animation source directory, as defined by
+   [KIMODO-SRC-006][kimodo-sources].
 2. Preview on the retargeted, meshed reference rig in that setup copy. Bake the same retargeted motion onto the
    reference skeleton and export it as the native clip. Preview and export share one retarget mechanism, so the
    exported clip matches what the author reviewed.
@@ -49,6 +50,7 @@ catalogue only wraps a published set in an entry.
    exported.
 
 [kimodo-set]: ../../tooling/kimodo-pipeline/locomotive-animation-set.md#character-setup-and-calibration-contract
+[kimodo-sources]: ../../tooling/kimodo-pipeline/locomotive-animation-set.md#repository-source-asset-contract
 
 ## Acceptance Criteria
 

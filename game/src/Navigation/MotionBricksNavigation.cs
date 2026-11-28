@@ -141,7 +141,7 @@ public partial class MotionBricksNavigation : NavigationBase
         {
             _actor = GetParent<Character.Character>();
             _skeleton = _actor.RequireMotionTarget();
-            _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+            _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
             var catalogue = AnimationCatalogue.RequireFor(_actor);
             _reviewed = catalogue.Locomotion.CreateSampler(_data);
             _ = _reviewed.TurnReference("left_turn");
@@ -151,7 +151,7 @@ public partial class MotionBricksNavigation : NavigationBase
             _rig = new NativeSomaRig(_data, _skeleton);
             _history = new RealisedPoseHistory(_pose.Length);
             string model = ResolveModelPath(System.Environment.GetEnvironmentVariable("MOTIONBRICKS_MODEL"));
-            string frames = ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json");
+            string frames = ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/model-frames.json");
             SomaMotionData data = _data;
             StrongBox<string?> nativePhase = _nativePhase;
             ILogger<MotionBricksNavigation> logger = _logger!;

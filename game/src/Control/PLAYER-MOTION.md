@@ -1,8 +1,8 @@
 # Player Motion
 
 Normal player installation uses the shared feminine source set at
-`res://data/motionbricks/reviewed-feminine/set.json`. No locomotion activation flags are required.
-See [Source Data](../../data/motionbricks/reviewed-feminine/README.md) and
+`res://assets/animations/packs/default/locomotion/feminine/set.json`. No locomotion activation flags are required.
+See [Source Data](../../assets/animations/packs/default/locomotion/feminine/README.md) and
 [Shared Motion Runtime](../Motion/README.md).
 
 ## Controls and Ownership

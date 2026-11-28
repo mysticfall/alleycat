@@ -27,7 +27,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         {
             Skeleton3D source = skeleton.GetParent().GetParent<Skeleton3D>();
             source.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
-            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+            var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
             var rig = new NativeSomaRig(data, skeleton);
             int finger = skeleton.FindBone("LeftIndexProximal");
             var authored = new Quaternion(Vector3.Right, 0.4f);

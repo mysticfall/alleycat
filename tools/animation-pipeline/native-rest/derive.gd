@@ -2,8 +2,8 @@ extends SceneTree
 ## Bake corrected source-local digit frames from the reviewed immutable F6 donor and current import.
 func _initialize():
  var dir=get_script().resource_path.get_base_dir();var args=OS.get_cmdline_user_args()
- var output=ProjectSettings.globalize_path('res://data/motionbricks/source-rest') if args.is_empty() else args[0]
- var info=JSON.parse_string(FileAccess.get_file_as_string('res://data/motionbricks/poses.json'))
+ var output=ProjectSettings.globalize_path('res://assets/animations/motionbricks/source-rest') if args.is_empty() else args[0]
+ var info=JSON.parse_string(FileAccess.get_file_as_string('res://assets/animations/motionbricks/poses.json'))
  var names=JSON.parse_string(FileAccess.get_file_as_string(dir+'/semantic.json'))
  for sex in ['female','male']:
   var donor=str_to_var(FileAccess.get_file_as_string(dir+'/'+sex+'.txt'));var actor=load('res://assets/characters/reference/%s/reference_%s.blend'%[sex,sex]).instantiate();var t=actor.get_node(sex.capitalize()+'/GeneralSkeleton');var skin=t.get_node(sex.capitalize()+'_body').skin

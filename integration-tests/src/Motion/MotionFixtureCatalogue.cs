@@ -8,7 +8,7 @@ namespace AlleyCat.IntegrationTests.Motion;
 /// </summary>
 internal static class MotionFixtureCatalogue
 {
-    private const string DefaultPack = "res://data/animations/default/pack.json";
+    private const string DefaultPack = "res://assets/animations/packs/default/pack.json";
 
     /// <summary>
     /// Creates the catalogue: the base template's locomotion default, plus the NPC role's idle default when

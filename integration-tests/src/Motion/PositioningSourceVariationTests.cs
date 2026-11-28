@@ -16,8 +16,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     {
         const double precision = .000002;
         var errors = new List<string>();
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-        using var set = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json")));
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+        using var set = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json")));
         static Vector3 Horizontal(Vector3 p)
         {
             return new(p.X, 0, p.Z);
@@ -60,7 +60,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             Assert.True(contextCorrect);
             Assert.Equal(0, fixture.Provider.Faults);
             JsonElement entry = set.RootElement.GetProperty("roles").EnumerateArray().Single(e => e.GetProperty("cycle").GetProperty("role").GetString() == role);
-            var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/" + entry.GetProperty("source").GetString()), data);
+            var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/" + entry.GetProperty("source").GetString()), data);
             ReviewedMotionSource.Role sourceRole = source.GetRole("feminine", "normal", role);
             ReviewedMotionSource.ExperimentalCycle cycle = source.LoadExperimentalCycle(entry.GetProperty("cycle"), sourceRole);
             var raw = new Transform3D[source.JointCount * 4];

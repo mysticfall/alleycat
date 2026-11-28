@@ -13,7 +13,7 @@ From the repository root, after normal Godot import and game build:
 ```sh
 dotnet test tests/AlleyCat.Tests.csproj --filter 'FullyQualifiedName~AlleyCat.Tests.Motion|FullyQualifiedName~AlleyCat.Tests.Navigation'
 MOTIONBRICKS_MODEL="$PWD/game/models/motionbricks/onnx/mmm_v6_soma_fp32.onnx" \
-MOTIONBRICKS_FRAMES="$PWD/game/data/motionbricks/model-frames.json" \
+MOTIONBRICKS_FRAMES="$PWD/game/assets/animations/motionbricks/model-frames.json" \
 xvfb-run -a dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
  --test-class AlleyCat.IntegrationTests.Motion.MotionBricksIntegrationTests,AlleyCat.IntegrationTests.Motion.MotionBricksDeliveryIntegrationTests
 ```

@@ -13,14 +13,14 @@ namespace AlleyCat.IntegrationTests.Motion;
 [Headless]
 public sealed class MotionBricksIntegrationTests
 {
-    private static SomaMotionData Data() => new(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+    private static SomaMotionData Data() => new(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
 
     /// <summary>Kimodo 1.0.0 conversion on committed reviewed and rest inputs; tolerances cover arithmetic only.</summary>
     [Fact]
     public void ModelFrames_MatchExecutedKimodoAndPreserveJointPositions()
     {
         SomaMotionData data = Data();
-        var conversion = new SomaModelFrames(data, ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json"));
+        var conversion = new SomaModelFrames(data, ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/model-frames.json"));
         using FileStream file = File.OpenRead(ProjectSettings.GlobalizePath(
             "res://../integration-tests/fixtures/motion-frame-oracles/kimodo-rotations.json.gz"));
         using var stream = new GZipStream(file, CompressionMode.Decompress);
@@ -89,13 +89,13 @@ public sealed class MotionBricksIntegrationTests
     [IsolatedProcess]
     public async Task AuthoredWindows_GenerateFiniteTrimmedMotion()
     {
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         // Production defaults keep this suite-runnable without environment setup; explicit overrides still win.
         string path = ResolveInferenceInput("MOTIONBRICKS_MODEL", "res://models/motionbricks/onnx/mmm_v6_soma_fp32.onnx");
-        string frames = ResolveInferenceInput("MOTIONBRICKS_FRAMES", "res://data/motionbricks/model-frames.json");
+        string frames = ResolveInferenceInput("MOTIONBRICKS_FRAMES", "res://assets/animations/motionbricks/model-frames.json");
         // The four authored frames leading into the target window form a realistic realised context.
         Transform3D[][] context = ReviewedPoseFixture.Window(data, 54);
-        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/landing-ablation-01.json"), data);
+        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"), data);
         var raw = new Transform3D[data.Names.Length * 4];
         source.CopyWindow(source.GetRole("feminine", "normal", "forward"), 58, raw);
         Transform3D[][] target = [.. Enumerable.Range(0, 4).Select(f => raw.AsSpan(f * data.Names.Length, data.Names.Length).ToArray())];
@@ -262,7 +262,7 @@ public sealed class MotionBricksIntegrationTests
     [Fact]
     public async Task SkinReadyFeedback_ObservesTargetPerturbation()
     {
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         Transform3D[] authoredPose = ReviewedPoseFixture.Pose(data);
         var holder = new Node3D { Transform = new Transform3D(SomaMotionData.ModelToWorld, new Vector3(1, 0, -2)) };
         SceneTree tree = Support.TestUtils.GetSceneTree();
@@ -337,7 +337,7 @@ public sealed class MotionBricksIntegrationTests
     private static (Skeleton3D Source, RetargetModifier3D Retarget, Skeleton3D Target) AddSkinFeedbackRig(Node3D holder)
     {
         // Match the local position/rotation NPC transfer in native_soma_mount.gd, without an actor or AnimationPlayer.
-        Skeleton3D source = GD.Load<PackedScene>("res://data/motionbricks/source-rest/female.tscn").Instantiate<Skeleton3D>();
+        Skeleton3D source = GD.Load<PackedScene>("res://assets/animations/motionbricks/source-rest/female.tscn").Instantiate<Skeleton3D>();
         holder.AddChild(source);
         source.ResetBonePoses();
         source.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;

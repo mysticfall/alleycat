@@ -22,7 +22,7 @@ public sealed class IdlePlayerHandPoseIntegrationTests
 {
     private const string PlayerTemplatePath = "res://assets/characters/reference/ally_player.tscn";
     private const string MockRuntimeScenePath = "res://assets/xr/mock_runtime.tscn";
-    private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
+    private const string GrabBallAnimationPath = "res://assets/animations/reference/female/Grab-ball-40.tres";
 
     /// <summary>Existing held-pose agreement bound of the grab/hand-pose facts.</summary>
     private const float AuthoredMatchToleranceRadians = 0.03f;

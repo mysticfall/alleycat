@@ -25,22 +25,22 @@ ALLOWED_PYTHON_OCCURRENCES = {
     (
         "tools/animation-pipeline/export_motionbricks.py",
         "<module>",
-        "game/assets/characters/reference/female/animations/source/kimodo_retarget_setup.blend",
+        "game/assets/animations/source/reference/female/kimodo_retarget_setup.blend",
     ): "structural/calibration input path",
     (
         "tools/animation-pipeline/kimodo_pipeline/bootstrap_extraction.py",
         "<module>",
-        "game/assets/characters/animations/source/locomotion/locomotion.blend",
+        "game/assets/animations/source/locomotion/locomotion.blend",
     ): "structural/path derivation",
     (
         "tools/animation-pipeline/kimodo_pipeline/bootstrap_paths.py",
         "<module>",
-        "game/assets/characters/animations/source/locomotion/locomotion_template.blend",
+        "game/assets/animations/source/locomotion/locomotion_template.blend",
     ): "structural/path derivation",
     (
         "tools/animation-pipeline/kimodo_pipeline/bootstrap_paths.py",
         "<module>",
-        "animations/source/kimodo_retarget_setup.blend",
+        "kimodo_retarget_setup.blend",
     ): "structural/path derivation",
     (
         "tools/animation-pipeline/tests/test_blender_idle_real_asset_smoke.py",
@@ -50,17 +50,17 @@ ALLOWED_PYTHON_OCCURRENCES = {
     (
         "tools/animation-pipeline/tests/test_native_idle_clip.py",
         "<module>",
-        "animations/source/kimodo_retarget_setup.blend",
+        "kimodo_retarget_setup.blend",
     ): "explicit real-asset idle-clip smoke setup input (byte-unchanged check, not an oracle)",
     (
         "tools/animation-pipeline/tests/test_core_asset_read_only_smoke.py",
         "<module>",
-        "game/assets/characters/animations/source/locomotion/locomotion.blend",
+        "game/assets/animations/source/locomotion/locomotion.blend",
     ): "structural/immutability smoke",
     (
         "tools/animation-pipeline/tests/test_core_asset_read_only_smoke.py",
         "<module>",
-        "game/assets/characters/animations/source/locomotion/locomotion_template.blend",
+        "game/assets/animations/source/locomotion/locomotion_template.blend",
     ): "structural/immutability smoke",
     # The two exact 'sad' allowance tuples below are the selected-variant identity of the read-only
     # source-contract smoke, not motion-behaviour oracles (KIMODO-TAC-001, KIMODO-SRC-005): the
@@ -181,7 +181,7 @@ def test_production_authored_numeric_behaviour_oracle_is_rejected() -> None:
     """An authored source reference plus a numeric motion oracle remains prohibited."""
     source = '''
 def test_production_stride_distance():
-    blend = "game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01.blend"
+    blend = "game/assets/animations/source/locomotion/locomotion_feminine_landing_ablation_01.blend"
     expected_root_distance = 0.928596497
     assert measured_root_distance(blend) == expected_root_distance
 '''
@@ -197,27 +197,27 @@ def test_precise_synthetic_and_structural_classifications_are_accepted() -> None
     real_asset_smoke = _category_for(
         ROOT / "tools/animation-pipeline/tests/test_native_idle_clip.py",
         "<module>",
-        "animations/source/kimodo_retarget_setup.blend",
+        "kimodo_retarget_setup.blend",
     )
     real_asset_near_miss = _category_for(
         ROOT / "tools/animation-pipeline/tests/test_native_idle_clip.py",
         "KimodoPathTests.test_sad_reexports_matching_the_blender_preview_without_touching_sources",
-        "animations/source/kimodo_retarget_setup.blend",
+        "kimodo_retarget_setup.blend",
     )
     path_derivation = _category_for(
         ROOT / "tools/animation-pipeline/kimodo_pipeline/bootstrap_extraction.py",
         "<module>",
-        "game/assets/characters/animations/source/locomotion/locomotion.blend",
+        "game/assets/animations/source/locomotion/locomotion.blend",
     )
     structural = _category_for(
         ROOT / "tools/animation-pipeline/tests/test_core_asset_read_only_smoke.py",
         "<module>",
-        "game/assets/characters/animations/source/locomotion/locomotion.blend",
+        "game/assets/animations/source/locomotion/locomotion.blend",
     )
     near_miss = _category_for(
         ROOT / "tools/animation-pipeline/kimodo_pipeline/bootstrap_extraction.py",
         "assert_behaviour",
-        "game/assets/characters/animations/source/locomotion/locomotion.blend",
+        "game/assets/animations/source/locomotion/locomotion.blend",
     )
     synthetic_assertion = _category_for(
         ROOT / "integration-tests/src/Motion/MotionBricksDeliveryIntegrationTests.cs",
@@ -240,7 +240,7 @@ def test_delivery_absence_contract_does_not_allow_neighbouring_content_oracles()
     assert _category_for(path, "<text>", source) == "structural/obsolete provenance absence"
     assert _category_for(path, "<text>", source + '\nAssert.Equal("loc_sad_fixture", actual);') == "unclassified"
     exporter = ROOT / "tools/animation-pipeline/export_motionbricks.py"
-    calibration = "game/assets/characters/reference/female/animations/source/kimodo_retarget_setup.blend"
+    calibration = "game/assets/animations/source/reference/female/kimodo_retarget_setup.blend"
     assert _category_for(exporter, "<module>", calibration) == "structural/calibration input path"
     assert _category_for(exporter, "test_motion", calibration) == "unclassified"
 

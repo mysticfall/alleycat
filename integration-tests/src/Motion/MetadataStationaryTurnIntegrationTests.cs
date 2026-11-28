@@ -197,8 +197,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     [Fact]
     public void MetadataTurn_ExplicitWindowsPreserveDerivativesAndRawWrap()
     {
-        string directory = ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine");
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        string directory = ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine");
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         var sampler = new ReviewedRoleSampler(Path.Combine(directory, "set.json"), data);
         var source = new ReviewedMotionSource(Path.Combine(directory, "landing-ablation-01.json"), data);
         ReviewedMotionSource.Role role = source.GetRole("feminine", "normal", "left_turn");

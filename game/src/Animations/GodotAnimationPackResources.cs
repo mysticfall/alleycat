@@ -10,7 +10,7 @@ namespace AlleyCat.Animations;
 /// </summary>
 public sealed class GodotAnimationPackResources : IAnimationPackResources
 {
-    private const string CalibrationPath = "res://data/motionbricks/poses.json";
+    private const string CalibrationPath = "res://assets/animations/motionbricks/poses.json";
 
     // Reviewed sets are immutable shipped data; verify each one once per process rather than once per character.
     private static readonly Dictionary<string, string?> _reviewedSetResults = new(StringComparer.Ordinal);

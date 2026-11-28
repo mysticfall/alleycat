@@ -75,7 +75,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         private readonly Skeleton3D _target;
         private readonly NavigationRegion3D _region;
         private readonly Vector2[][] _floorPolygons;
-        private readonly SomaMotionData _data = new(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        private readonly SomaMotionData _data = new(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
 
         private PositioningNavigationFixture()
         {

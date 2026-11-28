@@ -86,7 +86,7 @@ public sealed class AnimationPackLoaderTests
 
     /// <summary>Production context derivation follows the manifest location.</summary>
     [Theory]
-    [InlineData("res://data/animations/default/pack.json", "default", "res://")]
+    [InlineData("res://assets/animations/packs/default/pack.json", "default", "res://")]
     [InlineData("res://tests/animation/catalogue/extension/pack.json", "default", "res://")]
     [InlineData("res://content/noir/data/animations/combat/pack.json", "noir", "res://content/noir/")]
     public void DeriveContext_FollowsManifestLocation(string manifest, string contentID, string root)

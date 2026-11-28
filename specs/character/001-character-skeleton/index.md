@@ -135,7 +135,8 @@ authored template contents without requiring generators to know internal node pl
 38. The player template owns player animation-tree root selection by overriding the inherited `AnimationTree` resource;
         player subsystem installers bind that authored node/resource instead of loading hidden role resources from C#.
 39. Animation tree templates live under `game/assets/characters/templates/animation/`.
-40. `game/assets/characters/reference/female/animations/` remains source/reference animation-library data.
+40. The standalone reference-female animation library lives at `game/assets/animations/reference/female/`, outside
+    the ANIM-003 catalogue. Blender authoring inputs live separately under `game/assets/animations/source/`.
 41. Male NPC template assets live under `game/assets/characters/templates/reference_male/`; the production Vadim scene
     is `game/assets/characters/reference/vadim_npc.tscn` and selects the male template and runtime assets.
 42. Character installation follows CORE-005 target-scene precedence: explicitly local exported properties and
@@ -293,7 +294,7 @@ authored template contents without requiring generators to know internal node pl
         NPC `CharacterIK`/provider setup.
     - The player template serialises player animation-tree root selection, and `PlayerRigInstaller` only validates and
         binds the already-installed/template-authored `AnimationTree`.
-    - Animation tree templates and reference animation-library data use their documented directories.
+    - Animation tree templates and standalone reference animation-library data use their TR39–40 directories.
     - Tests verify CORE-005 precedence preserves explicitly local reused-node exported properties,
         `Node3D.Transform`, and direct character-root exported-property copies while refreshing non-overridden values
         and fully populating new or missing nodes.
@@ -330,7 +331,8 @@ authored template contents without requiring generators to know internal node pl
 - @game/assets/characters/reference/vadim_npc.tscn
 - @game/assets/characters/reference/female/body_collider_profile.tres
 - @game/assets/characters/reference/female/reference_female.blend
-- @game/assets/characters/reference/female/animations/
+- [Animation Asset and Pack Guide](../../../game/assets/animations/README.md)
+- @game/assets/animations/reference/female/
 - @game/assets/testing/mirror_room/mirror_room.tscn
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)

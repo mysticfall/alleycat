@@ -37,7 +37,7 @@ def _report() -> dict:
             "curve_count": 39,
         },
         "idle_source": {
-            "destination": "/fixture/character/animations/source/idle/ember.blend",
+            "destination": "/fixture/authoring/character/idle/ember.blend",
             "staged": "/fixture/temp/staged/ember.blend",
             "published": True,
             "replaced_existing": False,

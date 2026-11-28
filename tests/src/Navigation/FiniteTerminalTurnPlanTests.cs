@@ -13,11 +13,11 @@ public sealed class FiniteTerminalTurnPlanTests
     public void HalfTurnsUse120Then60AndPrimarySourceAnglesInBothDirections()
     {
         DirectoryInfo directory = new(AppContext.BaseDirectory);
-        while (!Directory.Exists(Path.Combine(directory.FullName, "game/data/motionbricks/reviewed-feminine")))
+        while (!Directory.Exists(Path.Combine(directory.FullName, "game/assets/animations/packs/default/locomotion/feminine")))
         {
             directory = directory.Parent!;
         }
-        string path = Path.Combine(directory.FullName, "game/data/motionbricks/reviewed-feminine");
+        string path = Path.Combine(directory.FullName, "game/assets/animations/packs/default/locomotion/feminine");
         using var source = JsonDocument.Parse(File.ReadAllText(Path.Combine(path, "landing-ablation-01.json")));
         using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(path, "turn-angular-reference.json")));
         JsonElement samples = source.RootElement.GetProperty("samples");

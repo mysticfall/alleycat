@@ -20,11 +20,11 @@ from kimodo_pipeline.blender_cli import run_blender_python
 
 ROOT = Path(__file__).resolve().parents[3]
 TOOL_ROOT = ROOT / "tools/animation-pipeline"
-CHARACTER_ROOT = ROOT / "game/assets/characters/reference/female"
+CHARACTER_ROOT = ROOT / "game/assets/animations/source/reference/female"
 BOOTSTRAP_PATHS = derive_artefact_paths(CHARACTER_ROOT, "sad", ROOT)
 CANONICAL_SOURCE = BOOTSTRAP_PATHS.canonical_source
 NEUTRAL_TEMPLATE = BOOTSTRAP_PATHS.neutral_template
-MONOLITH = ROOT / "game/assets/characters/animations/source/locomotion/locomotion.blend"
+MONOLITH = ROOT / "game/assets/animations/source/locomotion/locomotion.blend"
 IDLE_SOURCE = derive_idle_source_path(CHARACTER_ROOT, "sad")
 MANIFEST_ENTRYPOINT = ROOT / "tools/animation-pipeline/kimodo_pipeline/manifest_bootstrap.py"
 LFS_POINTER_HEADER = b"version https://git-lfs.github.com/spec/v1"

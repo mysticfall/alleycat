@@ -26,6 +26,7 @@ from .bootstrap_manifest import (
     _helper_configuration_entries,
 )
 from .bootstrap_paths import (
+    DEFAULT_CHARACTER_ROOT_RELATIVE,
     BootstrapPathError,
     derive_artefact_paths,
     repository_root,
@@ -54,8 +55,6 @@ from .bootstrap_validation import (
 )
 from .compatibility import ensure_registered
 from .temp_paths import resolve_temp_root
-
-DEFAULT_CHARACTER_ROOT_RELATIVE = Path("game/assets/characters/reference/female")
 
 # Gate 1 baseline approval is per character (KIMODO-CHAR-002): the approved
 # bytes of the three bootstrap inputs live in ``character_baselines``, where

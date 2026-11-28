@@ -17,7 +17,7 @@ namespace AlleyCat.IntegrationTests.XR;
 /// </summary>
 public sealed class OpticalGrabOwnershipReadinessIntegrationTests
 {
-    private const string AnimationDirectory = "res://assets/characters/reference/female/animations/";
+    private const string AnimationDirectory = "res://assets/animations/reference/female/";
     /// <summary>Negative controls for no removal and an unrelated opposite-side teardown.</summary>
     [Headless]
     [Fact]

@@ -29,7 +29,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
     private const string TestStickScenePath = "res://assets/items/test_stick.tscn";
     private const string ValidGrabPoseAnimationPath =
-        "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
+        "res://assets/animations/reference/female/Grab-ball-40.tres";
     private const string ReferencePlayerFixtureScenePath = "res://assets/testing/reference_player_fixture/reference_player_fixture.tscn";
     // World-space contacts near the mock-runtime-calibrated reference target rest frame (0.497, 1.063, 0.012).
     // They are deliberately fixed fixture geometry, never derived from the solved bone attachment.

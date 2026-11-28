@@ -22,7 +22,7 @@ from kimodo_pipeline.bootstrap_paths import derive_artefact_paths, derive_idle_s
 
 ROOT = Path(__file__).resolve().parents[3]
 STAGING_ENTRYPOINT = ROOT / "tools/animation-pipeline/commands/idle_source_bootstrap.py"
-REAL_CHARACTER_ROOT = ROOT / "game/assets/characters/reference/female"
+REAL_CHARACTER_ROOT = ROOT / "game/assets/animations/source/reference/female"
 # The real character's selected idle variant is an asset identity, not a
 # literal: derive it from the published idle-source path.
 REAL_VARIANT = derive_idle_source_path(REAL_CHARACTER_ROOT, "sad").stem

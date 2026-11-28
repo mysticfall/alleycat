@@ -637,7 +637,7 @@ internal sealed class WalkingExperimentDriver(CharacterBody3D actor, Skeleton3D 
         bool reviewedRoleActive = ReviewedRoles.Role.Length > 0 && !_settling;
         if (_worker is null)
         {
-            string frames = ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json");
+            string frames = ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/model-frames.json");
             if (SessionFactory is { } factory)
             {
                 _worker = Game.Instance.MotionWorkers.Create(() => Decorate(factory()), ReturnedObserved);

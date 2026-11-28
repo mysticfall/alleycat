@@ -6,7 +6,7 @@ contract:
 
 * ``kimodo_source`` — the canonical clean rig, repository-fixed.
 * ``locomotion_template`` — the neutral locomotion template, repository-fixed.
-* ``kimodo_retarget_setup`` — per-character, beneath the character asset root.
+* ``kimodo_retarget_setup`` — per-character, at the character authoring root.
 * ``locomotion_[variant]_authoring`` — per-character authoring workspace.
 
 The per-character animated idle sources (KIMODO-SRC-006) are a fifth,
@@ -20,11 +20,12 @@ from typing import Union
 
 from .contracts import validate_variant
 
-CANONICAL_SOURCE_RELATIVE = Path("game/assets/characters/animations/source/kimodo_source.blend")
-NEUTRAL_TEMPLATE_RELATIVE = Path("game/assets/characters/animations/source/locomotion/locomotion_template.blend")
-CHARACTER_SETUP_RELATIVE = Path("animations/source/kimodo_retarget_setup.blend")
-IDLE_SOURCE_DIRECTORY_RELATIVE = Path("animations/source/idle")
-AUTHORING_WORKSPACE_DIRECTORY_RELATIVE = Path("animations/source/locomotion")
+CANONICAL_SOURCE_RELATIVE = Path("game/assets/animations/source/kimodo_source.blend")
+NEUTRAL_TEMPLATE_RELATIVE = Path("game/assets/animations/source/locomotion/locomotion_template.blend")
+DEFAULT_CHARACTER_ROOT_RELATIVE = Path("game/assets/animations/source/reference/female")
+CHARACTER_SETUP_RELATIVE = Path("kimodo_retarget_setup.blend")
+IDLE_SOURCE_DIRECTORY_RELATIVE = Path("idle")
+AUTHORING_WORKSPACE_DIRECTORY_RELATIVE = Path("locomotion")
 
 
 class BootstrapPathError(ValueError):
@@ -77,7 +78,7 @@ def derive_artefact_paths(
 
     The canonical source and neutral template are fixed relative to the
     repository root; the remaining two artefacts hang beneath the supplied
-    character asset root.  Paths are derived only — existence is a later
+    character authoring root.  Paths are derived only — existence is a later
     extraction-phase concern.
     """
     try:
@@ -108,7 +109,7 @@ def derive_idle_source_path(
 ) -> Path:
     """Derive the per-character animated idle-source path for ``variant``.
 
-    Idle sources live at ``[character asset root]/animations/source/idle/
+    Idle sources live at ``[character authoring root]/idle/
     <variant>.blend`` (KIMODO-SRC-006); they are protected character-authored
     inputs the pipeline never modifies.  Paths are derived only — existence is
     a later idle-staging-phase concern.

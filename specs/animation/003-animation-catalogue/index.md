@@ -193,18 +193,20 @@ pack authors can also add content without editing code or the Godot editor.
 
 ### Content
 
-24. Default content (`res://`) ships one animation pack, `default`, at `game/data/animations/default/pack.json`.
+24. Default content (`res://`) ships one animation pack, `default`, at
+    `game/assets/animations/packs/default/pack.json`.
     - It holds idle `sad`, a native clip authored from the reference female idle source and published at
-      `game/data/animations/default/idle/sad.tres` (`data/animations/default/idle/sad.tres` under the root).
+      `assets/animations/packs/default/idle/sad.tres` under that content root.
     - Its `entries` array lists locomotion `feminine`, whose `set` is
-      `data/motionbricks/reviewed-feminine/set.json`. The set files stay in place and unchanged.
+      `assets/animations/packs/default/locomotion/feminine/set.json` under that root. Keep the ANIM-002 set,
+      approved source bundle and angular metadata together.
     - The female and male reference base templates both add the `default` pack and set the locomotion default. NPC
       role templates set the idle default, and player role templates declare none (TR13).
     - The male template must have at least one compatible idle and locomotion entry (TR11).
 25. Catalogue native clips (TR13) are the only idle source. Idle playback and its tooling have none of the following:
     - an `idle` animation library on the AnimationPlayer of `reference_female_base.tscn` or
       `reference_male_base.tscn`;
-    - a MotionBricks `catalogue.json` or other idle catalogue under `game/data/motionbricks/`;
+    - a MotionBricks `catalogue.json` or other idle catalogue under `game/assets/animations/motionbricks/`;
     - a `clips` section in `poses.json`, which publication validation rejects;
     - a hardcoded export clip list;
     - processed or runtime idle packages.
@@ -299,10 +301,10 @@ pack authors can also add content without editing code or the Godot editor.
    - transition-started events with the correct kind, and a new event on interruption only when the target differs;
    - controllers resolving through the views.
    Actual-rig evidence under TR28 confirms the motion.
-3. **ANIM-003-TAC-003 (TR22–26):** [Mind Integration](mind-integration.md) and [authoring](authoring.md) acceptance
-   pass. The default pack contains `sad` and `feminine`, and an audit of scenes, data and tooling finds none of the
-   idle sources TR25 prohibits. The export
-   include-filter requirement is recorded.
+3. **ANIM-003-TAC-003 (TR22–26):** [Mind Integration](mind-integration.md), [authoring](authoring.md) and
+   [author guide](pack-format.md#acceptance-criteria) (PACK-AC-003) acceptance pass. The default pack contains
+   `sad` and `feminine` at the documented paths, and an audit of scenes, data and tooling finds none of the idle
+   sources TR25 prohibits. The export include-filter requirement is recorded.
 4. **ANIM-003-TAC-004 (TR27–28):** The validator and test-pack checks under [Animation Pack Format](pack-format.md)
    (PACK-AC-001–002) pass. Actual-rig evidence is independently reviewed.
 
@@ -314,8 +316,9 @@ The catalogue is delivered and verified on the delivery candidate.
   idle and locomotion views, default resolution and TR11 compatibility. Native idle playback uses
   `NativeIdleModifier`, placed first on the reference skeleton. `MotionBricksNavigation` runs the idle↔idle and
   idle↔locomotion bridges, interruption with velocity blending, and stale-context regeneration.
-- **Content:** the `default` pack at `game/data/animations/default/pack.json` holds `sad` and `feminine`. Test packs
-  live under `game/tests/animation/catalogue/`, and the author guide is `game/data/animations/README.md`.
+- **Content:** the `default` pack at `game/assets/animations/packs/default/pack.json` holds `sad` and `feminine`.
+  Test packs live under `game/tests/animation/catalogue/`, and the [author guide][author-guide] is under
+  `game/assets/animations/`.
 - **Tooling:** `tools/animation-pipeline/commands/export_idle_clip.py` exports idle clips on the Kimodo (`kimodo`)
   and Rigify (`rig`) paths through `godot/commands/build_native_clip.gd`. The pack validator command is
   `godot/commands/validate_animation_pack.gd`.
@@ -350,3 +353,4 @@ Known limits:
 - [Kimodo Motion Sources](../../tooling/kimodo-pipeline/locomotive-animation-set.md)
 
 [kimodo-reuse]: ../../tooling/kimodo-pipeline/locomotive-animation-set.md#character-setup-and-calibration-contract
+[author-guide]: ../../../game/assets/animations/README.md

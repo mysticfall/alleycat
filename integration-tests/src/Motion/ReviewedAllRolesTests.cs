@@ -21,12 +21,12 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         Assert.Equal("backward", ReviewedRoleSampler.Classify(new Vector2(.01f, -.5f), 0, .15f));
         Assert.Equal("left_turn", ReviewedRoleSampler.Classify(Vector2.Zero, -.5f, .15f));
         Assert.Equal("right_turn", ReviewedRoleSampler.Classify(Vector2.Zero, .5f, .15f));
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-        var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), data);
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+        var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json"), data);
         _ = sampler.SetIntent("forward", 0);
         Transform3D[][] window = sampler.Targets(0, 34.0 / 30, Basis.Identity, Vector3.Zero);
         Assert.Equal(92, sampler.Selection.WindowStart);
-        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/landing-ablation-01.json"), data);
+        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"), data);
         ReviewedMotionSource.Role role = source.GetRole("feminine", "normal", "forward");
         var raw = new Transform3D[308];
         source.CopyWindow(role, 58, raw);

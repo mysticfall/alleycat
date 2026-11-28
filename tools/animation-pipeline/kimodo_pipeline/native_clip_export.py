@@ -121,7 +121,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     paths = parser.add_subparsers(dest="path", required=True)
     kimodo = paths.add_parser("kimodo", help="Kimodo_Source action previewed through the calibrated setup.")
     kimodo.add_argument("--character-root", type=Path, required=True,
-                        help="Character asset root; its calibrated setup and approved baseline are used.")
+                        help="Character authoring root; its calibrated setup and approved baseline are used.")
     kimodo.add_argument("--source", type=Path, required=True, help="Animated idle source blend.")
     kimodo.add_argument("--setup", type=Path, help="Setup override for disposable tests.")
     kimodo.add_argument("--target-rig", help="Reference rig name when the setup binds more than one.")

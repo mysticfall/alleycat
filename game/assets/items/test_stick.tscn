@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="1_px86d"]
 [ext_resource type="Script" uid="uid://cfbkq153qba1t" path="res://src/Interaction/CylindricalGrabPoint.cs" id="2_tkeyf"]
-[ext_resource type="Animation" uid="uid://bhyeepsp5ifv0" path="res://assets/characters/reference/female/animations/Grab-pipe-10.tres" id="3_lqbx0"]
+[ext_resource type="Animation" uid="uid://bhyeepsp5ifv0" path="res://assets/animations/reference/female/Grab-pipe-10.tres" id="3_lqbx0"]
 [ext_resource type="Script" uid="uid://mwj3evwi2jvj" path="res://src/Interaction/Physical/RigidBodyImpactInteractionReceiver3D.cs" id="4_tkeyf"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pnfld"]

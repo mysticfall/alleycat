@@ -14,10 +14,10 @@ class ReviewedSetSourceAliasTests(unittest.TestCase):
         repo=Path(__file__).resolve().parents[3]
         root=repo/'game/temp/motionbricks/anim002-regenerated-source-adoption-01'/('publisher-alias-'+uuid.uuid4().hex)
         root.mkdir(parents=True,exist_ok=False)
-        saved=json.loads((repo/'game/data/motionbricks/reviewed-feminine/set.json').read_text())
+        saved=json.loads((repo/'game/assets/animations/packs/default/locomotion/feminine/set.json').read_text())
         sources={entry['source'] for entry in saved['roles']}
         for source in sources:
-            shutil.copyfile(repo/'game/data/motionbricks/reviewed-feminine'/source,root/source)
+            shutil.copyfile(repo/'game/assets/animations/packs/default/locomotion/feminine'/source,root/source)
         selection={'roles':[dict(source='./'+e['source'],**{k:e['cycle'][k] for k in
           ('variant','stage','role','first','end_exclusive')},kind=e['cycle']['repetition_kind'],
           reason=e['cycle']['selection_reason']) for e in saved['roles']]}
@@ -35,6 +35,7 @@ class ReviewedSetSourceAliasTests(unittest.TestCase):
             json.dump(dict(contract='AR-B02 resolved source alias refusal',refused=refused,
                 exact_source_bytes_unchanged=same,message=message),f,indent=2)
         self.assertTrue(refused,'AR-B02: resolved source alias was not refused before publication')
+        self.assertEqual(message, "Cannot overwrite a source bundle")
         self.assertEqual(same,{source:True for source in sources})
 
 if __name__=='__main__': unittest.main()

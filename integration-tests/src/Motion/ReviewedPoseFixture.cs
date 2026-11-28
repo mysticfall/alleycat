@@ -9,7 +9,7 @@ namespace AlleyCat.IntegrationTests.Motion;
 /// </summary>
 internal static class ReviewedPoseFixture
 {
-    private const string SourcePath = "res://data/motionbricks/reviewed-feminine/landing-ablation-01.json";
+    private const string SourcePath = "res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json";
 
     /// <summary>
     /// Four consecutive authored poses starting at <paramref name="sourceFrame" /> (default: the role's first frame).

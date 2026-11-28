@@ -291,11 +291,11 @@ opposition roll.
     ```csharp
     [Export]
     public string AuthoredNeutralReferenceAnimationPath { get; set; }
-        = "res://assets/characters/reference/female/animations/Reset.tres";
+        = "res://assets/animations/reference/female/Reset.tres";
 
     [Export]
     public string AuthoredFlexionReferenceAnimationPath { get; set; }
-        = "res://assets/characters/reference/female/animations/Grab-pipe-10.tres";
+        = "res://assets/animations/reference/female/Grab-pipe-10.tres";
     ```
 
     The binding contract is direct, immutable, and strict:

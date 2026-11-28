@@ -19,8 +19,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 DIRECTORY = ROOT / "integration-tests/fixtures/motion-frame-oracles"
-DATA = ROOT / "game/data/motionbricks"
-SOURCE = DATA / "reviewed-feminine/landing-ablation-01.json"
+DATA = ROOT / "game/assets/animations/motionbricks"
+SOURCE = ROOT / "game/assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"
+AUTHORING = ROOT / "game/assets/animations/source/locomotion"
 
 
 def write_gzip(name, payload):
@@ -32,7 +33,8 @@ def blender():
 
     bundle = json.loads(SOURCE.read_text())
     identity = bundle["descriptor"]["source"]
-    path = ROOT / identity["path"]
+    # The descriptor preserves the old authoring path as review evidence.
+    path = AUTHORING / Path(identity["path"]).name
     assert hashlib.sha256(path.read_bytes()).hexdigest() == identity["sha256"]
     bpy.ops.wm.open_mainfile(filepath=str(path))
     scene = bpy.context.scene

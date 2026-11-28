@@ -9,7 +9,7 @@ publishes it transactionally to ``derive_idle_source_path``:
 
     blender --background --factory-startup \
         --python tools/animation-pipeline/commands/idle_source_bootstrap.py -- \
-        --character-root game/assets/characters/reference/female --variant sad \
+        --character-root game/assets/animations/source/reference/female --variant sad \
         --donor-blend <donor.blend> --donor-action <action>
 
 The published idle source is a protected character-authored input: the command

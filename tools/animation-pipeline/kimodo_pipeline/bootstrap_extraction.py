@@ -21,7 +21,12 @@ from typing import Any, Mapping
 import bpy
 
 from .bootstrap_manifest import _constraint_graph_edges, _helper_configuration_entries
-from .bootstrap_paths import BootstrapPathError, derive_artefact_paths, repository_root
+from .bootstrap_paths import (
+    DEFAULT_CHARACTER_ROOT_RELATIVE,
+    BootstrapPathError,
+    derive_artefact_paths,
+    repository_root,
+)
 from .bootstrap_policy import (
     CLASSIFICATIONS,
     RETARGET_BONE_COLLECTION,
@@ -48,8 +53,7 @@ from .bootstrap_validation import (
 from .compatibility import ensure_registered
 from .temp_paths import resolve_temp_root
 
-MONOLITH_RELATIVE = Path("game/assets/characters/animations/source/locomotion/locomotion.blend")
-DEFAULT_CHARACTER_ROOT_RELATIVE = Path("game/assets/characters/reference/female")
+MONOLITH_RELATIVE = Path("game/assets/animations/source/locomotion/locomotion.blend")
 DEFAULT_MANIFEST_RELATIVE = (
     Path("game/temp/kimodo-bootstrap-manifest/locomotion_authoring_manifest.json")
 )

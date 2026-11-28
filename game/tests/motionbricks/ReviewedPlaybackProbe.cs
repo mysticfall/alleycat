@@ -89,7 +89,7 @@ public partial class ReviewedPlaybackProbe : Node
         _actor = (CharacterBody3D)actor;
         _nav = (MotionBricksNavigation)((Character.Character)actor).Navigation!;
         _skeleton = actor.RequireNode<Skeleton3D>("Female/SOMA/Native/GeneralSkeleton");
-        _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         _source = new ReviewedMotionSource(ProjectSettings.GlobalizePath(
             "res://temp/motionbricks/source-pipeline-05/reviewed-ingestion-01/reviewed-source.json"), _data);
         _observer = new NativeSomaRig(_data, _skeleton);

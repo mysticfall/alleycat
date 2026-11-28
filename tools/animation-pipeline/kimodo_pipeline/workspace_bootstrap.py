@@ -23,7 +23,7 @@ def _arguments() -> argparse.Namespace:
         "--character-root",
         default=None,
         help=(
-            "Character asset root for the workspace; "
+            "Character authoring root for the workspace; "
             f"defaults to {default_character_asset_root()}."
         ),
     )

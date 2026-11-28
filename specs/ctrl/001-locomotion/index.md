@@ -69,8 +69,8 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
 1. Wire a player-side intent owner through production controller input and the existing startup/content spawning route
    using `game/assets/characters/templates/reference_female/reference_female_player.tscn`. Install the driver for
    the reviewed set resolved by the character's [ANIM-003](../../animation/003-animation-catalogue/index.md)
-   locomotion view (default `feminine`, binding `reviewed-feminine/set.json`), without a source activation switch or
-   fallback movement catalogue.
+   locomotion view (default `feminine` from the default pack), without a source activation switch or fallback movement
+   catalogue.
    Trace that route rather than
    inferring missing startup from `empty.tscn`. Do not create another scene or adapt NPC destination navigation into
    stick control. Preserve NPC navigation and unrelated tracking, hands, gaze, and interaction functionality.
@@ -432,16 +432,18 @@ the game sets actor facing from planned cycle yaw, independently of generated ar
 ## Implementation Status
 
 Normal player installation resolves its set through the ANIM-003 locomotion view (default `feminine`) and uses all
-eight roles from `reviewed-feminine/set.json`, bound to
-`landing-ablation-01.json`. Travel uses a stable input frame, source-rate placement, continuous steering,
-backward ratio and held chaining. The [stationary-turn policy](#stationary-turn-conditioning), including planned-yaw
+eight roles from `set.json` in the default pack, bound to `landing-ablation-01.json`. Travel uses a stable input
+frame, source-rate placement, continuous steering, backward ratio and held chaining. The
+[stationary-turn policy](#stationary-turn-conditioning), including planned-yaw
 facing and release continuity, is in progress and not yet verified. The player plays no catalogue idle; tracked
 idle stays with VRIK.
 No source/controller activation flag or prototype movement fallback exists.
 Migration to TR2/TR4 native presentation, final-target feedback and tracked-idle ownership is in progress and not
 yet verified. TR5 same-direction stationary-turn retention is implemented with focused checks, pending independent
 review and manual playtest. See [Player Motion](../../../game/src/Control/PLAYER-MOTION.md) and the
-[shared source data](../../../game/data/motionbricks/reviewed-feminine/README.md).
+[shared source data][feminine-set].
+
+[feminine-set]: ../../../game/assets/animations/packs/default/locomotion/feminine/README.md
 
 Technical checks cover normal startup/source binding, all-role primary input, release/ownership and native-free
 preservation checks, with clean format/build results. These are technical migration evidence; combined independent

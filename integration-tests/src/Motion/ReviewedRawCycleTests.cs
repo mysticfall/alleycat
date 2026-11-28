@@ -17,7 +17,7 @@ public sealed class ReviewedRawCycleTests
     [Fact]
     public void ExplicitCycle_WrapsEachSampleAndAccumulatesSE2WithoutAdmittingFiniteRole()
     {
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         string path = ProjectSettings.GlobalizePath($"res://temp/motionbricks-fixture-repair/raw-cycle-{Guid.NewGuid():N}.json");
         _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         try

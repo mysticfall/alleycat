@@ -66,8 +66,8 @@ public sealed class MotionBricksDeliveryIntegrationTests
     [Fact]
     public void RuntimeData_LoadsCanonicalSkeletonAndNamedModelFrames()
     {
-        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-        _ = new SomaModelFrames(data, ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json"));
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+        _ = new SomaModelFrames(data, ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/model-frames.json"));
         Assert.False(data.Manifest.TryGetProperty("clips", out _));
         Assert.False(data.Manifest.GetProperty("sources").TryGetProperty(
             "game/assets/characters/animations/source/locomotion/locomotion.blend", out _));

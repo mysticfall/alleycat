@@ -4,7 +4,7 @@ Normal CTRL/NAV source data; no activation switches are required.
 
 `set.json` binds all eight roles to `landing-ablation-01.json`, a maintained Blender export of the complete
 1200-frame, 30 Hz `source_feminine_landing_ablation_01` action. Durable source/authoring, descriptor, user approval
-and provenance are under `game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01*`.
+and provenance are under `game/assets/animations/source/locomotion/locomotion_feminine_landing_ablation_01*`.
 Source SHA256: `3da77b8ab373dc503b789b8377d3023ea2496eab34086ef91e400a31f68de80a`.
 
 ## Selections
@@ -26,7 +26,9 @@ promises. Preserve chronology and the authored late reversal; neither turn is as
 
 ## Publication and Limits
 
-Use the [maintained ingestion/set publishers](../../../../tools/animation-pipeline/README.md#reviewed-source-ingestion).
+Use the [maintained ingestion and set publishers][ingestion]. To check the existing source without republishing it,
+follow [Shipped Feminine Source Replay][replay]. Replay preserves the original path bindings in
+scratch only; it does not reconstruct the historical review.
 Export new bundles first. Validate bundle/set/angular metadata together, then coordinate fixed set/angular
 replacement with consumers stopped and rollback available. Single-file atomic replacement is not multi-file
 hot publication.
@@ -34,3 +36,6 @@ hot publication.
 Source stepping/foot-sliding mitigation is user accepted; initial twitch is deferred. Sources remain non-cyclic
 and raw repetitions `EXPERIMENTAL_NOT_ADMITTED`: these labels describe quality admission, not activation flags.
 No seamless-loop, sole-contact, generated-motion naturalness or no-slip claim follows.
+
+[ingestion]: ../../../../../../../tools/animation-pipeline/README.md#reviewed-source-ingestion
+[replay]: ../../../../../../../tools/animation-pipeline/README.md#shipped-feminine-source-replay

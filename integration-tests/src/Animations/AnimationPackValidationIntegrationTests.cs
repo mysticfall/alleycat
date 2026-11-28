@@ -59,7 +59,7 @@ public sealed class AnimationPackValidationIntegrationTests
     public void ValidatorCommand_ReportsDefaultPackOnReferenceTemplates()
     {
         (AnimationPackValidationReport? report, string? usage) = AnimationPackValidationCommand.Execute(
-            ["--pack=res://data/animations/default/pack.json", $"--template={FemaleNPC}", $"--template={MaleNPC}"]);
+            ["--pack=res://assets/animations/packs/default/pack.json", $"--template={FemaleNPC}", $"--template={MaleNPC}"]);
 
         Assert.Null(usage);
         Assert.NotNull(report);

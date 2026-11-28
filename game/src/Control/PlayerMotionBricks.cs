@@ -143,7 +143,7 @@ public partial class PlayerMotionBricks : Node
             Character.Character character = GetParent<Character.Character>();
             _actor = character;
             _skeleton = character.RequireMotionTarget();
-            _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+            _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
             _pose = new Transform3D[_data.Names.Length];
             _observed = new Transform3D[_pose.Length];
             _rig = new NativeSomaRig(_data, _skeleton);

@@ -87,8 +87,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                     offset.Y = 0;
                     Assert.InRange((offset - (course * offset.Dot(course))).Length(), 0, .00001f);
                 }
-                var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-                var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), data);
+                var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+                var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json"), data);
                 _ = sampler.SetIntent("forward", sourceTime);
                 float speed = sampler.ReferenceSpeed * nav.NormalisedSpeed;
                 float horizon = speed * (49f / 30);

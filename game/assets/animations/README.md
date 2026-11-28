@@ -2,9 +2,12 @@
 
 This guide is for anyone adding idle stances or gaits to AlleyCat characters, including external content-pack
 authors. You need a text editor, Blender and a checkout of the game; you do not need to change code or open the Godot
-editor. The normative contract is [Animation Pack Format](../../../specs/animation/003-animation-catalogue/pack-format.md),
-with clip production defined in [Animation Clip Authoring](../../../specs/animation/003-animation-catalogue/authoring.md).
+editor. The normative contract is [Animation Pack Format][pack-format], with clip production defined in
+[Animation Clip Authoring][authoring].
 Where this guide and those pages differ, the specifications win.
+
+[pack-format]: ../../../specs/animation/003-animation-catalogue/pack-format.md
+[authoring]: ../../../specs/animation/003-animation-catalogue/authoring.md
 
 ## What a Pack Is
 
@@ -13,7 +16,11 @@ native Godot `Animation` clip on the reference skeleton) or a **locomotion** gai
 Characters combine packs through their templates, and NPCs pick entries by id and tags, while other characters only
 ever see the entry's description.
 
-The default content ships one pack, `default`, beside this guide at `default/pack.json`.
+Default content ships one pack, [`default`](packs/default/pack.json). Its idle clips and
+[reviewed feminine set](packs/default/locomotion/feminine/README.md) live under `packs/default/`.
+Shared MotionBricks calibration and source-rest scenes live under `motionbricks/`.
+Standalone reference animations under `reference/female/` are not catalogue entries. Blender sources and review
+material live under `source/`, which Godot ignores; AnimationTree templates stay with the character templates.
 
 ## Manifest Fields
 
@@ -22,7 +29,7 @@ A manifest is a UTF-8 JSON object with exactly these top-level fields:
 | Field | Meaning |
 | --- | --- |
 | `schema` | Always `anim003_pack_v1`. |
-| `id` | The pack id: a lowercase identifier (`a-z`, digits, `_`, starting with a letter), unique among a character's packs. |
+| `id` | Lowercase pack id (`a-z`, digits, `_`, starting with a letter), unique among a character's packs. |
 | `entries` | An ordered array of entries. Order matters: the first compatible entry of a category is the fallback. |
 
 Every entry has these fields:
@@ -65,7 +72,7 @@ A locomotion entry looks like this (from the `default` pack):
   "category": "locomotion",
   "tags": ["relaxed", "feminine"],
   "description": "walks with an easy, relaxed feminine gait",
-  "set": "data/motionbricks/reviewed-feminine/set.json"
+  "set": "assets/animations/packs/default/locomotion/feminine/set.json"
 }
 ```
 
@@ -74,15 +81,16 @@ A locomotion entry looks like this (from the `default` pack):
 `clip` and `set` paths are relative to the pack's **content root**. They are never `res://` paths or absolute paths,
 and they may not contain `..`.
 
-- A manifest under `res://content/<pack>/` belongs to that content pack, so its paths resolve from
-  `res://content/<pack>/`. A manifest at `res://content/my_pack/data/animations/my_pack/pack.json` with
-  `"clip": "data/animations/my_pack/idle/slump.tres"` loads `res://content/my_pack/data/animations/my_pack/idle/slump.tres`.
-- A manifest anywhere else belongs to the default content, whose root is `res://`. The `default` pack's
-  `"clip": "data/animations/default/idle/sad.tres"` loads `res://data/animations/default/idle/sad.tres`.
+- For an external content pack rooted at `res://content/my_pack/`, a manifest at
+  `res://content/my_pack/assets/animations/packs/my_pack/pack.json` resolves
+  `"clip": "assets/animations/packs/my_pack/idle/slump.tres"` to
+  `res://content/my_pack/assets/animations/packs/my_pack/idle/slump.tres`.
+- A manifest anywhere else belongs to default content, whose root is `res://`. The `default` pack's
+  `"clip": "assets/animations/packs/default/idle/sad.tres"` loads `res://assets/animations/packs/default/idle/sad.tres`.
 
-Place each pack at `data/animations/<pack id>/pack.json` under its content root, with its clips beside it (for
-example in an `idle/` directory). The manifest path on the pack node is authoritative, so other locations work, but
-the convention keeps packs easy to find.
+For new external packs, use `assets/animations/packs/<pack-id>/pack.json` relative to the external content pack's
+own root, not the base game's assets tree. Keep its clips nearby (for example in `idle/`). The manifest path on
+the pack node is authoritative; existing layouts remain valid and need not migrate.
 
 A content pack cannot reach outside its own root. If it adds a gait, it must ship that reviewed locomotion set (the
 set file and the source files it references) inside its own content root, and point `set` at that copy.
@@ -142,17 +150,17 @@ There are two authoring paths, both run by the Kimodo pipeline tool. See its
 ### Kimodo Path
 
 Author the motion on the SOMA `Kimodo_Source` rig in a copy of the character's calibrated setup, and save the
-animated source as `animations/source/idle/<variant>.blend` under the character's asset root. In Blender, the meshed
+animated source as `idle/<variant>.blend` under its animation source directory. In Blender, the meshed
 reference rig in that setup follows `Kimodo_Source`, so what you see there is what the clip will contain. Export it:
 
 ```sh
 python3 tools/animation-pipeline/commands/export_idle_clip.py kimodo \
-  --character-root game/assets/characters/reference/female \
-  --source game/assets/characters/reference/female/animations/source/idle/sad.blend \
+  --character-root game/assets/animations/source/reference/female \
+  --source game/assets/animations/source/reference/female/idle/sad.blend \
   --action kimodo_m0a3dyf0 \
   --skeleton-scene res://assets/characters/reference/female/reference_female.blend \
   --check-skeleton-scene res://assets/characters/reference/male/reference_male.blend \
-  --output game/data/animations/default/idle/sad.tres
+  --output game/assets/animations/packs/default/idle/sad.tres
 ```
 
 Add `--preview-blend game/temp/<name>/preview.blend` to save the prepared setup copy with your action bound, for
@@ -168,7 +176,7 @@ the reference armature's deform bones:
 python3 tools/animation-pipeline/commands/export_idle_clip.py rig \
   --blend path/to/authoring.blend --control-rig rig --target Female --action my_idle \
   --skeleton-scene res://assets/characters/reference/female/reference_female.blend \
-  --output game/data/animations/my_pack/idle/my_idle.tres
+  --output game/content/my_pack/assets/animations/packs/my_pack/idle/my_idle.tres
 ```
 
 The control rig itself is never exported.
@@ -187,7 +195,7 @@ first (`dotnet build AlleyCat.sln`), then run from the repository root:
 ```sh
 godot-mono --headless --xr-mode off --path game \
   --script "$PWD/tools/animation-pipeline/godot/commands/validate_animation_pack.gd" -- \
-  --pack=res://content/my_pack/data/animations/my_pack/pack.json \
+  --pack=res://content/my_pack/assets/animations/packs/my_pack/pack.json \
   --template=res://assets/characters/templates/reference_female/reference_female_npc.tscn
 ```
 

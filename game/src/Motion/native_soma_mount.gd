@@ -13,7 +13,7 @@ func install(actor: Node, target: Skeleton3D, rest_key: String, player_role: boo
 			var dest: Node = node.get_node_or_null(path)
 			if dest:
 				references.append([node, prop.name, dest])
-	var source: Skeleton3D = load("res://data/motionbricks/source-rest/%s.tscn" % rest_key.to_lower()).instantiate()
+	var source: Skeleton3D = load("res://assets/animations/motionbricks/source-rest/%s.tscn" % rest_key.to_lower()).instantiate()
 	source.name = "SOMA"
 	model.add_child(source)
 	source.reset_bone_poses()

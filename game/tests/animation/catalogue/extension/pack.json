@@ -7,14 +7,14 @@
       "category": "idle",
       "tags": ["sad", "weary"],
       "description": "stands wearily, shoulders drooping",
-      "clip": "data/animations/default/idle/sad.tres"
+      "clip": "assets/animations/packs/default/idle/sad.tres"
     },
     {
       "id": "stroll",
       "category": "locomotion",
       "tags": ["leisurely"],
       "description": "strolls along at an unhurried pace",
-      "set": "data/motionbricks/reviewed-feminine/set.json"
+      "set": "assets/animations/packs/default/locomotion/feminine/set.json"
     }
   ]
 }

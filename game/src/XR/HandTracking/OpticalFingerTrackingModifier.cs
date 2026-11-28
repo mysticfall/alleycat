@@ -185,7 +185,7 @@ public partial class OpticalFingerTrackingModifier : SkeletonModifier3D
     {
         get; set;
     }
-        = "res://assets/characters/reference/female/animations/Reset.tres";
+        = "res://assets/animations/reference/female/Reset.tres";
 
     /// <summary>
     /// Project-relative path of the immutable Blender-authored single-frame soft-fist flexion reference
@@ -198,7 +198,7 @@ public partial class OpticalFingerTrackingModifier : SkeletonModifier3D
         get;
         set;
     }
-        = "res://assets/characters/reference/female/animations/Grab-pipe-10.tres";
+        = "res://assets/animations/reference/female/Grab-pipe-10.tres";
 
     /// <summary>
     /// Duration in seconds of the per-hand optical-grab pose blend window (XR-002 UR16; INTR-002 R60-61):

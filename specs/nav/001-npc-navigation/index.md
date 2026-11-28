@@ -85,9 +85,9 @@ preserving a parallel clip-planning implementation or disguising model limitatio
    [ANIM-002](../../animation/002-locomotive-animation-set/index.md) are normative for generic speed stages, dynamic
    source windows, idle/action target compatibility, SOMA conversion, realised feedback and licensing;
    [ANIM-003](../../animation/003-animation-catalogue/index.md) supplies idle targets and the locomotion view.
-   Normal installation loads the reviewed set resolved by that view (default `feminine`, binding
-   `reviewed-feminine/set.json`, shared with CTRL and bound wholly to the current `landing-ablation-01.json`
-   source). No source/controller activation flag or prototype movement fallback is required.
+   Normal installation loads the reviewed set resolved by that view (default `feminine` from the default pack,
+   shared with CTRL and bound wholly to the current `landing-ablation-01.json` source). No source/controller
+   activation flag or prototype movement fallback is required.
 4. Demonstrate generated walk-to-idle on the actual MakeHuman rig with realised-pose feedback before expanding route
    integration. The NPC presents generated motion through native retargeting with digits mapped and feeds back the
    final target pose under [ANIM TR4–5](../../animation/index.md#technical-requirements). Bone-name correspondence
@@ -402,7 +402,7 @@ player readiness. A broken NPC playtest is not a delivered prototype.
 
 ## Implementation Status
 
-Normal NAV loads the set resolved by the ANIM-003 locomotion view (default `feminine`, `reviewed-feminine/set.json`),
+Normal NAV loads the set resolved by the ANIM-003 locomotion view (default `feminine` from the default pack),
 wholly bound to `landing-ablation-01.json`, without activation flags. Native catalogue idles, idle↔idle and
 idle↔locomotion bridges, and interruption with velocity blending are delivered under
 [ANIM-003](../../animation/003-animation-catalogue/index.md#implementation-status).

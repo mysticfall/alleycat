@@ -26,7 +26,7 @@ transitions are defined on the [ANIM-003 index](index.md).
      not use first-person wording, ids or tags. Observers receive only this text.
 4. Category payloads:
    - `idle` requires `clip`, the path of a native Godot `Animation` resource on the reference skeleton.
-   - `locomotion` requires `set`, the path of an ANIM-002 reviewed set file, which stays unchanged.
+   - `locomotion` requires `set`, the path of a reviewed set file in the unchanged ANIM-002 format.
 5. Unknown top-level or entry fields are validation errors. A schema change requires a new `schema` version.
 
 ```json
@@ -39,14 +39,14 @@ transitions are defined on the [ANIM-003 index](index.md).
       "category": "idle",
       "tags": ["sad", "slumped"],
       "description": "stands with slumped shoulders and a lowered gaze",
-      "clip": "<content-root-relative path to the sad idle Animation resource>"
+      "clip": "assets/animations/packs/default/idle/sad.tres"
     },
     {
       "id": "feminine",
       "category": "locomotion",
       "tags": ["relaxed", "feminine"],
       "description": "walks with an easy, relaxed feminine gait",
-      "set": "data/motionbricks/reviewed-feminine/set.json"
+      "set": "assets/animations/packs/default/locomotion/feminine/set.json"
     }
   ]
 }
@@ -64,8 +64,9 @@ The example shows the shape, not final authored wording.
      content pack's context. Anywhere else it is `ContentContext.Default` (`default` at `res://`).
    - **Tests:** tests may inject a context, so a fixture can stand in for a content pack without being installed
      under `res://content/`.
-3. Default content places packs at `data/animations/<pack-id>/pack.json` under its root. Content packs should follow
-   the same convention. The pack node's explicit manifest path is authoritative.
+3. Default content places packs at `assets/animations/packs/<pack-id>/pack.json` under `res://`. For a new external
+   content pack, the same path relative to that pack's **own content root** is recommended, not a path in the base
+   game's assets tree. The pack node's explicit manifest path is authoritative; existing layouts need not migrate.
 
 ## Validator
 
@@ -96,7 +97,7 @@ under `game/content/` and are never shipped in or loaded by the default pack. Th
    [ANIM-003](index.md) TR27 can prove idle→idle.
 2. **Default-context extension:** locomotion entry resolution, and a pack that extends `default`, are proven under
    `ContentContext.Default`, with paths relative to `res://`.
-   - The `default` pack's `feminine` entry resolves `data/motionbricks/reviewed-feminine/set.json`.
+   - The `default` pack's `feminine` entry resolves `assets/animations/packs/default/locomotion/feminine/set.json`.
    - An extension test pack at `game/tests/animation/catalogue/extension/pack.json` gets `ContentContext.Default`
      through the production location rule. Applied at a higher priority than `default`, it overrides a `default`
      entry id, and adds a new locomotion id whose `set` is a `res://`-relative reviewed-set path.
@@ -108,9 +109,9 @@ under `game/content/` and are never shipped in or loaded by the default pack. Th
 
 ## Author Documentation
 
-1. An author-facing guide sits beside the default pack at `game/data/animations/README.md`. It covers:
+1. The [author-facing guide][guide] lives at `game/assets/animations/README.md`. It covers:
    - the manifest fields and an example;
-   - path resolution;
+   - path resolution and the recommended layout under each external content pack's own root;
    - pack nodes, `Enabled`, `Priority` and overrides;
    - template defaults;
    - description and tag writing guidance;
@@ -132,4 +133,6 @@ under `game/content/` and are never shipped in or loaded by the default pack. Th
    entry and the extension pack's new locomotion entry resolve their sets, and the extension pack's override applies
    with its log message.
 3. **ANIM-003-PACK-AC-003:** The author guide exists, covers every listed topic and links to this page. Using only the
-   guide, an author can produce a valid fixture-equivalent pack.
+   guide, an author can produce a valid fixture-equivalent pack without being required to use the recommended paths.
+
+[guide]: ../../../game/assets/animations/README.md
