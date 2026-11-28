@@ -82,4 +82,4 @@ Authored scenarios do not replay the original playtest recordings or establish d
 
 The compressed fixtures are generated using Kimodo 1.0.0 (SOMA77 pose conversions) and Blender 5.3.0 (evaluated
 matrices from the approved action and slot). They are checked in so a routine test run does not need either tool.
-See the [Kimodo pipeline guide](../../../tools/kimodo-pipeline/README.md#independent-motion-frame-oracles) for regeneration.
+See the [Kimodo pipeline guide](../../../tools/animation-pipeline/README.md#independent-motion-frame-oracles) for regeneration.

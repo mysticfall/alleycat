@@ -38,8 +38,10 @@ and the default hip reconciliation profile.
 1. The standing pose family uses a single AnimationTree state with continuous
    seek-based control for the standing-to-crouching continuum.
 2. One standing-family PoseState resource covers the full continuum.
-3. The Idle clip remains in the animation library for future layering but
-   is not wired into the tree for MVP.
+3. The pose AnimationTree has no idle state. Catalogue idles under
+   [ANIM-003](../../animation/003-animation-catalogue/index.md) play outside
+   this tree and never on the player. Built-in pose clips are not catalogue
+   entries.
 
 ### Hip Reconciliation Profile
 

@@ -15,7 +15,7 @@ public sealed class MotionBricksIntegrationTests
 {
     private static SomaMotionData Data() => new(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
 
-    /// <summary>Kimodo 1.0.0 conversion on committed reviewed, idle and rest inputs; tolerances cover arithmetic only.</summary>
+    /// <summary>Kimodo 1.0.0 conversion on committed reviewed and rest inputs; tolerances cover arithmetic only.</summary>
     [Fact]
     public void ModelFrames_MatchExecutedKimodoAndPreserveJointPositions()
     {
@@ -93,7 +93,8 @@ public sealed class MotionBricksIntegrationTests
         // Production defaults keep this suite-runnable without environment setup; explicit overrides still win.
         string path = ResolveInferenceInput("MOTIONBRICKS_MODEL", "res://models/motionbricks/onnx/mmm_v6_soma_fp32.onnx");
         string frames = ResolveInferenceInput("MOTIONBRICKS_FRAMES", "res://data/motionbricks/model-frames.json");
-        Transform3D[][] context = [.. data.Idle.Take(4).Select(p => (Transform3D[])p.Clone())];
+        // The four authored frames leading into the target window form a realistic realised context.
+        Transform3D[][] context = ReviewedPoseFixture.Window(data, 54);
         var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/landing-ablation-01.json"), data);
         var raw = new Transform3D[data.Names.Length * 4];
         source.CopyWindow(source.GetRole("feminine", "normal", "forward"), 58, raw);
@@ -164,6 +165,7 @@ public sealed class MotionBricksIntegrationTests
     public async Task ActorYaw_PreservesPhysicalPoseAndWorldFeedback()
     {
         SomaMotionData data = Data();
+        Transform3D[] authoredPose = ReviewedPoseFixture.Pose(data);
         var model = new Node3D { Basis = SomaMotionData.ModelToWorld };
         SceneTree tree = Support.TestUtils.GetSceneTree();
         try
@@ -201,14 +203,14 @@ public sealed class MotionBricksIntegrationTests
                 Assert.Equal(expectedTransfers, observations);
             }
 
-            await PresentAsync(data.Idle[0], 1);
+            await PresentAsync(authoredPose, 1);
             Assert.NotNull(landmarks);
             after.CopyTo(before, 0);
             Vector3[] original = landmarks;
             Basis yaw = new(Vector3.Up, 0.7f);
             Vector3 translation = new(2, 0, -1);
             model.GlobalTransform = new Transform3D(yaw * SomaMotionData.ModelToWorld, translation);
-            var input = (Transform3D[])data.Idle[0].Clone();
+            var input = (Transform3D[])authoredPose.Clone();
             input[0] = new Transform3D(yaw * input[0].Basis,
                 (yaw * input[0].Origin) + (SomaMotionData.ModelToWorld.Inverse() * translation));
             await PresentAsync(input, 2);
@@ -261,6 +263,7 @@ public sealed class MotionBricksIntegrationTests
     public async Task SkinReadyFeedback_ObservesTargetPerturbation()
     {
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
+        Transform3D[] authoredPose = ReviewedPoseFixture.Pose(data);
         var holder = new Node3D { Transform = new Transform3D(SomaMotionData.ModelToWorld, new Vector3(1, 0, -2)) };
         SceneTree tree = Support.TestUtils.GetSceneTree();
         try
@@ -294,10 +297,10 @@ public sealed class MotionBricksIntegrationTests
             }
 
             int neck2 = Array.IndexOf(data.Names, "Neck2");
-            Assert.False(data.Idle[0][neck2].Basis.IsEqualApprox(Basis.Identity));
+            Assert.False(authoredPose[neck2].Basis.IsEqualApprox(Basis.Identity));
             retarget.ModificationProcessed += () => transfers++;
             skeleton.SkeletonUpdated += Observe;
-            adapter.Apply(data.Idle[0]);
+            adapter.Apply(authoredPose);
             sourceSkeleton.Advance(1.0 / 30);
             await AdvanceTargetAsync(1);
             Assert.Equal(1, transfersAtObservation);

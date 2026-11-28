@@ -83,9 +83,11 @@ preserving a parallel clip-planning implementation or disguising model limitatio
     [runtime README](../../../game/src/Motion/README.md#launch).
 3. The [shared animation contract](../../animation/index.md) and
    [ANIM-002](../../animation/002-locomotive-animation-set/index.md) are normative for generic speed stages, dynamic
-    source windows, externally supplied idle/action compatibility, SOMA conversion, realised feedback and licensing.
-   Normal installation loads `reviewed-feminine/set.json`, shared with CTRL and bound wholly to the current
-   `landing-ablation-01.json` source. No source/controller activation flag or prototype movement fallback is required.
+   source windows, idle/action target compatibility, SOMA conversion, realised feedback and licensing;
+   [ANIM-003](../../animation/003-animation-catalogue/index.md) supplies idle targets and the locomotion view.
+   Normal installation loads the reviewed set resolved by that view (default `feminine`, binding
+   `reviewed-feminine/set.json`, shared with CTRL and bound wholly to the current `landing-ablation-01.json`
+   source). No source/controller activation flag or prototype movement fallback is required.
 4. Demonstrate generated walk-to-idle on the actual MakeHuman rig with realised-pose feedback before expanding route
    integration. The NPC presents generated motion through native retargeting with digits mapped and feeds back the
    final target pose under [ANIM TR4–5](../../animation/index.md#technical-requirements). Bone-name correspondence
@@ -183,20 +185,21 @@ The following clauses refine TR5–8 and are covered by NAV-TAC-002:
      diagnostics, review disposition, separate player scope, and the outstanding user suitability decision.
      Do not commit bulky model artefacts or secrets.
 14. **Conditioning Controller:** navigation owns variant, state, role, virtual source clock/phase, expected source foot
-    phase and target selection under the
-    [ANIM-002 lifecycle](../../animation/002-locomotive-animation-set/index.md#technical-requirements). Select the role
-    before constructing its motion guide, under the selection policy below. Sample future consecutive source windows
-     using virtual playback and target horizon outside the finite terminal-facing exception below, preserving local
-     motion while adapting the native path under TR5–6;
-    engine physics determines realised movement. Apply the shared advance,
+    phase and target selection under the [ANIM-002
+    lifecycle](../../animation/002-locomotive-animation-set/index.md#technical-requirements). Select the role before
+    constructing its motion guide, under the selection policy below. Sample future consecutive source windows using
+    virtual playback and target horizon outside the finite terminal-facing exception below, preserving local motion
+    while adapting the native path under TR5–6; engine physics determines realised movement. Apply the shared advance,
     loop/end, role/stage/variant-switch and overlapping-request rules. Snapshot phase/window/placement with request
-     ownership; model duration/completion must not set elapsed source-clock pace. The finite plan's service cursor
-     advances only when its owned landmark endpoint is actually played. Replacement, cancellation and
-    terminal outcomes supersede old progression immediately; do not wait for source-cycle completion or require a
-    matching displayed support foot. Connect from actual context to a new role or compatible external idle/action
-    targets. Missing/incompatible inputs follow the explicit unavailable-motion policy, without a fabricated idle
-    anchor, procedural fallback or retry loop. Preserve route/outcome, single collision-root and worker guarantees;
-    no leading-foot variants, dedicated arc-turn or start/stop/reversal clips are prerequisites.
+    ownership; model duration/completion must not set elapsed source-clock pace. The finite plan's service cursor
+    advances only when its owned landmark endpoint is actually played. Replacement, cancellation and terminal outcomes
+    supersede old progression immediately; do not wait for source-cycle completion or require a matching displayed
+    support foot. A displayed catalogue-idle or arrival bridge keeps playing until its replacement is installed, under
+    [ANIM-003 TR20–21](../../animation/003-animation-catalogue/index.md#transitions). Connect from actual context to a
+    new role or compatible ANIM-003 idle/external action targets. Missing/incompatible inputs follow the explicit
+    unavailable-motion policy, without a fabricated idle anchor, procedural fallback or retry loop. Preserve
+    route/outcome, single collision-root and worker guarantees; no leading-foot variants, dedicated arc-turn or
+    start/stop/reversal clips are prerequisites.
 15. **Playtest Feedback Recording (UR8):** restrict automatic recording to the existing navigation test scene. The
     [recorder workflow and schema](../../../game/src/Navigation/Recording/README.md) are normative dependencies for
     controls, storage and bundle interpretation. Correlate attempts/bookmarks, accepted requests and inference tickets
@@ -259,7 +262,7 @@ the game sets actor facing from planned cycle yaw, independently of generated ar
   cycle, landmark, mapping and request identity immutably. Each submission uses actual post-modifier realised context,
   never a sampled source pose or unplayed prediction. Endpoint service proves playback, not lift, support or contact.
 - **Finite Finish:** after the last primary lift, complete the remaining mapped cycle angle and connect from actual
-  context to a compatible external idle target at the requested final position/facing, rather than stopping with a
+  context to a compatible ANIM-003 idle target at the requested final position/facing, rather than stopping with a
   raised-foot target. This is a finite end sequence, not a new idle system.
   The existing reached-position contract/configured tolerance admits this end sequence; the turn source's incidental
   translation distance must not re-gate final arrival or restart small-turn/cue-catch-up loops. Completion remains
@@ -279,7 +282,7 @@ the game sets actor facing from planned cycle yaw, independently of generated ar
 - Actual-rig conversion and feedback, runtime setup, source/licence checks, diagnostics, and automated/temporal
   evidence.
 - Upfront replacement of obsolete locomotion machinery and independent review before playable handoff.
-- Game-owned source role/phase control, physical-speed placement and dynamic sampling with external idle integration.
+- Game-owned source role/phase control, physical-speed placement and dynamic sampling with ANIM-003 idle integration.
 
 ## Out Of Scope
 
@@ -326,7 +329,7 @@ player readiness. A broken NPC playtest is not a delivered prototype.
    Include desired-facing differences, a genuine obstacle detour, near-destination reconsideration and a changed
    destination during motion. Choices remain stable without delaying replacement/cancellation; stationary final
    turning does not replace feasible simple translation. Inspect variant-appropriate speed/posture, repeatable lateral
-   motion and compatible external idle. Do not require every short diagonal to cross, every rear move to turn,
+   motion and compatible ANIM-003 idle. Do not require every short diagonal to cross, every rear move to turn,
     displayed-foot matching, fixed step counts or mandatory transition clips.
    For the finite terminal-facing plan, inspect the complete fixed-request turn and settled arrival on the actual rig,
    including inference holds and every planned primary cue. Check a 180-degree request reads as one large turn plus
@@ -399,24 +402,26 @@ player readiness. A broken NPC playtest is not a delivered prototype.
 
 ## Implementation Status
 
-Normal NAV loads `reviewed-feminine/set.json`, wholly bound to `landing-ablation-01.json`, without activation flags.
+Normal NAV loads the set resolved by the ANIM-003 locomotion view (default `feminine`, `reviewed-feminine/set.json`),
+wholly bound to `landing-ablation-01.json`, without activation flags. Native catalogue idles, idle↔idle and
+idle↔locomotion bridges, and interruption with velocity blending are delivered under
+[ANIM-003](../../animation/003-animation-catalogue/index.md#implementation-status).
 The existing scene uses Godot's native path authority, source-rate target placement/native handoff and the finite
 terminal-facing plan above. Both primary lifts are source-angle mapped per allocation and actually serviced before
-the next planned submission; fresh post-`SkeletonUpdated` context precedes one finite external-idle arrival connection.
+the next planned submission; fresh post-`SkeletonUpdated` context precedes one finite ANIM-003 idle arrival connection.
 Request-local overrun/lockout handling, stale-result rejection, provider-failure retention, generated-root
 `MoveAndCollide` and worker disposal remain required. The automatic scene recorder remains part of normal play.
 Planned-yaw facing during stationary turns is in progress. Migration to TR4 native presentation and final-target
 feedback is in progress and not yet verified.
 
-The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records shared
-source identity/normal installation, finite cue service, route replacement/cancellation, actual-context/handoff and
-overrun preservation checks, with clean format/build results. Combined independent review of this normal-source
-migration remains pending; native-free component evidence is not native gait, arrival quality or performance proof.
-Source stepping/foot-sliding mitigation is user accepted with initial twitch deferred, not certified no-slip motion.
-Full actual-rig route/turn/settled-arrival and user naturalness/pace judgement remain open, including the unresolved
-around-corner/arrival outcomes. Raw repetition admission, broader stage/default content and previews, headset and known
-native-shutdown risks remain deferred-with-risk. Plan steps 5/6 and final acceptance remain open.
-No new source generation, model-call budget or shutdown retry follows from this documentation alignment.
+Technical checks cover shared source identity/normal installation, finite cue service, route replacement/cancellation,
+actual-context/handoff and overrun preservation checks, with clean format/build results. Combined independent review of
+this normal-source migration remains pending; native-free component evidence is not native gait, arrival quality or
+performance proof. Source stepping/foot-sliding mitigation is user accepted with initial twitch deferred, not certified
+no-slip motion. Full actual-rig route/turn/settled-arrival and user naturalness/pace judgement remain open, including
+the unresolved around-corner/arrival outcomes. Raw repetition admission, broader stage/default content and previews,
+headset and known native-shutdown risks remain deferred-with-risk. Plan steps 5/6 and final acceptance remain open. No
+new source generation, model-call budget or shutdown retry follows from this documentation alignment.
 
 ## References
 

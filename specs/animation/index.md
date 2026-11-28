@@ -19,9 +19,11 @@ special cases or treating source availability and retargeting as already proven.
 ## User Requirements
 
 1. Locomotion uses dynamically sampled role/variant sources under
-   [ANIM-002](002-locomotive-animation-set/index.md), with idle supplied by its separate owner. Prefer our Kimodo
-    content where available; verify actual availability and never copy or ship evaluation-only upstream samples.
-   Normal player/NPC installation uses the same complete feminine source set without source activation switches.
+   [ANIM-002](002-locomotive-animation-set/index.md). Idle and locomotion variants are selected through the
+   [ANIM-003](003-animation-catalogue/index.md) animation catalogue. Prefer our Kimodo content where available;
+   verify actual availability and never copy or ship evaluation-only upstream samples. Player and NPC installation
+   resolve their locomotion set through the catalogue, without source activation switches. The default is the
+   complete feminine set.
 2. Generated transitions and walking are displayed on the actual MakeHuman character, not merely a source skeleton.
    The visual reference is Godot's native retargeted body with F6-aligned hands, judged in native playback. Player
    fingers that are actually observed (authored hand poses or optical tracking) stay with their owner; generated
@@ -31,24 +33,27 @@ special cases or treating source availability and retargeting as already proven.
 
 ## Technical Requirements
 
-1. [ANIM-002](002-locomotive-animation-set/index.md) is normative for required motion roles, generic one-or-more
-   speed stages, physical reference/local velocity metadata and dynamic consecutive source-window sampling.
-   Normalised speed is relative to the selected variant; target placement combines physical metadata, intent and
-    horizon. A fixed-only entry/exit catalogue is insufficient. Do not introduce walking-specific gait modes or
-    prescribe a particular migration schema here.
-     ANIM-002 TR9 requires a variant-local authoring reference posture at each authored role's boundaries within one
-    continuous multi-role source take. This is not an external idle dependency or a runtime idle/phase-reset barrier;
-    actual idle/action transition targets remain externally owned. Boundary agreement alone does not prove suitable
-     interior motion, phase, loopability or absence of carryover. Source creation is external and artist-owned.
-     Its normative tooling dependency covers acceptable source/reference inputs, mandatory reviewed-action admission,
-     canonical export, technical sanitising, traceable role slicing and source-set publication, not source-generation
-     machinery. Generation-runner receipts are not required for a human-authored source. Preserve essential integrity
-     and safe publication without extra misplaced-constraint tests as delivery prerequisites.
+1. [ANIM-002](002-locomotive-animation-set/index.md) is normative for required motion roles, generic one-or-more speed
+   stages, physical reference/local velocity metadata and dynamic consecutive source-window sampling. Normalised speed
+   is relative to the selected variant; target placement combines physical metadata, intent and horizon. A fixed-only
+   entry/exit catalogue is insufficient. Do not introduce walking-specific gait modes or prescribe a particular
+   migration schema here. ANIM-002 TR9 requires a variant-local authoring reference posture at each authored role's
+   boundaries within one continuous multi-role source take. It is not a dependency on a runtime idle, and it is not an
+   idle or phase-reset barrier. ANIM-003 owns idle transition targets, and action targets remain externally owned.
+   Boundary agreement alone does not prove suitable interior motion, phase, loopability or absence of carryover. Source
+   creation is external and artist-owned. Its normative tooling dependency covers acceptable source/reference inputs,
+   mandatory reviewed-action admission, canonical export, technical sanitising, traceable role slicing and source-set
+   publication, not source-generation machinery. Generation-runner receipts are not required for a human-authored
+   source. Preserve essential integrity and safe publication without extra misplaced-constraint tests as delivery
+   prerequisites.
 2. The game owns variant, state, role, virtual source playback/expected source foot phase and target selection under
    ANIM-002's lifecycle. MotionBricks connects actual realised context to supplied targets; generated duration and
-   displayed feet do not own intended phase. Idle/action owners provide compatible target windows outside ANIM-002.
-   Current SOMA windows contain four consecutive frames at 30 Hz. Preserve source order, timing and local motion;
-   target-displacement intent does not authorise generated-playback time-warping or procedural locomotion.
+   displayed feet do not own intended phase. ANIM-003 provides idle target windows; action owners remain outside
+   ANIM-002. Current SOMA windows contain four consecutive frames at 30 Hz. Preserve source order, timing and local
+   motion. Target-displacement intent does not authorise time-warping generated playback, or procedural locomotion.
+   The one exception is the [ANIM-003 TR18](003-animation-catalogue/index.md#transitions) settle easing. It covers
+   only bridges into and out of catalogue idles, and never the CTRL-001 player settle into tracked idle, which TR3
+   still governs.
 3. Implement the necessary SOMA runtime helpers alongside inference: pose preparation, generated-output decoding,
    boundary-frame handling, endpoint treatment, playback/chaining, and context recording follow the upstream contract.
    Raw ONNX output is not equivalent to the upstream runtime's processed motion. Endpoint processing does not
@@ -93,7 +98,9 @@ special cases or treating source availability and retargeting as already proven.
      fingers are observed ([INTR-003](../interaction/003-hands/index.md) authored poses or
      [XR-002](../xr/002-optical-hand-tracking/index.md) optical tracking); NPCs map digits. Tracked idle is an
      explicit ownership transition that stops native body writes; a source held on its last sample must not keep
-     ownership. Existing IK, hand-tracking and optical-last modifier order is preserved.
+     ownership. Likewise, the retargeter is inactive during [ANIM-003](003-animation-catalogue/index.md#playback-rig)
+     native idle. A first-placed idle modifier is the only presented writer for clip-keyed bones. Idles are never
+     retargeted at runtime. Existing IK, hand-tracking and optical-last modifier order is preserved.
    - **Visual Authority:** Godot native playback is the visual authority. A Blender preview is authoritative only
      where independently shown to match native playback on skinned landmarks. Calibrated Blender posture parity is
      not a requirement.
@@ -105,7 +112,8 @@ special cases or treating source availability and retargeting as already proven.
    coordinates. Channels the target cannot observe
    retain canonical SOMA local rest and inherit observed parent motion; this policy is declared because no unique
    exact inverse exists. Only actual observations after installed modifiers under normal physics scheduling feed
-   runtime history.
+   runtime history. This native→SOMA conversion exists only to feed MotionBricks. It also converts the start frames
+   of ANIM-003 idle clips into target windows, but those frames are targets and never enter realised history.
    Do not substitute manual diagnostic scheduling, unplayed predictions, source-skeleton samples, or stale
     pre-modifier poses for realised context. NAV-001 owns NPC sequence-completion, failure/idle, replacement and shared
     worker lifetime; CTRL-001 owns player input, release/replacement and XR integration under those worker guarantees;
@@ -113,10 +121,15 @@ special cases or treating source availability and retargeting as already proven.
 6. Verify code/model/content licensing and document local model setup without committing bulky models or secrets.
    Preserve source assets and authoring inputs; missing content is an explicit delivery issue, not permission
    to use evaluation-only samples or claim source readiness.
-    Runtime content must not depend on diagnostic fixtures under `game/temp`. Current runtime reads `poses.json`,
-    `model-frames.json`, the external-idle `catalogue.json` and shared `reviewed-feminine/set.json`/angular metadata
-    under `game/data/motionbricks/`. All eight movement roles bind to `landing-ablation-01.json`; no prototype movement
-    catalogue is a fallback. Quality-admission metadata does not turn normal source loading into an opt-in mode.
+    Runtime content must not depend on diagnostic fixtures under `game/temp`.
+    - **MotionBricks data:** under `game/data/motionbricks/`, runtime reads `poses.json` (canonical skeleton identity
+      and provenance), `model-frames.json` (named model frames) and reviewed sets with their angular metadata. None
+      of these files carries idle samples or frames.
+    - **Catalogue packs:** [ANIM-003](003-animation-catalogue/index.md) packs reference idle clips and reviewed
+      sets. The default `feminine` entry binds `reviewed-feminine/set.json`, and all eight of its movement roles bind
+      to `landing-ablation-01.json`.
+    - **Loading:** no prototype movement catalogue is a fallback. Quality-admission metadata does not turn normal
+      source loading into an opt-in mode.
     Read-only source extraction and frame export belong to
     [Kimodo tooling](../tooling/kimodo-pipeline/locomotive-animation-set.md).
     External means separately provisioned, gitignored weights at
@@ -131,13 +144,14 @@ special cases or treating source availability and retargeting as already proven.
 
 ## In Scope
 
-- ANIM-002 conditioning sources/lifecycle, externally supplied idle/action targets, and runtime motion helpers.
+- ANIM-002 conditioning sources/lifecycle, ANIM-003 idle targets, external action targets, runtime motion helpers.
 - Source and licence verification, actual-rig conversion, realised-pose feedback, and validation.
 
 ## Out Of Scope
 
-- A general action/idle subsystem, content-pack catalogue implementation and terrain/contact adaptation. ANIM-002's
-  required roles, generic stages, source metadata and external-target boundary remain mandatory.
+- A general action subsystem and terrain/contact adaptation; [ANIM-003](003-animation-catalogue/index.md) owns idle
+  and the animation catalogue. ANIM-002's required roles, generic stages, source metadata and idle/action target
+  boundary remain mandatory.
 - Player policy beyond CTRL-001's initial slice, broad hardware support, and multi-NPC execution.
 - Wrist/finger fidelity refinement beyond the F6 source-rest alignment and TR4 ownership; do not claim complete hand
   fidelity or weaken gross-body posture and realised-feedback validation.
@@ -146,7 +160,7 @@ special cases or treating source availability and retargeting as already proven.
 
 ### User Requirement Acceptance
 
-1. **ANIM-UAC-001 (UR1):** Required locomotion and external idle/action sources and licences are identified; their
+1. **ANIM-UAC-001 (UR1):** Required locomotion, catalogue idle and action sources and licences are identified; their
    availability is verified rather than inferred from upstream sample files, following ANIM-002 acceptance.
 2. **ANIM-UAC-002 (UR2–3):** Actual MakeHuman temporal evidence in Godot native playback shows generated walking and
    entry into idle on both reference characters, with F6-aligned NPC hands, observed player fingers left with their
@@ -156,7 +170,7 @@ special cases or treating source availability and retargeting as already proven.
 ### Technical Requirement Acceptance
 
 1. **ANIM-TAC-001 (TR1–2):** Apply ANIM-002 metadata/sampling/lifecycle acceptance, including physical reference speed,
-    dynamic four-frame windows and external idle compatibility. Verify game-owned phase separately from actual context.
+    dynamic four-frame windows and ANIM-003 idle compatibility. Verify game-owned phase separately from actual context.
      Apply [ANIM-002-TAC-004](002-locomotive-animation-set/index.md#technical-requirement-acceptance) for external
      source/reference properties, reviewed-action ingestion, essential integrity,
      sanitising/slicing fidelity and whole-window human review. Do not substitute source endpoints or human artistic
@@ -187,7 +201,9 @@ special cases or treating source availability and retargeting as already proven.
 Normal CTRL/NAV share the full eight-role feminine source set, dynamic four-frame sampling and actual post-modifier
 feedback. CTRL uses source-guided travel, and NAV uses native path/handoff and finite terminal-facing plans.
 CTRL integration with the shared angular mapping and planned-yaw stationary facing in both controllers are in
-progress. External idle and generated-root ownership remain separate boundaries.
+progress. Generated-root ownership remains a separate boundary. Catalogue idles, native idle presentation and the
+idle bridges are delivered under [ANIM-003](003-animation-catalogue/index.md#implementation-status), and CTRL/NAV
+resolve their locomotion set through its locomotion view.
 TR4–5 native presentation and final-target feedback are the target contract; production import and runtime migration
 is in progress and not yet verified or reviewed. See
 [ANIM-002](002-locomotive-animation-set/index.md#implementation-status),
@@ -202,6 +218,7 @@ hand-origin risks remain open. Broader ANIM delivery remains deferred-with-risk;
 
 - [Project Specifications](../index.md)
 - [ANIM-002: Locomotive Conditioning Sources](002-locomotive-animation-set/index.md)
+- [ANIM-003: Animation Catalogue](003-animation-catalogue/index.md)
 - [NAV-001: NPC Navigation](../nav/001-npc-navigation/index.md)
 - [Kimodo Motion Sources](../tooling/kimodo-pipeline/locomotive-animation-set.md)
 - [Player Character Control](../ctrl/index.md)

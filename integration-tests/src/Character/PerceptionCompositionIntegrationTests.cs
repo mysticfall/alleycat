@@ -97,6 +97,7 @@ public sealed class PerceptionCompositionIntegrationTests
                     typeof(VisualSurveyPerception),
                     typeof(VisualDescriptionPerception),
                     typeof(RelativePositionPerception),
+                    typeof(AnimationChangePerception),
                 ],
                 mind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
             // The current NPC template authors MotionBricksNavigation (NAV-001 TR5); component order
@@ -124,6 +125,7 @@ public sealed class PerceptionCompositionIntegrationTests
                     typeof(VisualSurveyPerception),
                     typeof(VisualDescriptionPerception),
                     typeof(RelativePositionPerception),
+                    typeof(AnimationChangePerception),
                 ],
                 maleMind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
             Assert.NotSame(mind.GetNode("SpeechPerception"), maleMind.GetNode("SpeechPerception"));

@@ -78,6 +78,9 @@ public sealed class ReadLoreFlowIntegrationTests
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
+        // The shared current-scene stack also binds the own stance-and-gait projector (ANIM-003 Mind Integration);
+        // this fixture character has no animation catalogue, so its projection is empty and renders no block.
+        mind.AddChild(new OwnAnimationSceneStatusProjector());
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, ally, vadim, player], content));
         // The speak batch's automatic park (§12) resolves immediately through the scripted always-act wait
         // client, keeping this fact's consecutive-turn flow as fast as before parking existed.
@@ -204,6 +207,9 @@ public sealed class ReadLoreFlowIntegrationTests
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
+        // The shared current-scene stack also binds the own stance-and-gait projector (ANIM-003 Mind Integration);
+        // this fixture character has no animation catalogue, so its projection is empty and renders no block.
+        mind.AddChild(new OwnAnimationSceneStatusProjector());
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
         // The wait completes through the decision poll's act verdict: a deterministic scripted client keeps the
         // batch-retention claim independent of decision timing (wait experiment §1).

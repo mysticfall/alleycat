@@ -32,11 +32,6 @@ public sealed class SomaMotionData
         get;
     }
     /// <inheritdoc/>
-    public Transform3D[][] Idle
-    {
-        get;
-    }
-    /// <inheritdoc/>
     public static Basis BlenderToModel => new(Vector3.Right, new Vector3(0, 0, -1), Vector3.Up);
     /// <inheritdoc/>
     public static Basis ModelToWorld => new(Vector3.Left, Vector3.Up, Vector3.Forward);
@@ -50,15 +45,11 @@ public sealed class SomaMotionData
         Parents = Manifest.GetProperty("parents").Deserialize<int[]>()!;
         Rest = ReadPose(Manifest.GetProperty("rest"));
         BlenderRest = [.. Manifest.GetProperty("blenderRest").EnumerateArray().Select(ReadMatrix)];
-        Idle = ReadClip("idle");
-        if (Names[0] != "Hips" || Parents[0] != -1 || Idle.Length < 4)
+        if (Names[0] != "Hips" || Parents[0] != -1)
         {
-            throw new InvalidDataException("Invalid SOMA source layout or motion windows.");
+            throw new InvalidDataException("Invalid SOMA source layout.");
         }
     }
-
-    internal Transform3D[][] ReadClip(string name) => [.. Manifest.GetProperty("clips").GetProperty(name)
-        .GetProperty("frames").EnumerateArray().Select(ReadPose)];
 
     private static Transform3D[] ReadPose(JsonElement rows) => [.. rows.EnumerateArray().Select(row =>
         new Transform3D(new Basis(new Quaternion(row[3].GetSingle(), row[4].GetSingle(), row[5].GetSingle(), row[6].GetSingle()).Normalized()),

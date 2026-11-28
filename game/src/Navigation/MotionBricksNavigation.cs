@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using AlleyCat.Animations;
 using AlleyCat.Core.Logging;
 using AlleyCat.Models;
 using AlleyCat.Motion;
@@ -51,7 +52,6 @@ public partial class MotionBricksNavigation : NavigationBase
     private Character.Character? _actor;
     private Skeleton3D? _skeleton;
     private SomaMotionData? _data;
-    private MotionCatalogue? _catalogue;
     private ReviewedRoleSampler? _reviewed;
     private NavigationMotionIntent _intent;
     /// <summary>Forward/lateral component near-zero tolerance; same default as player input.</summary>
@@ -65,8 +65,7 @@ public partial class MotionBricksNavigation : NavigationBase
     private Transform3D[] _pose = [], _observed = [];
     private Transform3D[][]? _segment;
     private double _phaseTime, _requestStarted;
-    private Vector3 _lastGround, _idleGround;
-    private Basis _idleYaw = Basis.Identity;
+    private Vector3 _lastGround;
     private bool _pending, _needRequest, _arrival, _endpoint, _record;
     private bool _unavailable, _idleTransitionRequested, _idleTransitionActive, _arrivalFinished;
     private long _ticket;
@@ -143,8 +142,8 @@ public partial class MotionBricksNavigation : NavigationBase
             _actor = GetParent<Character.Character>();
             _skeleton = _actor.RequireMotionTarget();
             _data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-            _catalogue = new MotionCatalogue(ProjectSettings.GlobalizePath("res://data/motionbricks/catalogue.json"), _data);
-            _reviewed = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), _data);
+            var catalogue = AnimationCatalogue.RequireFor(_actor);
+            _reviewed = catalogue.Locomotion.CreateSampler(_data);
             _ = _reviewed.TurnReference("left_turn");
             _ = _reviewed.TurnReference("right_turn");
             _pose = new Transform3D[_data.Names.Length];
@@ -186,11 +185,9 @@ public partial class MotionBricksNavigation : NavigationBase
             }
             _skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Physics;
             _skeleton.SkeletonUpdated += Observe;
-            _idleGround = SomaMotionData.ModelToWorld.Inverse() * _actor.GlobalPosition;
-            _idleYaw = _actor.GlobalBasis.Orthonormalized();
-            _lastGround = _idleGround;
+            _lastGround = Ground(SomaMotionData.ModelToWorld.Inverse() * _actor.GlobalPosition);
             Phase = "initial-idle";
-            SampleIdle();
+            InstallNativeIdle(catalogue);
             DestinationReachedDistance = 0.1f;
             PathDesiredDistance = 0.15f;
             _logger!.LogInformation("MotionBricks normal lifecycle installed on {Actor}", _actor.Name);
@@ -222,6 +219,8 @@ public partial class MotionBricksNavigation : NavigationBase
         _worker?.CancelRequest();
         _ = (_reviewed?.SetIntent("", ObservationTime));
         _pending = false;
+        RetainOutgoingBridge();
+        _submittedIdle = null;
         _segment = null;
         _endpoint = false;
         _needRequest = true;
@@ -241,6 +240,7 @@ public partial class MotionBricksNavigation : NavigationBase
         _worker?.CancelRequest();
         _pending = false;
         _needRequest = false;
+        RetainOutgoingBridge();
         _segment = null;
         _endpoint = false;
         if (_unavailable)
@@ -275,8 +275,9 @@ public partial class MotionBricksNavigation : NavigationBase
         }
         if (Phase == "failed")
         {
-            // Skeleton modifiers reset their output each tick. Retain the input pose, not their transient output.
-            _rig.Apply(_pose);
+            // Skeleton modifiers reset their output each tick. Retain the input pose, not their transient output;
+            // a native idle that owns the body keeps playing as the safe pose.
+            HoldPresentation(delta);
             return;
         }
         try
@@ -289,8 +290,7 @@ public partial class MotionBricksNavigation : NavigationBase
             LogFailureDiagnostic();
             Fail(error.Message);
             // Refusal skips the normal base write; keep ownership through the post-modifier observation.
-            _rig.Apply(_pose);
-            _record = true;
+            HoldPresentation(0);
         }
         catch (Exception error)
         {
@@ -346,8 +346,10 @@ public partial class MotionBricksNavigation : NavigationBase
                 _earlyNativeSubmission, _actor!.GlobalPosition, _submissionCorridorEnd,
                 true,
                 true,
-                CurrentRouteSnapshot?.RouteRevision ?? 0, SubmittedRole);
+                CurrentRouteSnapshot?.RouteRevision ?? 0, SubmittedRole, _nextIdleTarget);
         }
+        _submittedIdle = _nextIdleTarget ?? _submittedIdle;
+        _nextIdleTarget = null;
         Requests++;
         _needRequest = false;
         _pending = true;
@@ -365,6 +367,7 @@ public partial class MotionBricksNavigation : NavigationBase
         }
         _record = false;
         _rig!.Observe(_observed);
+        ObserveOffset();
         _history!.Record(ObservationTime, _observed);
         _observedAt = ObservationTime;
         ObserveFiniteTurnEndpoint();
@@ -397,21 +400,18 @@ public partial class MotionBricksNavigation : NavigationBase
         return new Transform3D(new Basis(Vector3.Up, yaw), _actor!.GlobalPosition);
     }
 
+    // Settles NAV state once a bridge into an idle has handed the body to the native clip (ANIM-003 TR13).
     private void EnterIdle()
     {
-        _idleGround = Ground(_observed[0].Origin);
-        _idleYaw = MeasuredTransform().Basis;
-        _lastGround = _idleGround;
-        _phaseTime = 0;
+        if (!NativeIdleOwnsBody)
+        {
+            // Defensive: an idle phase is never presented by generated motion.
+            EnterNativeIdle(_idleClip ?? EffectiveIdleClip(), NativeIdleTime, null);
+        }
+        _lastGround = _rig!.PinnedModelGround();
         Phase = "settled-idle";
-    }
-
-    private void SampleIdle()
-    {
-        PlaybackObserved?.Invoke(0, null, 0);
-        SomaMotionData.Sample(_data!.Idle, _phaseTime % ((_data.Idle.Length - 1) / 30.0), _pose);
-        _pose[0] = new Transform3D(_idleYaw * _pose[0].Basis,
-            _idleGround + (_idleYaw * (_pose[0].Origin - Ground(_data.Idle[0][0].Origin))));
+        // A preference chosen while moving is adopted once settled.
+        RequestEffectiveIdle();
     }
 
     private void Fail(string message)
@@ -431,39 +431,53 @@ public partial class MotionBricksNavigation : NavigationBase
         _worker?.CancelRequest();
         _segment = null;
         _pending = _needRequest = _endpoint = _idleTransitionRequested = _idleTransitionActive = false;
+        _submittedIdle = null;
         _ = TryCommitFailedOutcome(CreateLifecycleTerminalContext(MeasuredTransform(), NavigationTerminalReason.MotionUnavailable), Engine.GetPhysicsFrames());
         Phase = "failed";
-        _rig?.Apply(_pose);
+        if (_rig is not null && !NativeIdleOwnsBody)
+        {
+            _rig.Apply(_pose);
+        }
     }
 
+    // Bridge from the current realised pose into the start of the effective idle (ANIM-003 TR15–TR17): an idle
+    // change while settled or bridging between idles, or a stop that interrupts movement.
     private void SubmitIdleTransition()
     {
-        Transform3D[][] context = _history!.Context();
-        MotionCatalogue.Stage stage = _catalogue!.Select(0);
-        Transform3D[][] clip = MotionCatalogue.Clip(_data!, stage.Action);
-        Basis yaw = MeasuredTransform().Basis;
-        Vector3 placement = Ground(context[3][0].Origin);
-        Vector3 initial = Ground(clip[stage.Entry][0].Origin);
-        var target = new Transform3D[4][];
-        for (int f = 0; f < 4; f++)
+        _idleTransitionRequested = false;
+        NativeIdleClip clip = EffectiveIdleClip();
+        if (NativeIdleOwnsBody && clip == _idleClip && !_pending)
         {
-            target[f] = (Transform3D[])clip[stage.Entry + f].Clone();
-            target[f][0] = new Transform3D(yaw * target[f][0].Basis,
-                placement + (yaw * (target[f][0].Origin - initial)));
+            // Already presenting the effective idle; nothing to bridge.
+            _idleTransitionActive = false;
+            EnterIdle();
+            return;
         }
-        _lastGround = Ground(context[3][0].Origin);
+        Transform3D[][] context = _history!.Context();
+        bool stationary = NativeIdleOwnsBody || ((_segment is null ? _outgoing : _bridge)?.Plan.Stationary ?? false);
+        Transform3D[][] target = stationary
+            ? IdleTargetWindow(clip, ActorYaw(), _actor!.GlobalPosition, null, true, out IdleTarget idle)
+            : IdleTargetWindow(clip, ActorYaw(), _actor!.GlobalPosition, AnatomicalHeading(context[3]), false, out idle);
+        if (!stationary)
+        {
+            _lastGround = Ground(context[3][0].Origin) - _observedOffset;
+        }
         _ticket = _worker!.Submit(context, target);
         {
             _nativePending = new NativePacket(_ticket, _nativeRevision, _observedAt, false, true, false,
-                _actor!.GlobalPosition, _actor.GlobalPosition, false);
+                _actor!.GlobalPosition, _actor.GlobalPosition, false, IdleTarget: idle);
         }
+        _submittedIdle = idle;
         Requests++;
-        _idleTransitionRequested = false;
         _idleTransitionActive = _pending = true;
         _endpoint = false;
         _requestStarted = ObservationTime;
-        Phase = "inference-hold";
+        if (!NativeIdleOwnsBody)
+        {
+            Phase = "inference-hold";
+        }
         WindowSubmitted?.Invoke(_ticket, context, target);
+        _logger!.LogInformation("Idle transition window {Request} to {Entry}: stationary {Stationary}", Requests, clip.Entry, stationary);
     }
 
     private static Vector3 Ground(Vector3 p) => new(p.X, 0, p.Z);

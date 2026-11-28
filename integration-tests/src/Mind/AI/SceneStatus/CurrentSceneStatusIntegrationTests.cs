@@ -79,6 +79,9 @@ public sealed class CurrentSceneStatusIntegrationTests
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
+        // The shared current-scene stack also binds the own stance-and-gait projector (ANIM-003 Mind Integration);
+        // this fixture character has no animation catalogue, so its projection is empty and renders no block.
+        mind.AddChild(new OwnAnimationSceneStatusProjector());
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())
             .BuildServiceProvider();
@@ -117,6 +120,9 @@ public sealed class CurrentSceneStatusIntegrationTests
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
+        // The shared current-scene stack also binds the own stance-and-gait projector (ANIM-003 Mind Integration);
+        // this fixture character has no animation catalogue, so its projection is empty and renders no block.
+        mind.AddChild(new OwnAnimationSceneStatusProjector());
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())
             .BuildServiceProvider();
@@ -185,6 +191,9 @@ public sealed class CurrentSceneStatusIntegrationTests
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
+        // The shared current-scene stack also binds the own stance-and-gait projector (ANIM-003 Mind Integration);
+        // this fixture character has no animation catalogue, so its projection is empty and renders no block.
+        mind.AddChild(new OwnAnimationSceneStatusProjector());
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ITemplateCompiler>(new FluidTemplateCompiler())
             .BuildServiceProvider();

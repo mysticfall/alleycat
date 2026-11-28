@@ -1,3 +1,4 @@
+using AlleyCat.Animations;
 using AlleyCat.IK.Pose;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
@@ -1244,7 +1245,8 @@ public partial class CharacterIK : Node3D
         for (int i = 0; i < childCount; i++)
         {
             Node child = skeleton.GetChild(i);
-            if (child is SkeletonModifier3D)
+            // A base-pose presenter (ANIM-003 TR13 native idle) stays ahead of the IK pipeline.
+            if (child is SkeletonModifier3D and not IBasePoseModifier)
             {
                 insertionIndex = Math.Min(insertionIndex, i);
             }

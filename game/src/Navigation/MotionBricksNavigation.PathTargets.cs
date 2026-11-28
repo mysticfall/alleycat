@@ -57,17 +57,7 @@ public partial class MotionBricksNavigation
         if (_arrival)
         {
             _ = _reviewed.SetIntent("", ObservationTime);
-            MotionCatalogue.Stage idle = _catalogue!.Select(0);
-            Transform3D[][] clip = MotionCatalogue.Clip(_data!, idle.Action);
-            Basis facing = new(Vector3.Up, finalYaw - Mathf.Pi);
-            Vector3 placement = Ground(SomaMotionData.ModelToWorld.Inverse() * Destination.Origin);
-            Vector3 origin = Ground(clip[idle.Entry][0].Origin);
-            target = new Transform3D[4][];
-            for (int i = 0; i < 4; i++)
-            {
-                target[i] = (Transform3D[])clip[idle.Entry + i].Clone();
-                target[i][0] = new(facing * target[i][0].Basis, placement + (facing * (target[i][0].Origin - origin)));
-            }
+            target = ArrivalIdleWindow();
         }
         else
         {

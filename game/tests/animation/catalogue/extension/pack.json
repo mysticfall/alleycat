@@ -1,0 +1,20 @@
+{
+  "schema": "anim003_pack_v1",
+  "id": "extension",
+  "entries": [
+    {
+      "id": "sad",
+      "category": "idle",
+      "tags": ["sad", "weary"],
+      "description": "stands wearily, shoulders drooping",
+      "clip": "data/animations/default/idle/sad.tres"
+    },
+    {
+      "id": "stroll",
+      "category": "locomotion",
+      "tags": ["leisurely"],
+      "description": "strolls along at an unhurried pace",
+      "set": "data/motionbricks/reviewed-feminine/set.json"
+    }
+  ]
+}

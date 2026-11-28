@@ -19,7 +19,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static readonly StringName _eyesLibraryName = new("eyes");
     private static readonly StringName _actorsGroupName = new("Actors");
     private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
-    private static readonly StringName _idleLibraryName = new("idle");
     private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
     [
@@ -90,14 +89,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             AnimationPlayer animationPlayer = FindSingleDescendant<AnimationPlayer>(context.TargetRoot)
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationPlayer copied from the role template.");
 
-            AnimationPlayer? templateAnimationPlayer = FindSingleDescendant<AnimationPlayer>(context.TemplateRoot, required: false);
-            bool animationLibrariesChanged = templateAnimationPlayer is not null
-                && RetainAuthoredAnimationLibraries(templateAnimationPlayer, animationPlayer);
-            if (animationLibrariesChanged && animationTree.Active)
-            {
-                animationTree.Active = false;
-                animationTree.Active = true;
-            }
             RebaseAnimationMixerRoots(animationTree, animationPlayer, context.Skeleton);
             EyeAnimationTreeFilterTargets eyeFilterTargets = ValidateEyeAnimationLibrary(animationPlayer);
             ConfigureEyeAnimationTreeFilters(animationTree, eyeFilterTargets);
@@ -178,38 +169,6 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         NodePath modelRootPath = animationTree.GetPathTo(modelRoot);
         animationTree.RootNode = modelRootPath;
         animationPlayer.RootNode = animationPlayer.GetPathTo(modelRoot);
-    }
-
-    private static bool RetainAuthoredAnimationLibraries(
-        AnimationPlayer templateAnimationPlayer,
-        AnimationPlayer targetAnimationPlayer)
-    {
-        bool changed = false;
-        changed |= RetainAuthoredAnimationLibrary(templateAnimationPlayer, targetAnimationPlayer, _idleLibraryName);
-        return changed;
-    }
-
-    private static bool RetainAuthoredAnimationLibrary(
-        AnimationPlayer templateAnimationPlayer,
-        AnimationPlayer targetAnimationPlayer,
-        StringName libraryName)
-    {
-        if (!templateAnimationPlayer.HasAnimationLibrary(libraryName))
-        {
-            return false;
-        }
-
-        if (targetAnimationPlayer.HasAnimationLibrary(libraryName))
-        {
-            return false;
-        }
-
-        AnimationLibrary library = templateAnimationPlayer.GetAnimationLibrary(libraryName);
-        Error result = targetAnimationPlayer.AddAnimationLibrary(libraryName, library);
-        return result == Error.Ok && targetAnimationPlayer.HasAnimationLibrary(libraryName)
-            ? true
-            : throw new InvalidOperationException(
-                $"Character runtime subsystem installer could not retain authored AnimationLibrary '{libraryName}' on '{targetAnimationPlayer.GetPath()}'.");
     }
 
     private static EyeAnimationTreeFilterTargets ValidateEyeAnimationLibrary(AnimationPlayer animationPlayer)

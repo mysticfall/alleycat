@@ -307,6 +307,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             typeof(AlleyCat.Character.Character).GetField("_motionTarget", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .SetValue(Player, skeleton);
             Player.AddChild(new AnimationTree { Name = "AnimationTree", Active = false });
+            // Player locomotion resolves its reviewed set through the character's catalogue (ANIM-003).
+            Player.AddChild(MotionFixtureCatalogue.Create(npc: false));
             Player.AddChild(Motion);
             _root.AddChild(Player);
         }

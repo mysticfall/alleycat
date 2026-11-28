@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bji3uvqm0d0ay" path="res://src/Mind/AI/Prompting/ProjectionPromptSection.cs" id="1_projection"]
 [ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="2_stack"]
+[ext_resource type="Resource" uid="uid://dq68eam5mkf1o" path="res://assets/characters/prompts/own_stance_and_gait_status_section.tres" id="3_own_status"]
 
 [sub_resource type="Resource" id="Resource_attended_characters"]
 script = ExtResource("1_projection")
@@ -18,4 +19,4 @@ Name = "Attended Characters"
 
 [resource]
 script = ExtResource("2_stack")
-Sections = [SubResource("Resource_attended_characters")]
+Sections = [SubResource("Resource_attended_characters"), ExtResource("3_own_status")]

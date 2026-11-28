@@ -197,21 +197,7 @@ public partial class MotionBricksNavigation
         }
         PositioningPlacementIntent = null;
         _ = _reviewed!.SetIntent("", ObservationTime);
-        MotionCatalogue.Stage stage = _catalogue!.Select(0);
-        Transform3D[][] clip = MotionCatalogue.Clip(_data!, stage.Action);
-        Vector3 forward = -Destination.Basis.Z;
-        Basis facing = new(Vector3.Up, Mathf.Atan2(forward.X, forward.Z) - Mathf.Pi);
-        Vector3 ground = Ground(SomaMotionData.ModelToWorld.Inverse() * Destination.Origin);
-        Vector3 origin = Ground(clip[stage.Entry][0].Origin);
-        var target = new Transform3D[4][];
-        for (int i = 0; i < 4; i++)
-        {
-            target[i] = (Transform3D[])clip[stage.Entry + i].Clone();
-            target[i][0] = new(facing * target[i][0].Basis, ground + (facing * (target[i][0].Origin - origin)));
-            // Retain the existing source-rate external-idle anatomical-heading placement contract.
-            float modelHeading = Mathf.Atan2(forward.X, forward.Z) - Mathf.Pi;
-            target[i][0].Basis = new Basis(Vector3.Up, modelHeading - AnatomicalHeading(target[i])) * target[i][0].Basis;
-        }
+        Transform3D[][] target = ArrivalIdleWindow();
         _arrival = true;
         SubmitPlacedPositioning(context, target, 0, 0);
         return true;

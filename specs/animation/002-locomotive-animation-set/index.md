@@ -29,27 +29,29 @@ owner of intended state progression.
    identical generated foot placement or timing. Stationary turns retain the source's pacing and ordered left/right
    lift cues as the turn arc widens or narrows. Wider turns read as larger turns, not as clusters of small turns.
    Actor facing progresses in the commanded direction without being reversed by generated hip motion.
-4. Locomotion enters and leaves externally supplied compatible idle/action targets. Idle assets belong to a separate
-   system. Each source variant owns a reference posture for authoring, not a matching runtime idle asset or a
-   requirement to pass through idle during movement or state changes.
+4. Locomotion enters and leaves compatible idle targets supplied by the
+   [ANIM-003](../003-animation-catalogue/index.md) catalogue and compatible externally supplied action targets. Each
+   source variant owns a reference posture for authoring, not a matching runtime idle asset or a requirement to pass
+   through idle during movement or state changes.
 
 ## Technical Requirements
 
 1. **Semantic Source Metadata:** identify variant/posture, movement role, speed stage and source identity/provenance.
-   Declare usable time ranges, sample timing/rate, root units and coordinate axes, travel direction separately from
-   body facing, loopability and cyclic boundaries, and admissible phase initialisation/transfer information.
-   Describe expected source foot phases where applicable, sufficient to interpret the ordered source cycle; these
-   describe source intent, not inferred contact in the displayed character. For stationary turns, identify each foot's
-   lift landmarks with source phase, associated source angular progression and their order, including both feet where
-   present. Declare whether measurements use foot/toe joint origins or a defined clearance convention; joint-origin
-   peaks do not establish sole clearance, support or contact. Do not collapse two distinct foot cues into one global
-   maximum or an artificial midpoint. No unique highest point or automatic peak-selection algorithm is required.
-   If a required cue is absent, declare the source unsuitable for that coverage or record the missing validation
-   follow-up; do not fabricate another cue. Declare unsupported roles or missing inputs explicitly rather than
-   silently relabelling crossing travel as non-crossing sidestepping.
-   Normal CTRL/NAV installation loads the same complete feminine `reviewed-feminine/set.json` source set, without
-   controller/source activation flags or a prototype movement fallback. Bind all eight roles, angular metadata and
-   approved source identity together; unavailable or inconsistent content fails explicitly.
+   Declare usable time ranges, sample timing/rate, root units and coordinate axes, travel direction separately from body
+   facing, loopability and cyclic boundaries, and admissible phase initialisation/transfer information. Describe
+   expected source foot phases where applicable, sufficient to interpret the ordered source cycle; these describe source
+   intent, not inferred contact in the displayed character. For stationary turns, identify each foot's lift landmarks
+   with source phase, associated source angular progression and their order, including both feet where present. Declare
+   whether measurements use foot/toe joint origins or a defined clearance convention; joint-origin peaks do not
+   establish sole clearance, support or contact. Do not collapse two distinct foot cues into one global maximum or an
+   artificial midpoint. No unique highest point or automatic peak-selection algorithm is required. If a required cue is
+   absent, declare the source unsuitable for that coverage or record the missing validation follow-up; do not fabricate
+   another cue. Declare unsupported roles or missing inputs explicitly rather than silently relabelling crossing travel
+   as non-crossing sidestepping. CTRL/NAV load the reviewed set resolved by the character's ANIM-003 locomotion view,
+   without controller or source activation flags or a prototype movement fallback. The default `feminine` entry binds
+   the complete `reviewed-feminine/set.json`. Bind all eight roles, angular metadata and approved source identity
+   together; unavailable or inconsistent content fails explicitly. ANIM-003 entries reference sets in this format
+   without extending it.
 2. **Physical Speed Metadata:** each moving variant/stage/role supplies a physical reference velocity or speed with
    direction and the representative interval/cycle used to establish it. Keep this distinct from phase-local root
    velocity and turning information available from ordered samples. Uneven local velocity, such as a limp, must not
@@ -75,8 +77,8 @@ owner of intended state progression.
      source-rate policy, not inference completion. Select a future phase/window using the controller's target horizon
      and source timing, subject to the stationary-turn contract below. Source-clock time, planned phase, selection,
      target horizon and model-selected generated duration are distinct; do not assume they coincide.
-   - For repeated sampling, identify a candidate complete cycle supported by actual source motion, manually or with
-     reused deterministic tools; no particular cycle-finding algorithm is required. Freeze source bounds, period,
+   - For repeated sampling, identify a candidate complete cycle supported by actual source motion, manually; no
+     repository cycle-finding tooling exists and no algorithm is required. Freeze source bounds, period,
      endpoint-duplicate convention and accumulated travel/facing transform before the trial. Authoring boundaries alone
      do not establish a complete cycle.
    - First test the raw cycle without boundary processing. Explicit experimental cycle metadata within a human-approved
@@ -92,7 +94,7 @@ owner of intended state progression.
      range using declared metadata. Do not require leading-foot variants or infer displayed support feet to switch.
      Missing compatibility must be exposed, not repaired with fabricated source poses or an authored-idle reset.
    - Interruption replaces the intended state/target immediately under CTRL/NAV policy. Stop advancing the abandoned
-     state's phase; an external idle/action handoff or new locomotion state must not await the old cycle's completion.
+     state's phase; an idle/action handoff or new locomotion state must not await the old cycle's completion.
    - Overlapping generation/playback may retain compatible work, but each request snapshots its role, stage, phase,
      sampled window and placement with request ownership. Sample-ahead must not itself commit future state. Reject
      obsolete results; late completion must not rewind the clock, revive interrupted state or dictate the next phase.
@@ -101,10 +103,12 @@ owner of intended state progression.
    distinguishing non-crossing positioning from crossing travel without requiring a new control binding here.
    They own target placement and compatibility/replacement, not source authoring. No blend tree or elaborate new
    scheduler is prescribed. No mandatory arc-turn, start/stop, reversal or leading-foot clips are introduced.
-6. **Idle/Action Boundary:** the external owner supplies usable target windows with timing, coordinates and posture
-   compatibility. The locomotion controller requests compatible targets for arrival, release or interruption and
-   connects from actual realised context; it must not assume an idle clip in every locomotion variant. Report missing
-   or incompatible targets explicitly under CTRL/NAV failure policy. This defines the boundary, not an idle subsystem.
+6. **Idle/Action Boundary:** [ANIM-003](../003-animation-catalogue/index.md#transitions) supplies idle target
+   windows (the start of the effective idle clip, converted to SOMA). External action owners supply action target
+   windows with timing, coordinates and posture compatibility. The locomotion controller requests compatible
+   targets for arrival, release or interruption and connects from actual realised context. It must not assume an
+   idle clip in every locomotion variant. Report missing or incompatible targets explicitly under the CTRL/NAV
+   failure policy. This page defines the boundary. ANIM-003 owns idle playback and transitions.
 7. **Realisation and Safety:** apply the [shared animation contract](../index.md) for source licensing, native
    presentation, SOMA helpers and actual final-target feedback. Virtual phase and expected source foot phase are
    intended state only; never feed sampled/predicted targets back as observed motion. CTRL/NAV retain collision-root,
@@ -124,7 +128,7 @@ owner of intended state progression.
    its provenance. Each authored role begins and ends in that same posture, preserving the whole child-pose
    configuration while placing the root at the role's declared world position and facing. The posture may be
    arms-down standing or another authored configuration, such as arms crossed; it is not limited to a T-pose or
-   default standing pose and does not depend on an external matching idle asset.
+   default standing pose and does not depend on a matching idle asset.
    Source creation is external and artist-owned; retain inspectable Blender source/reference inputs for generic variants
    with one or more stages. Repository delivery covers reviewed-action ingestion, canonical export and source-set
    publication, not a template generator or extension runner.
@@ -184,15 +188,17 @@ drive the actor or be applied twice in presentation. The planned cycle endpoint 
 ## In Scope
 
 - Required role vocabulary, generic variants/stages, physical speed and timing metadata, and dynamic window sampling.
-- Game-owned phase lifecycle, target placement boundary, external idle/action integration, and safety/validation.
+- Game-owned phase lifecycle, target placement boundary, ANIM-003 idle and external action integration, and
+  safety/validation.
 - Variant-local source reference postures, continuous multi-role authoring and whole-window source validation.
 
 ## Out Of Scope
 
-- An entire idle/action system, mandatory transition/arc/leading-foot clips, inferred displayed-foot matching,
-  procedural stitching, terrain/contact adaptation and general rig support.
+- Idle content, playback and transitions, owned by [ANIM-003](../003-animation-catalogue/index.md); an action
+  system; mandatory transition, arc or leading-foot clips; inferred displayed-foot matching; procedural stitching;
+  terrain/contact adaptation; and general rig support.
 - Mandatory automatic source-window discovery or a new cycle-finding algorithm, and general exporter/schema design
-  beyond the required reviewed-source pipeline. Manual identification or deterministic tool reuse is permitted.
+  beyond the required reviewed-source pipeline. Cycles and windows are identified manually.
   These exclusions do not waive ingestion, usable metadata, role slicing, coverage, lifecycle or runtime validation.
 
 ## Acceptance Criteria
@@ -207,9 +213,10 @@ drive the actor or be applied twice in presentation. The planned cycle endpoint 
    from both feet where present. Check that larger arcs read as larger turns at source pace and that neither controller
    sustains rotation against the command or reverses actor facing because of generated hip motion. Distinguish
    authored micro-reversals in the mapped source from hip-driven reversals. Correct facing does not prove footwork.
-3. **ANIM-002-UAC-003 (UR4):** Locomotion connects to compatible externally owned idle/action targets without requiring
-   a runtime ANIM-002 idle asset or passing through the source reference posture; unavailable targets are reported
-   truthfully rather than silently reset. Source reference ownership remains local and independent of those targets.
+3. **ANIM-002-UAC-003 (UR4):** Locomotion connects to compatible ANIM-003 idle targets and externally owned action
+   targets (TR6) without requiring a runtime ANIM-002 idle asset or passing through the source reference posture;
+   unavailable targets are reported truthfully rather than silently reset. Source reference ownership remains local and
+   independent of those targets.
 
 ### Technical Requirement Acceptance
 
@@ -249,8 +256,8 @@ drive the actor or be applied twice in presentation. The planned cycle endpoint 
    Stationary-turn review includes the full actual-rig turn, intensity changes, release and settled tail. Metadata
    correctness or four future poses alone does not establish displayed mid-turn footwork or resolve slow turning.
 4. **ANIM-002-TAC-004 (TR7–9, UR2/4):** Audit externally authored source/reference inputs, local-reference boundary
-   placement, multiple intended cycles, declared extraction policy and full chronology, independently of external idle
-   assets.
+   placement, multiple intended cycles, declared extraction policy and full chronology, independently of catalogue
+   idle assets.
    Verify reviewed-action ingestion without a generation-runner receipt, hash/action/range-bound approval and essential
    data checks. Check documented technical sanitising preserves poses/trajectory and role slices retain ordered windows;
    range revisions require new review. Experimental cycle declarations inside approved roles retain original approval
@@ -264,7 +271,8 @@ drive the actor or be applied twice in presentation. The planned cycle endpoint 
 
 ## Implementation Status
 
-Normal CTRL and NAV share `game/data/motionbricks/reviewed-feminine/set.json`; every role binds to
+Normal CTRL and NAV share `game/data/motionbricks/reviewed-feminine/set.json`, resolved through the ANIM-003
+locomotion view's default `feminine` entry; every role binds to
 `landing-ablation-01.json`, the complete 1–1200 at 30 Hz export of `source_feminine_landing_ablation_01`.
 The [source manifest](../../../game/data/motionbricks/reviewed-feminine/set.json),
 [angular metadata](../../../game/data/motionbricks/reviewed-feminine/turn-angular-reference.json) and
@@ -284,20 +292,19 @@ neither turn is assumed to span 90 degrees. Runtime does not search for a substi
 Source ranges remain non-cyclic; `EXPERIMENTAL_NOT_ADMITTED` labels describe content quality,
 not an activation flag. They confer no seamless-loop, sole-contact or generated-motion naturalness guarantee.
 
-Shared normal-source adoption and native NAV path/handoff with finite terminal turns have technical evidence;
-combined independent review remains pending. CTRL integration with the shared angular mapping and planned-yaw facing
-for both controllers are in progress. See the
-[adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md).
-Source stepping/foot-sliding mitigation is user accepted; initial twitch is explicitly deferred. Runtime generated
-gait, sliding, turn pace, headset/interaction quality and raw repetition admission remain open. Masculine/default
-content, reference previews and known native-shutdown/hand-origin risks remain unresolved. Broader architecture and
-final acceptance remain deferred-with-risk; plan steps 5/6 are open. Normal-source adoption does not complete ANIM-002
-or authorise new source generation/model calls.
+Shared normal-source adoption and native NAV path/handoff with finite terminal turns have technical evidence; combined
+independent review remains pending. CTRL integration with the shared angular mapping and planned-yaw facing for both
+controllers are in progress. Source stepping/foot-sliding mitigation is user accepted; initial twitch is explicitly
+deferred. Runtime generated gait, sliding, turn pace, headset/interaction quality and raw repetition admission remain
+open. Masculine/default content, reference previews and known native-shutdown/hand-origin risks remain unresolved.
+Broader architecture and final acceptance remain deferred-with-risk; plan steps 5/6 are open. Normal-source adoption
+does not complete ANIM-002 or authorise new source generation/model calls.
 
 ## References
 
 - [Project Specifications](../../index.md)
 - [Shared Animation Contract](../index.md)
+- [ANIM-003: Animation Catalogue](../003-animation-catalogue/index.md)
 - [Player Locomotion](../../ctrl/001-locomotion/index.md)
 - [NPC Navigation](../../nav/001-npc-navigation/index.md)
 - [Kimodo Source Protection and Current Tooling](../../tooling/kimodo-pipeline/locomotive-animation-set.md)

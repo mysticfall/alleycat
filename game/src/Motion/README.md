@@ -1,7 +1,7 @@
 # Shared Motion Runtime
 
 CTRL and NAV normally use the same [feminine source set](../../data/motionbricks/reviewed-feminine/README.md).
-No source/controller activation flags are needed. Authored idle remains in `MotionCatalogue`; moving and
+No source/controller activation flags are needed. NPC idles are native catalogue clips (ANIM-003); moving and
 stationary-turn roles come from `ReviewedRoleSampler`, not fixed prototype walk windows.
 
 ## Files and Attribution
@@ -26,7 +26,7 @@ Open Model Agreement and locally provisioned. No evaluation-only upstream motion
 ## Launch
 
 Provision the [model](../../models/motionbricks/README.md), calibration and model-frame exports using
-the [maintained tooling](../../../tools/kimodo-pipeline/README.md). Ordinary gameplay executes no Python or Blender.
+the [maintained tooling](../../../tools/animation-pipeline/README.md). Ordinary gameplay executes no Python or Blender.
 Runtime JSON is self-contained; embedded source/evidence paths are provenance, not runtime dependencies.
 
 ```sh

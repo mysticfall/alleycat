@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using AlleyCat.Motion;
 using AlleyCat.Navigation;
 using AlleyCat.TestFramework;
@@ -11,35 +10,6 @@ namespace AlleyCat.IntegrationTests.Motion;
 [Headless]
 public sealed class MotionBricksDeliveryIntegrationTests
 {
-    /// <summary>SA-B01: normal idle/calibration startup must not require any prototype walking clip or stage.</summary>
-    [Fact]
-    public void RuntimeData_IdleOnlyCalibrationAndCatalogueNeedNoPrototypeWalk()
-    {
-        string runtime = ProjectSettings.GlobalizePath("res://data/motionbricks");
-        JsonObject poses = JsonNode.Parse(File.ReadAllText(Path.Combine(runtime, "poses.json")))!.AsObject();
-        _ = poses["clips"]!.AsObject().Remove("walk");
-        _ = poses["sources"]!.AsObject().Remove("game/assets/characters/animations/source/locomotion/locomotion.blend");
-        JsonObject catalogue = JsonNode.Parse(File.ReadAllText(Path.Combine(runtime, "catalogue.json")))!.AsObject();
-        JsonArray stages = catalogue["variants"]![0]!["stages"]!.AsArray();
-        foreach (JsonNode? stage in stages.Where(s => s!["action"]!.GetValue<string>() == "walk").ToArray())
-        {
-            _ = stages.Remove(stage);
-        }
-        string directory = ProjectSettings.GlobalizePath("res://temp/motionbricks/anim002-regenerated-source-adoption-01/blocker-fix-01/idle-only-" + Guid.NewGuid().ToString("N"));
-        _ = Directory.CreateDirectory(directory);
-        string posePath = Path.Combine(directory, "poses.json"), cataloguePath = Path.Combine(directory, "catalogue.json");
-        File.WriteAllText(posePath, poses.ToJsonString());
-        File.WriteAllText(cataloguePath, catalogue.ToJsonString());
-        var data = new SomaMotionData(posePath);
-        var idle = new MotionCatalogue(cataloguePath, data);
-        MotionCatalogue.Stage selected = Assert.Single(idle.Stages);
-        Assert.Equal("idle", selected.Action);
-        Assert.Equal(0, selected.Speed);
-        Assert.True(data.Idle.Length >= 4);
-        Assert.Same(data.Idle, MotionCatalogue.Clip(data, selected.Action));
-        _ = new SomaModelFrames(data, Path.Combine(runtime, "model-frames.json"));
-    }
-
     /// <summary>Local model setup resolves both defaults and explicit overrides before native worker IO.</summary>
     [Fact]
     public void ModelPath_GlobalisesDefaultAndHonoursNonBlankOverride()
@@ -89,25 +59,18 @@ public sealed class MotionBricksDeliveryIntegrationTests
         finally { npc.Free(); player.Free(); }
     }
 
-    /// <summary>Delivery loads real runtime paths and approved action windows without any diagnostic fixture.</summary>
+    /// <summary>
+    /// Delivery loads the real calibration paths without any diagnostic fixture: the poses export carries the canonical
+    /// skeleton only, with no clip or prototype walking source, and the named model frames resolve against it.
+    /// </summary>
     [Fact]
-    public void RuntimeData_LoadsApprovedWindowsAndNamedModelFrames()
+    public void RuntimeData_LoadsCanonicalSkeletonAndNamedModelFrames()
     {
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
-        var catalogue = new MotionCatalogue(ProjectSettings.GlobalizePath("res://data/motionbricks/catalogue.json"), data);
         _ = new SomaModelFrames(data, ProjectSettings.GlobalizePath("res://data/motionbricks/model-frames.json"));
-        Assert.Equal("idle", catalogue.Select(0).Action);
-        Assert.Equal("idle", Assert.Single(catalogue.Stages).Action);
-        Assert.Equal(0, catalogue.Stages[0].Speed);
-        Assert.False(data.Manifest.GetProperty("clips").TryGetProperty("walk", out _));
+        Assert.False(data.Manifest.TryGetProperty("clips", out _));
         Assert.False(data.Manifest.GetProperty("sources").TryGetProperty(
             "game/assets/characters/animations/source/locomotion/locomotion.blend", out _));
         Assert.All(["LeftFoot", "LeftToeBase", "RightFoot", "RightToeBase"], n => Assert.Contains(n, data.Names));
-        Assert.All(catalogue.Stages, stage =>
-        {
-            Transform3D[][] clip = MotionCatalogue.Clip(data, stage.Action);
-            Assert.InRange(stage.Entry + 3, 3, clip.Length - 1);
-            Assert.InRange(stage.Exit + 3, 3, clip.Length - 1);
-        });
     }
 }

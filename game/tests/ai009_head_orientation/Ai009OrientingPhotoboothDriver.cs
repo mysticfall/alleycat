@@ -118,7 +118,7 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
             tree.TreeRoot = (AnimationRootNode)tree.TreeRoot.Duplicate(true);
             var root = (AnimationNodeBlendTree)tree.TreeRoot;
             var states = (AnimationNodeStateMachine)root.GetNode("States");
-            states.AddNode("FixtureIdle", new AnimationNodeAnimation { Animation = "idle/idle_sad" });
+            states.AddNode("FixtureIdle", new AnimationNodeAnimation { Animation = "Idle" });
             tree.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics;
             tree.Active = true;
             tree.Get(StatesPlaybackParameter).As<AnimationNodeStateMachinePlayback>().Start("FixtureIdle");

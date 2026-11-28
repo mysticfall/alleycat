@@ -1,3 +1,4 @@
+using AlleyCat.Animations;
 using AlleyCat.Common;
 using AlleyCat.Core.Logging;
 using AlleyCat.Models;
@@ -147,7 +148,7 @@ public partial class PlayerMotionBricks : Node
             _observed = new Transform3D[_pose.Length];
             _rig = new NativeSomaRig(_data, _skeleton);
             _history = new RealisedPoseHistory(_pose.Length);
-            var reviewedRoles = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://data/motionbricks/reviewed-feminine/set.json"), _data);
+            ReviewedRoleSampler reviewedRoles = AnimationCatalogue.RequireFor(character).Locomotion.CreateSampler(_data);
             _ = reviewedRoles.TurnReference("left_turn");
             _ = reviewedRoles.TurnReference("right_turn");
             {

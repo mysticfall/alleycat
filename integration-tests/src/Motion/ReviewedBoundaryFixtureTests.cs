@@ -18,7 +18,8 @@ public sealed class ReviewedBoundaryFixtureTests
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));
         var source = new ReviewedMotionSource(Path.Combine(directory, "landing-ablation-01.json"), data);
         var sampler = new ReviewedRoleSampler(Path.Combine(directory, "set.json"), data);
-        Transform3D[][] context = [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])data.Idle[0].Clone())];
+        Transform3D[] contextPose = ReviewedPoseFixture.Pose(data);
+        Transform3D[][] context = [.. Enumerable.Range(0, 4).Select(_ => (Transform3D[])contextPose.Clone())];
         Transform3D[][] original = [.. context.Select(p => (Transform3D[])p.Clone())];
         _ = sampler.SetIntent("forward", 0);
         Vector3 ground = new(context[3][0].Origin.X, 0, context[3][0].Origin.Z);

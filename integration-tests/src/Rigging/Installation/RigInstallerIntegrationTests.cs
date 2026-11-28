@@ -1,3 +1,4 @@
+using AlleyCat.Animations;
 using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
@@ -668,6 +669,8 @@ public sealed class RigInstallerIntegrationTests : IDisposable
         AnimationTree animationTree = Assert.IsType<AnimationTree>(playerRoot.GetNode("AnimationTree"), exactMatch: false);
         Assert.False(playerRoot.HasNode("Locomotion"));
         AssertPlayerRuntimeBindings(playerRoot);
+        var catalogue = AnimationCatalogue.RequireFor(playerRoot);
+        Assert.Equal((string.Empty, "feminine"), (catalogue.DefaultIdle, catalogue.DefaultLocomotion));
 
         Assert.Same(poseStateMachine, GetPropertyValue(playerVRIK, nameof(PlayerVRIK.PoseStateMachine)));
         Assert.Same(poseStateMachine, GetPropertyValue(hipModifier, nameof(HipReconciliationModifier.StateMachine)));

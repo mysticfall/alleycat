@@ -144,6 +144,68 @@ public sealed class VisualDescriptionObservationLifetimePolicy : IObservationLif
 }
 
 /// <summary>
+/// Policy for observed stance and gait changes (ANIM-003 Mind Integration): keyed by subject and category, equal values
+/// suppress and changed values supersede the earlier active entry. Unlike the visual-description precedent the type is
+/// event-eligible, so the description reaches the model through the automatic scene-update exchange.
+/// </summary>
+public sealed class AnimationChangeObservationLifetimePolicy : IObservationLifetimePolicy
+{
+    /// <inheritdoc />
+    public Type DeclaredConcreteType => typeof(ObservedAnimationChange);
+
+    /// <inheritdoc />
+    public ObservationLifetimePolicyDecision Evaluate(
+        Observation candidate,
+        IReadOnlyList<AcceptedObservationEntry> activeEntries,
+        double observedAtSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(activeEntries);
+        ObservedAnimationChange change = candidate as ObservedAnimationChange
+            ?? throw new ArgumentException("Animation-change policy received an incompatible observation.", nameof(candidate));
+
+        List<long> superseded = [];
+        foreach (AcceptedObservationEntry entry in activeEntries)
+        {
+            if (entry.Payload is not ObservedAnimationChange retained
+                || retained.Category != change.Category
+                || !string.Equals(retained.SubjectId, change.SubjectId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (change.IsSemanticallyEquivalentTo(retained))
+            {
+                return ObservationLifetimePolicyDecision.Suppressed;
+            }
+
+            superseded.Add(entry.SequenceID);
+        }
+
+        return superseded.Count == 0
+            ? ObservationLifetimePolicyDecision.Accept
+            : new ObservationLifetimePolicyDecision(false, superseded);
+    }
+
+    /// <inheritdoc />
+    public bool IsEventEligible(Observation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool HasFiniteLifetime => false;
+
+    /// <inheritdoc />
+    public bool IsExpired(AcceptedObservationEntry entry, double nowSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return false;
+    }
+}
+
+/// <summary>
 /// Policy for focused relative-position evidence: equal samples suppress, changed samples supersede, and active
 /// evidence expires after a finite game-time window.
 /// </summary>
@@ -240,6 +302,7 @@ internal static class InitialObservationLifetimePolicies
             new NeverExpireObservationLifetimePolicy<ObservedSpeech>(eventEligible: true),
             new VisualDescriptionObservationLifetimePolicy(),
             new RelativePositionObservationLifetimePolicy(),
+            new AnimationChangeObservationLifetimePolicy(),
         ];
 }
 

@@ -49,6 +49,43 @@ public sealed class NativeSomaRig
         {
             throw new InvalidDataException($"Expected 52 observable SOMA joints, found {_channels.Length}.");
         }
+        List<int> chain = [];
+        for (int bone = _channels[0].Target; bone >= 0; bone = skeleton.GetBoneParent(bone))
+        {
+            chain.Insert(0, bone);
+        }
+        _hipChain = [.. chain];
+    }
+
+    private readonly int[] _hipChain;
+
+    /// <summary>Native target bones written by the retargeter; every other target bone is outside the SOMA map.</summary>
+    public IEnumerable<int> MappedTargetBones => _channels.Select(c => c.Target);
+
+    /// <summary>
+    /// Converts a native local pose (one entry per target bone) to canonical SOMA channels exactly as
+    /// <see cref="Observe" /> converts the live target, but for an explicit target-skeleton world placement.
+    /// ANIM-003 TR14 uses this only to convert idle clip start frames into MotionBricks target windows; the result is
+    /// a target, never a realised observation.
+    /// </summary>
+    public void ConvertNative(ReadOnlySpan<Transform3D> nativeLocal, Transform3D skeletonGlobal, Span<Transform3D> local)
+    {
+        _data.Rest.AsSpan().CopyTo(local);
+        foreach (Channel c in _channels)
+        {
+            local[c.Source].Basis = (c.Left * nativeLocal[c.Target].Basis * c.Right).Orthonormalized();
+        }
+        Transform3D hips = Transform3D.Identity;
+        foreach (int bone in _hipChain)
+        {
+            hips *= nativeLocal[bone];
+        }
+        int hip = _channels[0].Target;
+        Vector3 observed = hips.Origin - _target.GetBoneGlobalRest(hip).Origin;
+        Vector3 pos = _source.GetBoneGlobalRest(0).Origin + (observed * (_source.MotionScale / _target.MotionScale));
+        Basis model = SomaMotionData.ModelToWorld.Inverse();
+        local[0].Origin = model * (skeletonGlobal * pos);
+        local[0].Basis = model * skeletonGlobal.Basis * local[0].Basis;
     }
 
     /// <summary>Relinquish the body; merely holding the previous source pose still drives the target.</summary>
@@ -56,6 +93,23 @@ public sealed class NativeSomaRig
 
     /// <summary>Supply the canonical world root in source space; planar travel belongs to the actor.</summary>
     public void Apply(ReadOnlySpan<Transform3D> local) => Apply(local, Vector3.Zero);
+
+    /// <summary>
+    /// ANIM-003 TR19 hips carry: presents the hips displaced from the pinned position by a planar offset in canonical
+    /// model coordinates, instead of pinning them above the actor.
+    /// </summary>
+    public void ApplyWithHipsOffset(ReadOnlySpan<Transform3D> local, Vector3 modelOffset)
+        => Apply(local, _source.GlobalTransform.Basis.Inverse() * (SomaMotionData.ModelToWorld * new Vector3(modelOffset.X, 0, modelOffset.Z)));
+
+    /// <summary>Model-coordinate ground position at which <see cref="Apply(ReadOnlySpan{Transform3D})" /> pins the hips.</summary>
+    public Vector3 PinnedModelGround()
+    {
+        Vector3 model = SomaMotionData.ModelToWorld.Inverse() * _source.GlobalPosition;
+        return new Vector3(model.X, 0, model.Z);
+    }
+
+    /// <summary>The hidden SOMA source skeleton's world transform.</summary>
+    public Transform3D SourceGlobal => _source.GlobalTransform;
 
     internal void Apply(ReadOnlySpan<Transform3D> local, Vector3 sourceLocalHips)
     {

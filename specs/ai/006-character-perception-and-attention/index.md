@@ -79,6 +79,11 @@ event-eligible observations.
     membership — the scene context's player group — never from model-supplied data. Player speech never carries
     declared recipients: its addressee set stays blank (undecided), while the private provenance drives AI-001 TR-14's
     temporary fresh-turn rule. The flag never appears in a public payload or any model-visible rendering.
+13. Another NPC's stance or gait produces an event-eligible observation only under the TR5 subject condition: the
+    NPC is the observer's effective visual focus. It is observed at first look, at re-focus when its entry differs
+    from the last observed one, and on change. The [ANIM-003 Mind
+    Integration](../../animation/003-animation-catalogue/mind-integration.md#observation-of-changes) contract is
+    normative for its triggers and description-only content. The player is never a subject.
 
 ## In Scope
 

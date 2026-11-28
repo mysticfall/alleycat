@@ -1,6 +1,7 @@
 using System.Reflection;
 using AlleyCat.IK.Pose;
 using AlleyCat.Interaction.Hands;
+using AlleyCat.Navigation;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -42,7 +43,7 @@ public sealed class PoseStateMachineIntegrationTests
 
     private static void BindAmbientPoseSession(Node node)
     {
-        if (node is Navigation.MotionBricksNavigation navigation)
+        if (node is MotionBricksNavigation navigation)
         {
             navigation.SessionFactory = () => new AmbientPoseSession();
         }
@@ -1157,6 +1158,12 @@ public sealed class PoseStateMachineIntegrationTests
 
         Node navigation = Assert.IsType<Node>(characterRoot.GetNodeOrNull(NavigationPath), exactMatch: false);
         navigation.ProcessMode = Node.ProcessModeEnum.Disabled;
+        // The NPC's catalogue idle (ANIM-003 TR13) is part of the navigation animation authority this fixture removes:
+        // its skeleton modifier would otherwise keep presenting the idle over the pose driver's output.
+        if (navigation is MotionBricksNavigation { IdleModifier: { } idleModifier })
+        {
+            idleModifier.Active = false;
+        }
         sceneTree.NodeAdded -= BindAmbientPoseSession;
 
         Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);

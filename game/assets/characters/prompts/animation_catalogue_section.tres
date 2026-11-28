@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="AnimationCataloguePromptSection" format=3 uid="uid://ddl1yc5qw4oe4"]
+
+[ext_resource type="Script" uid="uid://cy2mutetbs60h" path="res://src/Mind/AI/Prompting/AnimationCataloguePromptSection.cs" id="1_animcat"]
+
+[resource]
+script = ExtResource("1_animcat")
+StanceHeading = "Stances you can take up with `change_stance`:"
+GaitHeading = "Gaits you can move with using `change_gait`:"
+Name = "Stances And Gaits"

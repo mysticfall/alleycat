@@ -32,7 +32,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             int finger = skeleton.FindBone("LeftIndexProximal");
             var authored = new Quaternion(Vector3.Right, 0.4f);
             skeleton.SetBonePoseRotation(finger, authored);
-            rig.Apply(data.Idle[0]);
+            rig.Apply(ReviewedPoseFixture.Pose(data));
             source.Advance(1.0 / 30);
             Assert.Equal(authored, skeleton.GetBonePoseRotation(finger));
         }

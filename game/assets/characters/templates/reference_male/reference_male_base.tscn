@@ -13,7 +13,6 @@
 [ext_resource uid="uid://degycvmqbvjx1" type="PackedScene" path="res://assets/characters/templates/animation/animation_tree.tscn" id="9_xp4vs"]
 [ext_resource uid="uid://ckmm3fnsp6y36" type="Script" path="res://src/Vision/EyesBehaviour.cs" id="11_2lsar"]
 [ext_resource uid="uid://clntm6ydqb54a" type="Script" path="res://src/Interaction/Hands/HandComponentHolder.cs" id="12_5rn12"]
-[ext_resource uid="uid://ccol2816n7hg4" type="AnimationLibrary" path="res://assets/characters/reference/female/animations/runtime/idle/sad/idle_sad.tres" id="13_4p0d3"]
 [ext_resource uid="uid://cxh7lfqn5k3nw" type="Script" path="res://src/Interaction/Hands/HandPoseBehaviour.cs" id="13_b0yuh"]
 [ext_resource uid="uid://tb33120b0yo" type="Script" path="res://src/Vision/StaticVisualCue.cs" id="13_e6bn2"]
 [ext_resource uid="uid://b8340t35vo8cv" type="Script" path="res://src/Vision/SphereVisualBounds.cs" id="14_c6lj4"]
@@ -24,6 +23,8 @@
 [ext_resource type="Script" uid="uid://basssmqph1u36" path="res://src/Contact/HandContactSweeperController.cs" id="22_contact_sweepers"]
 [ext_resource type="Script" uid="uid://4ecsil8doyft" path="res://src/Contact/ContactMonitor.cs" id="23_contact_monitor"]
 [ext_resource type="Resource" path="res://assets/characters/reference/male/contact_region_profile.tres" id="24_region_profile"]
+[ext_resource type="Script" uid="uid://cmp8jqdcl6ebv" path="res://src/Animations/AnimationCatalogue.cs" id="anim003_catalogue"]
+[ext_resource type="Script" uid="uid://ckh63vxcukg3p" path="res://src/Animations/AnimationPack.cs" id="anim003_pack"]
 
 [sub_resource type="Resource" id="Resource_c6lj4"]
 script = ExtResource("14_c6lj4")
@@ -424,7 +425,6 @@ bone_idx = 45
 unique_name_in_owner = true
 
 [node name="AnimationPlayer" parent="." index="1" unique_id=940557564]
-libraries/idle = ExtResource("13_4p0d3")
 
 [node name="IKTargets" type="Node3D" parent="." index="2" unique_id=1352918098]
 
@@ -535,3 +535,13 @@ metadata/_custom_type_script = "uid://basssmqph1u36"
 script = ExtResource("23_contact_monitor")
 RegionProfile = ExtResource("24_region_profile")
 metadata/_custom_type_script = "uid://4ecsil8doyft"
+
+[node name="AnimationCatalogue" type="Node" parent="."]
+script = ExtResource("anim003_catalogue")
+DefaultLocomotion = "feminine"
+metadata/_custom_type_script = "uid://cmp8jqdcl6ebv"
+
+[node name="Default" type="Node" parent="AnimationCatalogue"]
+script = ExtResource("anim003_pack")
+Manifest = "res://data/animations/default/pack.json"
+metadata/_custom_type_script = "uid://ckh63vxcukg3p"

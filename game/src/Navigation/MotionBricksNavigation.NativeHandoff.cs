@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using AlleyCat.Motion;
 using Godot;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Navigation;
 
@@ -9,7 +10,7 @@ public partial class MotionBricksNavigation
     private const double NativeEarlyReserve = 10.0 / 30;
     private sealed record NativePacket(long Ticket, long Revision, double ContextAt, bool Arrival, bool Idle,
         bool Overlap, Vector3 Start, Vector3 CorridorEnd, bool Curve,
-        bool RouteGuided = false, long RouteRevision = 0, RoleSubmission? Role = null);
+        bool RouteGuided = false, long RouteRevision = 0, RoleSubmission? Role = null, IdleTarget? IdleTarget = null);
     private NativePacket? _nativePending;
     private RoleSubmission? _shortPositioningRole;
     private NavigationPathQuery? _shortPositioningQuery;
@@ -53,7 +54,8 @@ public partial class MotionBricksNavigation
         }
 
         ObservationTime += delta;
-        _phaseTime += delta;
+        AdvancePlayback(delta);
+        ApplyLocomotionSwitch();
         _intent = HasDestination ? Poll(MeasuredTransform()) : default;
         if (HasDestination && NativeTargetUnreachable)
         {
@@ -140,10 +142,31 @@ public partial class MotionBricksNavigation
                 _nativePending = null;
                 _needRequest = true;
             }
+            else if (ReplacesMovingPresentation(packet) && ObservationTime - packet.ContextAt > MaxBridgeContextAge)
+            {
+                // ANIM-003 TR20: the body kept moving during a slow (cold) generation. Regenerate this bridge (idle
+                // target or departure) from fresh realised context instead of starting from a stale pose.
+                _pending = false;
+                _nativePending = null;
+                if (packet.IdleTarget is not null)
+                {
+                    _idleTransitionRequested = true;
+                }
+                else
+                {
+                    _needRequest = true;
+                }
+                StaleBridgeRegenerations++;
+                _logger!.LogInformation("Bridge {Request} context aged {Age:F3}s; regenerating from fresh realised context",
+                    packet.Ticket, ObservationTime - packet.ContextAt);
+            }
             else
             {
                 Transform3D[][] incoming = result.Poses!;
-                double age = packet.Overlap ? ObservationTime - packet.ContextAt : 0;
+                // A bridge replacing a native idle or still-moving bridge playback starts at the time already elapsed
+                // since its realised context, as overlap packets do, so the velocity blend never runs backwards
+                // (ANIM-003 TR20).
+                double age = packet.Overlap || ReplacesMovingPresentation(packet) ? ObservationTime - packet.ContextAt : 0;
                 double remaining = _segment is null ? 0 : ((_segment.Length - 1) / 30.0) - _phaseTime;
                 var next = new Transform3D[_pose.Length];
                 // Refuse out-of-range ages, never clamp them to a native endpoint as successful continuation.
@@ -195,13 +218,16 @@ public partial class MotionBricksNavigation
                     }
                     return;
                 }
+                Transform3D[][]? previous = _segment;
                 _segment = incoming;
                 _activeNativeTicket = packet.Ticket;
                 RememberShortPositioningTranslation(packet);
                 _arrival = packet.Arrival;
                 _idleTransitionActive = packet.Idle;
                 _phaseTime = age;
-                Phase = packet.Idle ? "failure-to-idle" : packet.Arrival ? "arrival" : Requests == 1 ? "departure" : "sustained-walk";
+                Phase = packet.Idle ? (packet.IdleTarget?.Stationary == true ? "idle-transition" : "failure-to-idle")
+                    : packet.Arrival ? "arrival" : Requests == 1 ? "departure" : "sustained-walk";
+                OnSegmentInstalled(packet, previous, age);
             }
         }
         if (_pending && ObservationTime - _requestStarted > 30)
@@ -209,9 +235,11 @@ public partial class MotionBricksNavigation
             InferenceUnavailable("Native overlap exceeded the existing request budget.");
             return;
         }
+        bool enteredIdle = false;
         if (_segment is not null)
         {
             SomaMotionData.Sample(_segment, _phaseTime, _pose);
+            BlendFromOutgoing(delta);
             if (_finiteTurn is not null && _activeNativeTicket == _finiteTicket)
             {
                 // NAV plan headings use atan2(forward.X,forward.Z); Godot actor yaw faces -Z at zero.
@@ -221,17 +249,38 @@ public partial class MotionBricksNavigation
             PlaybackObserved?.Invoke(_activeNativeTicket, _segment, Math.Clamp(_phaseTime * 30, 0, _segment.Length - 1));
             if (_phaseTime >= (_segment.Length - 1) / 30.0)
             {
+                // The bridge's last frame is the target idle's frame 0; the native clip continues from there.
+                FinishBridgeSegment();
+                enteredIdle = NativeIdleOwnsBody;
                 _segment = null;
                 _endpoint = true;
                 _finiteAwaitingObservation = _finiteTurn is { FinishedCues: false } && !_arrival && _activeNativeTicket == _finiteTicket;
             }
         }
-        else if (!HasDestination && !_pending && !_idleTransitionActive && !_idleTransitionRequested)
+        else if (_outgoing is not null)
         {
-            SampleIdle();
+            StepOutgoingBridge(delta);
+            enteredIdle = NativeIdleOwnsBody;
+            if (!enteredIdle)
+            {
+                BlendFromOutgoing(delta);
+            }
         }
 
-        Vector3 ground = Ground(_pose[0].Origin);
+        if (NativeIdleOwnsBody)
+        {
+            StepNativeIdle(enteredIdle ? 0 : delta);
+            return;
+        }
+
+        Vector3 offset = UpdateBridgeOffset(out bool stationary, out bool bridging);
+        Vector3 ground = Ground(_pose[0].Origin) - offset;
+        if (stationary || _anchorGround)
+        {
+            // Stationary idle bridges hold the actor; the first travelling tick after one re-anchors without moving.
+            _lastGround = ground;
+            _anchorGround = false;
+        }
         KinematicCollision3D? collision = _actor!.MoveAndCollide(SomaMotionData.ModelToWorld * (ground - _lastGround));
         Vector3 movement = ground - _lastGround;
         _lastGround = ground;
@@ -240,7 +289,15 @@ public partial class MotionBricksNavigation
             Fail("Generated root encountered a static obstruction.");
         }
 
-        _rig!.Apply(_pose);
+        _presentedOffset = offset;
+        if (bridging)
+        {
+            _rig!.ApplyWithHipsOffset(_pose, offset);
+        }
+        else
+        {
+            _rig!.Apply(_pose);
+        }
         _record = true;
     }
 

@@ -52,6 +52,9 @@ per-request scene context.
      status describes characters through their lore descriptions (AI-006 TR-9).
    - `ObservedRelativePosition`: equal values suppress; changed values retain a finite evidence window adequate for
      hysteresis; normally event-ineligible and supplied as current-scene input.
+   - the ANIM-003 stance/gait observation: per subject and category, equal values suppress and changed values
+     supersede; event-eligible ([ANIM-003 Mind
+     Integration](../../animation/003-animation-catalogue/mind-integration.md#observation-of-changes)).
    - visual presence: attention-only; it creates no retained observation initially.
 6. Mind independently appends every event-eligible accepted entry to a persistent event timeline. Active-log expiry or
    supersession never removes timeline entries. AI-002 delivers this timeline's entries to the model through

@@ -1,0 +1,15 @@
+{
+  "schema": "anim003_pack_v1",
+  "id": "escaping_path",
+  "entries": [
+    {
+      "id": "slump",
+      "category": "idle",
+      "tags": [
+        "tired"
+      ],
+      "description": "stands slumped",
+      "clip": "../fixture/idle/slump.tres"
+    }
+  ]
+}

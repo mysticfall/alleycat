@@ -20,7 +20,7 @@ obj/
 
 # Python
 __pycache__
-tools/kimodo-pipeline/.blender-python-deps/
+tools/animation-pipeline/.blender-python-deps/
 
 # Godot-generated solution in game project
 game/AlleyCat.sln

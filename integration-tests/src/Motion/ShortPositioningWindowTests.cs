@@ -10,7 +10,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     /// <summary>Short rearward travel must realise useful progress before turning, without a wide forward loop.</summary>
     [Headless]
     [Fact]
-    public Task ShortAdjustmentSubmitsTranslationAndFacingBeforeExternalIdle() => CheckLocalAdjustmentAsync(1.3f, 10.858264787);
+    public Task ShortAdjustmentSubmitsTranslationAndFacingBeforeIdle() => CheckLocalAdjustmentAsync(1.3f, 10.858264787);
 
     /// <summary>Opposite terminal facing must not restart translation after the short adjustment is reached.</summary>
     [Headless]

@@ -634,14 +634,15 @@ public sealed partial class ScenarioIntegrationTests
         Assert.NotNull(stack);
 
         // The shared generic NPC prompt stack carries exactly the mind.md file section, essential lore, character
-        // lore, the dialogue examples section (AI-012 TR-7), the grouped catalogue of remaining lore, and the
-        // scenario section.
+        // lore, the dialogue examples section (AI-012 TR-7), the grouped catalogue of remaining lore, the static
+        // stances-and-gaits catalogue (ANIM-003 Mind Integration), and the scenario section.
         Assert.Equal(
-            ["Instructions", "Lore", "Characters", "Dialogue Examples", "Lore Catalogue", "Scenario"],
+            ["Instructions", "Lore", "Characters", "Dialogue Examples", "Lore Catalogue", "Stances And Gaits", "Scenario"],
             stack.Sections.Select(section => section.Name));
         _ = Assert.IsType<DialogueExamplesPromptSection>(stack.Sections[3]);
         _ = Assert.IsType<LoreCataloguePromptSection>(stack.Sections[4]);
-        PromptSection scenarioSection = Assert.IsType<FilePromptSection>(stack.Sections[5]);
+        _ = Assert.IsType<AnimationCataloguePromptSection>(stack.Sections[5]);
+        PromptSection scenarioSection = Assert.IsType<FilePromptSection>(stack.Sections[6]);
         var fileSection = (FilePromptSection)scenarioSection;
         Assert.Equal("res://prompts/scenario.md", fileSection.FilePath);
         Assert.Equal("Scenario", fileSection.Name);

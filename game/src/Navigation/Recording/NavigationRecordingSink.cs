@@ -22,7 +22,7 @@ internal sealed class NavigationRecordingSink
             try
             {
                 string[] paths = ["assets/testing/navigation/navigation_test.tscn", "assets/testing/navigation/navigation_test_npc.tscn",
-                    "data/motionbricks/poses.json", "data/motionbricks/catalogue.json", "data/motionbricks/model-frames.json",
+                    "data/motionbricks/poses.json", "data/motionbricks/model-frames.json",
                     "data/motionbricks/reviewed-feminine/set.json", "src/Navigation/navigation_playtest.gd",
                     "src/Navigation/MotionBricksNavigation.cs", "src/Navigation/MotionBricksNavigation.Roles.cs",
                     "src/Navigation/MotionBricksNavigation.NativeHandoff.cs", "src/Motion/SomaInference.cs",

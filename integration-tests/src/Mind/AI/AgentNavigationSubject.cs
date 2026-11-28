@@ -1,4 +1,5 @@
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Tool;
@@ -28,6 +29,8 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// tools drive.</item>
 /// <item>A collision sphere matching the base template's, so generated motion collides with the arena like the
 /// production NPC (<c>MoveAndCollide</c> obstruction checks).</item>
+/// <item>The NPC role's <c>AnimationCatalogue</c> with the default pack (ANIM-003 TR13, NAV-001 TR14): MotionBricks
+/// navigation resolves its locomotion set and idle through it.</item>
 /// <item>A perception-free <see cref="AgenticMind" /> named <c>Mind</c>: tool composition, outcome polling and the
 /// event timeline.</item>
 /// <item>The actor <c>MiniMapMarker</c>, so the subject appears on (and is the gold <c>*You*</c> marker of) the AI
@@ -113,6 +116,7 @@ internal sealed partial class AgentNavigationSubject : CharacterHub
         };
         subject.AddChild(navigation);
         subject.Navigation = navigation;
+        subject.AddChild(MotionFixtureCatalogue.Create(npc: true));
         subject.AddChild(new AgenticMind { Name = "Mind" });
         subject.AddChild(TestUtils.LoadPackedScene(ActorMarkerPath).Instantiate());
         subject.AddChild(new RigRoleTemplateSceneInstaller

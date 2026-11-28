@@ -102,6 +102,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             typeof(AlleyCat.Character.Character).GetField("_motionTarget", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .SetValue(Actor, _target);
             Actor.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = .2f }, Position = new(0, .2f, 0) });
+            // Navigation resolves locomotion and idles through the character's catalogue (ANIM-003).
+            Actor.AddChild(MotionFixtureCatalogue.Create(npc: true));
             Navigation = new()
             {
                 SessionFactory = () => new LifecycleSession(Provider, false)

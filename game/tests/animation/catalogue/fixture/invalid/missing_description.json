@@ -1,0 +1,14 @@
+{
+  "schema": "anim003_pack_v1",
+  "id": "missing_description",
+  "entries": [
+    {
+      "id": "slump",
+      "category": "idle",
+      "tags": [
+        "tired"
+      ],
+      "clip": "idle/slump.tres"
+    }
+  ]
+}

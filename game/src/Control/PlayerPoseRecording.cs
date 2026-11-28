@@ -30,7 +30,7 @@ internal sealed class PlayerPoseRecording
         {
             try
             {
-                string[] paths = ["data/motionbricks/poses.json", "data/motionbricks/catalogue.json", "data/motionbricks/model-frames.json",
+                string[] paths = ["data/motionbricks/poses.json", "data/motionbricks/model-frames.json",
                     "data/motionbricks/reviewed-feminine/set.json", "data/motionbricks/reviewed-feminine/landing-ablation-01.json",
                     "data/motionbricks/reviewed-feminine/turn-angular-reference.json", "src/Control/PlayerMotionBricks.cs",
                     "src/Control/PlayerMotionBricks.InputTrace.cs", "src/Control/PlayerMotionBricks.PoseTrace.cs",

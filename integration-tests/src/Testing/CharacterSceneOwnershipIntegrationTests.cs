@@ -236,7 +236,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
         object[] orderedSections = [.. sections.Cast<object>()];
-        Assert.Equal(6, orderedSections.Length);
+        Assert.Equal(7, orderedSections.Length);
         object instructionSection = orderedSections[0];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
@@ -267,7 +267,10 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         // The grouped catalogue of remaining lore follows the dialogue examples (AI-003 TR-17; AI-004 TR-46).
         Assert.Equal("AlleyCat.Mind.AI.Prompting.LoreCataloguePromptSection", orderedSections[4].GetType().FullName);
         Assert.Equal("Lore Catalogue", GetPropertyValue<string>(orderedSections[4], "Name"));
-        object scenarioSection = orderedSections[5];
+        // The static stances-and-gaits catalogue follows the Lore Catalogue (ANIM-003 Mind Integration).
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.AnimationCataloguePromptSection", orderedSections[5].GetType().FullName);
+        Assert.Equal("Stances And Gaits", GetPropertyValue<string>(orderedSections[5], "Name"));
+        object scenarioSection = orderedSections[6];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
         Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
         Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
@@ -282,7 +285,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         PromptStack currentSceneStatus = Assert.IsType<PromptStack>(
             GetRequiredPropertyValue(mind, "CurrentSceneStatus"),
             exactMatch: false);
-        _ = Assert.Single(currentSceneStatus.Sections);
+        Assert.Equal(2, currentSceneStatus.Sections.Length);
         ProjectionPromptSection projectionSection = Assert.IsType<ProjectionPromptSection>(currentSceneStatus.Sections[0], exactMatch: false);
         Assert.Equal("Attended Characters", projectionSection.Name);
         Assert.Equal(AttendedCharacterSceneStatusProjector.ProjectorIDValue, projectionSection.ProjectorID);
@@ -295,6 +298,15 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             npc.GetNodeOrNull("Mind/AttendedCharacterSceneStatusProjector"),
             exactMatch: false);
         Assert.Equal(AttendedCharacterSceneStatusProjector.ProjectorIDValue, projector.ProjectorID);
+
+        // The agent's own stance and gait follow the attended characters (AI-003 TR5; ANIM-003 Mind Integration).
+        ProjectionPromptSection ownStatusSection = Assert.IsType<ProjectionPromptSection>(currentSceneStatus.Sections[1], exactMatch: false);
+        Assert.Equal(OwnAnimationSceneStatusProjector.ProjectorIDValue, ownStatusSection.ProjectorID);
+        Assert.Equal(typeof(OwnAnimationSceneStatus).FullName, ownStatusSection.RootTypeName);
+        OwnAnimationSceneStatusProjector ownProjector = Assert.IsType<OwnAnimationSceneStatusProjector>(
+            npc.GetNodeOrNull("Mind/OwnAnimationSceneStatusProjector"),
+            exactMatch: false);
+        Assert.Equal(OwnAnimationSceneStatusProjector.ProjectorIDValue, ownProjector.ProjectorID);
     }
 
     private static Node RequireScriptedNode(Node root, string path, string expectedTypeName)

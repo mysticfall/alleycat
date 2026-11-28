@@ -141,20 +141,20 @@ persistent event timeline remains canonical memory; the provider transcript is d
      recorded in the transcript sink (AI-011). Every response is completely validated before any tool effect; invalid
      responses have no transcript, observation, action, or watermark effect and use bounded recovery; transport retry
      and recovery remain contained.
-13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, and, in the `tools` and `auto`
-     visual-context modes, the two zero-argument visual-context tools
-     (minimap and view capture) composed at AgenticMind under AI-013; in `auto` mode a model-initiated call to
-     either behaves exactly as in `tools` mode. In `off` visual-context mode those two
-     tools are absent from the inventory, and a model attempt to call either is rejected as an unknown tool under
-     existing validation, mirroring the synthetic-delivery precedent (TR-18). When the subject character exposes
-     navigation at composition — after the TR-1 component-projection wait — the inventory also includes the
-     AI-015 coordinate navigation tools `walk_to`, `turn_to` and `stop`; for a subject without navigation they are
-     absent and a model attempt to call any of them is rejected as an unknown tool under existing validation. The
-     synthetic delivery tool (TR-18)
-     is runtime-authored only: it is not offered to the model, and a model attempt to call it is rejected as an
-     unknown tool under existing validation. Tool delegates send any
-     resulting observations through Mind's atomic queue. Tool validation and typed tool binding occur only at
-     AgenticMind composition; the common runtime has no feature service bag.
+13. The model-facing tool inventory includes `speak`, `wait`, `read_lore` from AI-004, the in-character `change_stance`
+    and `change_gait` catalogue tools composed under [ANIM-003 Mind
+    Integration](../../animation/003-animation-catalogue/mind-integration.md#agent-tools), and, in the `tools` and
+    `auto` visual-context modes, the two zero-argument visual-context tools (minimap and view capture) composed at
+    AgenticMind under AI-013; in `auto` mode a model-initiated call to either behaves exactly as in `tools` mode. In
+    `off` visual-context mode those two tools are absent from the inventory, and a model attempt to call either is
+    rejected as an unknown tool under existing validation, mirroring the synthetic-delivery precedent (TR-18). When the
+    subject character exposes navigation at composition — after the TR-1 component-projection wait — the inventory
+    also includes the AI-015 coordinate navigation tools `walk_to`, `turn_to` and `stop`; for a subject without
+    navigation they are absent and a model attempt to call any of them is rejected as an unknown tool under existing
+    validation. The synthetic delivery tool (TR-18) is runtime-authored only: it is not offered to the model, and a
+    model attempt to call it is rejected as an unknown tool under existing validation. Tool delegates send any
+    resulting observations through Mind's atomic queue. Tool validation and typed tool binding occur only at
+    AgenticMind composition; the common runtime has no feature service bag.
 14. Speech admitted to its voice pipeline remains committed at playback hand-off and uses Mind's node-lifetime
     exact-once commit identity. Node exit remains terminal and creates no replacement request or synthetic
     confirmation.
@@ -397,6 +397,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
     Run same-contribution calls in one batch serially before automatic parking; individual calls cannot bypass it.
     After automatic parking, retain a runtime-authored, argument-free `wait` call and its result before the next
     request. Use a distinct runtime call-ID sub-namespace and the collision and whole-exchange rules (TR-17–TR-20).
+    The ANIM-003 `change_stance` and `change_gait` tools are declared non-parking: their accepted preference changes
+    never trigger automatic parking.
 40. While parked, evaluate at a tunable cadence (default two seconds) and on coalesced nudges from accepted player
     speech, attended-speaker onset or completion, and changes in scene membership. Nudges request evaluation, not
     a wake. Register for the wait's lifetime. When due, contribute both named choices to the
@@ -678,6 +680,8 @@ persistent event timeline remains canonical memory; the provider transcript is d
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
+- [ANIM-003: Animation Catalogue Mind Integration](../../animation/003-animation-catalogue/mind-integration.md) —
+  normative for the `change_stance` and `change_gait` tools and their non-parking role
 - [AI-011: Mind Session Transcripts](../011-mind-session-transcripts/index.md) — parsed-only transcript diagnostics,
   reasoning-content rendering, invocation index, runtime-authored synthetic-exchange marking, and stripped-text
   records normative for reasoning surfacing and tolerated-text recording (TR-12, TR-31, TR-32)

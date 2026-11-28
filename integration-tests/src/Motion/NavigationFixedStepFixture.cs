@@ -42,6 +42,8 @@ public sealed partial class PlayerMotionBricksIntegrationTests
                 Position = new(0, .5f, 0),
                 Shape = new BoxShape3D { Size = new(.2f, 1, .2f) }
             });
+            // Navigation resolves locomotion and idles through the character's catalogue (ANIM-003).
+            Actor.AddChild(MotionFixtureCatalogue.Create(npc: true));
             Navigation = new()
             {
                 SessionFactory = () => Provider
@@ -168,6 +170,9 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             {
                 Node3D model = asset.RequireNode<Node3D>("Female");
                 model.Reparent(mountHost, keepGlobalTransform: false);
+                // The reference templates mount the model turned to face the actor's forward; native idles play in
+                // the reference skeleton's local frame, so the fixture mirrors that orientation (ANIM-003 TR13).
+                model.Basis = SomaMotionData.ModelToWorld;
                 target = model.RequireNode<Skeleton3D>("GeneralSkeleton");
                 using GodotObject mount = GD.Load<GDScript>("res://src/Motion/native_soma_mount.gd").New().AsGodotObject();
                 Assert.True(mount.Call("install", mountHost, target, "Female", false).AsBool());

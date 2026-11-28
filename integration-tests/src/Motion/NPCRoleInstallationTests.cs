@@ -1,3 +1,4 @@
+using AlleyCat.Animations;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging.Installation;
@@ -39,7 +40,34 @@ public sealed class NPCRoleInstallationTests : IDisposable
     [Fact]
     public Task RenamedContentNPC_InstallsOnOriginalSkeleton() => CheckInstallation(ContentNPC, rename: true);
 
-    private static async Task CheckInstallation(string scene, bool rename = false)
+    /// <summary>
+    /// ANIM-003 TR6: a test-only template derived from the female NPC role disables the inherited default pack and
+    /// adds the extension pack; the installed catalogue reflects both overrides and the chain-inherited defaults.
+    /// </summary>
+    [Fact]
+    public Task TemplateChainPackOverrides_SurviveInstallation()
+        => CheckInstallation("res://tests/animation/catalogue/chain/chain_npc.tscn", catalogueCheck: catalogue =>
+        {
+            Assert.Equal(("sad", "feminine"), (catalogue.DefaultIdle, catalogue.DefaultLocomotion));
+            Assert.Equal(["Default:False:0", "Extension:True:10"],
+                catalogue.GetChildren().OfType<AnimationPack>().Select(p => $"{p.Name}:{p.Enabled}:{p.Priority}"));
+            Assert.Equal(["extension:idle/sad", "extension:locomotion/stroll"],
+                catalogue.Entries.Select(e => $"{e.PackID}:{e.Category.ToName()}/{e.ID}"));
+            Assert.Equal(("sad", "extension"), (catalogue.Idle.Effective.ID, catalogue.Idle.Effective.PackID));
+            // The inherited template default 'feminine' belongs to the disabled pack, so resolution falls back.
+            Assert.Equal(["stroll"], catalogue.Locomotion.Entries.Select(e => e.ID));
+            Assert.Equal("stroll", catalogue.Locomotion.Effective.ID);
+        });
+
+    // Reference NPC templates: base declares the locomotion default and the NPC role the idle default.
+    private static void AssertReferenceCatalogue(AnimationCatalogue catalogue)
+    {
+        Assert.Equal(("sad", "feminine"), (catalogue.DefaultIdle, catalogue.DefaultLocomotion));
+        Assert.Equal("sad", catalogue.Idle.Effective.ID);
+        Assert.Equal("feminine", catalogue.Locomotion.Effective.ID);
+    }
+
+    private static async Task CheckInstallation(string scene, bool rename = false, Action<AnimationCatalogue>? catalogueCheck = null)
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var viewport = new SubViewport { OwnWorld3D = true };
@@ -83,6 +111,7 @@ public sealed class NPCRoleInstallationTests : IDisposable
             installed = navigation;
             Assert.Same(navigation, Assert.Single(actor.GetChildren().OfType<NavigationBase>()));
             Assert.Equal(identity, actor.Id);
+            (catalogueCheck ?? AssertReferenceCatalogue)(AnimationCatalogue.RequireFor(actor));
             Assert.Same(profile, installer.ColliderProfile);
             if (scene == ContentNPC)
             {

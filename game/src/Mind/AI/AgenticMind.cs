@@ -445,7 +445,7 @@ public partial class AgenticMind : MindBase
         _speechContinuations.HandleLifecycleNotification(notification);
     }
 
-    private List<AITool> CreateSessionTools(
+    internal List<AITool> CreateSessionTools(
         ScenarioContext context,
         IMainThreadDispatcher dispatcher,
         IGameClock clock,
@@ -512,6 +512,16 @@ public partial class AgenticMind : MindBase
             }
         }
 
+        // ANIM-003 Mind Integration: the stance and gait tools bind the character's own catalogue and variant control
+        // here, so the model supplies only an entry id. They are informational for parking purposes and never pause
+        // the session.
+        foreach (AnimationPreferenceTool animationTool in CreateAnimationPreferenceTools(context.Character))
+        {
+            functions.Add(BindSessionParking(
+                animationTool,
+                animationTool.CreateFunction(context, this, dispatcher, sessionServices)));
+        }
+
         foreach (AgentTool? extra in Tools)
         {
             if (extra is not null)
@@ -530,7 +540,7 @@ public partial class AgenticMind : MindBase
     /// invocation opted out through <c>chain</c>. Informational tools bind no parking policy. The binding rides
     /// inside the phase-policy wrapper so the runner's outermost phase inspection is unchanged.
     /// </summary>
-    private static AIFunction BindSessionParking(AgentTool tool, AIFunction function)
+    internal static AIFunction BindSessionParking(AgentTool tool, AIFunction function)
         => tool.ParksSessionByDefault ? AgentSessionParkingPolicy.SessionParking.Bind(function) : function;
 
     /// <summary>
@@ -572,6 +582,21 @@ public partial class AgenticMind : MindBase
 
     /// <summary>The navigation controller of the running session, or null when its subject cannot navigate.</summary>
     internal CoordinateNavigationController? NavigationController => _navigationController;
+
+    /// <summary>
+    /// Creates the <c>change_stance</c> and <c>change_gait</c> tools bound to the character's variant control
+    /// (ANIM-003 Mind Integration, Agent Tools), or none when the character has no animation catalogue or no variant
+    /// control.
+    /// </summary>
+    internal static IReadOnlyList<AnimationPreferenceTool> CreateAnimationPreferenceTools(ICharacter character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return character is Character.Character node
+            && node.Navigation is Animations.IAnimationVariantControl control
+            && node.GetChildren().OfType<Animations.AnimationCatalogue>().Count() == 1
+            ? [new ChangeStanceTool(control), new ChangeGaitTool(control)]
+            : [];
+    }
 
     /// <summary>
     /// Creates the session's transcript sink (AI-011 TR-5): the filesystem recorder when session transcript logging

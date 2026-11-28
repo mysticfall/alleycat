@@ -1,0 +1,15 @@
+{
+  "schema": "anim003_pack_v0",
+  "id": "wrong_schema",
+  "entries": [
+    {
+      "id": "slump",
+      "category": "idle",
+      "tags": [
+        "tired"
+      ],
+      "description": "stands slumped",
+      "clip": "idle/slump.tres"
+    }
+  ]
+}

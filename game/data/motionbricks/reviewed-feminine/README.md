@@ -26,7 +26,7 @@ promises. Preserve chronology and the authored late reversal; neither turn is as
 
 ## Publication and Limits
 
-Use the [maintained ingestion/set publishers](../../../../tools/kimodo-pipeline/README.md#reviewed-source-ingestion).
+Use the [maintained ingestion/set publishers](../../../../tools/animation-pipeline/README.md#reviewed-source-ingestion).
 Export new bundles first. Validate bundle/set/angular metadata together, then coordinate fixed set/angular
 replacement with consumers stopped and rollback available. Single-file atomic replacement is not multi-file
 hot publication.

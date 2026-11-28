@@ -67,6 +67,9 @@ public sealed class LoreReferenceRenderingIntegrationTests
         {
             ProjectorID = AttendedCharacterSceneStatusProjector.ProjectorIDValue,
         });
+        // The shared current-scene stack also binds the own stance-and-gait projector (ANIM-003 Mind Integration);
+        // this fixture character has no animation catalogue, so its projection is empty and renders no block.
+        mind.AddChild(new OwnAnimationSceneStatusProjector());
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player], content));
         // Exact request-shape expectations pin the default `tools` visual-context mode, keeping this suite
         // independent of a developer machine's `AI:VisualContextMode` override.

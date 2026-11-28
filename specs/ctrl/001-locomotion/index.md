@@ -67,8 +67,10 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
 ## Technical Requirements
 
 1. Wire a player-side intent owner through production controller input and the existing startup/content spawning route
-   using `game/assets/characters/templates/reference_female/reference_female_player.tscn`. Install the shared
-   `reviewed-feminine/set.json` driver normally, without a source activation switch or fallback movement catalogue.
+   using `game/assets/characters/templates/reference_female/reference_female_player.tscn`. Install the driver for
+   the reviewed set resolved by the character's [ANIM-003](../../animation/003-animation-catalogue/index.md)
+   locomotion view (default `feminine`, binding `reviewed-feminine/set.json`), without a source activation switch or
+   fallback movement catalogue.
    Trace that route rather than
    inferring missing startup from `empty.tscn`. Do not create another scene or adapt NPC destination navigation into
    stick control. Preserve NPC navigation and unrelated tracking, hands, gaze, and interaction functionality.
@@ -77,7 +79,7 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
    and licensing.
    Reuse the in-process Godot/C# NVIDIA SOMA FP32 runtime. The
    [ANIM-002 source contract](../../animation/002-locomotive-animation-set/index.md) is normative for role/variant
-   sources and dynamic sampling; external idle/action targets follow its compatibility boundary. Apply
+   sources and dynamic sampling; ANIM-003 idle/external action targets follow its compatibility boundary. Apply
    [NAV-001 TR2](../../nav/001-npc-navigation/index.md#runtime-and-content) for shared model provisioning and path
    selection:
    exported default `res://models/motionbricks/onnx/mmm_v6_soma_fp32.onnx`, with neither `MOTIONBRICKS_MODEL` nor
@@ -225,21 +227,21 @@ motion. Implementers and reviewers must preserve existing XR, hand, gaze, and in
      Stationary-turn recordings must distinguish latest requested magnitude from immutable submitted and actually
      adopted magnitudes with their tickets and live pending/active/held state. Retained work must not be relabelled
      with the latest magnitude; historical receipts are not live ownership.
-10. **Conditioning Controller:** implement the normative
-    [ANIM-002 lifecycle](../../animation/002-locomotive-animation-set/index.md#technical-requirements) on the game side.
-    Own variant, state, role, virtual source phase, expected source foot phase and future consecutive-window selection.
-    Resolve roles from player movement/turn and interaction-positioning intent; expose how non-crossing sidestepping
-    is distinguished from crossing lateral travel without inventing an additional binding in this specification.
-     For travel, use variant/stage physical metadata with input magnitude, placement horizon and the backward ratio;
-     never treat a crawling/limping source as a walking-speed replacement. Apply ANIM-002 advance, loop, sample-ahead,
+10. **Conditioning Controller:** implement the normative [ANIM-002
+    lifecycle](../../animation/002-locomotive-animation-set/index.md#technical-requirements) on the game side. Own
+    variant, state, role, virtual source phase, expected source foot phase and future consecutive-window selection.
+    Resolve roles from player movement/turn and interaction-positioning intent; expose how non-crossing sidestepping is
+    distinguished from crossing lateral travel without inventing an additional binding in this specification. For
+    travel, use variant/stage physical metadata with input magnitude, placement horizon and the backward ratio; never
+    treat a crawling/limping source as a walking-speed replacement. Apply ANIM-002 advance, loop, sample-ahead,
     role/stage/variant switch and overlapping-request rules. Snapshot source selection with request identity alongside
     actual realised context; compatible retention must not let a late result own phase progression. Release or
-    interruption abandons old intended progression immediately and requests compatible external idle/action targets
-    or the new role without waiting for source-cycle completion. Missing/incompatible sources or targets are explicit
-    availability failures under TR5, not permission for procedural fallback or authored-idle reset. Source foot phase
-     is intended information only; no inferred displayed-foot matching, leading-foot variants or arc/transition clips
-     are prerequisites. Keep existing input responsiveness, steering, tracking, collision and worker authority.
-     Apply the stationary-turn allocation and scheduling policy below through the shared ANIM-002 mapping.
+    interruption abandons old intended progression immediately and requests compatible ANIM-003 idle/external action
+    targets or the new role without waiting for source-cycle completion. Missing/incompatible sources or targets are
+    explicit availability failures under TR5, not permission for procedural fallback or authored-idle reset. Source foot
+    phase is intended information only; no inferred displayed-foot matching, leading-foot variants or arc/transition
+    clips are prerequisites. Keep existing input responsiveness, steering, tracking, collision and worker authority.
+    Apply the stationary-turn allocation and scheduling policy below through the shared ANIM-002 mapping.
 
 ### Stationary-Turn Conditioning
 
@@ -278,7 +280,7 @@ the game sets actor facing from planned cycle yaw, independently of generated ar
 - Live tracking, body/view separation, collision/root and XR-origin ownership, realised feedback, safe worker lifetime.
 - Focused verification, temporal diagnostics, independent review, and headset playtest handoff.
 - Normal source-guided travel with continuous steering, held chaining and truthful diagnostics.
-- Game-owned role/phase control, dynamic source sampling and external idle/action integration under ANIM-002.
+- Game-owned role/phase control, dynamic source sampling and ANIM-003 idle/external action integration under ANIM-002.
 
 ## Out Of Scope
 
@@ -429,24 +431,25 @@ the game sets actor facing from planned cycle yaw, independently of generated ar
 
 ## Implementation Status
 
-Normal player installation uses all eight roles from `reviewed-feminine/set.json`, bound to
+Normal player installation resolves its set through the ANIM-003 locomotion view (default `feminine`) and uses all
+eight roles from `reviewed-feminine/set.json`, bound to
 `landing-ablation-01.json`. Travel uses a stable input frame, source-rate placement, continuous steering,
 backward ratio and held chaining. The [stationary-turn policy](#stationary-turn-conditioning), including planned-yaw
-facing and release continuity, is in progress and not yet verified. Idle remains externally supplied.
+facing and release continuity, is in progress and not yet verified. The player plays no catalogue idle; tracked
+idle stays with VRIK.
 No source/controller activation flag or prototype movement fallback exists.
 Migration to TR2/TR4 native presentation, final-target feedback and tracked-idle ownership is in progress and not
 yet verified. TR5 same-direction stationary-turn retention is implemented with focused checks, pending independent
 review and manual playtest. See [Player Motion](../../../game/src/Control/PLAYER-MOTION.md) and the
 [shared source data](../../../game/data/motionbricks/reviewed-feminine/README.md).
 
-The [adoption report](../../../game/temp/motionbricks/anim002-regenerated-source-adoption-01/REPORT.md) records normal
-startup/source binding, all-role primary input, release/ownership and native-free preservation checks,
-with clean format/build results. These are technical migration evidence; combined independent review remains pending.
-No default-entrypoint GPU inference or fresh headset/visual quality acceptance was established by those checks.
-The user's source stepping/foot-sliding mitigation is accepted with initial twitch deferred, not a no-slip guarantee.
-Raw repetition quality, generated gait and settling toe motion/contact, turning pace and headset/interaction
-suitability remain open. Synthetic release-boundary evidence does not resolve the settling pose snap in the headset.
-Masculine/default content and previews, native-shutdown and hand-origin risks remain unresolved.
+Technical checks cover normal startup/source binding, all-role primary input, release/ownership and native-free
+preservation checks, with clean format/build results. These are technical migration evidence; combined independent
+review remains pending. No default-entrypoint GPU inference or fresh headset/visual quality acceptance was established
+by those checks. The user's source stepping/foot-sliding mitigation is accepted with initial twitch deferred, not a
+no-slip guarantee. Raw repetition quality, generated gait and settling toe motion/contact, turning pace and
+headset/interaction suitability remain open. Synthetic release-boundary evidence does not resolve the settling pose snap
+in the headset. Masculine/default content and previews, native-shutdown and hand-origin risks remain unresolved.
 Normal-source code/spec alignment is updated; broader ANIM-002 completion remains deferred-with-risk. Plan steps 5/6
 remain open. No new generation or model-call budget follows from this documentation alignment.
 

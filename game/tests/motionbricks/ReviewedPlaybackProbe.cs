@@ -104,7 +104,7 @@ public partial class ReviewedPlaybackProbe : Node
             _playbackAt = Time;
             _playbackRequest = request;
             _playbackFrame = frame;
-            if (poses is not null && _requestRoles.TryGetValue(request, out string? role) && role != "external_idle")
+            if (poses is not null && _requestRoles.TryGetValue(request, out string? role) && role != "idle")
             {
                 _ = _playedRoles.Add(role);
                 if (CompleteForward && role == "forward")
@@ -176,7 +176,7 @@ public partial class ReviewedPlaybackProbe : Node
         if (_released && _nav.Phase == "settled-idle")
         {
             Settled += delta;
-            State = "settled-external-idle";
+            State = "settled-idle";
             Finished = Settled >= 3.2;
         }
     }
@@ -226,7 +226,7 @@ public partial class ReviewedPlaybackProbe : Node
         _clock.Stop(Time);
         _selection = null;
         _nav!.ClearDestination();
-        State = "external-idle-transition";
+        State = "idle-transition";
     }
 
     private Transform3D[][]? Target(double time, Transform3D[][] context)
@@ -258,7 +258,7 @@ public partial class ReviewedPlaybackProbe : Node
     private void Submitted(long request, Transform3D[][] context, Transform3D[][] target)
     {
         bool idle = _released;
-        string role = idle ? "external_idle" : _role!.Name;
+        string role = idle ? "idle" : _role!.Name;
         _requestRoles[request] = role;
         _requests.Add(new
         {
