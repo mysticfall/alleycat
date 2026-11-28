@@ -210,6 +210,88 @@ public sealed class GodotSessionTests
     // Outcome publication and correlation
     // ---------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// A runtime <c>skipped</c> result (a declared host precondition did not hold) reaches the host as a skipped node
+    /// carrying the reported reason, neither passed nor failed, and leaves the session reusable for the next test.
+    /// </summary>
+    [Fact]
+    public async Task RunTests_SkippedResult_PublishesSkippedNodeWithReason_AndReusesSession()
+    {
+        const string reason = "Needs no other Godot process running, but found: godot-mono (pid 4242).";
+        (TestNodeUid uid, MethodInfo method) skipped = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.FirstTest));
+        (TestNodeUid uid, MethodInfo method) passed = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.SecondTest));
+        var session = FakeGodotProcess.CreateSession(commandStages:
+        [
+            new FakeSessionStage(OutputEvents:
+            [
+                new FakeOutputEvent(TimeSpan.Zero, FakeOutputStream.StdOut,
+                    ResultLine(skipped.uid.Value, "skipped", message: reason)),
+            ]),
+            ResultStage(passed.uid, "passed"),
+        ]);
+        var factory = new FakeGodotProcessFactory(session);
+        GodotTestFramework framework = CreateFramework(factory);
+        List<TestNode> published = [];
+
+        await framework.RunSelectedTestsAsync(
+            [skipped, passed],
+            (node, _) =>
+            {
+                published.Add(node);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.Equal(4, published.Count);
+        AssertNode(published[0], skipped.uid, IsInProgress);
+        AssertNode(published[1], skipped.uid, state =>
+            Assert.Equal(reason, Assert.IsType<SkippedTestNodeStateProperty>(state).Explanation));
+        AssertNode(published[3], passed.uid, IsPassed);
+        _ = Assert.Single(factory.Invocations);
+    }
+
+    /// <summary>
+    /// A <c>skipped</c> result whose session is no longer reusable means baseline restoration failed after the skip,
+    /// so it is reported as a framework error rather than a skip, and the next test runs in a replacement session.
+    /// </summary>
+    [Fact]
+    public async Task RunTests_SkippedResultWithNonReusableSession_PublishesError()
+    {
+        (TestNodeUid uid, MethodInfo method) skipped = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.FirstTest));
+        (TestNodeUid uid, MethodInfo method) next = CreateTest(typeof(WindowedSessionFixture), nameof(WindowedSessionFixture.SecondTest));
+        var taintedSession = FakeGodotProcess.CreateSession(commandStages:
+        [
+            new FakeSessionStage(
+                OutputEvents:
+                [
+                    new FakeOutputEvent(TimeSpan.Zero, FakeOutputStream.StdOut,
+                        ResultLine(skipped.uid.Value, "skipped", sessionReusable: false, message: "Baseline restoration failed.")),
+                ],
+                ExitCode: 1,
+                ExitDelay: TimeSpan.FromMilliseconds(20)),
+        ]);
+        var replacementSession = FakeGodotProcess.CreateSession(commandStages: [ResultStage(next.uid, "passed")]);
+        var factory = new FakeGodotProcessFactory(taintedSession, replacementSession);
+        GodotTestFramework framework = CreateFramework(factory);
+        List<TestNode> published = [];
+
+        await framework.RunSelectedTestsAsync(
+            [skipped, next],
+            (node, _) =>
+            {
+                published.Add(node);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.Equal(2, factory.CreatedProcesses.Count);
+        AssertNode(published[1], skipped.uid, state =>
+            Assert.Contains("Baseline restoration failed", Assert.IsType<ErrorTestNodeStateProperty>(state).Exception!.Message));
+        AssertNode(published[3], next.uid, IsPassed);
+        Assert.Equal([next.uid.Value],
+            ParseCommands(replacementSession.WrittenLines, "run").Select(command => command.GetProperty("RequestId").GetString()));
+    }
+
     /// <summary>Skipped facts publish a skip without a run command; neighbouring failures remain failures.</summary>
     [Fact]
     public async Task RunTests_SkipsAttributedFact_AndStillReportsUnrelatedFailureAndPass()

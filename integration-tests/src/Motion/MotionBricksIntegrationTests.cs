@@ -86,6 +86,7 @@ public sealed class MotionBricksIntegrationTests
 
     /// <summary>Real authored source windows exercise the Godot-hosted CUDA binding and complete codec.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task AuthoredWindows_GenerateFiniteTrimmedMotion()
     {
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://data/motionbricks/poses.json"));

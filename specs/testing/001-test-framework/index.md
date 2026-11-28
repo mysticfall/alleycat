@@ -18,7 +18,8 @@ authorises live LLM
 experiment harnesses: bounded, caller-declared scenarios that may make several provider requests and offer tools,
 capture inspectable evidence traces, and aggregate a fixed trial batch into one reported outcome. Integration tests that
 need a fresh Godot process of their own, for example to configure process-wide native state or to observe host-wide
-process activity, are likewise opt-in and run only when named exactly.
+process activity, each run in a fresh session process with no other session alongside, and take part in full runs
+like any other test. Integration fixtures load a live inference system only when the behaviour under test needs it.
 
 ## Goal
 
@@ -57,10 +58,14 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 14. Default integration scene composition must never make a billable provider call: a mind that a test scene starts
     itself cannot construct a production AI client in an integration session, regardless of selection or flags,
     while offline scripted providers keep covering real session dispatch and completion.
-15. Tests that need a fresh process of their own must stay out of default and class-wide runs, producing no result
-    at all, and run only when a contributor names each one exactly.
-16. When such a test runs, no other Godot test session process runs alongside it, and several of them named in one
-    run each get their own process.
+15. Tests that need a fresh process of their own take part in default, class-wide and exact-method runs like other
+    tests, so a full run covers them.
+16. When such a test runs, no other Godot test session process runs alongside it, and several of them in one run each
+    get their own process.
+17. A test loads only the live inference systems (for example MotionBricks, Supertonic or Wav2Arkit) that the
+    behaviour under test needs, so a full run does not exhaust host memory or video memory.
+18. A test that needs a host with no other Godot process running reports itself skipped, with a reason naming what
+    it found, when another one is running. It does not fail, and on a clean host it runs fully.
 
 ## Technical Requirements
 
@@ -155,15 +160,27 @@ evidence to design production APIs, then lock behaviour down with deterministic 
     static construction path (TR-20). Wholesale provider suppression in the harness is not an acceptable substitute
     for the scoped guard.
 31. Integration tests that need a fresh Godot process must carry `[IsolatedProcess]` on the method or its declaring
-    class (inherited; either marker marks the test) and are governed by the gate defined in
+    class (inherited; either marker marks the test) and run under the contract in
     [Isolated Process Tests](#isolated-process-tests).
-32. The isolated-process gate must apply to both discovery and execution with eligibility defined as: existing UID/CLI
-    selection AND the live-LLM gate (TR-18) AND (test not isolated-marked OR an exact `--test-method` entry names it).
-    Default runs, `--test-class` selection and MTP UID filters alone never name a method, and an excluded isolated
-    test must produce no discovered, in-progress, terminal or skipped node.
+32. Isolated tests take part in discovery and execution under the same eligibility as ordinary tests: existing
+    UID/CLI selection AND the live-LLM gate (TR-18). Default runs, `--test-class` selection, exact `--test-method`
+    selection and MTP UID filters all admit them.
 33. Before an isolated test runs, the host must shut down every live session; the test runs in a newly started
-    session, which the host shuts down afterwards. Routing, wire protocol, outcomes and restart semantics are
-    otherwise unchanged.
+    session, which the host shuts down afterwards, and no other session runs alongside it. Routing, wire protocol,
+    outcomes and restart semantics are otherwise unchanged.
+34. An integration fixture must not load MotionBricks or any other live inference system, such as Supertonic or
+    Wav2Arkit, unless the behaviour under test needs it. A test that needs a real shared model carries
+    `[IsolatedProcess]`. A fixture that does not need such a system removes or disables it in the fixture itself;
+    the framework applies no load policy of its own. Keeping production consumer nodes with a test-scoped stand-in
+    session that loads no model counts as disabling the system. See
+    [Fixture Inference Systems](#fixture-inference-systems).
+35. An isolated test that observes process activity across the whole host checks for Godot processes the framework
+    did not launch when it starts. If it finds one, it reports the `skipped` outcome with a reason naming what it
+    found, instead of failing. On a clean host it runs fully. See [Process Isolation](#process-isolation).
+    A test skips itself at runtime by throwing `IntegrationTestSkippedException`, whose message is the reason. Only
+    facts may skip themselves: a theory row that throws it counts as a failed row. A teardown failure after a skip
+    makes the outcome `failed`. A `skipped` result from a session that is not reusable is reported as `error`
+    ([Session Restart Semantics](#session-restart-semantics)).
 
 ## In Scope
 
@@ -181,8 +198,9 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 - The integration-session production AI boundary: fail-closed rejection of production client construction in
   integration contexts (normative contract in AI-002), preserved offline injected-provider coverage, and no
   `--live-llm` bypass of the production guard.
-- Opt-in gated discovery and execution for `[IsolatedProcess]` integration tests, each in a fresh session process
-  with no other session process alive.
+- Discovery and execution of `[IsolatedProcess]` integration tests in default and selected runs, each in a fresh
+  session process with no other session process alive.
+- The fixture rule that limits live inference systems to tests whose behaviour needs them.
 
 ## Out Of Scope
 
@@ -192,9 +210,10 @@ evidence to design production APIs, then lock behaviour down with deterministic 
 - Load and performance benchmarking infrastructure.
 - Collection-level fixtures (`IClassFixture`, `ICollectionFixture`).
 - Parallel execution within a session; execution is strictly serial.
-- OS-process and CLR isolation between tests within a session; tests that need it opt into `[IsolatedProcess]`.
-- Guarding against Godot processes that the framework did not launch; isolated tests that observe host-wide activity
-  require the contributor to run them with no other Godot process running.
+- OS-process and CLR isolation between tests within a session; tests that need it carry `[IsolatedProcess]`.
+- A framework-level load policy that removes or disables live inference systems; fixtures own that (TR-34).
+- Preventing or stopping Godot processes that the framework did not launch; isolated tests that observe host-wide
+  activity detect them and report `skipped` (TR-35).
 - Provisioning, distributing, or storing live LLM credentials; each contributor supplies a private local override.
 - Result caching, dashboards, or hosted reporting for live experiments beyond the per-test MTP nodes, the in-fact
   batch report, and the local trace artefacts.
@@ -216,6 +235,8 @@ process per test.
 - Rendering mode cannot change within a process, which is why sessions partition by rendering mode.
 - CLI `--headless` collapses every test into the single headless session.
 - Execution within a session is strictly serial: one in-flight test per session.
+- An `[IsolatedProcess]` test runs exclusively: the host shuts down every other session first, and no other session
+  runs alongside it ([Isolated Process Tests](#isolated-process-tests)).
 
 ### Wire Protocol
 
@@ -234,15 +255,19 @@ process per test.
     - `shutdown` — carries a non-empty `RequestId`.
 - Runtime-to-host messages:
     - `ready` — signals session start; on startup failure it carries `Outcome:"error"` with a `Message`.
-    - `result` — exactly one per `run`, carrying non-empty `RequestId`, `Outcome` (`passed`, `failed`, or `error`),
-      `Message`, `Stack`, and required Boolean `SessionReusable`, the runtime's post-test verdict on whether the
-      session may execute further tests. `SessionReusable:false` is an explicit valid verdict and is not equivalent to
-      an absent property.
+    - `result` — exactly one per `run`, carrying non-empty `RequestId`, `Outcome` (`passed`, `failed`, `skipped`, or
+      `error`), `Message`, `Stack`, and required Boolean `SessionReusable`, the runtime's post-test verdict on whether
+      the session may execute further tests. `SessionReusable:false` is an explicit valid verdict and is not equivalent
+      to an absent property.
     - `shutdown-complete` — carries the non-empty `RequestId` from the corresponding `shutdown`.
 
 ### Outcome Taxonomy
 
 - `failed` — test-owned assertion, setup, or teardown failure.
+- `skipped` — the test found that a declared host precondition does not hold and stopped by throwing
+  `IntegrationTestSkippedException` (TR-35). `Message` carries the reason, and the host publishes a skipped result
+  node with it. Skipped is neither a pass nor a failure. Only facts report it: a theory row that throws the exception
+  is a failed row, and a skip followed by a teardown failure is `failed`.
 - `error` — framework, runtime, or protocol failure.
 
 This preserves the existing assertion-versus-framework diagnostic separation.
@@ -270,6 +295,9 @@ baseline restoration while the session is idle between commands, and again befor
 `GodotObject` wrappers are disposed against a live engine rather than racing a later test or teardown-time
 object-database destruction.
 
+Freeing a `Game` ends its shared-model registry's lifetime, which stops its models under
+[CORE-011 TR24](../../core/011-shared-model-services/index.md#shutdown-and-diagnostics).
+
 The existing isolated-`Game` policy still removes the runtime global before tests that require it; the baseline
 re-creates it afterwards. Removal follows the same teardown contract: free every root-owned `Game` by type and await
 observed completion within a bounded frame budget — never a name-keyed free or a fixed frame count.
@@ -293,6 +321,8 @@ The framework cannot reset test-owned state. Tests remain responsible for cleani
 - A `passed` result with `SessionReusable:false` means baseline restoration failed after an otherwise-passing test;
   the runtime carries its baseline diagnostics in `Message`. The host converts this to an `error` result for that
   test carrying those diagnostics, and the session is lazily replaced for the remaining tests.
+- A `skipped` result with `SessionReusable:false` is handled the same way: the host reports `error` for that test and
+  lazily replaces the session.
 - For graceful shutdown, the host sends `shutdown` with a non-empty `RequestId` and waits for a
   `shutdown-complete` carrying the same identifier. A missing, invalid, or mismatched acknowledgement is a
   protocol/cleanup fault: the host must not accept a clean shutdown and must force termination within the cleanup
@@ -494,37 +524,52 @@ live-LLM experiment methodology in the `llm-experiment-driven-development` skill
 
 ## Isolated Process Tests
 
-This section is a normative dependency for TR-31–TR-33. Some integration tests cannot share a process: they configure
-process-wide native state that can be set only once, or they observe every process's activity on the host. Session
-reuse would make their results depend on earlier tests, so they opt into a fresh process instead.
+This section is a normative dependency for TR-31–TR-35. Some integration tests cannot share a process: they configure
+process-wide native state that can be set only once, they load a real shared model, or they observe every process's
+activity on the host. Session reuse would make their results depend on earlier tests, so they carry
+`[IsolatedProcess]` and run in a fresh process.
 
-### Opt-In Gate
+### Selection
 
 - `[IsolatedProcess]` (`test-framework/src/IsolatedProcessAttribute.cs`) is valid on methods and classes, is
   inherited, and marks a test when either the method or its declaring type carries it.
-- One gate in `GodotTestFramework.FilteredTests` serves both discovery and execution, after the live-LLM gate. An
-  isolated test is eligible only when an exact `--test-method` entry names it (`GodotCliTestSelector.NamesMethod`).
-- Default runs, `--test-class` runs, `--list-tests` without a method selector, and MTP UID filters alone never select
-  an isolated test. An excluded isolated test produces no discovered, in-progress, terminal or skipped node, so a green
-  default run never implies isolated coverage.
-- The gate only adds a condition. A `[LiveLlm]` isolated test also needs `--live-llm`, and ordinary tests named in the
-  same command run as usual.
+- Isolated tests are selected exactly like ordinary tests. Default runs, `--test-class` runs, `--list-tests`, exact
+  `--test-method` entries and MTP UID filters all include them, so a full run covers them.
+- The live-LLM gate still applies: a `[LiveLlm]` isolated test also needs `--live-llm`.
 
 ### Process Isolation
 
 - Before each isolated test, the host shuts down every live session, headless and windowed, through the normal
   graceful shutdown contract. The test then runs in a newly started session routed by its effective headless mode.
-- After the test, the host shuts that session down, so no session outlives it. Several isolated tests named in one
-  command each get their own process; later ordinary tests lazily start a replacement session.
-- Isolation covers only session processes the framework launches. A test that observes host-wide activity documents
-  that contributors must run it with no other Godot process running.
+- After the test, the host shuts that session down, so no session outlives it and none runs alongside it. Several
+  isolated tests in one run each get their own process; later ordinary tests lazily start a replacement session.
+- Isolation covers only session processes the framework launches. A test that observes process activity across the
+  whole host checks, when it starts, for Godot processes the framework did not launch. If it finds one, it reports
+  `skipped` with a reason that names what it found (for example the process name and ID), rather than failing. On a
+  clean host it runs fully.
+
+### Fixture Inference Systems
+
+- An integration fixture loads MotionBricks, Supertonic, Wav2Arkit or any other live inference system only when the
+  behaviour under test needs it. Session reuse would otherwise carry its memory into later tests.
+- A test that needs a real shared model carries `[IsolatedProcess]`, so the model is loaded and released in a process
+  of its own.
+- A fixture that does not need such a system removes or disables it in the fixture itself, for example by omitting
+  the node or its model wiring. The framework applies no load policy that strips systems from fixtures.
+- A fixture may instead keep the production consumer nodes and give them a test-scoped stand-in session before they
+  initialise, so they run normally without loading a model. This is the sanctioned way to keep scenes that contain
+  live-system consumers model-free. The current example is `NativeFreeMotion`
+  (`integration-tests/src/Motion/NativeFreeMotion.cs`): while its class- or method-level scope is active, every
+  `MotionBricksNavigation` and `PlayerMotionBricks` that enters the tree receives a native-free session before its
+  deferred initialisation, so no CUDA model loads. Tests that verify generated motion must not use it.
 
 ## Supported CLI Options
 
 - `--test-class <Fully.Qualified.TypeName[,...]>` — narrows selection to tests whose declaring type exactly matches
   any listed fully qualified class name.
-- `--test-method <Fully.Qualified.TypeName.MethodName[,...]>` — narrows selection to the listed exact test methods.
-  It is the only selector that admits `[IsolatedProcess]` tests; see [Isolated Process Tests](#isolated-process-tests).
+- `--test-method <Fully.Qualified.TypeName.MethodName[,...]>` — narrows selection to the listed exact test methods,
+  including `[IsolatedProcess]` tests, which other selectors also admit; see
+  [Isolated Process Tests](#isolated-process-tests).
 - `--headless` — forces all tests to run in headless mode. Overrides per-test and per-class `HeadlessAttribute`
   settings. Intended for tests known to be safe without renderer-backed behaviour.
 - `--live-llm` — permits integration tests marked `[LiveLlm]` to run; live-marked tests stay excluded without this
@@ -614,19 +659,31 @@ all-empty list (for example `","`) is rejected during validation.
 26. Deterministic tests prove live-marked tests stay excluded without `--live-llm` and are admitted only with it,
     opted-in execution still cannot construct a production AI client, and the explicit `AITest` factory remains
     constructible through deterministic local seams with no billable call.
-27. Without an exact `--test-method` entry naming it, an `[IsolatedProcess]` test is absent from discovery and
-    execution — including default runs, `--test-class` runs, `--list-tests` and MTP UID filters — producing no
-    discovered, in-progress, terminal or skipped node; a named isolated test still respects the live-LLM gate.
-28. A named isolated test runs with no other framework session process alive, in a newly started session that is
-    shut down afterwards; several isolated tests named in one command run in distinct processes, and ordinary tests
-    in the same command keep their selector, headless, session and result semantics.
-29. Deterministic framework tests, without a real Godot runtime, prove that UID-filtered and class-selected runs
-    exclude isolated tests, that an exact method selector admits them, and that each isolated test gets its own
-    freshly started session.
+27. An `[IsolatedProcess]` test is discovered and executed in default runs, `--test-class` runs, `--list-tests`,
+    exact `--test-method` runs and MTP UID filters, with an individual result like any other test; an isolated
+    `[LiveLlm]` test still respects the live-LLM gate.
+28. An isolated test runs with no other framework session process alive, in a newly started session that is shut
+    down afterwards; several isolated tests in one run execute in distinct processes, and ordinary tests in the same
+    run keep their selector, headless, session and result semantics.
+29. Deterministic framework tests, without a real Godot runtime, prove that default, class-selected, UID-filtered and
+    exact-method runs all admit isolated tests, and that each isolated test gets its own freshly started session
+    with no other session alive.
 30. Criteria 1-6 and 14 verify User Requirements; criteria 3, 6, 7-14 verify Technical Requirements. Criteria 15-23
     additionally verify User Requirements 7-13 and Technical Requirements 17-28. Criteria 24-26 verify User
     Requirement 14 and Technical Requirements 29-30. Criteria 27-29 verify User Requirements 15-16 and Technical
-    Requirements 31-33.
+    Requirements 31-33. Criterion 31 verifies User Requirement 17 and Technical Requirement 34. Criterion 32 verifies
+    User Requirement 18 and Technical Requirement 35.
+31. Review of integration fixtures confirms that none loads MotionBricks or another live inference system unless its
+    behaviour under test needs it, that every test loading a real shared model carries `[IsolatedProcess]`, and that
+    unneeded systems are removed or disabled in the fixture rather than by a framework policy. A full default run,
+    including isolated tests, completes without exhausting host memory or video memory. This memory check counts
+    only on the supported NVIDIA host, the same as real-model evidence.
+32. With another Godot process running that the framework did not launch, an isolated test that observes host-wide
+    process activity reports `skipped` with a reason naming the process it found; it is neither passed nor failed.
+    On a clean host the same test runs fully. Deterministic framework tests show that a `skipped` result reaches the
+    host as a skipped node carrying its reason. They also show that a theory row throwing
+    `IntegrationTestSkippedException` counts as a failure, that a skip followed by a teardown failure is `failed`, and
+    that a `skipped` result with `SessionReusable:false` is reported as `error` with the session replaced.
 
 ## References
 
@@ -634,6 +691,8 @@ all-empty list (for example `","`) is rejected during validation.
 - @test-framework/src/GodotTestFramework.cs
 - @test-framework/src/LiveLlmAttribute.cs
 - @test-framework/src/IsolatedProcessAttribute.cs
+- @game/src/Testing/IntegrationTestSkippedException.cs
+- @integration-tests/src/Motion/NativeFreeMotion.cs
 - @test-framework/src/Cli/GodotTestCommandLineOptions.cs
 - @test-framework/AlleyCat.TestFramework.csproj
 - @test-framework/AlleyCat.TestFramework.Tests.csproj

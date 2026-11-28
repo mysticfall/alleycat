@@ -38,6 +38,7 @@ public partial class TestRuntimeRunner : Node
     private const string SessionPassedOutcome = "passed";
     private const string SessionFailedOutcome = "failed";
     private const string SessionErrorOutcome = "error";
+    private const string SessionSkippedOutcome = "skipped";
 
     private static readonly JsonSerializerOptions _sessionResultPayloadOptions = new();
     private static readonly JsonSerializerOptions _sessionCompactPayloadOptions = new()
@@ -502,7 +503,12 @@ public partial class TestRuntimeRunner : Node
             await RemoveRuntimeGlobalAutoloadForIntegrationTestAsync(typeName);
 
             executionResult = await PerTestLifecycleExecutor.ExecuteAsync(method);
-            if (!executionResult.Passed)
+            if (executionResult.SkipReason is { } skipReason)
+            {
+                failureMessage = skipReason;
+                outcome = SessionSkippedOutcome;
+            }
+            else if (!executionResult.Passed)
             {
                 (failureMessage, failureStack) = PerTestLifecycleExecutor.BuildFailureDiagnostics(executionResult);
                 outcome = SessionFailedOutcome;

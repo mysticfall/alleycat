@@ -83,6 +83,27 @@ public sealed class SharedModelShutdownTests
         Assert.True(backend.ObservedOnDispose);
     }
 
+    /// <summary>
+    /// CORE-011-TAC-008 (TR24): a second stop after the first has completed, such as the owning <c>Game</c>'s tree
+    /// exit after the shutdown boundary, returns the same completion and never disposes the backend again.
+    /// </summary>
+    [Fact]
+    public async Task Stop_CalledAgainAfterCompletion_ReturnsSameTask_AndDisposesOnce()
+    {
+        var registry = new SharedModelRegistry();
+        var backend = new TestBackend();
+        ISharedModel<TestBackend> model = registry.Resolve(TestDefinition.Immediate(new TestModelKey("/models/a.onnx"), backend));
+        await model.Loaded.WaitAsync(_bound);
+
+        Task first = registry.Stop();
+        await first.WaitAsync(_bound);
+        Task second = registry.Stop();
+
+        Assert.Same(first, second);
+        Assert.True(second.IsCompletedSuccessfully);
+        Assert.Equal(1, backend.DisposeCount);
+    }
+
     /// <summary>CORE-011-TAC-008 (TR24): stop completes for failed loads and aggregates every backend.</summary>
     [Fact]
     public async Task Stop_AggregatesEveryBackend_IncludingFailedLoads()

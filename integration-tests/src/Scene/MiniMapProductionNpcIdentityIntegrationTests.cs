@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.Mind.AI;
 using AlleyCat.Scene.MiniMap;
 using Godot;
@@ -19,8 +20,14 @@ namespace AlleyCat.IntegrationTests.Scene;
 /// only — scene instancing, marker discovery and a successful render — never the identity values under diagnosis,
 /// which live in the captured artefacts under <c>game/temp/minimap-bugfix/</c>.
 /// </summary>
-public sealed partial class MiniMapProductionNpcIdentityIntegrationTests
+public sealed partial class MiniMapProductionNpcIdentityIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     private const string ProductionScenePath = "res://content/the_veridian_spc/characters/mali/mali_npc.tscn";
     private const string SessionScenePath = "res://content/the_veridian_spc/start.tscn";
     private const string DissentSessionScenePath = "res://content/the_price_of_dissent/start.tscn";

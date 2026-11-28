@@ -18,6 +18,7 @@ internal static class GodotSessionProtocol
     public const string PassedOutcome = "passed";
     public const string FailedOutcome = "failed";
     public const string ErrorOutcome = "error";
+    public const string SkippedOutcome = "skipped";
 }
 
 /// <summary>
@@ -30,13 +31,22 @@ internal enum GodotSessionTestOutcome
     Failed,
 
     Error,
+
+    Skipped,
 }
 
 /// <summary>
 /// Result of one session-dispatched test execution, including the post-test verdict on whether the session may
 /// execute further tests.
 /// </summary>
-internal sealed record GodotSessionTestResult(GodotSessionTestOutcome Outcome, Exception? Error, bool SessionReusable);
+internal sealed record GodotSessionTestResult(GodotSessionTestOutcome Outcome, Exception? Error, bool SessionReusable)
+{
+    /// <summary>The reason a <see cref="GodotSessionTestOutcome.Skipped" /> test reported; otherwise <c>null</c>.</summary>
+    public string? SkipReason
+    {
+        get; init;
+    }
+}
 
 /// <summary>
 /// A framework or protocol failure raised while driving a Godot integration-test session.
@@ -412,6 +422,19 @@ internal sealed class GodotSessionClient : IDisposable
                     GodotSessionTestOutcome.Failed,
                     BuildFailureException(resultEvent.Message, resultEvent.Stack),
                     sessionReusable);
+            case GodotSessionProtocol.SkippedOutcome:
+                // Like a pass, a skip with a non-reusable session means baseline restoration failed.
+                return resultEvent.SessionReusable == false
+                    ? new GodotSessionTestResult(
+                        GodotSessionTestOutcome.Error,
+                        BuildFailureException(resultEvent.Message, resultEvent.Stack),
+                        SessionReusable: false)
+                    : new GodotSessionTestResult(GodotSessionTestOutcome.Skipped, null, sessionReusable)
+                    {
+                        SkipReason = string.IsNullOrWhiteSpace(resultEvent.Message)
+                            ? "The test skipped itself without a reason."
+                            : resultEvent.Message,
+                    };
             case GodotSessionProtocol.ErrorOutcome:
                 return new GodotSessionTestResult(
                     GodotSessionTestOutcome.Error,
@@ -831,6 +854,7 @@ internal sealed class GodotSessionClient : IDisposable
 
         if (wireEvent.Outcome is not GodotSessionProtocol.PassedOutcome
             and not GodotSessionProtocol.FailedOutcome
+            and not GodotSessionProtocol.SkippedOutcome
             and not GodotSessionProtocol.ErrorOutcome)
         {
             error = $"'result' carried unsupported Outcome '{wireEvent.Outcome ?? "<missing>"}'";

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -21,13 +22,11 @@ namespace AlleyCat.IntegrationTests.Models;
 /// the root window once the consumers have released their handles; it never calls the shutdown internals.
 /// </para>
 /// <para>
-/// Each fact loads the real models on CUDA, so the facts are <see cref="IsolatedProcessAttribute" /> opt-ins. Run them
-/// from the repository root with no other Godot process running:
+/// Each fact loads the real models on CUDA, so the facts are <see cref="IsolatedProcessAttribute" />: default, class
+/// and exact-method runs all include them, and each runs in its own session with no other session alive. Each fact
+/// first checks for Godot processes the framework did not launch and reports itself skipped, naming them, if any is
+/// running.
 /// </para>
-/// <code>
-/// ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS=900000 dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
-///   --test-method AlleyCat.IntegrationTests.Models.SharedModelShutdownTests.MenuExit_DuringInFlightModelWork_DrainsAndExitsCleanly,AlleyCat.IntegrationTests.Models.SharedModelShutdownTests.RootWindowClose_DuringInFlightModelWork_DrainsAndExitsCleanly,AlleyCat.IntegrationTests.Models.SharedModelShutdownTests.SceneExit_DuringInFlightModelWork_ReleasesConsumersThenExitsCleanly
-/// </code>
 /// <para>
 /// The probe process is headless: the measured behaviour is scene-thread scheduling, model disposal and process exit,
 /// none of which needs a renderer. Without a display server the operating system's close event cannot be produced, so
@@ -84,6 +83,7 @@ public sealed class SharedModelShutdownTests
 
     private static async Task RunAsync(string fact, string path)
     {
+        HostIsolation.RequireNoOtherGodotProcess();
         string directory = ProjectSettings.GlobalizePath($"res://temp/shared-ai-models/{fact}");
         _ = Directory.CreateDirectory(directory);
         string stamp = $"{DateTimeOffset.UtcNow:yyyyMMddTHHmmssZ}";

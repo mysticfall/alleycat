@@ -4,6 +4,7 @@ using AlleyCat.Control;
 using AlleyCat.IK;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Motion;
+using AlleyCat.TestFramework;
 using AlleyCat.XR;
 using AlleyCat.XR.Mock;
 using Godot;
@@ -75,6 +76,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 
     /// <summary>A real generated result returns late after production release/replacement and must never play.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task NativeLateResult_ProductionReplacementRejectsOldPlaybackAndSettles()
     {
         await using ClosureFixture fixture = await ClosureFixture.CreateAsync();
@@ -178,6 +180,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 
     /// <summary>Existing root sphere meets one obstacle; continued generation and feedback remain collision-realised.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task RootObstacle_BlocksGeneratedPlaybackAndFeedsRealisedContext()
     {
         await using ClosureFixture fixture = await ClosureFixture.CreateAsync();

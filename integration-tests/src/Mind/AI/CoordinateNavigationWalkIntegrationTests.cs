@@ -9,6 +9,7 @@ using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Navigation;
 using AlleyCat.Scene;
+using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.AI;
 using Xunit;
@@ -35,6 +36,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// submitted request is published, so these tool contracts do not depend on host inference speed or load. NAV-001's
 /// real-time overlap budget is not exercised here.
 /// </remarks>
+[IsolatedProcess]
 public sealed class CoordinateNavigationWalkIntegrationTests
 {
     private const string ArtefactDirectory = "res://temp/agent-nav-tools/walk-tests";

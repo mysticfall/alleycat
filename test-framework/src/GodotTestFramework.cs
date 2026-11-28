@@ -275,6 +275,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
             GodotSessionTestOutcome.Passed => CreateTestNode(uid, method, PassedTestNodeStateProperty.CachedInstance),
             GodotSessionTestOutcome.Failed => CreateTestNode(uid, method, new FailedTestNodeStateProperty(EnsureErrorDetail(result))),
             GodotSessionTestOutcome.Error => CreateTestNode(uid, method, new ErrorTestNodeStateProperty(EnsureErrorDetail(result))),
+            GodotSessionTestOutcome.Skipped => CreateTestNode(uid, method, new SkippedTestNodeStateProperty(result.SkipReason)),
             _ => throw new InvalidOperationException($"Unexpected session test outcome '{result.Outcome}'."),
         };
     }
@@ -382,8 +383,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
         return candidates
             .Where(candidate => _cliSelector.Matches(candidate.Method))
-            .Where(candidate => _liveLlmEnabled || !IsLiveLlmTest(candidate.Method))
-            .Where(candidate => !IsIsolatedProcessTest(candidate.Method) || _cliSelector.NamesMethod(candidate.Method));
+            .Where(candidate => _liveLlmEnabled || !IsLiveLlmTest(candidate.Method));
     }
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)

@@ -39,6 +39,16 @@ runs must use a renderer. Full integration runs are reserved for final handoff r
 - Shared composition, perception, hand/eye/voice and player pose tests remain owned by their respective contracts,
   even when their assertions mention navigation. Their outstanding broad-suite failures are not silently waived.
 
+## Real Model Loading
+
+Only tests that verify generated motion load the real MotionBricks model, and they carry `[IsolatedProcess]` so each
+runs in its own Godot process with no other session alive. Fixtures that merely contain MotionBricks nodes (templates,
+role installers, real session scenes) install `NativeFreeMotion` for the test's lifetime: every
+`MotionBricksNavigation` and `PlayerMotionBricks` entering the tree gets a native-free session factory before its
+deferred initialisation, so production wiring stays intact without a CUDA load. Narrower fixtures may set
+`SessionFactory` directly. See [`NativeFreeMotion.cs`](NativeFreeMotion.cs) and TEST-001
+[Fixture Inference Systems](../../../specs/testing/001-test-framework/index.md#fixture-inference-systems).
+
 Diagnostics are not suitability thresholds. Model contact confidence is not physical contact truth, and calibrated
 target joint landmarks are not sole-surface contacts. Keep raw evidence, interpolation identity and limitations.
 

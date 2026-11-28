@@ -522,30 +522,33 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
-    /// Ensures an isolated-process test is excluded from a default run, even when its UID is filtered, and
-    /// launches no process.
+    /// Ensures a UID-filtered run, which names no method, still runs an isolated-process test in its own session.
     /// </summary>
     [Fact]
-    public void ExecuteRequestAsync_Run_ExcludesIsolatedTests_WithoutExactMethodSelector()
+    public void ExecuteRequestAsync_Run_IncludesIsolatedTest_WithoutExactMethodSelector()
     {
-        var factory = new FakeGodotProcessFactory();
+        TestNodeUid isolatedUid = GetLiveLlmFixtureUid(typeof(IsolatedClassMarkedFixture), nameof(IsolatedClassMarkedFixture.IsolatedTest));
+        var session = FakeGodotProcess.CreateSession(commandStages: [ResultStage(isolatedUid)]);
+        var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess(), session);
         GodotTestFramework framework = CreateFramework(factory);
         var messageBus = new RecordingMessageBus();
         var request = new RunTestExecutionRequest(
             CreateTestSessionContext(),
-            new TestNodeUidListFilter([GetLiveLlmFixtureUid(typeof(IsolatedClassMarkedFixture), nameof(IsolatedClassMarkedFixture.IsolatedTest))]));
+            new TestNodeUidListFilter([isolatedUid]));
 
         ExecuteRequest(framework, CreateRequestContext(request, messageBus));
 
-        Assert.Empty(messageBus.Published);
-        Assert.Empty(factory.Invocations);
+        Assert.Equal([isolatedUid.Value], GetRunRequestIds(session));
+        List<TestNode> nodes = NodesOf(messageBus);
+        Assert.Equal(2, nodes.Count);
+        AssertNodeState(nodes[1], isolatedUid, IsPassedState);
     }
 
     /// <summary>
-    /// Ensures a <c>--test-class</c> selection runs the class's ordinary tests but not its isolated ones.
+    /// Ensures a <c>--test-class</c> selection discovers the class's isolated tests alongside its ordinary ones.
     /// </summary>
     [Fact]
-    public async Task ExecuteRequestAsync_Discovery_ClassSelectorExcludesIsolatedTests()
+    public async Task ExecuteRequestAsync_Discovery_ClassSelectorIncludesIsolatedTests()
     {
         GodotTestFramework framework = CreateFramework(
             new FakeGodotProcessFactory(),
@@ -555,15 +558,20 @@ public sealed class GodotTestFrameworkTests
 
         await framework.ExecuteRequestAsync(CreateRequestContext(request, messageBus));
 
-        TestNode discoveredNode = Assert.Single(NodesOf(messageBus));
-        AssertNodeState(
-            discoveredNode,
-            GetLiveLlmFixtureUid(typeof(IsolatedMethodMarkedFixture), nameof(IsolatedMethodMarkedFixture.OrdinaryTest)),
-            IsDiscoveredState);
+        List<TestNode> nodes = NodesOf(messageBus);
+        Assert.Equal(2, nodes.Count);
+        Assert.Equal(
+            new[]
+            {
+                GetLiveLlmFixtureUid(typeof(IsolatedMethodMarkedFixture), nameof(IsolatedMethodMarkedFixture.IsolatedTest)).Value,
+                GetLiveLlmFixtureUid(typeof(IsolatedMethodMarkedFixture), nameof(IsolatedMethodMarkedFixture.OrdinaryTest)).Value,
+            }.Order(StringComparer.Ordinal),
+            nodes.Select(node => node.Uid.Value).Order(StringComparer.Ordinal));
+        Assert.All(nodes, node => IsDiscoveredState(node.Properties.Single<IProperty>()));
     }
 
     /// <summary>
-    /// Ensures an exact <c>--test-method</c> selector opts an isolated test in.
+    /// Ensures an exact <c>--test-method</c> selector remains a valid way to run an isolated test.
     /// </summary>
     [Fact]
     public void ExecuteRequestAsync_Run_ExactMethodSelectorRunsIsolatedTest()

@@ -59,7 +59,8 @@ later. It also provides the seam for future priority and budget control without 
    the model key.
 9. A successful load that degrades internally, such as Supertonic's CUDA-to-CPU fallback under SPCH-007, is a
    successful load; its diagnostics are reported once per backend, not once per consumer.
-10. Loaded backends stay loaded until `Game` shutdown. Releasing a consumer never unloads or disposes a shared backend.
+10. Loaded backends stay loaded until the owning `Game`'s lifetime ends (TR24). Releasing a consumer never unloads or
+    disposes a shared backend.
 
 ### Scheduler and Work Items
 
@@ -105,11 +106,16 @@ later. It also provides the seam for future priority and budget control without 
 
 ### Shutdown and Diagnostics
 
-24. `Game`'s application-shutdown boundary, shared by menu exit and root-window close, stops admission on every
-    scheduler, settles queued items as cancelled, and disposes each backend only after its in-flight call or load
-    returns, never concurrently with it. It returns one aggregate completion that final quit awaits asynchronously;
-    the scene thread is never blocked. This generalises the current `MotionBricksWorkers.Stop` semantics. Native calls
-    cannot be interrupted, so a native call that never returns still prevents graceful exit.
+24. The registry and its schedulers stop when the owning `Game`'s lifetime ends (tree exit). Stopping:
+    - stops admission on every scheduler and settles queued items as cancelled;
+    - disposes each backend only after its in-flight call or load returns, never concurrently with it;
+    - never blocks the scene thread.
+    Stopping is idempotent. The application-shutdown boundary, shared by menu exit and root-window close, uses the
+    same stop and returns one aggregate completion that final quit awaits asynchronously. A later stop at tree exit
+    is then a no-op, so the shutdown path is unaffected. Production frees `Game` only at quit, so the earlier
+    tree-exit stop matters when a `Game` is freed and re-created, such as between integration tests. This generalises
+    the current `MotionBricksWorkers.Stop` semantics. Native calls cannot be interrupted, so a native call that never
+    returns still prevents graceful exit.
 25. Expose load and execution events, such as load started, succeeded or failed per key and item queued, started,
     dropped or completed per consumer, through an observer seam and log-only diagnostics under
     [CORE-007](../007-microsoft-logging-integration/index.md). These must not change scheduling behaviour.
@@ -117,10 +123,12 @@ later. It also provides the seam for future priority and budget control without 
 ## In Scope
 
 - The model-agnostic registry, scheduler, work item and scheduling-policy seam, with the v1 round-robin policy.
-- Model keys, lazy single loading, load coalescing, cached load failure and shutdown-only disposal.
+- Model keys, lazy single loading, load coalescing, cached load failure, and disposal only when the owning `Game`'s
+  lifetime ends.
 - Per-consumer handles for MotionBricks, Supertonic and Wav2Arkit that implement their existing interfaces.
 - The MotionBricks split of the shared native session from per-consumer codec state.
-- `Game` ownership, DI registration and the non-blocking application-shutdown boundary.
+- `Game` ownership, DI registration, and a non-blocking, idempotent stop at the end of the `Game`'s lifetime (tree
+  exit), shared with the application-shutdown boundary.
 - Observer and diagnostic seams, unit tests and runtime load evidence required by the acceptance criteria.
 
 ## Out Of Scope
@@ -169,10 +177,14 @@ later. It also provides the seam for future priority and budget control without 
    its interface. Tests show that per-call inputs such as voice style are isolated between consumers. The MotionBricks
    split keeps codec state per consumer, handle disposal cancels and releases without blocking, and existing session
    factory, failure-injection and observer seams still work without a GPU.
-8. **CORE-011-TAC-008 (TR24):** Unit tests show that shutdown stops admission, cancels queued items, disposes each
-   backend only after its in-flight call or load returns, and returns an aggregate completion without blocking. Runtime
-   evidence covers menu exit and root-window close, each triggered through the production exit path while real model
-   work is in flight. It is collected as described in [Runtime Evidence](#runtime-evidence).
+8. **CORE-011-TAC-008 (TR10, TR24):** Unit tests show that stopping stops admission, cancels queued items, disposes each
+   backend only after its in-flight call or load returns, and returns an aggregate completion without blocking. They
+   also show that a second stop on the registry returns the same completion and disposes each backend only once, so tree
+   exit after the shutdown boundary is a no-op. Because `Game` is a Godot node, an integration test covers its tree
+   exit: freeing `Game` without the shutdown boundary stops the registry without blocking and disposes each backend
+   once, after its in-flight work returns. Runtime evidence covers menu exit and root-window close, each triggered
+   through the production exit path while real model work is in flight. It is collected as described in [Runtime
+   Evidence](#runtime-evidence).
 9. **CORE-011-TAC-009 (TR25):** Tests observe load and item events through the observer seam. Diagnostics stay
    log-only and do not alter scheduling.
 10. **CORE-011-TAC-010:** `dotnet format --verify-no-changes AlleyCat.sln` and
@@ -181,10 +193,11 @@ later. It also provides the seam for future priority and budget control without 
 ### Runtime Evidence
 
 The integration tests below provide the runtime evidence for these criteria. They are marked `[IsolatedProcess]` under
-[TEST-001](../../testing/001-test-framework/index.md#isolated-process-tests). They load the real models on CUDA and
-need a fresh process with no other Godot process running, so default and class-wide runs exclude them. They count as
-evidence only when run by exact `--test-method` selection on the supported NVIDIA host. A default suite pass is not
-evidence for these criteria and does not satisfy them. Being opt-in does not narrow any criterion. Parts of a criterion
+[TEST-001](../../testing/001-test-framework/index.md#isolated-process-tests). They load the real models on CUDA. Each
+runs in its own session process, with no other session alongside it, in both full and selected runs. A test that
+observes process activity across the whole host reports `skipped`, with a reason naming what it found, when another
+Godot process is running (TEST-001 TR-35). They count as evidence only when they run fully, and pass, on the supported
+NVIDIA host; a skipped result, or a result from any other host, does not satisfy these criteria. Parts of a criterion
 that these tests do not exercise still need their own evidence.
 
 - `SharedModelLoadingTests` is the shared-model load regression, covering UAC-001, TAC-002's three-NPC runtime

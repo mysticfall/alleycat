@@ -1,3 +1,4 @@
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
@@ -83,8 +84,14 @@ public sealed class VisualSurveyIntegrationTests
 }
 
 /// <summary>Live runtime coverage for visual surveys in the production Mirror Room route.</summary>
-public sealed class MirrorRoomVisualSurveyRuntimeIntegrationTests
+public sealed class MirrorRoomVisualSurveyRuntimeIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(TestUtils.GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
 
     /// <summary>Verifies installed characters publish visible subjects after their physics world has settled.</summary>

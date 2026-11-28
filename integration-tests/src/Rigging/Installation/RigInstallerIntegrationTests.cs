@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.IK.Pose;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
@@ -19,8 +20,14 @@ namespace AlleyCat.IntegrationTests.Rigging.Installation;
 /// <summary>
 /// Integration coverage for rig-domain installers built on the CORE-005 scene installer framework.
 /// </summary>
-public sealed class RigInstallerIntegrationTests
+public sealed class RigInstallerIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     private const string PlayerInstallerPath =
         "res://assets/characters/templates/installers/player_installer.tscn";
 

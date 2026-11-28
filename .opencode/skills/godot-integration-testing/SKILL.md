@@ -291,6 +291,10 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
   complete-character wiring/runtime-scene tests.
 - Component, IK, pose, hand, eye, and locomotion tests should normally use minimal authored fixtures or direct resource
   setup, unless doing so would remove the reported symptom or production interaction under test.
+- Do not load MotionBricks or any other live inference system (Supertonic, Wav2Arkit and similar) unless the behaviour
+  under test needs it. Remove or disable an unneeded system in the fixture itself; the framework has no load policy
+  for it. A test that needs a real shared model carries `[IsolatedProcess]`. See
+  [TEST-001's Fixture Inference Systems](../../../specs/testing/001-test-framework/index.md#fixture-inference-systems).
 
 ### Timing Hygiene For Physics-Driven Waits
 
@@ -315,6 +319,11 @@ their own static state, static event subscriptions, unmanaged singletons, shared
 tasks. The complete contract is
 [TEST-001's Session Execution Model](../../../specs/testing/001-test-framework/index.md#session-execution-model).
 
+Tests marked `[IsolatedProcess]` are part of default and filtered runs. Each runs in its own freshly started session
+process, after the host shuts down every other session, and no other session runs alongside it. A full run therefore
+covers them; an exact `--test-method` selector still runs one on its own. See
+[TEST-001's Isolated Process Tests](../../../specs/testing/001-test-framework/index.md#isolated-process-tests).
+
 ## Reading Results
 
 The host publishes an individual Microsoft Testing Platform InProgress and terminal result for every selected test
@@ -324,7 +333,10 @@ UID. Interpret terminal outcomes operationally:
 | --- | --- | --- |
 | `passed` | The test and its post-test baseline restoration succeeded. | Continue. |
 | `failed` | A test-owned assertion, setup, or teardown failed. | Fix the test or behaviour; rerun the exact selector. |
+| `skipped` | Host precondition not met ([TEST-001 TR35][tr35]). | Check the reason, then rerun on a clean host. |
 | `error` | A framework, session, runtime, preflight, timeout, process, or protocol fault. | Follow the ladder below. |
+
+[tr35]: ../../../specs/testing/001-test-framework/index.md#technical-requirements
 
 Framework errors include captured session stdout and stderr. A preflight failure is reported as an `error` for
 every selected test because none can start safely. The outcome contract is

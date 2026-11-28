@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AlleyCat.Control;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 
@@ -10,6 +11,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 {
     /// <summary>The approved walking default gives full/half rates independently of stationary turn angle.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task VirtualSteering_DefaultRatePreservesPartialControl()
     {
         var samples = new List<object>();

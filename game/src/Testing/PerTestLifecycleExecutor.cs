@@ -373,4 +373,12 @@ public sealed record PerTestLifecycleExecutionResult(Exception? TestFailure, Exc
     /// Indicates whether test invocation and teardown both succeeded.
     /// </summary>
     public bool Passed => TestFailure is null && TeardownFailure is null;
+
+    /// <summary>
+    /// The reason the test skipped itself through <see cref="IntegrationTestSkippedException" />, when teardown also
+    /// succeeded; otherwise <c>null</c>.
+    /// </summary>
+    public string? SkipReason => TestFailure is IntegrationTestSkippedException skip && TeardownFailure is null
+        ? skip.Message
+        : null;
 }

@@ -11,8 +11,14 @@ using CharacterHub = AlleyCat.Character.Character;
 namespace AlleyCat.IntegrationTests.Motion;
 
 /// <summary>Exercise the packed targets through automatic role installation, not just template instantiation.</summary>
-public sealed class NPCRoleInstallationTests
+public sealed class NPCRoleInstallationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(TestUtils.GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     private const string ContentNPC = "res://content/the_price_of_dissent/characters/이만복/이만복_npc.tscn";
 
     /// <summary>Positive control for the original female role.</summary>

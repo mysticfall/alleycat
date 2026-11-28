@@ -131,6 +131,13 @@ public partial class MotionBricksNavigation : NavigationBase
 
     private void Initialise()
     {
+        if (!IsInsideTree())
+        {
+            // Left the tree before the deferred call ran: _ExitTree has already passed, so a worker created now would
+            // never be disposed. Defer initialisation to the next tree entry instead.
+            _ = Connect(Node.SignalName.TreeEntered, Callable.From(Initialise), (uint)ConnectFlags.OneShot | (uint)ConnectFlags.Deferred);
+            return;
+        }
         try
         {
             _actor = GetParent<Character.Character>();

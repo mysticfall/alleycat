@@ -1,3 +1,4 @@
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.IntegrationTests.Support.AI;
 using AlleyCat.TestFramework;
@@ -15,8 +16,14 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// (AI-002 TR-2/3/12/17/18).
 /// </summary>
 [Headless]
-public sealed class VadimInterrogationBaselineScenarioTests
+public sealed class VadimInterrogationBaselineScenarioTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(TestUtils.GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     /// <summary>
     /// A non-question opening — the prior candidate trial's actual live opening, which never asked for the name —
     /// fails the gate closed: the scenario stops without publishing the player line, no request or turn page ever

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.Scene.MiniMap;
 using Godot;
 using Xunit;
@@ -19,8 +20,14 @@ namespace AlleyCat.IntegrationTests.Scene;
 /// reproduces the engine's reported viewports. No occupancy value is asserted — the tuning decision stays with the
 /// user.
 /// </summary>
-public sealed class MiniMapFramingSweepIntegrationTests
+public sealed class MiniMapFramingSweepIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     private const string ProductionScenePath = "res://content/the_veridian_spc/characters/mali/mali_npc.tscn";
     private const string SessionScenePath = "res://content/the_veridian_spc/start.tscn";
     private const string ArtefactDirectory = "res://temp/minimap-bugfix/framing";

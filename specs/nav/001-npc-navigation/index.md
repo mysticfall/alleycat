@@ -152,9 +152,10 @@ The following clauses refine TR5–8 and are covered by NAV-TAC-002:
   is normative for its loading, scheduling, failure caching and disposal. Each NPC's worker is a per-consumer handle:
   it owns its codec state, request ownership and latest-wins supersession, not model construction or native disposal.
   Ordinary scene exit releases the handle without waiting and observes completion/faults asynchronously without
-  retaining scene nodes. The shared native session is disposed only at `Game` shutdown, after any in-flight native call
-  returns, never concurrently with it. Menu exit and root-window close share one application-shutdown boundary: reject
-  new MotionBricks work, and asynchronously await completion, including native disposal, before final application quit.
+  retaining scene nodes. The shared native session is disposed only when the owning `Game`'s lifetime ends (CORE-011
+  TR24), after any in-flight native call returns, never concurrently with it. Menu exit and root-window close share
+  one application-shutdown boundary: reject new MotionBricks work, and asynchronously await completion, including
+  native disposal, before final application quit.
   Cancellation and the 30-second request budget are logical: they cannot interrupt native load/CUDA calls. A native
   call that never returns prevents graceful application exit indefinitely; do not promise bounded native shutdown.
   Forced process termination and direct `SceneTree.Quit` bypass this boundary and are not supported graceful-exit paths.

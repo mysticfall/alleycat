@@ -55,6 +55,6 @@ public sealed class SomaNativeSession : IDisposable
         => (_session ?? throw new InvalidOperationException("This MotionBricks backend has no native model."))
             .Run(inputs);
 
-    /// <summary>Releases the native session. Only the shared model registry calls this, at application shutdown.</summary>
+    /// <summary>Releases the native session. Only the shared model registry calls this, when its owner's lifetime ends.</summary>
     public void Dispose() => _session?.Dispose();
 }

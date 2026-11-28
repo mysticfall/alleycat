@@ -4,8 +4,9 @@ namespace AlleyCat.Motion;
 
 /// <summary>
 /// Application-owned MotionBricks handles, retained beyond scene removal until their per-consumer sessions are
-/// released. The shared native sessions are owned by the shared model registry, which disposes them at the same
-/// application-shutdown boundary; this owner never disposes a backend.
+/// released. The shared native sessions are owned by the shared model registry; both are stopped together at the end of
+/// the owning <c>Game</c>'s lifetime (the application-shutdown boundary or tree exit), and this owner never disposes a
+/// backend.
 /// </summary>
 internal sealed class MotionBricksWorkers
 {

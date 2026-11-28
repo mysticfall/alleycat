@@ -49,8 +49,9 @@ public partial class Game : Node, IServiceProvider
     }
 
     /// <summary>
-    /// Session-wide shared model registry owned for the autoload lifetime and registered as
-    /// <see cref="ISharedModelRegistry" />. It is shut down only at the application-shutdown boundary.
+    /// Shared model registry owned by this <see cref="Game" /> and registered as <see cref="ISharedModelRegistry" />.
+    /// It is stopped at the end of the <see cref="Game" />'s lifetime: at the application-shutdown boundary, or when the
+    /// <see cref="Game" /> leaves the tree without passing that boundary, whichever comes first.
     /// </summary>
     internal SharedModelRegistry SharedModels
     {
@@ -100,6 +101,7 @@ public partial class Game : Node, IServiceProvider
     private LoadingScreen? _loadingScreen;
     private Callable? _loadCompletedCallable;
     private bool _isSubscribedToXRInitialised;
+    private bool _isSubscribedToCloseRequested;
 
     /// <summary>
     /// Gets the active game singleton for global service resolution.
@@ -144,6 +146,7 @@ public partial class Game : Node, IServiceProvider
         if (tree is not null)
         {
             tree.Root.CloseRequested += OnWindowCloseRequested;
+            _isSubscribedToCloseRequested = true;
         }
         if (tree is not null && RuntimeContext.ShouldBypassGlobalStartup(tree))
         {
@@ -293,7 +296,13 @@ public partial class Game : Node, IServiceProvider
     /// <inheritdoc />
     public override void _ExitTree()
     {
-        GetTree().Root.CloseRequested -= OnWindowCloseRequested;
+        // A Game whose _Ready never ran (for example a test probe) never subscribed.
+        if (_isSubscribedToCloseRequested)
+        {
+            GetTree().Root.CloseRequested -= OnWindowCloseRequested;
+            _isSubscribedToCloseRequested = false;
+        }
+
         MainThreadDispatcher.Close();
 
         if (_xrManager is XRManager xrManager && _isSubscribedToXRInitialised)
@@ -303,6 +312,15 @@ public partial class Game : Node, IServiceProvider
         }
 
         _xrManager = null;
+
+        // End of this Game's lifetime: stop its registry and workers without blocking, through the same stop the
+        // application-shutdown boundary uses; after RequestExit this is a no-op. The service provider is disposed
+        // below, so a fault, whenever it surfaces, is reported through the engine log.
+        _ = DrainMotionAndDiagnosticsAsync().ContinueWith(
+            static task => GD.PushError($"Shared model release failed: {task.Exception}"),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
 
         if (ReferenceEquals(_instance, this))
         {
@@ -406,8 +424,9 @@ public partial class Game : Node, IServiceProvider
     // Registered callbacks own transports, never scene nodes. Native outputs drain before diagnostics seal.
     internal void RegisterDiagnosticDrain(Func<Task> drain) => _diagnosticDrains.Add(drain);
 
-    // Shared with the focused shutdown integration check, which must not quit the reusable test process.
-    // Both stops return immediately; native disposal completes on the thread pool after in-flight calls return.
+    // The stop at the end of this Game's lifetime, shared by the application-shutdown boundary (RequestExit), tree exit
+    // and integration checks that must not quit the reusable test process. Both stops return immediately and are
+    // idempotent; native disposal completes on the thread pool after in-flight calls return.
     internal Task DrainMotionAndDiagnosticsAsync() =>
         DrainDiagnosticsAsync(Task.WhenAll(MotionWorkers.Stop(), SharedModels.Stop()), [.. _diagnosticDrains]);
 

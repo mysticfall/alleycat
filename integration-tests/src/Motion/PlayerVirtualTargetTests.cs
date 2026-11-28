@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 
@@ -9,6 +10,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 {
     /// <summary>A sharp curve supersedes incompatible native work, without losing the bout frame.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task VirtualSteering_RejectsIncompatiblePendingCurve()
     {
         {
@@ -60,6 +62,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 
     /// <summary>Useful in-flight walking survives tiny noise, but an incompatible direction cannot publish stale motion.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task VirtualTarget_RetainsNoisyPendingWorkAndRejectsSharpChange()
     {
         {

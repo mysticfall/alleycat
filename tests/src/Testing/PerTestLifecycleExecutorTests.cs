@@ -205,6 +205,57 @@ public sealed class PerTestLifecycleExecutorTests
         Assert.False(PerTestLifecycleExecutor.HasTheoryData(typeof(LifecycleProbe).GetMethod(nameof(LifecycleProbe.Pass))!));
     }
 
+    /// <summary>
+    /// A test body that throws <see cref="IntegrationTestSkippedException" /> yields its reason as the skip reason,
+    /// unwrapped from reflection invocation, rather than an ordinary failure.
+    /// </summary>
+    [Fact]
+    public async Task SkippedException_YieldsSkipReason()
+    {
+        MethodInfo method = typeof(SkipProbe).GetMethod(nameof(SkipProbe.SkipItself))!;
+
+        PerTestLifecycleExecutionResult result = await PerTestLifecycleExecutor.ExecuteAsync(method);
+
+        Assert.False(result.Passed);
+        Assert.Equal(SkipProbe.Reason, result.SkipReason);
+    }
+
+    /// <summary>
+    /// TEST-001 AC-32: only facts may skip themselves. A theory row that throws
+    /// <see cref="IntegrationTestSkippedException" /> counts as a failed row, so the theory fails and is not a skip.
+    /// </summary>
+    [Fact]
+    public async Task Theory_RowThrowingSkippedException_IsAFailedRow()
+    {
+        TheoryProbe.Reset();
+        MethodInfo method = typeof(TheoryProbe).GetMethod(nameof(TheoryProbe.SkipOnTwo))!;
+
+        PerTestLifecycleExecutionResult result = await PerTestLifecycleExecutor.ExecuteAsync(method);
+
+        Assert.False(result.Passed);
+        Assert.Null(result.SkipReason);
+        _ = Assert.IsType<TheoryRowFailureException>(result.TestFailure);
+    }
+
+    /// <summary>
+    /// A teardown failure after a skip, or an ordinary test failure, is never reported as a skip.
+    /// </summary>
+    [Fact]
+    public void SkipReason_IsNull_ForTeardownFailureAfterSkip_AndForOrdinaryFailure()
+    {
+        var skip = new IntegrationTestSkippedException(SkipProbe.Reason);
+
+        Assert.Null(new PerTestLifecycleExecutionResult(skip, new InvalidOperationException("teardown")).SkipReason);
+        Assert.Null(new PerTestLifecycleExecutionResult(new InvalidOperationException("body"), null).SkipReason);
+    }
+
+    private static class SkipProbe
+    {
+        public const string Reason = "Needs no other Godot process running, but found: godot-mono (pid 4242).";
+
+        public static void SkipItself() => throw new IntegrationTestSkippedException(Reason);
+    }
+
     private sealed class LifecycleProbe : IAsyncLifetime, IAsyncDisposable, IDisposable
     {
         public static List<string> Events { get; } = [];
@@ -388,6 +439,17 @@ public sealed class PerTestLifecycleExecutorTests
 
         [MemberData(nameof(MemberRows))]
         public void RecordMember(string label, int value) => Record($"{label}:{value}:0");
+
+        [InlineData(1)]
+        [InlineData(2)]
+        public void SkipOnTwo(int value)
+        {
+            Record($"skip:{value}:0");
+            if (value == 2)
+            {
+                throw new IntegrationTestSkippedException(SkipProbe.Reason);
+            }
+        }
 
         [InlineData(1)]
         [InlineData(2)]

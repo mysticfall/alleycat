@@ -65,9 +65,10 @@ public sealed class SharedModelRegistry(Func<ILogger?>? loggerResolver = null, I
     }
 
     /// <summary>
-    /// Application-shutdown boundary: stops admission on every scheduler, settles queued items as cancelled, signals
+    /// Stops the registry at the end of its owner's lifetime (for <c>Game</c>, the application-shutdown boundary or tree
+    /// exit, whichever comes first): stops admission on every scheduler, settles queued items as cancelled, signals
     /// in-progress loads, and disposes each backend only after its load and in-flight calls return. Never blocks;
-    /// await the returned aggregate completion asynchronously. Idempotent.
+    /// await the returned aggregate completion asynchronously. Idempotent: later calls return the same completion.
     /// </summary>
     /// <returns>Aggregate completion of every backend's disposal.</returns>
     public Task Stop()

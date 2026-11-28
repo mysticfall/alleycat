@@ -1,4 +1,5 @@
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
@@ -29,8 +30,14 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// tree — before its <c>_Ready</c> — so no network, prompt content, or visual capture is involved: a capturing client
 /// provider, a static prompt, visual context off, and a fixture scene context.
 /// </remarks>
-public sealed class RoleInstalledSessionToolCompositionIntegrationTests
+public sealed class RoleInstalledSessionToolCompositionIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     /// <summary>
     /// The shipped reference-female NPC scene: the reference-female body, the production <c>npc_installer.tscn</c>, and
     /// a role template instancing <c>reference_female_npc.tscn</c> unchanged except for a visual-cue description.

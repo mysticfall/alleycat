@@ -2,6 +2,7 @@ using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.IK;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Scene;
 using AlleyCat.Sense;
@@ -18,8 +19,14 @@ namespace AlleyCat.IntegrationTests.Mind.Attention;
 /// Focused runtime coverage for the AI-009 attention-driven head-orientation controller, its NPC role-template
 /// composition, and its NPC installer wiring into the head IK provider slot.
 /// </summary>
-public sealed class OrientingControllerIntegrationTests
+public sealed class OrientingControllerIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     /// <summary>AC11: defaults and both installed NPC configurations retain decision-cadence timing headroom.</summary>
     [Headless]
     [Fact]

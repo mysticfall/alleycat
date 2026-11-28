@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using AlleyCat.Character;
 using AlleyCat.Core.Threading;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.IntegrationTests.Support.AI;
 using AlleyCat.Mind.AI;
@@ -69,6 +70,7 @@ public sealed class CoordinateNavigationFinalGateTests
     /// and the production arrival outcome in a <c>scene_update</c> without an image — and scores the T5 two-step path.
     /// </summary>
     [Fact]
+    [IsolatedProcess]
     public async Task FinalGateHarness_DeliversTheProductionContract()
     {
         await using FinalGateScene scene = await FinalGateScene.LoadAsync();
@@ -130,6 +132,8 @@ public sealed class CoordinateNavigationFinalGateTests
     [Fact]
     public async Task Scene_MatchesDeclaredGroundTruthAndRendersTheOneMetreMinimap()
     {
+        // The scene check never moves the subject: keep its MotionBricks native-free.
+        using var nativeFreeMotion = NativeFreeMotion.Install(TestUtils.GetSceneTree());
         await using FinalGateScene scene = await FinalGateScene.LoadAsync();
         Assert.Equal(DeclaredSubjectPose.X, scene.SubjectPose.X, 2);
         Assert.Equal(DeclaredSubjectPose.Z, scene.SubjectPose.Z, 2);

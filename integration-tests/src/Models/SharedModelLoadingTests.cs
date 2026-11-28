@@ -28,13 +28,10 @@ namespace AlleyCat.IntegrationTests.Models;
 /// <para>
 /// Each fact configures the process-wide ONNX Runtime environment and counts model-file opens by every process on
 /// the host, so each needs its own fresh Godot process with no other running. The facts are therefore
-/// <see cref="IsolatedProcessAttribute" />: default and class runs exclude them, and an exact method selection runs
-/// each in its own session. Run them from the repository root with no other Godot process running:
+/// <see cref="IsolatedProcessAttribute" />: default, class and exact-method runs all include them, and each runs in
+/// its own session with no other session alive. Each fact first checks for Godot processes the framework did not
+/// launch and reports itself skipped, naming them, if any is running.
 /// </para>
-/// <code>
-/// ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS=900000 dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
-///   --test-method AlleyCat.IntegrationTests.Models.SharedModelLoadingTests.AddingNpcs_ReusesLoadedModels,AlleyCat.IntegrationTests.Models.SharedModelLoadingTests.ThreeNpcsAtSceneLoad_LoadEachModelOnce,AlleyCat.IntegrationTests.Models.SharedModelLoadingTests.ThreeNpcsAtSceneLoad_MoveSpeakAndLipSyncWithEachModelLoadedOnce
-/// </code>
 /// <para>
 /// Raw measurements are written to <c>res://temp/shared-ai-models/&lt;fact&gt;/</c> before the assertions run.
 /// Headless is valid: the measured behaviour is native model loading, which needs no renderer.
@@ -91,6 +88,7 @@ public sealed partial class SharedModelLoadingTests
 
     private static async Task RunAsync(string fact, int[] phases, bool lipSync = false)
     {
+        HostIsolation.RequireNoOtherGodotProcess();
         SceneTree tree = TestUtils.GetSceneTree();
         Dictionary<string, string> files = ModelFiles();
         Assert.Contains(MotionBricksKey, files.Keys);

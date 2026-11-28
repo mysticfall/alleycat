@@ -1,5 +1,6 @@
 using AlleyCat.Contact;
 using AlleyCat.IK;
+using AlleyCat.IntegrationTests.Motion;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using Godot;
@@ -21,8 +22,14 @@ namespace AlleyCat.IntegrationTests.Contact;
 /// with its wiring-order and regeneration re-supply contract holds on the player role against the player's
 /// own generated proxies.
 /// </summary>
-public sealed class ProductionContactActivationIntegrationTests
+public sealed class ProductionContactActivationIntegrationTests : IDisposable
 {
+    // Nothing here depends on generated motion: keep every MotionBricks node in this fixture native-free.
+    private readonly NativeFreeMotion _nativeFreeMotion = NativeFreeMotion.Install(GetSceneTree());
+
+    /// <inheritdoc />
+    public void Dispose() => _nativeFreeMotion.Dispose();
+
     private const string NpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
 

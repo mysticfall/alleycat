@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 
@@ -10,6 +11,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
 {
     /// <summary>Unchanged held steering retires playback at snapshots and must retire its visible marker too.</summary>
     [Fact]
+    [IsolatedProcess]
     public async Task VirtualSteering_SnapshotRetirementClearsOwnedMarkers()
     {
         string label = System.Environment.GetEnvironmentVariable("PLAYER_MARKER_RETIREMENT_PROBE") ?? $"test-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}";
