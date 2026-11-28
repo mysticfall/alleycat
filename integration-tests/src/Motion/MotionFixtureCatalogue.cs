@@ -1,14 +1,14 @@
 using AlleyCat.Animations;
+using AlleyCat.IntegrationTests.Animations;
 
 namespace AlleyCat.IntegrationTests.Motion;
 
 /// <summary>
 /// Builds the animation catalogue a hand-assembled MotionBricks fixture character needs (ANIM-003 TR6–TR10): locomotion
-/// and idles resolve through the character's catalogue, mirroring the reference templates' default pack and defaults.
+/// and idles resolve through the character's catalogue, mirroring the reference templates' selected variants and defaults.
 /// </summary>
 internal static class MotionFixtureCatalogue
 {
-    private const string DefaultPack = "res://assets/animations/packs/default/pack.json";
 
     /// <summary>
     /// Creates the catalogue: the base template's locomotion default, plus the NPC role's idle default when
@@ -22,7 +22,8 @@ internal static class MotionFixtureCatalogue
             DefaultLocomotion = "feminine",
             DefaultIdle = npc ? "sad" : string.Empty,
         };
-        catalogue.AddChild(new AnimationPack { Name = "Default", Manifest = DefaultPack });
+        catalogue.AddChild(AnimationFixtureVariants.Layer("FixtureBase",
+            AnimationFixtureVariants.Add(AnimationFixtureVariants.Sad), AnimationFixtureVariants.Add(AnimationFixtureVariants.Feminine)));
         return catalogue;
     }
 }

@@ -1,0 +1,8 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "bad\n",
+  "tags": ["ok"],
+  "description": "stands still",
+  "clip": "tests/animation/catalogue/fixture/idle/slump.tres"
+}

@@ -1,14 +1,9 @@
 {
-  "schema": "anim003_pack_v1",
-  "id": "missing_description",
-  "entries": [
-    {
-      "id": "slump",
-      "category": "idle",
-      "tags": [
-        "tired"
-      ],
-      "clip": "idle/slump.tres"
-    }
-  ]
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "slump",
+  "tags": [
+    "tired"
+  ],
+  "clip": "tests/animation/catalogue/fixture/invalid/missing.tres"
 }

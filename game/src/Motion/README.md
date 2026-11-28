@@ -1,8 +1,11 @@
 # Shared Motion Runtime
 
-CTRL and NAV normally use the same [feminine source set][feminine].
+CTRL and NAV resolve the reviewed set through the [ANIM-003 catalogue][catalogue]. The shipped templates default
+to the same [feminine source set][feminine].
 
-[feminine]: ../../assets/animations/packs/default/locomotion/feminine/README.md
+[catalogue]: ../../../specs/animation/003-animation-catalogue/index.md
+[feminine]: ../../assets/animations/locomotion/feminine/README.md
+
 No source/controller activation flags are needed. NPC idles are native catalogue clips (ANIM-003); moving and
 stationary-turn roles come from `ReviewedRoleSampler`, not fixed prototype walk windows.
 

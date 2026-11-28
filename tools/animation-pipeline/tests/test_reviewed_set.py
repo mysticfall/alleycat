@@ -16,8 +16,8 @@ class ReviewedSetTests(unittest.TestCase):
         repo = Path(__file__).resolve().parents[3]
         task = repo / "game/temp/motionbricks/reviewed-set-tests"
         task.mkdir(parents=True, exist_ok=True)
-        feminine = repo / "game/assets/animations/packs/default/locomotion/feminine"
-        authoring = repo / "game/assets/animations/source/locomotion"
+        feminine = repo / "game/assets/animations/locomotion/feminine"
+        authoring = feminine / "source"
         # Immutable approval paths must resolve from the disposable publication CWD.
         historical = Path("game/assets/characters/animations/source/locomotion")
         with tempfile.TemporaryDirectory(dir=task) as name:

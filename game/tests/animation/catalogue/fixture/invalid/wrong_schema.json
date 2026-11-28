@@ -1,15 +1,10 @@
 {
-  "schema": "anim003_pack_v0",
-  "id": "wrong_schema",
-  "entries": [
-    {
-      "id": "slump",
-      "category": "idle",
-      "tags": [
-        "tired"
-      ],
-      "description": "stands slumped",
-      "clip": "idle/slump.tres"
-    }
-  ]
+  "schema": "unknown_variant",
+  "category": "idle",
+  "id": "slump",
+  "tags": [
+    "tired"
+  ],
+  "description": "stands with shoulders slumped",
+  "clip": "tests/animation/catalogue/fixture/invalid/missing.tres"
 }

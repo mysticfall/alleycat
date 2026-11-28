@@ -133,8 +133,8 @@ act on information it has already been supplied.
 - Character-neutral shared context-interpretation guidance (scene delivery, speech-addressee interpretation,
   current scene, action selection, lore) in the authored static instruction.
 - Session-start grouped lore catalogue after unchanged automatic lore bodies, under AI-004's normative contracts.
-- Session-start static animation catalogue fragment, placed immediately after `Lore Catalogue`, and own stance/gait
-  status line, under
+- Session-start static fragment of the character's compatible selected variants immediately after `Lore Catalogue`,
+  and the own stance/gait status line, under
   [ANIM-003 Mind Integration](../../animation/003-animation-catalogue/mind-integration.md).
 
 ## Out Of Scope

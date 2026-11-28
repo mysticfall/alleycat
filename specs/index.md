@@ -44,7 +44,7 @@
 - [ANIM: Animation](animation/index.md)
   - [ANIM-002: Locomotive Conditioning Sources](animation/002-locomotive-animation-set/index.md)
   - [ANIM-003: Animation Catalogue](animation/003-animation-catalogue/index.md)
-    - [Animation Pack Format](animation/003-animation-catalogue/pack-format.md)
+    - [Animation Variant Format](animation/003-animation-catalogue/variant-format.md)
     - [Animation Clip Authoring](animation/003-animation-catalogue/authoring.md)
     - [Animation Catalogue Mind Integration](animation/003-animation-catalogue/mind-integration.md)
 

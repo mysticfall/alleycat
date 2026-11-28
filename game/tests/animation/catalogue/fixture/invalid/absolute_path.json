@@ -1,15 +1,10 @@
 {
-  "schema": "anim003_pack_v1",
-  "id": "absolute_path",
-  "entries": [
-    {
-      "id": "slump",
-      "category": "idle",
-      "tags": [
-        "tired"
-      ],
-      "description": "stands slumped",
-      "clip": "res://tests/animation/catalogue/fixture/idle/slump.tres"
-    }
-  ]
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "slump",
+  "tags": [
+    "tired"
+  ],
+  "description": "stands with shoulders slumped",
+  "clip": "/clip.tres"
 }

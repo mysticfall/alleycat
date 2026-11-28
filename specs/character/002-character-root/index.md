@@ -193,11 +193,12 @@ Shared eyes, voice, hands, senses, identity, and component projection contracts 
     - the character installer child.
 50. A local per-character template is optional. When present, it is named `<character>_template.tscn` — or
     `<character>_<role>_template.tscn` when the character ships multiple role variants — and lives beside the character
-    scene. Its root instances the role template (`reference_male_npc.tscn`, `reference_female_npc.tscn`,
-    `reference_male_player.tscn`, or `reference_female_player.tscn`). It carries only per-character content:
+    scene. Its root instances the role template. The shipped references are `reference_male_npc.tscn`,
+    `reference_female_npc.tscn` and `reference_female_player.tscn`. It carries only per-character content:
     calibration overrides of template-provided nodes, such as `SpeechGenerator` voice settings or visual-cue
-    descriptions, and character-specific new nodes that install with the template chain, such as 이만복's Mind and
-    scenario wiring. When a character has no calibration, no local template exists and the installer's `Template`
+    descriptions, character-specific new nodes such as 이만복's Mind and scenario wiring, and explicit variant
+    contributions under [ANIM-003](../../animation/003-animation-catalogue/index.md#character-catalogue-and-layering).
+    When a character has no local customisation, no local template exists and the installer's `Template`
     points directly at the role template.
 51. The character installer is an instance of `npc_installer.tscn` or `player_installer.tscn`. Per character, it
     configures `Template` to the local template (or the role template directly), `TemplateBaseline` to the character's

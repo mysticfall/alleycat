@@ -19,7 +19,7 @@ namespace AlleyCat.IntegrationTests.Interaction.Hands;
 public sealed class HandGrabCandidateSelectorIntegrationTests
 {
     private const string ValidGrabPoseAnimationPath =
-        "res://assets/animations/reference/female/Grab-ball-40.tres";
+        "res://assets/animations/hand-pose/Grab-ball-40.tres";
 
     /// <summary>
     /// Verifies the closest candidate inside the discovery range is selected.

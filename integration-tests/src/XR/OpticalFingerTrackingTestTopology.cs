@@ -15,9 +15,9 @@ internal static class OpticalFingerTrackingTestTopology
     private const float QuaternionNormalisationTolerance = 0.001f;
 
     /// <summary>Default authored reference resource paths (XR-002 TR25).</summary>
-    public const string DefaultNeutralReferencePath = "res://assets/animations/reference/female/Reset.tres";
+    public const string DefaultNeutralReferencePath = "res://assets/animations/hand-pose/Reset.tres";
 
-    public const string DefaultFlexionReferencePath = "res://assets/animations/reference/female/Grab-pipe-10.tres";
+    public const string DefaultFlexionReferencePath = "res://assets/animations/hand-pose/Grab-pipe-10.tres";
 
     public static readonly LimbSide[] Sides =
     [

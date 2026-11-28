@@ -1,0 +1,11 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "slump",
+  "tags": [
+    "tired"
+  ],
+  "description": "stands with shoulders slumped",
+  "clip": "tests/animation/catalogue/fixture/invalid/missing.tres",
+  "set": "something.json"
+}

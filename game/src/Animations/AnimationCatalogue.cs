@@ -1,11 +1,14 @@
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
+using AlleyCat.Rigging.Installation;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Animations;
 
 /// <summary>
-/// A character's animation catalogue: composes its enabled child <see cref="AnimationPack" /> nodes into per-category
+/// A character's animation catalogue: composes ordered <see cref="AnimationVariantLayer" /> nodes into per-category
 /// views (ANIM-003 TR6–TR11). The catalogue is built once before first use and stays fixed for the session.
 /// </summary>
 [GlobalClass]
@@ -22,17 +25,6 @@ public partial class AnimationCatalogue : Node
     /// <summary>Template default locomotion id.</summary>
     [Export]
     public string DefaultLocomotion { get; set; } = string.Empty;
-
-    // Test seams; never exported or set by gameplay.
-    internal IAnimationPackResources? ResourcesOverride
-    {
-        get; set;
-    }
-
-    internal ILogger? LoggerOverride
-    {
-        get; set;
-    }
 
     /// <summary>Whether the catalogue has been built.</summary>
     public bool IsBuilt => _idle is not null;
@@ -66,33 +58,39 @@ public partial class AnimationCatalogue : Node
     /// <summary>
     /// Builds the catalogue against the character's native reference skeleton. Later calls are no-ops.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown on duplicate enabled pack ids.</exception>
-    /// <exception cref="AnimationPackValidationException">Thrown when an enabled pack fails validation.</exception>
     public void Build(Skeleton3D skeleton)
     {
         ArgumentNullException.ThrowIfNull(skeleton);
+        if (!IsBuilt)
+        {
+            ContentContext active = Game.Instance.GetRequiredService<IContentResolver>().GetCurrentContentContext();
+            PackedScene? template = null;
+            if (GetParent() is Character.Character character)
+            {
+                RigRoleTemplateSceneInstaller? installer = character.GetNodeOrNull<RigRoleTemplateSceneInstaller>("PlayerCharacterInstaller")
+                    ?? character.GetNodeOrNull<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+                template = installer?.Template;
+            }
+
+            Build(skeleton, active, GameLoggerResolver.ResolveRequired<AnimationCatalogue>(), template);
+        }
+    }
+
+    internal void Build(Skeleton3D skeleton, ContentContext active, ILogger logger, PackedScene? template = null)
+    {
         if (IsBuilt)
         {
             return;
         }
 
-        ILogger logger = LoggerOverride ?? GameLoggerResolver.ResolveRequired<AnimationCatalogue>();
-        IAnimationPackResources resources = ResourcesOverride ?? GodotAnimationPackResources.Instance;
-
-        List<AnimationPackLayer> layers = [];
-        foreach (AnimationPack pack in GetChildren().OfType<AnimationPack>())
+        AnimationVariantLayer[] variantLayers = [.. GetChildren().OfType<AnimationVariantLayer>()];
+        if (template is not null)
         {
-            if (pack.Enabled)
-            {
-                layers.Add(new AnimationPackLayer(pack.LoadManifest(resources), pack.Priority));
-            }
-            else
-            {
-                logger.LogDebug("Animation catalogue {Catalogue}: pack node {Pack} is disabled", Name, pack.Name);
-            }
+            AnimationVariantLoader.RequireTemplateOwners(template, active);
+            variantLayers = AnimationVariantSelection.InTemplateOrder(template, variantLayers);
         }
 
-        IReadOnlyList<AnimationEntry> entries = AnimationCatalogueComposer.Compose(layers, logger);
+        IReadOnlyList<AnimationEntry> entries = AnimationVariantSelection.Compose(variantLayers, active, GodotAnimationVariantResources.Instance);
 
         List<AnimationEntry> idles = [];
         Dictionary<AnimationEntry, Animation> clips = [];
@@ -133,12 +131,14 @@ public partial class AnimationCatalogue : Node
             }
         }
 
+        var locomotionView = new LocomotionAnimationView(locomotion.AsReadOnly(), DefaultLocomotion, logger);
+        var idleView = new IdleAnimationView(idles.AsReadOnly(), clips, DefaultIdle, logger);
         _entries = entries;
-        _locomotion = new LocomotionAnimationView(locomotion.AsReadOnly(), DefaultLocomotion, logger);
-        _idle = new IdleAnimationView(idles.AsReadOnly(), clips, DefaultIdle, logger);
+        _locomotion = locomotionView;
+        _idle = idleView;
         logger.LogInformation(
-            "Animation catalogue {Catalogue} built from {PackCount} pack(s): {IdleCount} idle and {LocomotionCount} locomotion entries compatible",
-            Name, layers.Count, idles.Count, locomotion.Count);
+            "Animation catalogue {Catalogue} built from {LayerCount} layers: {IdleCount} idle and {LocomotionCount} locomotion entries compatible",
+            Name, variantLayers.Length, idles.Count, locomotion.Count);
     }
 
     private AnimationCatalogue EnsureBuilt()

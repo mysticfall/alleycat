@@ -16,7 +16,7 @@ public sealed class ReviewedMotionSourceIntegrationTests
     {
         var calibration = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath(
-            "res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"), calibration);
+            "res://assets/animations/locomotion/feminine/landing-ablation-01.json"), calibration);
         using FileStream file = File.OpenRead(ProjectSettings.GlobalizePath(
             "res://../integration-tests/fixtures/motion-frame-oracles/blender-matrices.f32.gz"));
         using var stream = new GZipStream(file, CompressionMode.Decompress);

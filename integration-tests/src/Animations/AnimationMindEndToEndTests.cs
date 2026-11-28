@@ -27,7 +27,7 @@ namespace AlleyCat.IntegrationTests.Animations;
 
 /// <summary>
 /// ANIM-003 Mind Integration end to end on the representative transition fixture: the installed reference female NPC
-/// with real MotionBricks navigation and the fixture (<c>slump</c>) and extension (<c>stroll</c>) packs.
+/// with real MotionBricks navigation and the alternate <c>slump</c> and <c>stroll</c> variants.
 /// <list type="bullet">
 /// <item>MIND-AC-001: the composed tools bind the NPC's own variant control, set preferences without awaiting a
 /// transition, refuse unknown or incompatible ids in character, and carry no parking policy.</item>
@@ -117,7 +117,7 @@ public sealed class AnimationMindEndToEndTests : IDisposable
     [Fact]
     public async Task CatalogueFragmentAndStatusLine_RenderFromTheNpcCatalogue()
     {
-        await using NativeIdleTransitionHarness harness = await NativeIdleTransitionHarness.StartAsync();
+        await using NativeIdleTransitionHarness harness = await NativeIdleTransitionHarness.StartAsync(includeIncompatible: true, replaceSad: true);
         CharacterSceneContext scene = new(harness.Actor);
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, harness.Actor);
         var catalogue = AnimationCatalogue.RequireFor(harness.Actor);
@@ -142,7 +142,14 @@ public sealed class AnimationMindEndToEndTests : IDisposable
 
         Assert.Contains("- `slump`:", source, StringComparison.Ordinal);
         Assert.Contains("- `stroll`:", source, StringComparison.Ordinal);
+        Assert.Equal("- `sad`: tired, slumped", Assert.Single(source.Split('\n'),
+            line => line.StartsWith("- `sad`:", StringComparison.Ordinal)));
+        Assert.DoesNotContain("- `sad`: sad, slumped, downcast", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("stands with slumped shoulders and a lowered gaze, shifting weight listlessly", source, StringComparison.Ordinal);
         Assert.DoesNotContain("walk_forward", source, StringComparison.Ordinal);
+        Assert.Contains(catalogue.Entries, entry => entry.ID == "incompatible");
+        Assert.DoesNotContain("`incompatible`", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("`unselected`", source, StringComparison.Ordinal);
 
         AgenticMind mind = Assert.Single(harness.Actor.GetChildren().OfType<AgenticMind>());
         var projectors = SceneStatusProjectorRegistry.Discover(mind);
@@ -173,7 +180,7 @@ public sealed class AnimationMindEndToEndTests : IDisposable
     [Fact]
     public async Task SessionComposition_OffersStanceAndGaitToolsForAnNpcWithACatalogue()
     {
-        await using NativeIdleTransitionHarness harness = await NativeIdleTransitionHarness.StartAsync();
+        await using NativeIdleTransitionHarness harness = await NativeIdleTransitionHarness.StartAsync(includeIncompatible: true);
         // Never entered into the tree, so no session starts; only the composition boundary runs.
         CallSiteMind mind = new(harness.Actor);
 
@@ -201,6 +208,13 @@ public sealed class AnimationMindEndToEndTests : IDisposable
                 new AIFunctionArguments(new Dictionary<string, object?> { ["id"] = "slump" })))?.ToString(),
                 StringComparison.Ordinal);
             Assert.Equal("slump", AnimationCatalogue.RequireFor(harness.Actor).Idle.Preference);
+            foreach (string excluded in new[] { "unselected", "incompatible" })
+            {
+                object? refusal = await tools["change_stance"].InvokeAsync(
+                    new AIFunctionArguments(new Dictionary<string, object?> { ["id"] = excluded }));
+                Assert.Contains("your stance is unchanged", refusal?.ToString(), StringComparison.Ordinal);
+                Assert.Equal("slump", AnimationCatalogue.RequireFor(harness.Actor).Idle.Preference);
+            }
         }
         finally
         {

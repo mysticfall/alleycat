@@ -16,7 +16,7 @@ public sealed class MetadataStationaryTurnTests
     {
         for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            string path = Path.Combine(directory.FullName, "game/assets/animations/packs/default/locomotion/feminine");
+            string path = Path.Combine(directory.FullName, "game/assets/animations/locomotion/feminine");
             if (File.Exists(Path.Combine(path, "landing-ablation-01.json")))
             {
                 return path;

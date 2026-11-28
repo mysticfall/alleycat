@@ -95,7 +95,7 @@ public sealed class MotionBricksIntegrationTests
         string frames = ResolveInferenceInput("MOTIONBRICKS_FRAMES", "res://assets/animations/motionbricks/model-frames.json");
         // The four authored frames leading into the target window form a realistic realised context.
         Transform3D[][] context = ReviewedPoseFixture.Window(data, 54);
-        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"), data);
+        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine/landing-ablation-01.json"), data);
         var raw = new Transform3D[data.Names.Length * 4];
         source.CopyWindow(source.GetRole("feminine", "normal", "forward"), 58, raw);
         Transform3D[][] target = [.. Enumerable.Range(0, 4).Select(f => raw.AsSpan(f * data.Names.Length, data.Names.Length).ToArray())];

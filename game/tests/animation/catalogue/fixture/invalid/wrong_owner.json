@@ -1,0 +1,10 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "slump",
+  "tags": [
+    "tired"
+  ],
+  "description": "stands with shoulders slumped",
+  "clip": "content/animation_variant_probe/idle/quiet/quiet.tres"
+}

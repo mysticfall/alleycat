@@ -31,8 +31,8 @@ internal sealed class PlayerPoseRecording
             try
             {
                 string[] paths = ["assets/animations/motionbricks/poses.json", "assets/animations/motionbricks/model-frames.json",
-                    "assets/animations/packs/default/locomotion/feminine/set.json", "assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json",
-                    "assets/animations/packs/default/locomotion/feminine/turn-angular-reference.json", "src/Control/PlayerMotionBricks.cs",
+                    "assets/animations/locomotion/feminine/set.json", "assets/animations/locomotion/feminine/landing-ablation-01.json",
+                    "assets/animations/locomotion/feminine/turn-angular-reference.json", "src/Control/PlayerMotionBricks.cs",
                     "src/Control/PlayerMotionBricks.InputTrace.cs", "src/Control/PlayerMotionBricks.PoseTrace.cs",
                     "src/Control/WalkingExperimentDriver.cs", "src/Control/PlayerInputTrace.cs", "src/Control/PlayerPoseRecording.cs",
                     "src/Motion/ReviewedRoleSampler.cs", "src/Motion/SourcePhaseClock.cs", "src/Motion/SomaInference.cs",

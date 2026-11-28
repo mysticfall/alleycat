@@ -17,16 +17,15 @@ import tempfile
 
 import pytest
 
-from kimodo_pipeline.bootstrap_paths import derive_artefact_paths, derive_idle_source_path
+from kimodo_pipeline.bootstrap_paths import IDLE_CATEGORY_RELATIVE, derive_artefact_paths, derive_idle_source_path
 
 
 ROOT = Path(__file__).resolve().parents[3]
 STAGING_ENTRYPOINT = ROOT / "tools/animation-pipeline/commands/idle_source_bootstrap.py"
-REAL_CHARACTER_ROOT = ROOT / "game/assets/animations/source/reference/female"
+REAL_CHARACTER_ROOT = ROOT / "game/assets/animations/authoring/reference/female"
 # The real character's selected idle variant is an asset identity, not a
 # literal: derive it from the published idle-source path.
-REAL_VARIANT = derive_idle_source_path(REAL_CHARACTER_ROOT, "sad").stem
-REAL_IDLE_SOURCE = derive_idle_source_path(REAL_CHARACTER_ROOT, REAL_VARIANT)
+REAL_IDLE_SOURCE = derive_idle_source_path(ROOT / IDLE_CATEGORY_RELATIVE, "sad")
 VARIANT = "ember"
 
 
@@ -74,13 +73,14 @@ def staged(work: str, donor_action: str) -> dict[str, Path]:
     """Stage a real-setup idle source into a disposable character root."""
     work_path = Path(work)
     character = work_path / "character"
+    idle_root = work_path / "idle"
     real_setup = derive_artefact_paths(REAL_CHARACTER_ROOT, VARIANT, ROOT).character_setup
     fixture_setup = derive_artefact_paths(character, VARIANT, ROOT).character_setup
     fixture_setup.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(real_setup, fixture_setup)
     result = _run([
         "--python", STAGING_ENTRYPOINT, "--",
-        "--character-root", character, "--variant", VARIANT,
+        "--character-root", character, "--idle-root", idle_root, "--variant", VARIANT,
         "--donor-blend", REAL_IDLE_SOURCE, "--donor-action", donor_action,
         "--temp-root", work_path / "temp",
     ])
@@ -90,7 +90,7 @@ def staged(work: str, donor_action: str) -> dict[str, Path]:
         "work": work_path,
         "character": character,
         "real_setup": real_setup,
-        "idle_source": derive_idle_source_path(character, VARIANT),
+        "idle_source": derive_idle_source_path(idle_root, VARIANT),
         "staging_summary": _summary(result),
     }
 

@@ -8,7 +8,6 @@ import unittest
 from kimodo_pipeline.bootstrap_paths import (
     CANONICAL_SOURCE_RELATIVE,
     CHARACTER_SETUP_RELATIVE,
-    IDLE_SOURCE_DIRECTORY_RELATIVE,
     NEUTRAL_TEMPLATE_RELATIVE,
     BootstrapPathError,
     derive_artefact_paths,
@@ -18,6 +17,7 @@ from kimodo_pipeline.bootstrap_paths import (
 
 REPOSITORY_ROOT = Path("/tmp/kimodo-fixture-repository")
 CHARACTER_ROOT = Path("/tmp/kimodo-fixture-character")
+IDLE_ROOT = REPOSITORY_ROOT / "game/assets/animations/idle"
 VARIANT = "ember"
 
 
@@ -72,24 +72,20 @@ class BootstrapPathTests(unittest.TestCase):
         with self.assertRaises(BootstrapPathError):
             derive_artefact_paths(unsupported_root, VARIANT, REPOSITORY_ROOT)
 
-    def test_derives_the_character_idle_source_per_variant(self) -> None:
+    def test_derives_idle_source_beside_each_variant_not_under_the_setup(self) -> None:
         self.assertEqual(
-            derive_idle_source_path(CHARACTER_ROOT, VARIANT),
-            CHARACTER_ROOT / IDLE_SOURCE_DIRECTORY_RELATIVE / f"{VARIANT}.blend",
-        )
-        self.assertEqual(
-            derive_idle_source_path(CHARACTER_ROOT, VARIANT),
-            CHARACTER_ROOT / "idle" / f"{VARIANT}.blend",
+            derive_idle_source_path(IDLE_ROOT, VARIANT),
+            IDLE_ROOT / VARIANT / "source" / f"{VARIANT}.blend",
         )
         self.assertNotEqual(
-            derive_idle_source_path(CHARACTER_ROOT, "calm"),
-            derive_idle_source_path(Path("/tmp/kimodo-other-character"), VARIANT),
+            derive_idle_source_path(IDLE_ROOT, "calm"),
+            derive_idle_source_path(IDLE_ROOT, VARIANT),
         )
 
     def test_invalid_idle_source_variants_and_roots_raise_contract_errors(self) -> None:
         for variant in ("Ember", "1x", "", None):
             with self.subTest(variant=variant), self.assertRaises(BootstrapPathError):
-                derive_idle_source_path(CHARACTER_ROOT, variant)
+                derive_idle_source_path(IDLE_ROOT, variant)
         for root in ("", "   ", "/", Path("/")):
             with self.subTest(root=root), self.assertRaises(BootstrapPathError):
                 derive_idle_source_path(root, VARIANT)

@@ -56,7 +56,12 @@ def validate_output(output: Path, protected: Sequence[Path]) -> Path:
     if resolved.suffix != ".tres":
         raise ExportError(f"--output must name a text resource (.tres): {output}")
     resource_path(resolved)
-    if "animations/source" in resolved.as_posix() or any(resolved == item.resolve() for item in protected):
+    relative = resolved.relative_to(GAME.resolve())
+    animations = Path("assets/animations")
+    in_authoring_area = relative.is_relative_to(animations) and bool(
+        {"source", "authoring"}.intersection(relative.relative_to(animations).parts[:-1])
+    )
+    if in_authoring_area or any(resolved == item.resolve() for item in protected):
         raise ExportError(f"--output must not name a protected authoring input: {output}")
     return resolved
 

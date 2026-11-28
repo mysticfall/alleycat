@@ -20,8 +20,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 DIRECTORY = ROOT / "integration-tests/fixtures/motion-frame-oracles"
 DATA = ROOT / "game/assets/animations/motionbricks"
-SOURCE = ROOT / "game/assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"
-AUTHORING = ROOT / "game/assets/animations/source/locomotion"
+SOURCE = ROOT / "game/assets/animations/locomotion/feminine/landing-ablation-01.json"
+AUTHORING = ROOT / "game/assets/animations/locomotion/feminine/source"
 
 
 def write_gzip(name, payload):

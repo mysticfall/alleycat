@@ -9,7 +9,7 @@ publishes it transactionally to ``derive_idle_source_path``:
 
     blender --background --factory-startup \
         --python tools/animation-pipeline/commands/idle_source_bootstrap.py -- \
-        --character-root game/assets/animations/source/reference/female --variant sad \
+        --character-root game/assets/animations/authoring/reference/female --variant sad \
         --donor-blend <donor.blend> --donor-action <action>
 
 The published idle source is a protected character-authored input: the command
@@ -39,7 +39,9 @@ from .bootstrap_manifest import _action_fcurves
 from .bootstrap_paths import (
     BootstrapPathError,
     derive_artefact_paths,
+    IDLE_CATEGORY_RELATIVE,
     derive_idle_source_path,
+    repository_root,
 )
 from .bootstrap_policy import inert_staging_objects
 from .bootstrap_validation import (
@@ -139,15 +141,23 @@ def stage_idle_source(
     temp_root: str | Path | None = None,
     repository_root_path: str | Path | None = None,
     approved_character_baselines: Mapping[str, Mapping[str, str]] | None = None,
+    idle_root: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Stage, verify, and transactionally publish one per-character idle source."""
+    """Stage, verify, and publish an idle source beside its variant."""
     try:
+        root = (
+            Path(repository_root_path).expanduser().resolve()
+            if repository_root_path is not None
+            else repository_root()
+        )
         paths = derive_artefact_paths(
             character_asset_root,
             variant,
-            Path(repository_root_path).expanduser().resolve()
-            if repository_root_path is not None
-            else None,
+            root,
+        )
+        destination = derive_idle_source_path(
+            idle_root if idle_root is not None else root / IDLE_CATEGORY_RELATIVE,
+            paths.variant,
         )
     except (BootstrapPathError, ValueError) as error:
         raise IdleSourceError(str(error)) from error
@@ -185,7 +195,6 @@ def stage_idle_source(
         raise IdleSourceError(str(error)) from error
     hashes_before = {key: _sha256(path) for key, path in inputs.items()}
 
-    destination = derive_idle_source_path(paths.character_asset_root, paths.variant)
     if destination.exists():
         raise IdleSourceError(
             f"The idle source already exists at {destination}; it is a protected "
@@ -360,6 +369,9 @@ def stage_idle_source(
 
     publish = destination.with_name(f".{destination.name}.kimodo-publish")
     try:
+        marker = destination.parent / ".gdignore"
+        if not marker.is_file():
+            marker.touch()
         shutil.copy2(staged, publish)
         os.replace(publish, destination)
     except OSError:
@@ -384,7 +396,11 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--character-root", type=Path, required=True,
-        help="Character asset root owning the setup input and the idle-source destination.",
+        help="Character authoring root owning the calibrated setup input.",
+    )
+    parser.add_argument(
+        "--idle-root", type=Path,
+        help="Idle category directory; defaults to game/assets/animations/idle under the repository root.",
     )
     parser.add_argument(
         "--variant", required=True, help="Lower-case snake_case variant key for path derivation."
@@ -428,6 +444,7 @@ def main() -> int:
             character_asset_root=arguments.character_root,
             donor_blend=arguments.donor_blend,
             donor_action=arguments.donor_action,
+            idle_root=arguments.idle_root,
             setup_path=arguments.setup,
             temp_root=arguments.temp_root,
             repository_root_path=arguments.repository_root,

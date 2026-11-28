@@ -15,7 +15,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     [Fact]
     public void FiniteNAVTurn_RightCyclesPreserveAllFourSourceRowsAndPlacement()
     {
-        string path = ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine");
+        string path = ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine");
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         var sampler = new ReviewedRoleSampler(Path.Combine(path, "set.json"), data);
         StationaryTurnReference reference = sampler.TurnReference("right_turn");

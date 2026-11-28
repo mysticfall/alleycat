@@ -1,7 +1,7 @@
 using AlleyCat.Animations;
 using Microsoft.Extensions.Logging;
 using Xunit;
-using static AlleyCat.Tests.Animations.PackBuilder;
+using static AlleyCat.Tests.Animations.VariantTestEntries;
 
 namespace AlleyCat.Tests.Animations;
 
@@ -9,7 +9,7 @@ namespace AlleyCat.Tests.Animations;
 public sealed class AnimationDefaultResolverTests
 {
     private static readonly IReadOnlyList<AnimationEntry> _entries =
-        Pack("default", (AnimationCategory.Idle, "sad"), (AnimationCategory.Idle, "calm"), (AnimationCategory.Idle, "proud")).Entries;
+        Entries((AnimationCategory.Idle, "sad"), (AnimationCategory.Idle, "calm"), (AnimationCategory.Idle, "proud"));
 
     private static string? Resolve(string? preference, string? templateDefault, CapturingLogger? logger = null)
         => AnimationDefaultResolver.Resolve(AnimationCategory.Idle, _entries, preference, templateDefault, logger ?? new CapturingLogger())?.ID;
@@ -43,15 +43,8 @@ public sealed class AnimationDefaultResolverTests
     [Fact]
     public void Resolve_FallbackUsesOverridingEntryPosition()
     {
-        IReadOnlyList<AnimationEntry> composed = AnimationCatalogueComposer.Compose(
-        [
-            new AnimationPackLayer(Pack("default", (AnimationCategory.Idle, "sad"), (AnimationCategory.Idle, "calm")), 0),
-            new AnimationPackLayer(Pack("extension", (AnimationCategory.Idle, "sad")), 1)
-        ], new CapturingLogger());
-
-        AnimationEntry? fallback = AnimationDefaultResolver.Resolve(AnimationCategory.Idle, composed, null, null, new CapturingLogger());
-
-        Assert.Equal(("calm", "default"), (fallback?.ID, fallback?.PackID));
+        IReadOnlyList<AnimationEntry> composed = Entries((AnimationCategory.Idle, "calm"), (AnimationCategory.Idle, "sad"));
+        Assert.Equal("calm", AnimationDefaultResolver.Resolve(AnimationCategory.Idle, composed, null, null, new CapturingLogger())?.ID);
     }
 
     /// <summary>A category without compatible entries resolves to nothing.</summary>

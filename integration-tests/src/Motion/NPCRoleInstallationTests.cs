@@ -40,23 +40,21 @@ public sealed class NPCRoleInstallationTests : IDisposable
     [Fact]
     public Task RenamedContentNPC_InstallsOnOriginalSkeleton() => CheckInstallation(ContentNPC, rename: true);
 
-    /// <summary>
-    /// ANIM-003 TR6: a test-only template derived from the female NPC role disables the inherited default pack and
-    /// adds the extension pack; the installed catalogue reflects both overrides and the chain-inherited defaults.
-    /// </summary>
+    /// <summary>Independent default override and clear survive real template installation without changing entries.</summary>
     [Fact]
-    public Task TemplateChainPackOverrides_SurviveInstallation()
+    public Task TemplateChainVariantDefaults_SurviveInstallation()
         => CheckInstallation("res://tests/animation/catalogue/chain/chain_npc.tscn", catalogueCheck: catalogue =>
         {
-            Assert.Equal(("sad", "feminine"), (catalogue.DefaultIdle, catalogue.DefaultLocomotion));
-            Assert.Equal(["Default:False:0", "Extension:True:10"],
-                catalogue.GetChildren().OfType<AnimationPack>().Select(p => $"{p.Name}:{p.Enabled}:{p.Priority}"));
-            Assert.Equal(["extension:idle/sad", "extension:locomotion/stroll"],
-                catalogue.Entries.Select(e => $"{e.PackID}:{e.Category.ToName()}/{e.ID}"));
-            Assert.Equal(("sad", "extension"), (catalogue.Idle.Effective.ID, catalogue.Idle.Effective.PackID));
-            // The inherited template default 'feminine' belongs to the disabled pack, so resolution falls back.
-            Assert.Equal(["stroll"], catalogue.Locomotion.Entries.Select(e => e.ID));
-            Assert.Equal("stroll", catalogue.Locomotion.Effective.ID);
+            Assert.Equal(("slump", ""), (catalogue.DefaultIdle, catalogue.DefaultLocomotion));
+            Assert.Equal(["BaseVariants", "LocalVariants"],
+                catalogue.GetChildren().OfType<AnimationVariantLayer>().Select(layer => layer.Name.ToString()));
+            Assert.Equal(["idle/sad", "locomotion/feminine", "idle/slump"],
+                catalogue.Entries.Select(entry => $"{entry.Category.ToName()}/{entry.ID}"));
+            Assert.Equal("slump", catalogue.Idle.Effective.ID);
+            Assert.Equal("feminine", catalogue.Locomotion.Effective.ID);
+            catalogue.Idle.Preference = "sad";
+            Assert.Equal("sad", catalogue.Idle.Effective.ID);
+            Assert.Equal("feminine", catalogue.Locomotion.Effective.ID);
         });
 
     // Reference NPC templates: base declares the locomotion default and the NPC role the idle default.

@@ -9,6 +9,11 @@ This document covers authoring and operation. The authoritative contracts live i
 [SPCH-003: Transcriber Component](../specs/speech/003-transcription/index.md), and
 [SPCH-007: Supertonic Speech Generator](../specs/speech/007-supertonic-speech-generator/index.md).
 
+For idle and gait assets, see [Selecting Variants in Template Scenes][animation-variants]. Activating a pack
+makes its descriptors eligible; a character template must still select them explicitly.
+
+[animation-variants]: ../game/assets/animations/README.md#selecting-variants-in-template-scenes
+
 ## Selecting a Pack at Startup
 
 - **Default pack**: `game/content/manifest.tres` (a `ContentManifest` resource) names the default pack through its

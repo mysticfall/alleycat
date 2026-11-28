@@ -21,7 +21,7 @@ searching unrelated project directories.
 
 1. The authoritative tool roots are:
    - `tools/character-generator/`;
-   - `tools/animation-pipeline/` (Kimodo commands, the Rigify bake and the animation pack validator); and
+   - `tools/animation-pipeline/` (Kimodo commands, the Rigify bake and the animation variant validator); and
    - `tools/gdscript-api-doc-generator/`.
 2. Each tool owns its manually invoked commands, command implementation, configuration where required, tests, fixtures,
    and operational README. Commands are the supported user-facing entry points; implementation files are not.

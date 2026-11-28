@@ -1,15 +1,19 @@
 [gd_scene format=3 uid="uid://cmgywrtul760k"]
 
 [ext_resource type="PackedScene" uid="uid://bibq37gjbxvhn" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="1_role"]
-[ext_resource type="Script" uid="uid://ckh63vxcukg3p" path="res://src/Animations/AnimationPack.cs" id="2_pack"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantLayer.cs" id="2_layer"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantOperation.cs" id="3_operation"]
+
+[sub_resource type="Resource" id="Resource_slump"]
+script = ExtResource("3_operation")
+Descriptor = "res://tests/animation/catalogue/fixture/idle/variant.json"
 
 [node name="Female" unique_id=1792987446 instance=ExtResource("1_role")]
 
-[node name="Default" parent="AnimationCatalogue" index="0"]
-Enabled = false
+[node name="AnimationCatalogue" parent="."]
+DefaultIdle = "slump"
+DefaultLocomotion = ""
 
-[node name="Extension" type="Node" parent="AnimationCatalogue" index="1" unique_id=1497452657]
-script = ExtResource("2_pack")
-Manifest = "res://tests/animation/catalogue/extension/pack.json"
-Priority = 10
-metadata/_custom_type_script = "uid://ckh63vxcukg3p"
+[node name="LocalVariants" type="Node" parent="AnimationCatalogue" index="1"]
+script = ExtResource("2_layer")
+Operations = [SubResource("Resource_slump")]

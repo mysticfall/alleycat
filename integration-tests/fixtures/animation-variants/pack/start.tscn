@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="PackedScene" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_installer"]
+[ext_resource type="PackedScene" path="res://content/animation_variant_probe/derived_template.tscn" id="3_template"]
+
+[node name="DerivedProbeNPC" groups=["Actors", "VisualSubjects"] instance=ExtResource("1_blend")]
+Id = "derived_variant_probe"
+
+[node name="NPCCharacterInstaller" parent="." instance=ExtResource("2_installer")]
+Template = ExtResource("3_template")
+TemplateBaseline = ExtResource("1_blend")

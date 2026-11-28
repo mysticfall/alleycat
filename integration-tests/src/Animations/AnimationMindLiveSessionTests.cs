@@ -37,7 +37,7 @@ namespace AlleyCat.IntegrationTests.Animations;
 /// </summary>
 /// <remarks>
 /// The NPCs have no movement tool, so the scenario scripts A's next movement after its gait choice; criterion 2 checks
-/// that this movement starts in the chosen gait. The test-only fixture (<c>slump</c>) and extension (<c>stroll</c>) packs
+/// that this movement starts in the chosen gait. The test-only alternate <c>slump</c> and <c>stroll</c> variants
 /// give A a second stance and gait; production content is unchanged.
 /// </remarks>
 [LiveLlm]
@@ -45,8 +45,6 @@ public sealed class AnimationMindLiveSessionTests
 {
     private const string NpcScene = "res://assets/testing/navigation/navigation_test_npc.tscn";
     private const string ScenarioPath = "res://tests/animation/catalogue/live/stance_gait_scenario.md";
-    private const string FixtureRoot = "res://tests/animation/catalogue/fixture/";
-    private const string ExtensionPack = "res://tests/animation/catalogue/extension/pack.json";
     private const int RequestBudget = 12;
 
     private static readonly LiveLLMScenarioBounds _bounds = new(MaxTargetRequests: RequestBudget + 2, Timeout: TimeSpan.FromMinutes(7));
@@ -103,14 +101,7 @@ public sealed class AnimationMindLiveSessionTests
         TestUtils.EnsureCharacterRuntimeInstalled(b);
 
         var catalogue = AnimationCatalogue.RequireFor(a);
-        catalogue.AddChild(new AnimationPack
-        {
-            Name = "Fixture",
-            Manifest = FixtureRoot + "pack.json",
-            Priority = 20,
-            ContextOverride = new ContentContext("fixture", FixtureRoot),
-        });
-        catalogue.AddChild(new AnimationPack { Name = "Extension", Manifest = ExtensionPack, Priority = 10 });
+        AnimationFixtureVariants.AddAlternates(catalogue);
 
         LiveClientProvider provider = new(context);
         AgenticMind mindA = a.GetNode<AgenticMind>("Mind");

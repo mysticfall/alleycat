@@ -30,7 +30,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
             var starts = new List<int>();
             var angles = new List<float>();
             bool rawNonRoots = true;
-            string directory = ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine");
+            string directory = ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine");
             var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
             var source = new ReviewedMotionSource(Path.Combine(directory, "landing-ablation-01.json"), data);
             string role = sign < 0 ? "left_turn" : "right_turn";

@@ -1,16 +1,11 @@
 {
-  "schema": "anim003_pack_v1",
-  "id": "unknown_field",
-  "entries": [
-    {
-      "id": "slump",
-      "category": "idle",
-      "tags": [
-        "tired"
-      ],
-      "description": "stands slumped",
-      "clip": "idle/slump.tres",
-      "mood": "gloomy"
-    }
-  ]
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "slump",
+  "tags": [
+    "tired"
+  ],
+  "description": "stands with shoulders slumped",
+  "clip": "tests/animation/catalogue/fixture/invalid/missing.tres",
+  "mood": "low"
 }

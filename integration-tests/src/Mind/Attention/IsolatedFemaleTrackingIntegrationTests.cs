@@ -668,7 +668,7 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
         public void StartNativeIdle()
         {
             _nativePlayer = _root.GetNode<AnimationPlayer>("UpstreamNeutral");
-            Animation source = ResourceLoader.Load<Animation>("res://assets/animations/reference/female/Idle.tres");
+            Animation source = ResourceLoader.Load<Animation>("res://assets/animations/player-pose/Idle.tres");
             var clip = (Animation)source.Duplicate(true);
             for (int track = 0; track < clip.GetTrackCount(); track++)
             {
@@ -1434,7 +1434,7 @@ public sealed partial class IsolatedFemaleTrackingIntegrationTests
                 RootNode = new NodePath("../Female")
             };
             _ = player.AddAnimationLibrary("eyes", ResourceLoader.Load<AnimationLibrary>(
-                "res://assets/animations/reference/female/eyes/eyes.tres"));
+                "res://assets/animations/eyes/eyes.tres"));
             AnimationLibrary neutralLibrary = new();
             _ = neutralLibrary.AddAnimation("Neutral", new Animation { Length = 1, LoopMode = Animation.LoopModeEnum.Linear });
             _ = player.AddAnimationLibrary("fixture", neutralLibrary);

@@ -1,0 +1,8 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "sad",
+  "tags": ["sad", "slumped", "downcast"],
+  "description": "stands with slumped shoulders and a lowered gaze, shifting weight listlessly",
+  "clip": "assets/animations/idle/sad/sad.tres"
+}

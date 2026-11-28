@@ -15,8 +15,8 @@ catalogue only wraps a published set in an entry.
 
 1. Every authoring path ends in a native Godot `Animation` clip on the reference character skeleton, whose bone tracks
    bind to `GeneralSkeleton`. No path publishes SOMA idle samples or MotionBricks idle data.
-2. Tools produce clips only. Pack metadata ([Animation Pack Format](pack-format.md)) is maintained by the author and
-   enforced by the validator. Tools never write or rewrite `pack.json`.
+2. Tools produce clips only. Authors maintain [variant descriptors](variant-format.md), which the validator
+   checks. Clip authoring tools never write or rewrite descriptors.
 3. Authoring guidance:
    - an idle starts on a settled pose, because frame 0 and the frames after it are its transition target;
    - an idle loops cleanly;
@@ -27,13 +27,16 @@ catalogue only wraps a published set in an entry.
    whose native playback remains the visual authority.
 6. Authored sources are protected inputs and are never modified by tools. Clip output is staged and validated before
    it replaces a published clip, so a failure leaves prior output intact.
+7. Store the built-in playable clip and its descriptor in `game/assets/animations/idle/<variant>/` beside its
+   ignored `source/` child. The runtime must not load its authoring input.
 
 ## Kimodo Path
 
 1. Author on the SOMA `Kimodo_Source` rig in a verified copy of the character's calibrated setup, under
    [KIMODO-SET-001–002][kimodo-set].
-   The animated source lives under `idle/` in the character's animation source directory, as defined by
-   [KIMODO-SRC-006][kimodo-sources].
+   The animated input lives at `idle/<variant>/source/<variant>.blend` under the built-in animation asset root,
+   separate from the shared character setup. [KIMODO-SRC-006][kimodo-sources] defines bootstrap path derivation;
+   the clip exporter receives the animated input explicitly.
 2. Preview on the retargeted, meshed reference rig in that setup copy. Bake the same retargeted motion onto the
    reference skeleton and export it as the native clip. Preview and export share one retarget mechanism, so the
    exported clip matches what the author reviewed.
@@ -55,9 +58,10 @@ catalogue only wraps a published set in an entry.
 ## Acceptance Criteria
 
 1. **ANIM-003-AUTH-AC-001:** Each path produces a native clip that binds to the reference skeleton. The sources stay
-   byte-unchanged, and a failed export leaves prior output intact.
+   byte-unchanged, and a failed export leaves prior output intact. Verify the shipped idle loads from its
+   category-first path with the adjacent authoring input excluded from Godot import.
 2. **ANIM-003-AUTH-AC-002:** For the Kimodo path, the exported clip matches the Blender retargeted preview, because
    both come from one mechanism. Any preview scale on the setup's reference model is restored, so the clip matches
    the imported character's scale. Runtime-recorded clips apply the `motion_scale` rule.
-3. **ANIM-003-AUTH-AC-003:** No authoring tool writes pack metadata or SOMA idle data. The `sad` clip plays
+3. **ANIM-003-AUTH-AC-003:** No clip authoring tool writes descriptors or SOMA idle data. The `sad` clip plays
    on both reference skeletons in native verification.

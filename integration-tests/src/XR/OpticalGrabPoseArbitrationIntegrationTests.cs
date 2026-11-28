@@ -38,7 +38,7 @@ namespace AlleyCat.IntegrationTests.XR;
 public sealed class OpticalGrabPoseArbitrationIntegrationTests
 {
     private const string MockRuntimeScenePath = "res://assets/xr/mock_runtime.tscn";
-    private const string GrabBallAnimationPath = "res://assets/animations/reference/female/Grab-ball-40.tres";
+    private const string GrabBallAnimationPath = "res://assets/animations/hand-pose/Grab-ball-40.tres";
 
     private const int TrackedJointCount = 20;
 

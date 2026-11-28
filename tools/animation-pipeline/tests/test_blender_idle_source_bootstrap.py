@@ -10,7 +10,7 @@ import tempfile
 import pytest
 
 from synthetic_kimodo_blend import FIXTURE_VARIANT, SyntheticKimodoBlendBuilder
-from kimodo_pipeline.bootstrap_paths import derive_idle_source_path
+from kimodo_pipeline.bootstrap_paths import IDLE_CATEGORY_RELATIVE, derive_idle_source_path
 from kimodo_pipeline.bootstrap_policy import inert_staging_objects
 from kimodo_pipeline.bootstrap_validation import idle_source_report_structure_failures
 from test_blender_bootstrap_extraction_smoke import _fixture, _manifest
@@ -48,6 +48,7 @@ def fixture() -> dict[str, Path]:
         if staged.returncode != 0:
             raise RuntimeError(staged.stdout + staged.stderr)
         built["donor"] = donor
+        built["idle_root"] = built["repository"] / IDLE_CATEGORY_RELATIVE
         yield built
 
 
@@ -97,7 +98,8 @@ def test_stages_a_verified_idle_source_without_touching_inputs(fixture: dict[str
     assert summary["validation_passed"] is True
     assert summary["inputs_unchanged"] is True
     assert summary["baseline_character"] == "fixture_character"
-    destination = derive_idle_source_path(fixture["character"], "ember")
+    destination = derive_idle_source_path(fixture["idle_root"], "ember")
+    assert (destination.parent / ".gdignore").is_file()
     assert Path(summary["idle_source"]["destination"]) == destination
     assert destination.is_file()
     assert _sha256(destination) == summary["idle_source"]["sha256"]
@@ -116,7 +118,7 @@ def test_stages_a_verified_idle_source_without_touching_inputs(fixture: dict[str
 
 
 def test_a_single_frame_donor_action_is_refused_as_a_pose_reference(fixture: dict[str, Path]) -> None:
-    destination = derive_idle_source_path(fixture["character"], "calm")
+    destination = derive_idle_source_path(fixture["idle_root"], "calm")
     result = _run(_arguments(fixture, "calm", donor=fixture["template"], action="pose_ref_idle"))
     assert result.returncode == 2, result.stdout + result.stderr
     assert "must be an animated loop" in result.stderr
@@ -125,7 +127,7 @@ def test_a_single_frame_donor_action_is_refused_as_a_pose_reference(fixture: dic
 
 
 def test_unapproved_setup_bytes_are_refused_before_staging(fixture: dict[str, Path]) -> None:
-    destination = derive_idle_source_path(fixture["character"], "hush")
+    destination = derive_idle_source_path(fixture["idle_root"], "hush")
     unrecognised = {
         "other_character": {
             "canonical_source": _sha256(fixture["canonical"]),
@@ -145,11 +147,11 @@ def test_an_unknown_donor_action_is_refused_with_available_actions(fixture: dict
     assert result.returncode == 2, result.stdout + result.stderr
     assert "carries no action" in result.stderr
     assert DONOR_ACTION in result.stderr
-    assert not derive_idle_source_path(fixture["character"], "still").exists()
+    assert not derive_idle_source_path(fixture["idle_root"], "still").exists()
 
 
 def test_an_existing_idle_source_is_never_overwritten(fixture: dict[str, Path]) -> None:
-    destination = derive_idle_source_path(fixture["character"], "mild")
+    destination = derive_idle_source_path(fixture["idle_root"], "mild")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(b"fixture protected idle source sentinel")
     result = _run(_arguments(fixture, "mild"))
@@ -173,4 +175,4 @@ def test_a_failed_stage_leaves_no_partial_idle_source(fixture: dict[str, Path]) 
     result = _run(_arguments(fixture, "late", donor=fixture["root"] / "absent.blend"))
     assert result.returncode == 2, result.stdout + result.stderr
     assert "donor_blend" in result.stderr
-    assert not derive_idle_source_path(fixture["character"], "late").exists()
+    assert not derive_idle_source_path(fixture["idle_root"], "late").exists()

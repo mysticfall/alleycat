@@ -15,7 +15,7 @@ OUT = ROOT / "game/assets/animations/motionbricks"
 sys.path.insert(0, str(Path(__file__).parent))
 from kimodo_pipeline.motionbricks_publication import publish_motionbricks
 
-SETUP = "game/assets/animations/source/reference/female/kimodo_retarget_setup.blend"
+SETUP = "game/assets/animations/authoring/reference/female/kimodo_retarget_setup.blend"
 MAP = "game/assets/characters/reference/skeleton_profiles/bone_map_makehuman.tres"
 hashes = {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in [SETUP, MAP]}
 bpy.ops.wm.open_mainfile(filepath=str(ROOT / SETUP))

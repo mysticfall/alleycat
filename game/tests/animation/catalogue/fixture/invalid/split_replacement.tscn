@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="base"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantLayer.cs" id="layer"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantOperation.cs" id="op"]
+
+[sub_resource type="Resource" id="remove"]
+script = ExtResource("op")
+Kind = 1
+Category = "idle"
+EntryID = "sad"
+
+[sub_resource type="Resource" id="add"]
+script = ExtResource("op")
+Descriptor = "res://tests/animation/catalogue/fixture/idle/sad_replacement.json"
+
+[node name="TwoLayers" instance=ExtResource("base")]
+
+[node name="Removal" type="Node" parent="AnimationCatalogue" index="1"]
+script = ExtResource("layer")
+Operations = [SubResource("remove")]
+
+[node name="Addition" type="Node" parent="AnimationCatalogue" index="2"]
+script = ExtResource("layer")
+Operations = [SubResource("add")]

@@ -135,8 +135,17 @@ authored template contents without requiring generators to know internal node pl
 38. The player template owns player animation-tree root selection by overriding the inherited `AnimationTree` resource;
         player subsystem installers bind that authored node/resource instead of loading hidden role resources from C#.
 39. Animation tree templates live under `game/assets/characters/templates/animation/`.
-40. The standalone reference-female animation library lives at `game/assets/animations/reference/female/`, outside
-    the ANIM-003 catalogue. Blender authoring inputs live separately under `game/assets/animations/source/`.
+40. Standalone built-in animation resources live by category under `game/assets/animations/`, outside ANIM-003:
+    - `player-pose/` holds the female model's external pose exports. Keep the reference models, their import
+      ownership and the existing player pose state machine bindings with the character assets.
+    - `hand-pose/` holds standalone grab and optical neutral/flexion references and historical hand fallback
+      resources. Keep the authored hand bindings and model-embedded hand animations distinct.
+    - `eyes/` holds the legacy eye library and clips for the female tracking fixture. The character importer
+      still generates production `eyes` libraries per model; it does not load the fixture library.
+    - Dedicated authoring inputs live in ignored `source/` children, including the shared pose bank under
+      `player-pose/source/`. Cross-category inputs live in ignored `authoring/`. Neither is a runtime dependency.
+    - Selectable idle and gait declarations in reference templates follow
+      [ANIM-003](../../animation/003-animation-catalogue/index.md#character-catalogue-and-layering).
 41. Male NPC template assets live under `game/assets/characters/templates/reference_male/`; the production Vadim scene
     is `game/assets/characters/reference/vadim_npc.tscn` and selects the male template and runtime assets.
 42. Character installation follows CORE-005 target-scene precedence: explicitly local exported properties and
@@ -294,7 +303,10 @@ authored template contents without requiring generators to know internal node pl
         NPC `CharacterIK`/provider setup.
     - The player template serialises player animation-tree root selection, and `PlayerRigInstaller` only validates and
         binds the already-installed/template-authored `AnimationTree`.
-    - Animation tree templates and standalone reference animation-library data use their TR39–40 directories.
+    - Animation tree templates and standalone clips use their TR39–40 directories. After a clean import, check
+      unchanged external model pose exports, player pose bindings, authored hand/optical sampling and their
+      historical fallback targets. Check per-model generated eye bindings separately from the fixture library.
+      Verify reference-template catalogue selection under ANIM-003-TAC-003.
     - Tests verify CORE-005 precedence preserves explicitly local reused-node exported properties,
         `Node3D.Transform`, and direct character-root exported-property copies while refreshing non-overridden values
         and fully populating new or missing nodes.
@@ -332,7 +344,6 @@ authored template contents without requiring generators to know internal node pl
 - @game/assets/characters/reference/female/body_collider_profile.tres
 - @game/assets/characters/reference/female/reference_female.blend
 - [Animation Asset and Pack Guide](../../../game/assets/animations/README.md)
-- @game/assets/animations/reference/female/
 - @game/assets/testing/mirror_room/mirror_room.tscn
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)

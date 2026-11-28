@@ -3,6 +3,6 @@
   "name": "Male",
   "outputFile": "assets/characters/reference/male/reference_male.blend",
   "amimations": [
-    "assets/animations/source/reference/male/animations.blend"
+    "assets/animations/authoring/reference/male/animations.blend"
   ]
 }

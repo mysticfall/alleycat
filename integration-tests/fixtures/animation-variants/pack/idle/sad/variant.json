@@ -1,0 +1,8 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "sad",
+  "tags": ["slumped"],
+  "description": "droops with a sunken posture",
+  "clip": "idle/sad/replacement.tres"
+}

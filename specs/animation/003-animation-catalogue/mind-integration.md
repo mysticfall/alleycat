@@ -37,8 +37,8 @@ changing their delivery or retention rules.
    after `Lore Catalogue`, so the existing `Characters`, `Dialogue Examples` and `Lore Catalogue` order is
    unchanged.
 2. It lists each category under an in-character heading (for example, stances and gaits). Each compatible entry
-   appears once as its backticked id followed by its tags. Descriptions, paths and pack names are not listed. Empty
-   categories are omitted.
+   in the composed catalogue appears once as its backticked id followed by its tags. Descriptions, paths and content
+   ownership are not listed. Empty categories are omitted.
 3. Locomotion is listed by variant (entry), never by ANIM-002 movement roles.
 
 ## Scene Status Line

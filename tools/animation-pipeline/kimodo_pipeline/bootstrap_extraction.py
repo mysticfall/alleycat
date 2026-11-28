@@ -53,7 +53,7 @@ from .bootstrap_validation import (
 from .compatibility import ensure_registered
 from .temp_paths import resolve_temp_root
 
-MONOLITH_RELATIVE = Path("game/assets/animations/source/locomotion/locomotion.blend")
+MONOLITH_RELATIVE = Path("game/assets/animations/authoring/locomotion/locomotion.blend")
 DEFAULT_MANIFEST_RELATIVE = (
     Path("game/temp/kimodo-bootstrap-manifest/locomotion_authoring_manifest.json")
 )

@@ -1,14 +1,14 @@
-"""ANIM-003 native idle clip export and pack validator commands.
+"""ANIM-003 native idle clip export and variant validator commands.
 
-Covers the authoring contract (authoring.md AUTH-AC-001–003) and the headless validator (pack-format.md
-PACK-AC-001):
+Covers the authoring contract (authoring.md AUTH-AC-001–003) and the headless validator (variant-format.md
+ANIM-003-VAR-AC-001):
 
 - publication keeps the destination UID and a failed export leaves the published clip untouched;
 - the Kimodo path re-exports the real ``sad`` source through a verified setup copy, matching the Blender preview,
   with protected sources byte-unchanged;
 - the control-rig path bakes a test-built action into a native clip that the game's validator accepts and binds on
   both reference templates, with the keyed rotation reproduced;
-- the validator passes the default, fixture and extension packs and rejects every invalid fixture by pack, entry,
+- the validator passes explicit variants and composed templates and rejects invalid descriptors by owner, category/id,
   field and path.
 
 Blender and Godot runs write only beneath ``game/temp/anim003-idle-clip-tests``. Requires ``blender`` and
@@ -37,16 +37,16 @@ sys.path.insert(0, str(TOOL_ROOT))
 from kimodo_pipeline.native_clip_export import ExportError, publish, validate_output, with_uid_of  # noqa: E402
 
 EXPORT = TOOL_ROOT / "commands" / "export_idle_clip.py"
-VALIDATOR = TOOL_ROOT / "godot" / "commands" / "validate_animation_pack.gd"
+VALIDATOR = TOOL_ROOT / "godot" / "commands" / "validate_animation_variants.gd"
 FIXTURE_BUILDER = TOOL_ROOT / "tests" / "build_control_rig_fixture.py"
 WORK = ROOT / "game" / "temp" / "anim003-idle-clip-tests"
 FEMALE = ROOT / "game/assets/characters/reference/female"
-FEMALE_AUTHORING = ROOT / "game/assets/animations/source/reference/female"
+FEMALE_AUTHORING = ROOT / "game/assets/animations/authoring/reference/female"
 FEMALE_SCENE = "res://assets/characters/reference/female/reference_female.blend"
 MALE_SCENE = "res://assets/characters/reference/male/reference_male.blend"
 FEMALE_TEMPLATE = "res://assets/characters/templates/reference_female/reference_female_npc.tscn"
 MALE_TEMPLATE = "res://assets/characters/templates/reference_male/reference_male_npc.tscn"
-SAD_SOURCE = FEMALE_AUTHORING / "idle/sad.blend"
+SAD_SOURCE = ROOT / "game/assets/animations/idle/sad/source/sad.blend"
 SAD_ACTION = "kimodo_m0a3dyf0"
 SETUP = FEMALE_AUTHORING / "kimodo_retarget_setup.blend"
 FIXTURES = "res://tests/animation/catalogue/"
@@ -136,7 +136,8 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(sorted(path.name for path in self.directory.iterdir()), ["clip.tres", "staged.tres"])
 
     def test_output_must_be_a_project_text_resource_outside_sources(self) -> None:
-        for output in (SAD_SOURCE.with_suffix(".tres"), ROOT / "clip.tres", self.directory / "clip.res"):
+        for output in (SAD_SOURCE.with_suffix(".tres"), FEMALE_AUTHORING / "clip.tres",
+                       ROOT / "clip.tres", self.directory / "clip.res"):
             with self.subTest(output=output), self.assertRaises(ExportError):
                 validate_output(output, [SAD_SOURCE])
 
@@ -185,7 +186,7 @@ class ControlRigPathTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.directory = WORK / "rig"
         shutil.rmtree(cls.directory, ignore_errors=True)
-        (cls.directory / "pack").mkdir(parents=True)
+        (cls.directory / "variant").mkdir(parents=True)
         cls.blend = cls.directory / "authoring.blend"
         built = subprocess.run(
             ["blender", "--background", "--factory-startup", "--python-exit-code", "1", "--python", str(FIXTURE_BUILDER),
@@ -193,7 +194,7 @@ class ControlRigPathTests(unittest.TestCase):
             cwd=ROOT, text=True, capture_output=True, check=False,
         )
         assert built.returncode == 0, built.stdout + built.stderr
-        cls.clip = cls.directory / "pack" / "rig_probe.tres"
+        cls.clip = cls.directory / "variant" / "rig_probe.tres"
         cls.result = _export(
             "rig", "--blend", str(cls.blend), "--control-rig", "Controls", "--target", "Female",
             "--action", "rig_probe_sway", "--skeleton-scene", FEMALE_SCENE, "--check-skeleton-scene", MALE_SCENE,
@@ -230,74 +231,81 @@ class ControlRigPathTests(unittest.TestCase):
         self.assertFalse(output.exists())
 
     def test_validator_accepts_the_clip_on_both_reference_templates(self) -> None:
-        pack = self.directory / "pack" / "pack.json"
-        pack.write_text(json.dumps({
-            "schema": "anim003_pack_v1", "id": "rig_probe",
-            "entries": [{"id": "rig_probe", "category": "idle", "tags": ["probe"],
-                         "description": "sways and lifts one arm", "clip": "rig_probe.tres"}],
+        directory = self.directory / "variant"
+        relative = directory.relative_to(ROOT / "game").as_posix()
+        descriptor = directory / "variant.json"
+        descriptor.write_text(json.dumps({
+            "schema": "anim003_variant_v1", "id": "rig_probe", "category": "idle", "tags": ["probe"],
+            "description": "sways and lifts one arm", "clip": relative + "/rig_probe.tres",
         }), encoding="utf-8")
-        root = "res://" + pack.parent.relative_to(ROOT / "game").as_posix() + "/"
-        result = _validate(f"--pack={root}pack.json", f"--content-root={root}", f"--template={FEMALE_TEMPLATE}",
-                           f"--template={MALE_TEMPLATE}", "--require-compatible")
+        resource = f"res://{relative}/variant.json"
+        templates = []
+        for index, template in enumerate((FEMALE_TEMPLATE, MALE_TEMPLATE)):
+            target = f"template_{index}.tscn"
+            (directory / target).write_text(f'''[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="{template}" id="1_template"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantLayer.cs" id="2_layer"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantOperation.cs" id="3_operation"]
+
+[sub_resource type="Resource" id="Resource_probe"]
+script = ExtResource("3_operation")
+Descriptor = "{resource}"
+
+[node name="ProbeTemplate" instance=ExtResource("1_template")]
+
+[node name="ProbeVariants" type="Node" parent="AnimationCatalogue" index="1"]
+script = ExtResource("2_layer")
+Operations = [SubResource("Resource_probe")]
+''', encoding="utf-8")
+            templates.append(f"res://{relative}/{target}")
+        result = _validate(f"--variant={resource}", *(f"--template={value}" for value in templates), "--require-compatible")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(_marker(result.stdout, "ANIMATION_PACK_VALIDATION_JSON=")["passed"])
-        for template in (FEMALE_TEMPLATE, MALE_TEMPLATE):
-            self.assertIn(f"Template '{template}': idle/rig_probe (pack 'rig_probe') binds to skeleton 'GeneralSkeleton'.", result.stdout)
+        self.assertTrue(_marker(result.stdout, "ANIMATION_VARIANT_VALIDATION_JSON=")["passed"])
+        for template in templates:
+            self.assertIn(f"Template '{template}': idle/rig_probe (owner 'default') binds", result.stdout)
 
 
 class ValidatorCommandTests(unittest.TestCase):
-    def test_valid_packs_pass(self) -> None:
-        default = _validate("--pack=res://assets/animations/packs/default/pack.json", f"--template={FEMALE_TEMPLATE}",
-                            f"--template={MALE_TEMPLATE}", "--require-compatible")
-        self.assertEqual(default.returncode, 0, default.stdout + default.stderr)
-        fixture = _validate(f"--pack={FIXTURES}fixture/pack.json", f"--content-root={FIXTURES}fixture/")
+    def test_valid_variants_and_templates_pass(self) -> None:
+        result = _validate("--variant=res://assets/animations/locomotion/feminine/variant.json",
+                           f"--template={FEMALE_TEMPLATE}", f"--template={MALE_TEMPLATE}", "--require-compatible")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(_marker(result.stdout, "ANIMATION_VARIANT_VALIDATION_JSON=")["passed"])
+        fixture = _validate(f"--variant={FIXTURES}fixture/idle/variant.json")
         self.assertEqual(fixture.returncode, 0, fixture.stdout + fixture.stderr)
-        extension = _validate(f"--pack={FIXTURES}extension/pack.json", f"--template={MALE_TEMPLATE}")
-        self.assertEqual(extension.returncode, 0, extension.stdout + extension.stderr)
-        self.assertIn("idle entry 'sad' from pack 'extension' overrides pack 'default'", extension.stdout)
 
     def test_every_rejection_class_fails_with_a_located_diagnostic(self) -> None:
         expected = {
-            "malformed_json": (None, None, "malformed JSON"),
-            "wrong_schema": (None, "schema", "schema must be 'anim003_pack_v1'"),
-            "unknown_field": ("slump", "mood", "unknown entry field"),
-            "missing_description": ("slump", "description", "description is missing or blank"),
-            "empty_tags": ("slump", "tags", "tags must be a non-empty array"),
-            "bad_category": ("slump", "category", "category must be 'idle' or 'locomotion'"),
-            "duplicate_id": ("slump", "id", "duplicate idle entry id 'slump'"),
-            "absolute_path": ("slump", "clip", "not a 'res://' or other scheme path"),
-            "escaping_path": ("slump", "clip", "must not escape the content root"),
-            "missing_file": ("slump", "clip", "does not exist"),
-            "clip_not_animation": ("slump", "clip", "clip must be a loadable native Animation resource, found Curve"),
+            "malformed_json": ("descriptor/payload", "field"),
+            "wrong_schema": ("schema", "must be anim003_variant_v1"),
+            "unknown_field": ("mood", "unknown"),
+            "missing_description": ("description", "must not be blank"),
+            "empty_tags": ("tags", "non-empty array"),
+            "bad_category": ("category", "must be idle or locomotion"),
+            "duplicate_field": ("id", "duplicate field"),
+            "absolute_path": ("clip", "owner-root-relative"),
+            "escaping_path": ("clip", "parent traversal"),
+            "missing_file": ("clip", "does not exist"),
+            "clip_not_animation": ("clip", "loadable native Animation resource, found Curve"),
+            "rejected-set/variant": ("set", "ANIM-002 reviewed-set loader rejects the set"),
         }
-        packs = [f"--pack={FIXTURES}fixture/invalid/{name}.json" for name in expected]
-        result = _validate(*packs, f"--content-root={FIXTURES}fixture/")
+        prefix = f"{FIXTURES}fixture/invalid/"
+        result = _validate(*(f"--variant={prefix}{name}.json" for name in expected))
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        errors = _marker(result.stdout, "ANIMATION_PACK_VALIDATION_JSON=")["errors"]
-        for name, (entry, field, message) in expected.items():
+        errors = _marker(result.stdout, "ANIMATION_VARIANT_VALIDATION_JSON=")["errors"]
+        self.assertEqual(len(errors), len(expected))
+        for name, (field, message) in expected.items():
             with self.subTest(name=name):
-                pack = f"{FIXTURES}fixture/invalid/{name}.json" if name == "malformed_json" else name
-                located = [error for error in errors if error.startswith(f"Animation pack '{pack}'") and message in error]
+                located = [error for error in errors if error.startswith(f"Descriptor '{prefix}{name}.json'")]
                 self.assertEqual(len(located), 1, errors)
-                if entry is not None:
-                    self.assertIn(f"entry '{entry}'", located[0])
-                if field is not None:
-                    self.assertIn(f"field '{field}'", located[0])
-                self.assertIn(", path '", located[0])
-
-        rejected = _validate(f"--pack={FIXTURES}extension/invalid/set_rejected.json")
-        self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
-        self.assertIn(
-            "Animation pack 'set_rejected', entry 'stagger', field 'set', "
-            "path 'tests/animation/catalogue/extension/invalid/rejected-set/set.json': "
-            "the ANIM-002 reviewed-set loader rejects the set",
-            rejected.stderr + rejected.stdout,
-        )
+                self.assertIn(f"field '{field}'", located[0])
+                self.assertIn(message, located[0])
 
     def test_bad_arguments_are_refused(self) -> None:
-        result = _validate("--packs=res://assets/animations/packs/default/pack.json")
+        result = _validate("--variants=res://assets/animations/idle/sad/variant.json")
         self.assertEqual(result.returncode, 2)
-        self.assertIn("unknown argument '--packs=", result.stderr)
+        self.assertIn("unknown or blank argument '--variants=", result.stderr)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,10 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "unselected",
+  "tags": [
+    "quiet"
+  ],
+  "description": "holds still with an even stance",
+  "clip": "idle/quiet/quiet.tres"
+}

@@ -7,9 +7,9 @@ title: Animation Catalogue
 
 ## Requirement
 
-Provide one catalogue for variant animations (idle and locomotion). Content authors define entries in JSON animation
-packs. Character templates compose those packs additively, and runtime systems, agents and observers resolve entries
-through per-category views. Transitions between entries run through MotionBricks bridges from the realised pose.
+Provide one catalogue for variant animations (idle and locomotion). Content authors describe individual variants
+in JSON. Character templates explicitly select and compose variants across content roots. Runtime systems, agents
+and observers resolve entries through per-category views, and transitions run from the realised pose.
 
 ## Goal
 
@@ -31,9 +31,9 @@ pack authors can also add content without editing code or the Godot editor.
    changes, as a plain visible account. It does not see internal identifiers or tags. It is not told about simply
    starting or stopping movement, or about an unchanged NPC it looks at again.
 6. Male and female reference characters each have at least one usable idle and gait.
-7. External content authors can add or extend animation packs for their characters using JSON files and Blender, then
-   validate them. They do not need to edit code or use the Godot editor, and no repository content is generated for
-   them.
+7. External content authors can author and validate individual variants with JSON and Blender, and explicitly
+   select them alongside inherited variants, without editing code or using the Godot editor. Installing content
+   does not itself make its variants available to a character.
 8. Player VRIK and pose behaviour is unchanged. Catalogue idles never play on the player, and built-in pose clips are
    not catalogue entries.
 
@@ -47,37 +47,32 @@ pack authors can also add content without editing code or the Godot editor.
 2. No runtime path special-cases an animation named `idle`, reads a hardcoded idle clip, or loops a fixed SOMA idle
    sample. All idle playback resolves through the idle view (TR9).
 
-### Entries and Packs
+### Variant Entries
 
-3. Every entry has a shared core: `id`, `category`, `tags`, `description` and its owning pack. Entry identity is the
-   pair (`category`, `id`). Each category adds its own payload: an idle entry references one native clip, and a
-   locomotion entry references one ANIM-002 reviewed set. The [Animation Pack Format](pack-format.md) page is the
-   normative public authoring contract for the JSON schema, path resolution, the validator, the fixture pack and the
-   author documentation.
-4. An animation pack is a named bundle of entries, such as `default` or `combat`, defined by one `pack.json`. The
-   pack loader takes a [CORE-008](../../core/008-content-pack-resolution/index.md) `ContentContext`, and paths inside
-   the pack resolve against that context's root.
-   - **Production:** the context comes from the location of `pack.json`. A manifest under `res://content/<id>/` gets
-     that content pack's context. Any other location gets `ContentContext.Default` (`default` at `res://`).
-   - **Tests:** tests may inject a context ([Animation Pack Format](pack-format.md#path-resolution)).
-   Content packs are never generated in this repository.
+3. Each selected entry comes from one JSON descriptor beside its typed payload. Entry identity is (`category`,
+   `id`), not owner, directory or gender. The same id may appear in different categories. The
+   [Animation Variant Format](variant-format.md) is normative for descriptors, paths and validation.
+4. Only explicit references select descriptors from base content or the active CORE-008 optional pack. Runtime
+   payloads resolve within the descriptor's own content root, not the installed character's root. Neither content
+   activation nor directory discovery adds entries.
 5. ANIM-002 reviewed set files are referenced unchanged. A locomotion entry adds catalogue identity around a set; it
    does not copy, rewrite or extend the set schema.
 
 ### Character Catalogue and Layering
 
-6. Each character has one catalogue node with one child pack node per animation pack. A pack node references one
-   `pack.json` and exports `Enabled` and an integer `Priority`. Derived templates add pack nodes, or disable inherited
-   ones by overriding `Enabled`, under [CHAR-002](../../character/002-character-root/index.md) TR50–51 template-chain
-   installation. Packs never come from a single array that inheritance would replace.
-7. The catalogue applies enabled packs additively in ascending `Priority` order, with ties broken by ordinal pack id.
-   Scene-tree child order is not part of the contract. Convention: base templates use lower priorities than the
-   templates derived from them.
-8. On an entry collision, the later-applied pack's entry replaces the earlier one, and one log message names the
-   category, entry id, overriding pack and overridden pack. Packs of equal `Priority` follow the same rule, in the
-   ordinal pack-id order from TR7, and write the same log message. A pack id used by two enabled pack nodes is a
-   different case: it fails catalogue construction clearly. The catalogue is built once per character before first
-   use and stays fixed for the session.
+6. Each character has one catalogue from its [CHAR-002](../../character/002-character-root/index.md) TR50–51
+   template chain. Each contributing template authors a distinct `AnimationVariantLayer` directly under
+   `AnimationCatalogue`, with its own `Operations` array. A derived template must not override that array.
+   Use [CORE-005](../../core/005-scene-installer-system/index.md) installation and target-scene precedence.
+7. Apply layers from base to most derived, in each layer's declared order. A layer acts at most once on each key:
+   - **Add:** select a descriptor for an absent key and append the new entry.
+   - **Remove:** name an inherited key and remove it; other entries retain their relative order.
+   - **Replace:** name an inherited key and select a descriptor with that key. Remove the inherited entry and
+     append the replacement, using the replacing layer's order.
+   A derived layer with no operation on a key inherits it unchanged.
+8. A colliding add, multiple operations on one key in one layer, an absent remove/replace target or a mismatched
+   replacement key fails catalogue construction. Do not silently replace, deduplicate or publish a partial
+   catalogue. Build it once per character before first use and keep it fixed for the session.
 
 ### Category Views and Defaults
 
@@ -87,12 +82,11 @@ pack authors can also add content without editing code or the Godot editor.
    - Consumers use a view, not raw entries or file paths. A view lists only entries compatible with the character
      (TR11).
 10. Each category's effective entry resolves in this order: agent preference (TR22), then the character template
-    default, then the catalogue fallback. The catalogue node exports one default id per category. Derived templates
-    override it like any exported value. The catalogue fallback is the first compatible entry of that category in
-    catalogue order. Catalogue order lists packs in application order (TR7) and each pack's entries in manifest order.
-    An overriding entry takes its overriding pack's position, and the overridden entry leaves the order. A category with
-    no compatible entry fails clearly when a consumer requires it. A preference or default naming an unknown or
-    incompatible entry is ignored with a clear log message, and resolution continues with the next source.
+    default, then the catalogue fallback. A template may inherit, override or clear a category default without
+    changing the selected entries, and selecting an entry does not set a default. Fallback is the first compatible
+    entry of that category in catalogue order (TR7). A category with no compatible entry fails clearly when a
+    consumer requires it. A preference or default naming an unknown or incompatible entry is ignored with a clear
+    log message, and resolution continues with the next source.
 11. An idle entry is compatible with a character when every clip track on a SOMA-mapped bone (a bone in the ANIM TR4
     semantic body map) resolves on that character's native skeleton. Tracks on bones outside the SOMA map, such as
     breasts or twist bones, are optional. On a skeleton without those bones they are safe no-ops, matching the
@@ -117,7 +111,7 @@ pack authors can also add content without editing code or the Godot editor.
     - Bones the clip does not key keep the output of their other writers.
     Catalogue idles never play on the player. The player's tracked idle stays owned by VRIK
     ([IK-004](../../ik/004-vrik-pose-state-machine/index.md)). Player templates declare no idle default. They still
-    carry packs and a locomotion default, because `PlayerMotionBricks` consumes the locomotion view.
+    inherit catalogue entries and a locomotion default, because `PlayerMotionBricks` consumes the locomotion view.
 14. The ANIM TR5 native→SOMA conversion is used only to feed MotionBricks bridges. It supplies realised context and
     converts idle target windows (TR16). Converted target frames are not realised observations and never enter
     realised-pose history.
@@ -193,16 +187,11 @@ pack authors can also add content without editing code or the Godot editor.
 
 ### Content
 
-24. Default content (`res://`) ships one animation pack, `default`, at
-    `game/assets/animations/packs/default/pack.json`.
-    - It holds idle `sad`, a native clip authored from the reference female idle source and published at
-      `assets/animations/packs/default/idle/sad.tres` under that content root.
-    - Its `entries` array lists locomotion `feminine`, whose `set` is
-      `assets/animations/packs/default/locomotion/feminine/set.json` under that root. Keep the ANIM-002 set,
-      approved source bundle and angular metadata together.
-    - The female and male reference base templates both add the `default` pack and set the locomotion default. NPC
-      role templates set the idle default, and player role templates declare none (TR13).
-    - The male template must have at least one compatible idle and locomotion entry (TR11).
+24. Both reference base templates explicitly select `idle/sad` and `locomotion/feminine`, in that order, and
+    set the locomotion default to `feminine`. Both NPC role templates set the idle default to `sad`; the shipped
+    female player template declares none (TR13). Descriptors sit beside `idle/sad/sad.tres` and
+    `locomotion/feminine/set.json` under `game/assets/animations/`. Keep the ANIM-002 set, approved source bundle and
+    angular metadata together.
 25. Catalogue native clips (TR13) are the only idle source. Idle playback and its tooling have none of the following:
     - an `idle` animation library on the AnimationPlayer of `reference_female_base.tscn` or
       `reference_male_base.tscn`;
@@ -212,42 +201,38 @@ pack authors can also add content without editing code or the Godot editor.
     - processed or runtime idle packages.
     Idle sources are staged and authored only through [Animation Clip Authoring](authoring.md).
 26. Catalogue JSON must ship in exported builds. No export presets exist yet. Any future export preset must include
-    `*.json` in its non-resource include filter, or an equivalent filter that covers every pack and set file.
+    `*.json` in its non-resource include filter, or an equivalent filter covering descriptors, sets and their
+    required JSON companions.
 
 ### Validation
 
-27. Automated checks cover these areas:
-    - schema and path validation;
-    - layering order, collision overrides (including equal-priority ordering by pack id), duplicate pack-id failure
-      and `Enabled` overrides;
-    - default resolution order;
-    - skeleton-binding compatibility, including the male template;
-    - acceptance of referenced sets by the ANIM-002 loader;
-    - removal of the idle special case.
+27. Pass the [installed fixture proof](variant-format.md#installed-fixture) before changing production selections.
+    For delivery, verify validation, composition, defaults, compatibility and the unchanged playback inputs (TAC-001
+    and TAC-004). Prompt and tools use only compatible selected entries (TR9 and TR22).
+    Descriptors and explicit template operations are the only selection format, including for external authors.
+    Ship no aggregate selection manifests, loaders, nodes, path aliases, compatibility branches or obsolete
+    documentation, examples, tooling, tests or fixtures. CORE-008 content packs are unchanged.
     Transition checks cover the four-frame target window, any-frame exit, settle easing, interruption with a fresh
-    realised context, and rejection of stale results. Transition checks use the `default` pack's `sad` and
-    `feminine`. Idle→idle also needs the second idle, `slump`, from the content-pack fixture at
-    `game/tests/animation/catalogue/fixture/`. Pack checks also run on the
-    [test packs](pack-format.md#fixture-pack): the idle-only content-pack fixture, and the default-context extension
-    pack.
+    realised context and rejection of stale results. Use `sad`, `feminine` and a second fixture idle (`slump`)
+    for idle→idle.
 28. Actual-rig temporal evidence on both reference characters, in Godot native playback, shows each required
     transition, including an interruption. Numerical seam measurements are diagnostic and do not replace the user's
     judgement of the motion.
 
 ## In Scope
 
-- Entry core, JSON pack format, pack layering through template-chain nodes, category views and defaults.
+- Variant descriptors, template-chain selection and layering, category views and defaults.
 - Native idle playback, SOMA locomotion through views, and the bridge transition and interruption contract.
-- Kimodo and Rigify idle-clip authoring contracts, the validator, the fixture pack and author documentation.
-- The `default` pack's `sad` and `feminine` entries, and catalogue clips as the only idle source (TR25).
+- Kimodo and Rigify idle-clip authoring contracts, the validator, installed fixture and author documentation.
+- Shipped `sad` and `feminine` entries, and catalogue clips as the only idle source (TR25).
 - Mind tools, prompt fragment, status line and NPC-to-NPC observation under [Mind Integration](mind-integration.md).
 
 ## Out Of Scope
 
 - Visual proof of locomotion→locomotion switching with a second reviewed set. The switching mechanism and its
   tests remain required.
-- Action animations, gestures, layered or additive animation, and VRIK or player pose clips. Built-in pose clips,
-  including the standalone `Idle.tres`, are untouched.
+- Action animations, gestures, layered or additive animation, and VRIK or player pose playback changes. Built-in
+  clips such as `player-pose/Idle.tres` remain outside the catalogue regardless of their storage location.
 - Final tuning values for settle and velocity-blend durations, curves and seam tolerances.
 - Player observation of NPC changes, and NPC observation of the player's stance or gait.
 - New idle or locomotion content beyond the `sad` and `feminine` entries.
@@ -265,21 +250,17 @@ pack authors can also add content without editing code or the Godot editor.
      looks at a static NPC, and again when it sees a change.
    - **Deterministic end-to-end test:** a request for an unknown id is refused in character, with the preference
      unchanged. The live session does not cover refusal.
-3. **ANIM-003-UAC-003 (UR6–8):** The male and female references each resolve a usable idle and gait. Using only JSON
-   and clips:
-   - the idle-only fixture defines a content-pack-shaped pack;
-   - the extension test pack extends `default` with an override and a new locomotion entry.
-   Both pass validation. VRIK and pose behaviour is unchanged.
+3. **ANIM-003-UAC-003 (UR6–8):** Both reference characters resolve a usable idle and gait. The author-guide and
+   installed fixture checks show that an author can compose individual variants with inherited entries and that
+   an installed but unselected variant is not available. VRIK and pose behaviour are unchanged.
 
 ### Technical Requirement Acceptance
 
 1. **ANIM-003-TAC-001 (TR1–11):** Tests verify:
-   - the entry schema, production derivation of the content context from the `pack.json` location, and path
-     resolution through an injected test context;
-   - additive layering in priority order, override logging, equal-priority collisions resolved by ordinal pack id
-     with the same log message, duplicate pack-id failure and `Enabled` overrides along a template chain;
-   - resolution order across preference, template default and fallback, including the fallback position of an
-     overriding entry;
+   - explicit references and descriptor-owned payload resolution (VAR-AC-001–002);
+   - inherited add/remove/replace, deterministic order, invalid operations (TR8) and the same id in both categories;
+   - preference, default and fallback precedence; inherited, overridden and cleared defaults independent of
+     selection; and unknown or incompatible targets, including a default whose entry was removed;
    - skeleton-binding compatibility, including SOMA-mapped binding of `sad` on the male skeleton with optional
      breast tracks as no-ops, and exclusion of a clip with an unresolved SOMA-mapped track;
    - acceptance of referenced sets by the ANIM-002 loader.
@@ -301,34 +282,28 @@ pack authors can also add content without editing code or the Godot editor.
    - transition-started events with the correct kind, and a new event on interruption only when the target differs;
    - controllers resolving through the views.
    Actual-rig evidence under TR28 confirms the motion.
-3. **ANIM-003-TAC-003 (TR22–26):** [Mind Integration](mind-integration.md), [authoring](authoring.md) and
-   [author guide](pack-format.md#acceptance-criteria) (PACK-AC-003) acceptance pass. The default pack contains
-   `sad` and `feminine` at the documented paths, and an audit of scenes, data and tooling finds none of the idle
-   sources TR25 prohibits. The export include-filter requirement is recorded.
-4. **ANIM-003-TAC-004 (TR27–28):** The validator and test-pack checks under [Animation Pack Format](pack-format.md)
-   (PACK-AC-001–002) pass. Actual-rig evidence is independently reviewed.
+3. **ANIM-003-TAC-003 (TR22–26):** [Mind Integration](mind-integration.md), [authoring](authoring.md) and the
+   [author guide](variant-format.md#acceptance-criteria) (VAR-AC-003) pass acceptance. A deterministic test shows
+   prompt listing and tool acceptance for compatible selected variants only, with refusal for removed or unselected
+   variants and the replacement listed once. Both reference templates resolve the documented defaults and order.
+   Audit that TR25's prohibited idle sources are absent and that the export include-filter requirement is recorded.
+4. **ANIM-003-TAC-004 (TR27–28):** Record VAR-AC-001–002 and audit runtime, scenes, assets, fixtures, tests,
+   tooling and docs for a single selection format. Compare installed native idle clip identity,
+   track bindings and sampled output, and reviewed gait set identity, eight role bindings, angular metadata and
+   sampler outputs against the storage baseline. Review actual-rig evidence independently.
 
 ## Implementation Status
 
-The catalogue is delivered and verified on the delivery candidate.
+The shipped templates select individual variants. Focused checks verify installed inheritance, cross-root addition
+and replacement, defaults, validation, selected prompt and tool visibility, and retained native idle and reviewed
+gait inputs. These checks do not establish visual quality, new generation, live LLM behaviour or headset operation.
 
-- **Runtime:** `game/src/Animations/` holds the catalogue node with child pack nodes (`Enabled`, `Priority`), the
-  idle and locomotion views, default resolution and TR11 compatibility. Native idle playback uses
-  `NativeIdleModifier`, placed first on the reference skeleton. `MotionBricksNavigation` runs the idle↔idle and
-  idle↔locomotion bridges, interruption with velocity blending, and stale-context regeneration.
-- **Content:** the `default` pack at `game/assets/animations/packs/default/pack.json` holds `sad` and `feminine`.
-  Test packs live under `game/tests/animation/catalogue/`, and the [author guide][author-guide] is under
-  `game/assets/animations/`.
-- **Tooling:** `tools/animation-pipeline/commands/export_idle_clip.py` exports idle clips on the Kimodo (`kimodo`)
-  and Rigify (`rig`) paths through `godot/commands/build_native_clip.gd`. The pack validator command is
-  `godot/commands/validate_animation_pack.gd`.
+- **Runtime:** native idle playback and MotionBricks bridges are delivered. Individual variant selection changes
+  catalogue composition, not playback, bridge or visibility behaviour.
 - **Mind:** `change_stance` and `change_gait`, the `Stances And Gaits` prompt section, the own stance and gait status
   line, and `AnimationChangePerception` with first-look and re-focus observations are in place.
-- **Removal:** the idle sources TR25 prohibits are gone from scenes, data and tooling.
-- **Evidence:** the full integration suite passes 1631 of 1632 tests; the one failure is an intermittent test outside
-  this work that passes three runs out of three on its own. Unit tests pass 2492 of 2492, framework tests pass 111
-  with 1 skipped, and Python tests pass 185 of 185. Actual-rig evidence for TR28 on the male reference is accepted,
-  and the live MIND-AC-004 session passes three runs out of three.
+- **Removal:** the idle sources TR25 prohibits are gone from scenes, data and tooling. Variant descriptors and
+  template operations are the only selection format.
 
 Known limits:
 
@@ -343,7 +318,7 @@ Known limits:
 
 - [Animation](../index.md)
 - [ANIM-002: Locomotive Conditioning Sources](../002-locomotive-animation-set/index.md)
-- [Animation Pack Format](pack-format.md)
+- [Animation Variant Format](variant-format.md)
 - [Animation Clip Authoring](authoring.md)
 - [Mind Integration](mind-integration.md)
 - [CORE-008: Content Pack Resolution](../../core/008-content-pack-resolution/index.md)
@@ -353,4 +328,3 @@ Known limits:
 - [Kimodo Motion Sources](../../tooling/kimodo-pipeline/locomotive-animation-set.md)
 
 [kimodo-reuse]: ../../tooling/kimodo-pipeline/locomotive-animation-set.md#character-setup-and-calibration-contract
-[author-guide]: ../../../game/assets/animations/README.md

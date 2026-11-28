@@ -1,0 +1,10 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "locomotion",
+  "id": "rejected",
+  "tags": [
+    "tired"
+  ],
+  "description": "stands with shoulders slumped",
+  "set": "tests/animation/catalogue/fixture/invalid/rejected-set/set.json"
+}

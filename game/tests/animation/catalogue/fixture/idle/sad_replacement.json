@@ -1,0 +1,11 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "sad",
+  "tags": [
+    "tired",
+    "slumped"
+  ],
+  "description": "stands slumped with weight sagging onto one hip",
+  "clip": "tests/animation/catalogue/fixture/idle/slump.tres"
+}

@@ -49,9 +49,10 @@ owner of intended state progression.
    another cue. Declare unsupported roles or missing inputs explicitly rather than silently relabelling crossing travel
    as non-crossing sidestepping. CTRL/NAV load the reviewed set resolved by the character's ANIM-003 locomotion view,
    without controller or source activation flags or a prototype movement fallback. The default `feminine` entry binds
-   `assets/animations/packs/default/locomotion/feminine/set.json` under `res://`. Bind all eight roles,
+   `assets/animations/locomotion/feminine/set.json` under `res://`. Bind all eight roles,
    angular metadata and approved source identity together; unavailable or inconsistent content fails explicitly.
-   ANIM-003 entries reference sets in this format without extending it.
+   [ANIM-003 descriptors](../003-animation-catalogue/variant-format.md) reference sets in this format without
+   extending it.
 2. **Physical Speed Metadata:** each moving variant/stage/role supplies a physical reference velocity or speed with
    direction and the representative interval/cycle used to establish it. Keep this distinct from phase-local root
    velocity and turning information available from ordered samples. Uneven local velocity, such as a limp, must not
@@ -232,9 +233,9 @@ drive the actor or be applied twice in presentation. The planned cycle endpoint 
    facing, scale and angular landmark placement against measured source yaw, with unchanged non-root articulation
    and four consecutive 30 Hz poses per connection. Check unchanged source timing and compare realised cycle duration
    with source duration in actual-rig captures; distinguish request handoffs and inference holds from source pacing.
-   Verify normal CTRL/NAV startup without activation variables loads the default pack's complete set and binds all
-   eight roles and angular metadata to the same current source. Quality-admission labels must not be interpreted as
-   runtime activation switches.
+   Verify normal CTRL/NAV startup without activation variables loads the complete set at the documented variant
+   path through the template-selected variant. All eight roles and angular metadata bind to the same reviewed source.
+   Quality-admission labels must not be interpreted as runtime activation switches.
 2. **ANIM-002-TAC-002 (TR4–6):** Independent lifecycle checks cover advance/sample-ahead, loop/end boundaries,
    role/stage/variant switches, interruptions, idle/action compatibility and overlapping/late requests. Traces identify
    controller-owned intended phase independently of generated duration, displayed feet and actual context timestamps.
@@ -272,15 +273,15 @@ drive the actor or be applied twice in presentation. The planned cycle endpoint 
 
 ## Implementation Status
 
-Normal CTRL and NAV share `game/assets/animations/packs/default/locomotion/feminine/set.json`, resolved through the
+Normal CTRL and NAV share `game/assets/animations/locomotion/feminine/set.json`, resolved through the
 ANIM-003 locomotion view's default `feminine` entry; every role binds to
 `landing-ablation-01.json`, the complete 1–1200 at 30 Hz export of `source_feminine_landing_ablation_01`.
-The [source manifest](../../../game/assets/animations/packs/default/locomotion/feminine/set.json),
-[angular metadata](../../../game/assets/animations/packs/default/locomotion/feminine/turn-angular-reference.json)
-and [source-data guide](../../../game/assets/animations/packs/default/locomotion/feminine/README.md) bind current
-hashes, measurements, usable ranges and half-open repetition selections. Durable source/authoring, descriptor,
-approval and provenance use the `game/assets/animations/source/locomotion/locomotion_feminine_landing_ablation_01`
-prefix.
+The [source manifest](../../../game/assets/animations/locomotion/feminine/set.json),
+[angular metadata](../../../game/assets/animations/locomotion/feminine/turn-angular-reference.json)
+and [source-data guide](../../../game/assets/animations/locomotion/feminine/README.md) bind current hashes,
+measurements, usable ranges and half-open repetition selections. The protected take, authoring workspace, descriptor,
+approval and provenance share the prefix `locomotion_feminine_landing_ablation_01` in the adjacent ignored `source/`.
+Retained records keep historical path strings for scratch replay; the runtime does not load those paths.
 
 Current inclusive usable ranges and half-open repetitions are:
 

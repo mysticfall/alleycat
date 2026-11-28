@@ -17,9 +17,9 @@ public sealed class EyesBlendTreeIntegrationTests
     private const string ReferencePlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string ReferenceNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string EyesPhotoboothScenePath = "res://tests/vision/eyes_visual_test.tscn";
-    private const string HorizontalLookAnimationResourcePath = "res://assets/animations/reference/female/eyes/eyes_right_left.tres";
-    private const string VerticalLookAnimationResourcePath = "res://assets/animations/reference/female/eyes/eyes_up_down.tres";
-    private const string BlinkAnimationResourcePath = "res://assets/animations/reference/female/eyes/eyes_blink.tres";
+    private const string HorizontalLookAnimationResourcePath = "res://assets/animations/eyes/eyes_right_left.tres";
+    private const string VerticalLookAnimationResourcePath = "res://assets/animations/eyes/eyes_up_down.tres";
+    private const string BlinkAnimationResourcePath = "res://assets/animations/eyes/eyes_blink.tres";
     private const string ReferenceEyeSkeletonNodeName = "GeneralSkeleton";
     private const float BlinkClipLengthSeconds = 0.3f;
     private const float BlinkClosedPeakSeconds = 0.15f;

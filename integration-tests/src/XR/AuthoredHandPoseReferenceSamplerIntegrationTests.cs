@@ -15,10 +15,10 @@ namespace AlleyCat.IntegrationTests.XR;
 public sealed class AuthoredHandPoseReferenceSamplerIntegrationTests
 {
     private const string GrabBallAnimationPath =
-        "res://assets/animations/reference/female/Grab-ball-40.tres";
+        "res://assets/animations/hand-pose/Grab-ball-40.tres";
 
     private const string GrabPipeAnimationPath =
-        "res://assets/animations/reference/female/Grab-pipe-10.tres";
+        "res://assets/animations/hand-pose/Grab-pipe-10.tres";
 
     private const string TrackPathPrefix = AuthoredThumbReferenceSampler.TrackPathPrefix;
 
@@ -205,7 +205,7 @@ public sealed class AuthoredHandPoseReferenceSamplerIntegrationTests
     public void MissingResource_FailsClosed()
     {
         Assert.False(AuthoredHandPoseReferenceSampler.TrySample(
-            "res://assets/animations/reference/female/Does-Not-Exist.tres",
+            "res://assets/animations/hand-pose/Does-Not-Exist.tres",
             LimbSide.Left,
             out _,
             out string error));

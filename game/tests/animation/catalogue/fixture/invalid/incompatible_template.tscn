@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/Animations/AnimationCatalogue.cs" id="1_catalogue"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantLayer.cs" id="2_layer"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantOperation.cs" id="3_op"]
+
+[sub_resource type="Resource" id="Resource_sad"]
+script = ExtResource("3_op")
+Descriptor = "res://assets/animations/idle/sad/variant.json"
+
+[sub_resource type="Resource" id="Resource_feminine"]
+script = ExtResource("3_op")
+Descriptor = "res://assets/animations/locomotion/feminine/variant.json"
+
+[node name="IncompatibleTemplate" type="Node3D"]
+
+[node name="GeneralSkeleton" type="Skeleton3D" parent="."]
+
+[node name="AnimationCatalogue" type="Node" parent="."]
+script = ExtResource("1_catalogue")
+DefaultIdle = "sad"
+
+[node name="Variants" type="Node" parent="AnimationCatalogue"]
+script = ExtResource("2_layer")
+Operations = [SubResource("Resource_sad"), SubResource("Resource_feminine")]

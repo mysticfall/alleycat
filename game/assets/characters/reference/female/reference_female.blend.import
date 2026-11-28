@@ -43,7 +43,7 @@ _subresources={
 "animations": {
 "All Fours": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/All Fours.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/All Fours.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://dejkq0m8tv7s5",
 "settings/loop_mode": 1,
@@ -2099,7 +2099,7 @@ _subresources={
 },
 "All Fours-enter": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/All Fours-enter.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/All Fours-enter.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://42sk0b6kust1",
 "settings/loop_mode": 0,
@@ -4155,7 +4155,7 @@ _subresources={
 },
 "All Fours-forward": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/All Fours-forward.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/All Fours-forward.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://cusy6fs4bdgau",
 "settings/loop_mode": 1,
@@ -6211,7 +6211,7 @@ _subresources={
 },
 "Crouch": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Crouch.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Crouch.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://chlcas24wc1v0",
 "settings/loop_mode": 1,
@@ -8267,7 +8267,7 @@ _subresources={
 },
 "Crouch-enter": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Crouch-enter.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Crouch-enter.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://f7v0dmp12bn",
 "settings/loop_mode": 0,
@@ -10323,7 +10323,7 @@ _subresources={
 },
 "Crouch-seek": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Crouch-seek.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Crouch-seek.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://brne58p6thj44",
 "settings/loop_mode": 0,
@@ -12379,7 +12379,7 @@ _subresources={
 },
 "Idle": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Idle.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Idle.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://cqw5vrfy6gh2i",
 "settings/loop_mode": 1,
@@ -14435,7 +14435,7 @@ _subresources={
 },
 "Kneel": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Kneel.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Kneel.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://c38qh7p1n72gr",
 "settings/loop_mode": 1,
@@ -16491,7 +16491,7 @@ _subresources={
 },
 "Kneel-enter": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Kneel-enter.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Kneel-enter.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://cnnq71sv82fis",
 "settings/loop_mode": 0,
@@ -18547,7 +18547,7 @@ _subresources={
 },
 "Kneel-seek": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Kneel-seek.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Kneel-seek.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://c6ans2aeecux3",
 "settings/loop_mode": 0,
@@ -20603,7 +20603,7 @@ _subresources={
 },
 "Sit": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Sit.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Sit.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://bg6oxn7gyjbr2",
 "settings/loop_mode": 1,
@@ -22659,7 +22659,7 @@ _subresources={
 },
 "Sit-enter": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/Sit-enter.tres",
+"save_to_file/fallback_path": "res://assets/animations/player-pose/Sit-enter.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://b6t4pfl0xiykp",
 "settings/loop_mode": 0,
@@ -26771,7 +26771,7 @@ _subresources={
 },
 "hand_fist": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/hand_fist.tres",
+"save_to_file/fallback_path": "res://assets/animations/hand-pose/hand_fist.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://ccduj100ntchm",
 "settings/loop_mode": 0,
@@ -28827,7 +28827,7 @@ _subresources={
 },
 "hand_thumb_opposition": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/hand_thumb_opposition.tres",
+"save_to_file/fallback_path": "res://assets/animations/hand-pose/hand_thumb_opposition.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://bbquivhee2yms",
 "settings/loop_mode": 0,
@@ -30883,7 +30883,7 @@ _subresources={
 },
 "hand_thumb_spread": {
 "save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://assets/animations/reference/female/hand_thumb_spread.tres",
+"save_to_file/fallback_path": "res://assets/animations/hand-pose/hand_thumb_spread.tres",
 "save_to_file/keep_custom_tracks": "",
 "save_to_file/path": "uid://1ycmuptklxg0",
 "settings/loop_mode": 0,

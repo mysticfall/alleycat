@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using AlleyCat.Animations;
-using AlleyCat.Core.Content;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Motion;
 using AlleyCat.Navigation;
@@ -14,14 +13,11 @@ namespace AlleyCat.IntegrationTests.Animations;
 
 /// <summary>
 /// Representative ANIM-003 transition fixture: the installed reference female NPC in the navigation playtest scene,
-/// with the real MotionBricks worker. The idle-only fixture pack (<c>slump</c>) and the default-context extension pack
-/// (<c>stroll</c>) are added to the installed catalogue before navigation builds it. Records the final visible pose at
+/// with the real MotionBricks worker. The alternate variants (<c>slump</c> and <c>stroll</c>) are added to the installed catalogue before navigation builds it. Records the final visible pose at
 /// every <c>skeleton_updated</c>.
 /// </summary>
 internal sealed partial class NativeIdleTransitionHarness : IAsyncDisposable
 {
-    internal const string FixtureRoot = "res://tests/animation/catalogue/fixture/";
-    internal const string ExtensionPack = "res://tests/animation/catalogue/extension/pack.json";
 
     /// <summary>SOMA-mapped body bones whose local rotation is traced (no digits, so the trace stays compact).</summary>
     internal static readonly string[] BodyBones =
@@ -84,7 +80,7 @@ internal sealed partial class NativeIdleTransitionHarness : IAsyncDisposable
 
     public List<long> Windows { get; } = [];
 
-    public static async Task<NativeIdleTransitionHarness> StartAsync()
+    public static async Task<NativeIdleTransitionHarness> StartAsync(bool includeIncompatible = false, bool replaceSad = false)
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var root = new HarnessGame();
@@ -99,7 +95,7 @@ internal sealed partial class NativeIdleTransitionHarness : IAsyncDisposable
                 // Captured before worker startup: lets a test hold back the next generation on the worker thread.
                 nav.SessionDecorator = session => new DelayingSession(session, harness);
                 // Runs before navigation's own deferred initialisation, after installation finished.
-                Callable.From(() => AddTestPacks(harness.Actor)).CallDeferred();
+                Callable.From(() => AddTestVariants(harness.Actor, includeIncompatible, replaceSad)).CallDeferred();
             }
         }
 
@@ -123,18 +119,23 @@ internal sealed partial class NativeIdleTransitionHarness : IAsyncDisposable
         return harness;
     }
 
-    private static void AddTestPacks(CharacterHub actor)
+    private static void AddTestVariants(CharacterHub actor, bool includeIncompatible, bool replaceSad)
     {
         var catalogue = AnimationCatalogue.RequireFor(actor);
         Assert.False(catalogue.IsBuilt);
-        catalogue.AddChild(new AnimationPack
+        AnimationFixtureVariants.AddAlternates(catalogue);
+        if (replaceSad)
         {
-            Name = "Fixture",
-            Manifest = FixtureRoot + "pack.json",
-            Priority = 20,
-            ContextOverride = new ContentContext("fixture", FixtureRoot)
-        });
-        catalogue.AddChild(new AnimationPack { Name = "Extension", Manifest = ExtensionPack, Priority = 10 });
+            catalogue.AddChild(AnimationFixtureVariants.Layer("ReplacementVariant",
+                AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Replace, "idle", "sad",
+                    "res://tests/animation/catalogue/fixture/idle/sad_replacement.json")));
+        }
+
+        if (includeIncompatible)
+        {
+            catalogue.AddChild(AnimationFixtureVariants.Layer("IncompatibleVariant",
+                AnimationFixtureVariants.Add("res://tests/animation/catalogue/fixture/idle/incompatible.json")));
+        }
     }
 
     private void Bind()

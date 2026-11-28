@@ -1,0 +1,8 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "incompatible",
+  "tags": ["still"],
+  "description": "holds still",
+  "clip": "tests/animation/catalogue/fixture/idle/incompatible.tres"
+}

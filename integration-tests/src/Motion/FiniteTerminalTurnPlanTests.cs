@@ -107,7 +107,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         Assert.Equal(5, submitted.Count);
         Assert.Equal(submitted, endpoints);
         using var source = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath(
-            "res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json")));
+            "res://assets/animations/locomotion/feminine/landing-ablation-01.json")));
         JsonElement rows = source.RootElement.GetProperty("samples");
         // The unchanged left source has two authored primary landmarks, repeated for the second allocation.
         int[] authoredCues = [947, 961, 947, 961];

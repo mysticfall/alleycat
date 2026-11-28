@@ -1,6 +1,6 @@
 using AlleyCat.Animations;
 using Xunit;
-using static AlleyCat.Tests.Animations.PackBuilder;
+using static AlleyCat.Tests.Animations.VariantTestEntries;
 
 namespace AlleyCat.Tests.Animations;
 
@@ -117,7 +117,7 @@ public sealed class IdleTransitionTests
     [Fact]
     public void Planner_AnnouncesOnlyNewTargets()
     {
-        IReadOnlyList<AnimationEntry> entries = Pack("default", (AnimationCategory.Idle, "sad"), (AnimationCategory.Idle, "slump")).Entries;
+        IReadOnlyList<AnimationEntry> entries = Entries((AnimationCategory.Idle, "sad"), (AnimationCategory.Idle, "slump"));
         Assert.True(IdleBridgePlanner.Announces(null, entries[0]));
         Assert.True(IdleBridgePlanner.Announces(entries[0], entries[1]));
         Assert.False(IdleBridgePlanner.Announces(entries[1], entries[1]));

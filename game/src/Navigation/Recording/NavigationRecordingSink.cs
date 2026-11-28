@@ -23,7 +23,7 @@ internal sealed class NavigationRecordingSink
             {
                 string[] paths = ["assets/testing/navigation/navigation_test.tscn", "assets/testing/navigation/navigation_test_npc.tscn",
                     "assets/animations/motionbricks/poses.json", "assets/animations/motionbricks/model-frames.json",
-                    "assets/animations/packs/default/locomotion/feminine/set.json", "src/Navigation/navigation_playtest.gd",
+                    "assets/animations/locomotion/feminine/set.json", "src/Navigation/navigation_playtest.gd",
                     "src/Navigation/MotionBricksNavigation.cs", "src/Navigation/MotionBricksNavigation.Roles.cs",
                     "src/Navigation/MotionBricksNavigation.NativeHandoff.cs", "src/Motion/SomaInference.cs",
                     "src/Navigation/Recording/NavigationPlaytestRecorder.cs", "src/Navigation/Recording/NavigationSessionWriter.cs",
@@ -33,7 +33,7 @@ internal sealed class NavigationRecordingSink
                     "src/Navigation/NavigationBase.cs", "src/Navigation/NativePathMotionTargets.cs",
                     "src/Navigation/MotionBricksNavigation.PathTargets.cs", "src/Navigation/MotionBricksNavigation.FiniteTurn.cs",
                     "src/Navigation/FiniteTerminalTurnPlan.cs", "src/Motion/StationaryTurnReference.cs", "src/Motion/ReviewedRoleSampler.cs",
-                    "assets/animations/packs/default/locomotion/feminine/turn-angular-reference.json"];
+                    "assets/animations/locomotion/feminine/turn-angular-reference.json"];
                 var hashes = new Dictionary<string, string>();
                 foreach (string relative in paths)
                 {

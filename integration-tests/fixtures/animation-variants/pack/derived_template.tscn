@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/animation_variants/base_template.tscn" id="1_base"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantLayer.cs" id="2_layer"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantOperation.cs" id="3_operation"]
+
+[sub_resource type="Resource" id="Resource_add"]
+script = ExtResource("3_operation")
+Descriptor = "res://content/animation_variant_probe/idle/quiet/variant.json"
+
+[sub_resource type="Resource" id="Resource_replace"]
+script = ExtResource("3_operation")
+Kind = 2
+Descriptor = "res://content/animation_variant_probe/idle/sad/variant.json"
+Category = "idle"
+EntryID = "sad"
+
+[node name="Female" instance=ExtResource("1_base")]
+
+[node name="FixtureVariants" type="Node" parent="AnimationCatalogue" index="0"]
+script = ExtResource("2_layer")
+Operations = [SubResource("Resource_add"), SubResource("Resource_replace")]

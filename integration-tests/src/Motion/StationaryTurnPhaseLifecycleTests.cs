@@ -16,9 +16,9 @@ public sealed class StationaryTurnPhaseLifecycleTests
     {
         const double horizon = 49.0 / 30;
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
-        string set = ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json");
+        string set = ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine/set.json");
         var sampler = new ReviewedRoleSampler(set, data);
-        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"), data);
+        var source = new ReviewedMotionSource(ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine/landing-ablation-01.json"), data);
         ReviewedMotionSource.Role role = source.GetRole("feminine", "normal", "left_turn");
         using var document = JsonDocument.Parse(File.ReadAllText(set));
         JsonElement receipt = document.RootElement.GetProperty("roles").EnumerateArray()

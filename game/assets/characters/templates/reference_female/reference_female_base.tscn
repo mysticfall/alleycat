@@ -23,7 +23,8 @@
 [ext_resource type="Script" uid="uid://4ecsil8doyft" path="res://src/Contact/ContactMonitor.cs" id="23_contact_monitor"]
 [ext_resource type="Resource" path="res://assets/characters/reference/female/contact_region_profile.tres" id="24_region_profile"]
 [ext_resource type="Script" uid="uid://cmp8jqdcl6ebv" path="res://src/Animations/AnimationCatalogue.cs" id="anim003_catalogue"]
-[ext_resource type="Script" uid="uid://ckh63vxcukg3p" path="res://src/Animations/AnimationPack.cs" id="anim003_pack"]
+[ext_resource type="Script" uid="uid://s36ojqhyw4vw" path="res://src/Animations/AnimationVariantLayer.cs" id="anim003_layer"]
+[ext_resource type="Script" uid="uid://drfdvx0lb0vx7" path="res://src/Animations/AnimationVariantOperation.cs" id="anim003_operation"]
 
 [sub_resource type="Resource" id="Resource_42fxf"]
 script = ExtResource("4_8lkn1")
@@ -44,6 +45,14 @@ angle = 0.55850536
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
+
+[sub_resource type="Resource" id="Resource_sad_variant"]
+script = ExtResource("anim003_operation")
+Descriptor = "res://assets/animations/idle/sad/variant.json"
+
+[sub_resource type="Resource" id="Resource_feminine_variant"]
+script = ExtResource("anim003_operation")
+Descriptor = "res://assets/animations/locomotion/feminine/variant.json"
 
 [node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 MotionModel = "Female"
@@ -546,7 +555,7 @@ script = ExtResource("anim003_catalogue")
 DefaultLocomotion = "feminine"
 metadata/_custom_type_script = "uid://cmp8jqdcl6ebv"
 
-[node name="Default" type="Node" parent="AnimationCatalogue"]
-script = ExtResource("anim003_pack")
-Manifest = "res://assets/animations/packs/default/pack.json"
-metadata/_custom_type_script = "uid://ckh63vxcukg3p"
+[node name="BaseVariants" type="Node" parent="AnimationCatalogue"]
+script = ExtResource("anim003_layer")
+Operations = [SubResource("Resource_sad_variant"), SubResource("Resource_feminine_variant")]
+metadata/_custom_type_script = "uid://s36ojqhyw4vw"

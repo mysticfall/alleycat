@@ -3,7 +3,7 @@
   "name": "Female",
   "outputFile": "assets/characters/reference/female/reference_female.blend",
   "amimations": [
-    "assets/animations/source/reference/female/animations.blend",
-    "assets/animations/source/reference/female/animations_rigify.blend"
+    "assets/animations/authoring/reference/female/animations.blend",
+    "assets/animations/player-pose/source/animations_rigify.blend"
   ]
 }

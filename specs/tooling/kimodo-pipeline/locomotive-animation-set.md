@@ -41,8 +41,8 @@ missing inputs without confusing generated outputs with protected source assets 
 1. The animation pipeline tool owns its commands, implementation, configuration, external Godot scripts, tests, and
    operational [README](../../../tools/animation-pipeline/README.md) under `tools/animation-pipeline/`; follow
    [Developer Tool Layout](../index.md). It hosts the Kimodo commands, the Rigify bake and the
-   [ANIM-003](../../animation/003-animation-catalogue/pack-format.md#validator) pack validator. The README describes
-   executable tooling, not a separate runtime motion contract.
+   [ANIM-003 variant validator](../../animation/003-animation-catalogue/variant-format.md#validator). The README
+   describes executable tooling, not a separate runtime motion contract.
 2. Bootstrap and Kimodo-path idle authoring use verified copies of the supplied calibrated setup. They never modify
    protected helpers, constraints, poses, overrides, or source files. Bootstrap, staging and reviewed ingestion
    preserve anatomy, hierarchy, intended direction, contact safety, and one-time root ownership.
@@ -52,15 +52,15 @@ missing inputs without confusing generated outputs with protected source assets 
 
 ### Repository Source Asset Contract
 
-1. **KIMODO-SRC-001:** `game/assets/animations/source/kimodo_source.blend` is the repository-fixed
+1. **KIMODO-SRC-001:** `game/assets/animations/authoring/kimodo_source.blend` is the repository-fixed
    clean Kimodo rig, containing `Kimodo_Source` without actions, meshes, or materials. Preserve it byte-for-byte.
    `bootstrap_paths.py` owns its path; `bootstrap_workspace.py` owns its approved baseline. Replacement requires
    deliberate baseline re-approval and coordinated path, validation, and test updates.
-2. **KIMODO-SRC-002:** `game/assets/animations/source/locomotion/locomotion_template.blend` is the
+2. **KIMODO-SRC-002:** `game/assets/animations/authoring/locomotion/locomotion_template.blend` is the
    character-neutral bootstrap template with pose references, root waypoints, and neutral reference actions.
    Preserve it byte-for-byte. Its path and baseline have the same owners as the canonical rig; replacement requires
    baseline re-approval and coordinated composition, validation, and test updates.
-3. **KIMODO-SRC-003:** `game/assets/animations/source/locomotion/locomotion.blend` is the read-only
+3. **KIMODO-SRC-003:** `game/assets/animations/authoring/locomotion/locomotion.blend` is the read-only
    monolithic bootstrap/extraction input, owned by `bootstrap_extraction.py`. Never save over it. Retirement requires
    an approved replacement for extraction and every reproducibility/provenance dependency; runtime replacement alone
    does not authorise source deletion.
@@ -74,11 +74,14 @@ missing inputs without confusing generated outputs with protected source assets 
    under KIMODO-SRC-006.
 5. **KIMODO-SRC-005:** Required missing inputs fail clearly. Checks cover path ownership, structure, baseline or
    before/after byte integrity, provenance, and replacement/retirement gates, separately from behavioural evidence.
-6. **KIMODO-SRC-006:** Per-character authored inputs are protected, not derivatives. The reference source directories
-   are `game/assets/animations/source/reference/{female,male}/`. Resolve `kimodo_retarget_setup.blend` and
-   `idle/<variant>.blend` directly under the selected animation source directory, not the character model directory.
-   Idle sources are authored on `Kimodo_Source` under the [ANIM-003 Kimodo path][idle-authoring].
-   `bootstrap_paths.py` owns path derivation; approval is per character. The pipeline never modifies these inputs.
+6. **KIMODO-SRC-006:** Authored setups and idle inputs are protected, not derivatives. The reference setup roots
+   are `game/assets/animations/authoring/reference/{female,male}/`. Resolve `kimodo_retarget_setup.blend`
+   beneath the selected `--character-root`, not the model directory. Stage new `Kimodo_Source` idle inputs under
+   `game/assets/animations/idle/<variant>/source/<variant>.blend` by default, with `.gdignore` in `source/`.
+   `--idle-root` changes the idle category root independently of the calibrated setup root. The
+   [ANIM-003 Kimodo path][idle-authoring] takes the animated input explicitly and publishes its clip outside
+   ignored directories. `bootstrap_paths.py` owns path derivation; setup approval remains per character.
+   The pipeline never modifies existing authored inputs.
 
 [idle-authoring]: ../../animation/003-animation-catalogue/authoring.md#kimodo-path
 
@@ -181,7 +184,7 @@ presentation, preview authority or published runtime data; the
 
 1. The [shared animation contract](../../animation/index.md) and
    [ANIM-002](../../animation/002-locomotive-animation-set/index.md) own runtime role/variant/stage and dynamic-window
-   needs. CTRL/NAV load the reviewed set resolved by the ANIM-003 locomotion view (`feminine` from the default pack),
+   needs. CTRL/NAV load the reviewed set resolved by the ANIM-003 locomotion view (default `feminine`),
    without source activation switches or a prototype movement fallback. Tooling
    publishes no stitch table or clip-seam repair data (ANIM-002 TR7).
 2. Retained outputs identify character, source, variant, canonical skeleton, coordinates, units, and provenance
@@ -204,10 +207,10 @@ presentation, preview authority or published runtime data; the
    evaluation motions or replace source-authoritative offsets with USD rests.
 7. Export `poses.json` (canonical skeleton only, with no `clips` section, which publication validation rejects) and
    `model-frames.json` (skeleton frame offsets) under `game/assets/animations/motionbricks/`, alongside the runtime
-   `source-rest/` scenes. The default set at `game/assets/animations/packs/default/locomotion/feminine/set.json`
+   `source-rest/` scenes. The default set at `game/assets/animations/locomotion/feminine/set.json`
    binds all eight movement roles to `landing-ablation-01.json` and its angular sidecar. The durable approved
-   source, authoring files, descriptor and provenance use the prefix
-   `game/assets/animations/source/locomotion/locomotion_feminine_landing_ablation_01`. Preserve
+   source, authoring files, descriptor and provenance use the prefix `locomotion_feminine_landing_ablation_01`
+   in the adjacent ignored `source/`. Preserve
    full 1–1200 at 30 Hz chronology and source/action/slot identity. Validate bundle/set/angular metadata together before
    coordinated replacement with consumers stopped and rollback bytes available; per-file atomic publication is not
    multi-file hot publication. Current ranges/cues are bound by
@@ -223,7 +226,7 @@ presentation, preview authority or published runtime data; the
     selection and host-qualified launch requirements. Provisioning evidence must distinguish a reused local setup
     from clean-checkout reproducibility.
 
-[feminine-set]: ../../../game/assets/animations/packs/default/locomotion/feminine/README.md
+[feminine-set]: ../../../game/assets/animations/locomotion/feminine/README.md
 [feminine-replay]: ../../../tools/animation-pipeline/README.md#shipped-feminine-source-replay
 
 ## In Scope
@@ -259,11 +262,13 @@ These exclusions do not defer required idle/walk source verification, conversion
 
 1. **KIMODO-TAC-001:** Tool/source-boundary and source-lifecycle checks verify ownership, protected inputs, provenance,
    baseline integrity, missing-input failures, and coordinated replacement/retirement gates (KIMODO-SRC-001–006).
+   Verify default idle publication under the variant's ignored `source/`, an independent idle root override, and
+   refusal to overwrite an existing idle source or publish a playable clip under the built-in authoring roots.
 2. **KIMODO-TAC-002:** Where Kimodo baking/reuse is used, checks verify calibration parity (KIMODO-SET-001–003), actual
    idle motion, explicit character parameters, isolated approvals, and absent-bone reuse safety.
 3. **KIMODO-TAC-003:** Output checks verify truthful bindings, rollback, clean loading, real selected-source conversion,
    and that consumer loading needs only the reviewed set, its angular sidecar, the MotionBricks exports and ANIM-003
-   packs, with no other catalogue. The recorded supported path and gaps match executed evidence. For MotionBricks,
+   variant descriptors, with no other catalogue. The recorded path and gaps match executed evidence. For MotionBricks,
    verify read-only export/input integrity, named frame provenance, set/action-window loading from runtime data paths
    and documented external prerequisites. Verify that published data and reviewed-source ingestion neither contain nor
    require helper, `LOOK` or `targetRest` calibration rows while retaining canonical skeleton identity, model frames and
@@ -304,7 +309,10 @@ not feature switches. No source poses are repaired or regenerated by normal runt
 Idle authoring is delivered under [ANIM-003](../../animation/003-animation-catalogue/authoring.md):
 `commands/export_idle_clip.py` exports native clips on the Kimodo and Rigify paths through
 `godot/commands/build_native_clip.gd`, restoring any preview scale. `export_motionbricks.py` publishes only the
-canonical skeleton, and the tool root also hosts the ANIM-003 pack validator.
+canonical skeleton. The [ANIM-003 variant validator][variant-validator] checks descriptors and composed template
+selections without running character playback.
+
+[variant-validator]: ../../../tools/animation-pipeline/README.md#animation-variant-validation
 
 Technical checks cover read-only full export, complete eight-role publication, coordinated set/angular replacement and
 normal consumer checks. Runtime JSON is self-contained; durable Blender inputs retain host-specific texture references,

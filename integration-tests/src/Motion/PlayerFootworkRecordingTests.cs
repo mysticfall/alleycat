@@ -86,7 +86,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
         Assert.Equal("right_turn", data.GetProperty("source").GetProperty("role").GetString());
         Assert.Equal(0, data.GetProperty("source").GetProperty("initialPhaseFrames").GetDouble());
         using var angular = JsonDocument.Parse(File.ReadAllText(ProjectSettings.GlobalizePath(
-            "res://assets/animations/packs/default/locomotion/feminine/turn-angular-reference.json")));
+            "res://assets/animations/locomotion/feminine/turn-angular-reference.json")));
         JsonElement firstCue = angular.RootElement.GetProperty("right_turn").GetProperty("recoveryTrial").GetProperty("events")[0];
         Assert.Equal(firstCue.GetProperty("frame").GetInt32(),
             data.GetProperty("source").GetProperty("metadata").GetProperty("samples")[0].GetProperty("OriginalFrame").GetInt32());

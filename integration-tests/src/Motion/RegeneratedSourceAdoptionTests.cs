@@ -91,7 +91,7 @@ public sealed partial class PlayerMotionBricksIntegrationTests
     [Fact]
     public void RegeneratedSource_CommittedSetAndAngularMetadataBindApprovedTake()
     {
-        string folder = ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine");
+        string folder = ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine");
         var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
         var sampler = new ReviewedRoleSampler(Path.Combine(folder, "set.json"), data);
         string path = Path.Combine(folder, "landing-ablation-01.json");

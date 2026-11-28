@@ -1,118 +1,172 @@
-# Animation Packs
+# Animation Variants
 
 This guide is for anyone adding idle stances or gaits to AlleyCat characters, including external content-pack
-authors. You need a text editor, Blender and a checkout of the game; you do not need to change code or open the Godot
-editor. The normative contract is [Animation Pack Format][pack-format], with clip production defined in
-[Animation Clip Authoring][authoring].
-Where this guide and those pages differ, the specifications win.
+authors. You can author clips in Blender and edit descriptors and template scenes in a text editor, without
+changing code or opening the Godot editor. See [Animation Variant Format][variant-format] and
+[Animation Clip Authoring][authoring] for the normative contracts.
 
-[pack-format]: ../../../specs/animation/003-animation-catalogue/pack-format.md
+[variant-format]: ../../../specs/animation/003-animation-catalogue/variant-format.md
 [authoring]: ../../../specs/animation/003-animation-catalogue/authoring.md
+[layers]: ../../../specs/animation/003-animation-catalogue/index.md#character-catalogue-and-layering
+[content-packs]: ../../../docs/content-packs.md
+[female-base]: ../characters/templates/reference_female/reference_female_base.tscn
+[reviewed-set]: ../../../specs/tooling/kimodo-pipeline/locomotive-animation-set.md#source-production-contract
 
-## What a Pack Is
+1. Publish a native idle clip or an ANIM-002 reviewed gait and write its [descriptor](#variant-descriptors).
+2. Add, remove or replace entries in your [character template](#selecting-variants-in-template-scenes).
+3. [Validate](#validating-variants) the descriptor and the composed template before playing or exporting.
 
-An animation pack is one `pack.json` file listing entries. Each entry is either an **idle** (a stance, played as a
-native Godot `Animation` clip on the reference skeleton) or a **locomotion** gait (an ANIM-002 reviewed set file).
-Characters combine packs through their templates, and NPCs pick entries by id and tags, while other characters only
-ever see the entry's description.
+## Category-First Storage
 
-Default content ships one pack, [`default`](packs/default/pack.json). Its idle clips and
-[reviewed feminine set](packs/default/locomotion/feminine/README.md) live under `packs/default/`.
-Shared MotionBricks calibration and source-rest scenes live under `motionbricks/`.
-Standalone reference animations under `reference/female/` are not catalogue entries. Blender sources and review
-material live under `source/`, which Godot ignores; AnimationTree templates stay with the character templates.
+The reference base templates select [`idle/sad`](idle/sad/variant.json) and
+[`locomotion/feminine`](locomotion/feminine/variant.json), in that order. Each descriptor lives beside its payload.
 
-## Manifest Fields
+- `idle/sad/` holds the native NPC stance exported from `idle/sad/source/sad.blend`, action `kimodo_m0a3dyf0`,
+  using the calibrated female setup in `authoring/reference/female/`.
+- `locomotion/feminine/` keeps `set.json`, the reviewed source export `landing-ablation-01.json` and
+  `turn-angular-reference.json` together. The [gait guide](locomotion/feminine/README.md) traces the reviewed
+  action and protected records in the adjacent `source/`.
+- `motionbricks/` is shared runtime rig data: canonical calibration, model frame offsets and source-rest scenes.
+- `player-pose/`, `hand-pose/` and `eyes/` are built-in assets, not ANIM-003 catalogue entries.
+- Dedicated Blender inputs and review files sit in ignored `source/` children beside their variant or category.
+  Shared rigs, setups, generator inputs and workspace templates stay in ignored `authoring/`. Runtime does not
+  load either authoring location. AnimationTree templates and imported models stay with the character assets;
+  dedicated test fixtures stay with their tests.
 
-A manifest is a UTF-8 JSON object with exactly these top-level fields:
+### Player Pose Provenance
 
-| Field | Meaning |
+The [female model importer][female-import] owns all twelve external `player-pose/` clips. The
+[female generator config][female-generator] selects `player-pose/source/animations_rigify.blend` upstream,
+with the same exact actions. This traces the configured inputs, not a replay of model generation.
+The pose state machine still uses its existing subset; the other exports remain model library members.
+
+| Player Pose Clips (`.tres`) | Model and Configured Rigify Actions |
 | --- | --- |
-| `schema` | Always `anim003_pack_v1`. |
-| `id` | Lowercase pack id (`a-z`, digits, `_`, starting with a letter), unique among a character's packs. |
-| `entries` | An ordered array of entries. Order matters: the first compatible entry of a category is the fallback. |
+| `All Fours`, `All Fours-enter`, `All Fours-forward` | `All Fours-loop`, `All Fours-enter`, `All Fours-forward-loop` |
+| `Crouch`, `Crouch-enter`, `Crouch-seek` | `Crouch-loop`, `Crouch-enter`, `Crouch-seek` |
+| `Idle` | `Idle-loop` (not the NPC `sad` stance) |
+| `Kneel`, `Kneel-enter`, `Kneel-seek` | `Kneel-loop`, `Kneel-enter`, `Kneel-seek` |
+| `Sit`, `Sit-enter` | `Sit-loop`, `Sit-enter` |
 
-Every entry has these fields:
+The unreferenced standalone `Walk Forward.tres` was removed. The model and forearm-twist fixture keep their own
+embedded `Walk Forward` animations, and `Walk Forward-loop` remains in `authoring/reference/female/animations.blend`.
 
-| Field | Meaning |
-| --- | --- |
-| `id` | A lowercase identifier, unique per category within the pack. |
-| `category` | `idle` or `locomotion`. |
-| `tags` | A non-empty array of short lowercase words (`a-z`, digits, `_`, `-`) that NPCs use to choose. |
-| `description` | A short visible account of the motion, as an observer would describe it. |
-| `clip` | Idle only: the path of the native `Animation` clip (`.tres`). |
-| `set` | Locomotion only: the path of an ANIM-002 reviewed set file. |
+### Hand and Eye Provenance
 
-Unknown fields, a missing or blank required field, an empty `tags` array, an unknown `category` and a repeated entry
-id within one category are all errors. A future format change uses a new `schema` value.
+- `hand-pose/Grab-ball-40.tres`, `Grab-pipe-10.tres` and `Reset.tres` are historical female model exports of
+  the identically named actions. The configured upstream input `authoring/reference/female/animations.blend`
+  contains all three actions and `Walk Forward-loop`. The current model embeds its same-named hand clips
+  separately. The ball and pipe clips serve their respective grab points; optical tracking also samples
+  `Grab-pipe-10.tres` for flexion and `Reset.tres` for neutral. The hand tree's `Reset` key resolves to
+  the embedded animation, not this standalone neutral sample.
+- `hand_fist.tres`, `hand_thumb_opposition.tres` and `hand_thumb_spread.tres` in `hand-pose/` retain their
+  historical female model export keys and configured UID/fallback targets. Their names match the historical
+  import keys, but the current model and configured inputs lack these actions. A fresh model library does not
+  contain them, no independent runtime reader was found, and earlier upstream sources are unknown.
+- `eyes/eyes.tres` is the legacy Godot library loaded by the female tracking fixture: `eyes_blink.tres`,
+  `eyes_right_left.tres` and `eyes_up_down.tres` supply `Eyes Blink`, `Eyes Right Left` and `Eyes Up Down`,
+  respectively. No upstream Blender action is established for these resources. Production eye curves are
+  generated by the [character importer][eye-import] from each model's own topology and morphs, not from the
+  fixture library.
 
-This is a complete idle-only pack, equivalent to the repository's content-pack test fixture:
+[female-import]: ../characters/reference/female/reference_female.blend.import
+[female-generator]: ../characters/reference/female/reference_female.json
+[eye-import]: ../characters/import/character_eye_animation_import.gd
+
+## Variant Descriptors
+
+Write one UTF-8 JSON object per variant. `id` starts with a lowercase letter, followed by lowercase letters,
+digits or underscores. Each tag starts with a lowercase letter and can also contain digits, underscores or
+hyphens. There must be at least one tag and a non-blank `description`. Extra or repeated fields are errors.
+Identity is `(category, id)`: the same id can occur in both categories, but not twice in one composed category.
+
+Shipped `idle/sad/variant.json`, next to the native `Animation` resource:
 
 ```json
 {
-  "schema": "anim003_pack_v1",
-  "id": "fixture",
-  "entries": [
-    {
-      "id": "slump",
-      "category": "idle",
-      "tags": ["tired", "slumped"],
-      "description": "stands slumped, weight sagging onto one hip",
-      "clip": "idle/slump.tres"
-    }
-  ]
+  "schema": "anim003_variant_v1",
+  "category": "idle",
+  "id": "sad",
+  "tags": ["sad", "slumped", "downcast"],
+  "description": "stands with slumped shoulders and a lowered gaze, shifting weight listlessly",
+  "clip": "assets/animations/idle/sad/sad.tres"
 }
 ```
 
-A locomotion entry looks like this (from the `default` pack):
+Shipped `locomotion/feminine/variant.json`, next to the [reviewed set][reviewed-set]:
 
 ```json
 {
-  "id": "feminine",
+  "schema": "anim003_variant_v1",
   "category": "locomotion",
+  "id": "feminine",
   "tags": ["relaxed", "feminine"],
   "description": "walks with an easy, relaxed feminine gait",
-  "set": "assets/animations/packs/default/locomotion/feminine/set.json"
+  "set": "assets/animations/locomotion/feminine/set.json"
 }
 ```
 
 ## Path Resolution
 
-`clip` and `set` paths are relative to the pack's **content root**. They are never `res://` paths or absolute paths,
-and they may not contain `..`.
+In a scene, `Descriptor` is an explicit canonical `res://` path. In that JSON descriptor, `clip` or `set` is a
+forward-slash path relative to the descriptor's **owning content root**, not to the scene or variant directory.
+Do not use absolute paths, `res://`, `.` or `..` in payload paths. A symlink cannot cross ownership.
 
-- For an external content pack rooted at `res://content/my_pack/`, a manifest at
-  `res://content/my_pack/assets/animations/packs/my_pack/pack.json` resolves
-  `"clip": "assets/animations/packs/my_pack/idle/slump.tres"` to
-  `res://content/my_pack/assets/animations/packs/my_pack/idle/slump.tres`.
-- A manifest anywhere else belongs to default content, whose root is `res://`. The `default` pack's
-  `"clip": "assets/animations/packs/default/idle/sad.tres"` loads `res://assets/animations/packs/default/idle/sad.tres`.
+- Base descriptors resolve payloads under `res://`, excluding `res://content/`.
+- For an active [content pack][content-packs] at `res://content/my_pack/`, a descriptor there with
+  `"clip": "assets/animations/idle/quiet/quiet.tres"` resolves to
+  `res://content/my_pack/assets/animations/idle/quiet/quiet.tres`. Put the descriptor beside `quiet.tres`.
+- A pack's gait descriptor must point to a set beside it in the same pack, with the reviewed role bundles
+  and angular metadata under that owner. To reuse the built-in gait, inherit or select the **base descriptor**
+  instead of pointing a pack-owned descriptor at the base payload.
 
-For new external packs, use `assets/animations/packs/<pack-id>/pack.json` relative to the external content pack's
-own root, not the base game's assets tree. Keep its clips nearby (for example in `idle/`). The manifest path on
-the pack node is authoritative; existing layouts remain valid and need not migrate.
+## Selecting Variants in Template Scenes
 
-A content pack cannot reach outside its own root. If it adds a gait, it must ship that reviewed locomotion set (the
-set file and the source files it references) inside its own content root, and point `set` at that copy.
+Put one `AnimationVariantLayer` node directly under `AnimationCatalogue` in each contributing template scene.
+Use a distinct child name; do not override an inherited layer's `Operations`. [Layers][layers] apply in template
+ancestry order, then in the array's written order. Installation does not discover variants from files on disk.
 
-## Pack Nodes, Enabled and Priority
+This `.tscn` fragment assumes a local template derived from a shipped NPC role. It adds `idle/quiet` and replaces
+inherited `idle/sad`. Prepare your own `quiet` and `sad` descriptors in the paths shown; the replacement must
+declare `category: idle` and `id: sad`. Insert the declarations into the corresponding external resource,
+subresource and node sections of your scene. Choose unused resource ids.
 
-A character template has one `AnimationCatalogue` node with one `AnimationPack` child node per pack. Each pack node
-has three properties:
+```text
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantLayer.cs" id="cat_layer"]
+[ext_resource type="Script" path="res://src/Animations/AnimationVariantOperation.cs" id="cat_op"]
 
-- `Manifest`: the `res://` path of the `pack.json`.
-- `Enabled`: whether the pack contributes. A derived template disables an inherited pack by overriding this to
-  `false`, instead of deleting the node.
-- `Priority`: an integer. Packs apply in ascending priority; packs with equal priority apply in ordinal pack-id
-  order. Scene-tree order does not matter. By convention, base templates use lower priorities than the templates
-  derived from them.
+[sub_resource type="Resource" id="AddQuiet"]
+script = ExtResource("cat_op")
+Kind = 0
+Descriptor = "res://content/my_pack/assets/animations/idle/quiet/variant.json"
 
-When two applied packs contain an entry with the same category and id, the later-applied pack's entry replaces the
-earlier one, takes the later pack's place in the fallback order, and the game logs one line naming both packs. Two
-enabled pack nodes using the same pack `id` are an error and stop the character's catalogue from being built.
+[sub_resource type="Resource" id="ReplaceSad"]
+script = ExtResource("cat_op")
+Kind = 2
+Category = "idle"
+EntryID = "sad"
+Descriptor = "res://content/my_pack/assets/animations/idle/sad/variant.json"
 
-To extend `default`, write a pack with its own `id` and add a pack node with a higher `Priority` to your template. An
-entry with the same id as a `default` entry (such as idle `sad`) overrides it; new ids add entries.
+[node name="LocalVariants" type="Node" parent="AnimationCatalogue"]
+script = ExtResource("cat_layer")
+Operations = [SubResource("AddQuiet"), SubResource("ReplaceSad")]
+```
+
+- **Add (`Kind = 0`):** use only `Descriptor`. Its key must not already exist; it goes at the end.
+- **Remove (`Kind = 1`):** use only `Category` and `EntryID`. To remove rather than replace `sad` above, change
+  `ReplaceSad` to `Kind = 1` and delete its `Descriptor` line.
+- **Replace (`Kind = 2`):** use `Category`, `EntryID` and `Descriptor`. It removes the inherited key and appends
+  the new entry. Two operations on one key in the same layer are invalid, as is removing or replacing an absent key.
+
+For a shipped example of `Add`, see `BaseVariants` in the [female base scene][female-base].
+
+### External Content Workflow
+
+Install the pack under `game/content/<pack-id>/` with a valid start scene as described in the
+[content-pack guide][content-packs]. Put the local template beside your character scene and configure the
+character's installer to use it ([CHAR-002](../../../specs/character/002-character-root/index.md)). Publish the
+variant and payload under the pack root, then explicitly select it in that template. Launch or validate with the
+pack active. Installing a pack does not change other characters' catalogues or select any of its files by itself.
 
 ## Template Defaults
 
@@ -120,7 +174,18 @@ The `AnimationCatalogue` node exports `DefaultIdle` and `DefaultLocomotion`. A c
 
 1. the NPC's own choice, once it has made one;
 2. the template default;
-3. the first compatible entry of that category in catalogue order (packs in application order, then manifest order).
+3. the first compatible entry of that category in the composed catalogue order.
+
+In your derived template, omit either property to inherit it, write an entry id to override it, or write `""`
+to clear it. To set `quiet` as the idle default and leave the gait default inherited, put this node override
+above the `LocalVariants` child. If the scene already has that override node, edit it instead of adding another:
+
+```text
+[node name="AnimationCatalogue" parent="."]
+DefaultIdle = "quiet"
+```
+
+Set defaults on the catalogue node, not in `Operations`. Removing an entry does not clear the default.
 
 A default that names an unknown or incompatible entry is ignored with a log line. Base templates set the locomotion
 default; NPC role templates set the idle default; player templates declare no idle default, because catalogue idles
@@ -149,18 +214,21 @@ There are two authoring paths, both run by the Kimodo pipeline tool. See its
 
 ### Kimodo Path
 
-Author the motion on the SOMA `Kimodo_Source` rig in a copy of the character's calibrated setup, and save the
-animated source as `idle/<variant>.blend` under its animation source directory. In Blender, the meshed
-reference rig in that setup follows `Kimodo_Source`, so what you see there is what the clip will contain. Export it:
+Author the motion on the SOMA `Kimodo_Source` rig in a copy of the character's calibrated setup. The built-in
+idle source belongs at `idle/<variant>/source/<variant>.blend`, separate from the shared setup. In Blender the
+meshed reference rig follows `Kimodo_Source`, so the export matches the preview. From the repository root, replay
+the shipped stance into scratch and compare it with the published clip:
 
 ```sh
 python3 tools/animation-pipeline/commands/export_idle_clip.py kimodo \
-  --character-root game/assets/animations/source/reference/female \
-  --source game/assets/animations/source/reference/female/idle/sad.blend \
+  --character-root game/assets/animations/authoring/reference/female \
+  --source game/assets/animations/idle/sad/source/sad.blend \
   --action kimodo_m0a3dyf0 \
   --skeleton-scene res://assets/characters/reference/female/reference_female.blend \
   --check-skeleton-scene res://assets/characters/reference/male/reference_male.blend \
-  --output game/assets/animations/packs/default/idle/sad.tres
+  --compare res://assets/animations/idle/sad/sad.tres \
+  --temp-root game/temp/animation-guide/idle-stage \
+  --output game/temp/animation-guide/sad.tres
 ```
 
 Add `--preview-blend game/temp/<name>/preview.blend` to save the prepared setup copy with your action bound, for
@@ -176,39 +244,40 @@ the reference armature's deform bones:
 python3 tools/animation-pipeline/commands/export_idle_clip.py rig \
   --blend path/to/authoring.blend --control-rig rig --target Female --action my_idle \
   --skeleton-scene res://assets/characters/reference/female/reference_female.blend \
-  --output game/content/my_pack/assets/animations/packs/my_pack/idle/my_idle.tres
+  --output game/content/my_pack/assets/animations/idle/my_idle/my_idle.tres
 ```
 
 The control rig itself is never exported.
 
-Both paths only write the clip; they never edit `pack.json`. Your source blends are never modified, and a failed
-export leaves an existing clip untouched. Re-exporting over an existing clip keeps its resource id, so scenes and packs
-that reference it stay valid. Then watch the clip on the character in the game, because Godot playback is the final
-visual check.
+Both paths write the clip, not its descriptor. The tools leave source blends unchanged and preserve the existing
+clip on failed export. Re-exporting over a clip keeps its UID. Check the result on the target character in Godot;
+the validator checks bindings, not appearance.
 
-## Validating a Pack
+## Validating Variants
 
-Validate packs with the headless validator before using them. It runs the same validation the game uses when it
-loads a catalogue, never edits files, and names the pack, entry, field and path of every problem. Build the game once
-first (`dotnet build AlleyCat.sln`), then run from the repository root:
+Build and import the project, then run the [headless validator][validator] from the repository root. This checks
+both shipped descriptors and all shipped role templates:
 
 ```sh
 godot-mono --headless --xr-mode off --path game \
-  --script "$PWD/tools/animation-pipeline/godot/commands/validate_animation_pack.gd" -- \
-  --pack=res://content/my_pack/assets/animations/packs/my_pack/pack.json \
-  --template=res://assets/characters/templates/reference_female/reference_female_npc.tscn
+  --script "$PWD/tools/animation-pipeline/godot/commands/validate_animation_variants.gd" -- \
+  --variant=res://assets/animations/idle/sad/variant.json \
+  --variant=res://assets/animations/locomotion/feminine/variant.json \
+  --template=res://assets/characters/templates/reference_female/reference_female_npc.tscn \
+  --template=res://assets/characters/templates/reference_male/reference_male_npc.tscn \
+  --template=res://assets/characters/templates/reference_female/reference_female_player.tscn \
+  --require-compatible
 ```
 
-- `--pack=` may repeat. Its paths resolve by the location rule above.
-- `--content-root=<res:// directory>` resolves every `--pack` as a content pack rooted at that directory, for a pack
-  you have not installed under `res://content/` yet.
-- `--template=` may repeat. For each template the validator also reports which entries override which, duplicate
-  pack ids, and whether each idle clip binds to that character's skeleton. Your pack applies at the priority of a
-  template pack node that already references it, otherwise above all of the template's packs, or at `--priority=`.
-- `--require-compatible` also fails when an entry cannot bind to a template's skeleton.
-
-The command exits with 0 when the packs are valid, 1 when they are not, and 2 for bad arguments. It ends with an
-`ANIMATION_PACK_VALIDATION_JSON=` summary line.
+- Use at least one `--variant=` or `--template=`; both are repeatable. A standalone descriptor check does not add
+  that variant to any template. A template check validates its on-disk inherited selection and reports bindings,
+  incompatibilities and invalid defaults, without starting a character scene or running inference.
+- For optional content, add `--content-pack=my_pack` **before** the `--` separator and pass the pack's actual
+  `res://content/my_pack/...` resource paths after it. The pack must resolve through normal startup rules.
+- Exit `0` means valid; non-strict checks can still report incompatibilities or invalid defaults. Exit `1` means
+  invalid content or composition, or those findings under `--require-compatible`. Exit `2` means bad usage or
+  the validator script could not load its command. Read the `ANIMATION_VARIANT_VALIDATION_JSON=` summary for
+  `valid`, `passed`, `errors`, `incompatible` and `invalid_defaults`.
 
 An idle clip is compatible with a character when every track on a body bone that the SOMA rig maps (hips, spine,
 limbs, fingers, head) resolves on that character's skeleton. Tracks on other bones, such as breasts or twist bones,
@@ -217,6 +286,7 @@ male reference.
 
 ## Exporting Builds
 
-Pack manifests and reviewed sets are plain JSON, which Godot does not export by default. Any export preset must add
-`*.json` to its non-resource include filter (or an equivalent filter covering every pack and set file), or the
-catalogue will be missing from the build.
+Any export preset must add `*.json` to its non-resource include filter, or use an equivalent filter covering
+all descriptors, reviewed sets and their required JSON companions. Do not include ignored authoring inputs.
+
+[validator]: ../../../tools/animation-pipeline/README.md#animation-variant-validation

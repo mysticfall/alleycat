@@ -14,10 +14,10 @@ class ReviewedSetSourceAliasTests(unittest.TestCase):
         repo=Path(__file__).resolve().parents[3]
         root=repo/'game/temp/motionbricks/anim002-regenerated-source-adoption-01'/('publisher-alias-'+uuid.uuid4().hex)
         root.mkdir(parents=True,exist_ok=False)
-        saved=json.loads((repo/'game/assets/animations/packs/default/locomotion/feminine/set.json').read_text())
+        saved=json.loads((repo/'game/assets/animations/locomotion/feminine/set.json').read_text())
         sources={entry['source'] for entry in saved['roles']}
         for source in sources:
-            shutil.copyfile(repo/'game/assets/animations/packs/default/locomotion/feminine'/source,root/source)
+            shutil.copyfile(repo/'game/assets/animations/locomotion/feminine'/source,root/source)
         selection={'roles':[dict(source='./'+e['source'],**{k:e['cycle'][k] for k in
           ('variant','stage','role','first','end_exclusive')},kind=e['cycle']['repetition_kind'],
           reason=e['cycle']['selection_reason']) for e in saved['roles']]}

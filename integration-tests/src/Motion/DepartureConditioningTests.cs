@@ -105,7 +105,7 @@ public sealed class DepartureConditioningTests
     private static ReachabilityOnlyNavigation CreateNavigation(out SomaMotionData data)
     {
         data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
-        var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://assets/animations/packs/default/locomotion/feminine/set.json"), data);
+        var sampler = new ReviewedRoleSampler(ProjectSettings.GlobalizePath("res://assets/animations/locomotion/feminine/set.json"), data);
         var nav = new ReachabilityOnlyNavigation();
         typeof(MotionBricksNavigation).GetField("_data", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(nav, data);
         typeof(MotionBricksNavigation).GetField("_reviewed", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(nav, sampler);

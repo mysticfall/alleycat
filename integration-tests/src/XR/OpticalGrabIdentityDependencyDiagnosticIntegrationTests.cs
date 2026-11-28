@@ -22,7 +22,7 @@ namespace AlleyCat.IntegrationTests.XR;
 /// </summary>
 public sealed class OpticalGrabReferenceIdentityIntegrationTests
 {
-    private const string Directory = "res://assets/animations/reference/female/";
+    private const string Directory = "res://assets/animations/hand-pose/";
 
     /// <summary>Instance sampling versus path-only derivation, plus actual tree resource and post-modifier bone output.</summary>
     [Headless]

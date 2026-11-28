@@ -23,7 +23,7 @@ namespace AlleyCat.IntegrationTests.Control;
 /// </summary>
 public sealed class HeldEligibilityPauseDiagnosticIntegrationTests
 {
-    private const string AnimationPath = "res://assets/animations/reference/female/Grab-ball-40.tres";
+    private const string AnimationPath = "res://assets/animations/hand-pose/Grab-ball-40.tres";
 
     private static readonly (HandGrabInputSource Source, bool Rigid)[] _provenanceHolderCombos =
     [

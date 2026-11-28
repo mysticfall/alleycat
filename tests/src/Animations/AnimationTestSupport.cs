@@ -1,5 +1,4 @@
 using AlleyCat.Animations;
-using AlleyCat.Core.Content;
 using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Tests.Animations;
@@ -24,31 +23,10 @@ internal sealed class CapturingLogger : ILogger
         => _entries.Add((logLevel, formatter(state, exception)));
 }
 
-/// <summary>In-memory resource checks: listed files exist; clip/set verdicts are configurable per path.</summary>
-internal sealed class FakePackResources : IAnimationPackResources
+/// <summary>Standalone animation entries for pure view and transition tests.</summary>
+internal static class VariantTestEntries
 {
-    public HashSet<string> Files { get; } = new(StringComparer.Ordinal);
-
-    public Dictionary<string, string> Texts { get; } = new(StringComparer.Ordinal);
-
-    public Dictionary<string, string> ClipErrors { get; } = new(StringComparer.Ordinal);
-
-    public Dictionary<string, string> SetErrors { get; } = new(StringComparer.Ordinal);
-
-    public string ReadText(string resourcePath)
-        => Texts.TryGetValue(resourcePath, out string? text) ? text : throw new FileNotFoundException(resourcePath);
-
-    public bool Exists(string resourcePath) => Files.Contains(resourcePath);
-
-    public string? CheckClip(string resourcePath) => ClipErrors.GetValueOrDefault(resourcePath);
-
-    public string? CheckReviewedSet(string resourcePath) => SetErrors.GetValueOrDefault(resourcePath);
-}
-
-/// <summary>Builders for manifests used by catalogue tests.</summary>
-internal static class PackBuilder
-{
-    public static AnimationPackManifest Pack(string id, params (AnimationCategory Category, string ID)[] entries)
-        => new(id, $"res://packs/{id}/pack.json", ContentContext.Default,
-            [.. entries.Select(e => new AnimationEntry(e.ID, e.Category, ["tag"], $"{e.ID} from {id}", id, $"{id}/{e.ID}", $"res://{id}/{e.ID}"))]);
+    public static IReadOnlyList<AnimationEntry> Entries(params (AnimationCategory Category, string ID)[] entries)
+        => [.. entries.Select(entry => new AnimationEntry(entry.ID, entry.Category, ["tag"], $"{entry.ID} fixture",
+            "default", $"{entry.ID}.tres", $"res://{entry.ID}.tres"))];
 }

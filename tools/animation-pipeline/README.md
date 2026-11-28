@@ -1,6 +1,6 @@
 # Animation Pipeline
 
-This tool hosts the Kimodo commands, the Rigify (non-Kimodo) idle bake and the ANIM-003 animation pack validator.
+This tool hosts the Kimodo commands, the Rigify (non-Kimodo) idle bake and the ANIM-003 variant validator.
 
 This tool owns Kimodo bootstrap, idle-source staging, and validation. Its normative contract is
 [Kimodo Motion Sources](../../specs/tooling/kimodo-pipeline/locomotive-animation-set.md).
@@ -37,7 +37,7 @@ Moving and turn roles use the shared reviewed source set published below; NPC id
 `commands/export_idle_clip.py` produces [ANIM-003](../../specs/animation/003-animation-catalogue/authoring.md) native
 idle clips: Godot `Animation` resources on the reference skeleton, with tracks bound to `%GeneralSkeleton:<bone>`. It
 writes the clip only; pack metadata is authored by hand and checked by the
-[validator](#animation-pack-validation). The author guide is
+[validator](#animation-variant-validation). The author guide is
 [`game/assets/animations/README.md`](../../game/assets/animations/README.md). Prerequisites: `blender` (tested 5.3) and
 `godot-mono` with the imported game cache; override the executables with `BLENDER` and `GODOT_PATH`.
 
@@ -45,12 +45,12 @@ Kimodo path, which re-exports the default `sad` clip:
 
 ```sh
 python3 tools/animation-pipeline/commands/export_idle_clip.py kimodo \
-  --character-root game/assets/animations/source/reference/female \
-  --source game/assets/animations/source/reference/female/idle/sad.blend \
+  --character-root game/assets/animations/authoring/reference/female \
+  --source game/assets/animations/idle/sad/source/sad.blend \
   --action kimodo_m0a3dyf0 \
   --skeleton-scene res://assets/characters/reference/female/reference_female.blend \
   --check-skeleton-scene res://assets/characters/reference/male/reference_male.blend \
-  --output game/assets/animations/packs/default/idle/sad.tres
+  --output game/assets/animations/idle/sad/sad.tres
 ```
 
 Control-rig (Rigify or equivalent) path:
@@ -59,7 +59,7 @@ Control-rig (Rigify or equivalent) path:
 python3 tools/animation-pipeline/commands/export_idle_clip.py rig \
   --blend PATH/authoring.blend --control-rig rig --target Female --action my_idle \
   --skeleton-scene res://assets/characters/reference/female/reference_female.blend \
-  --output game/content/my_pack/assets/animations/packs/my_pack/idle/my_idle.tres
+  --output game/content/my_pack/assets/animations/idle/my_idle/my_idle.tres
 ```
 
 Both paths share these options: `--name` (resource name, default the output stem), `--no-loop`, `--frame-start` and
@@ -90,31 +90,42 @@ The export has three stages beneath a fresh staging directory:
    UID. Any failure leaves the previous clip untouched.
 
 The command prints an `IDLE_CLIP_JSON=` summary; `report.json`, `samples.json` and both tool logs stay in the staging
-directory. Outputs must be `.tres` files inside `game/` and outside authoring-source directories.
+directory. Outputs must be `.tres` files inside `game/`, outside authoring-source directories. For a check without
+republishing the shipped stance, put `--output` under `game/temp/` and add
+`--compare res://assets/animations/idle/sad/sad.tres`. The relocation check matched the earlier scratch export
+byte-for-byte and the published data excluding the scratch export's differing UID header.
 
-## Animation Pack Validation
+## Animation Variant Validation
 
-`godot/commands/validate_animation_pack.gd` is the headless ANIM-003 pack validator. It calls the game's
-`AnimationPackValidationCommand`, so it uses the same `AnimationPackLoader` validation as catalogue loading, and it
-never writes files. Build the game's C# project first (`dotnet build AlleyCat.sln`).
+`godot/commands/validate_animation_variants.gd` uses the same descriptor and composition validation as
+catalogue loading. It does not write authored files. Run `dotnet build AlleyCat.sln`, import the project
+(`godot-mono --headless --editor --path game --import`), then run from the repository root:
 
 ```sh
 godot-mono --headless --xr-mode off --path game \
-  --script "$PWD/tools/animation-pipeline/godot/commands/validate_animation_pack.gd" -- \
-  --pack=res://assets/animations/packs/default/pack.json \
+  --script "$PWD/tools/animation-pipeline/godot/commands/validate_animation_variants.gd" -- \
+  --variant=res://assets/animations/idle/sad/variant.json \
+  --variant=res://assets/animations/locomotion/feminine/variant.json \
   --template=res://assets/characters/templates/reference_female/reference_female_npc.tscn \
-  --template=res://assets/characters/templates/reference_male/reference_male_npc.tscn
+  --template=res://assets/characters/templates/reference_male/reference_male_npc.tscn \
+  --template=res://assets/characters/templates/reference_female/reference_female_player.tscn \
+  --require-compatible
 ```
 
-Options: repeatable `--pack=`; `--content-root=<res:// directory>` to resolve every pack in a content-pack context
-rooted there; repeatable `--template=` to report layering overrides, duplicate pack ids and per-entry skeleton binding
-for that character template; `--priority=` for packs a template does not reference (default: above every template
-pack); and `--require-compatible`. Exit status is 0 when valid, 1 when invalid (or incompatible under
-`--require-compatible`) and 2 for bad arguments. Diagnostics name the pack, entry, field and path; the last line is an
-`ANIMATION_PACK_VALIDATION_JSON=` summary.
+Pass at least one repeatable `--variant=` or `--template=`. Descriptor checks do not alter template selection.
+Template checks compose the existing layers and check skeleton bindings and defaults without starting a character
+scene. Add `--content-pack=<id>` before `--` to validate optional installed content under normal
+[CORE-008 selection rules](../../docs/content-packs.md#selecting-a-pack-at-startup).
 
-Test packs for every rejection class live in `game/tests/animation/catalogue/fixture/invalid/` (validate them with
-`--content-root=res://tests/animation/catalogue/fixture/`) and `game/tests/animation/catalogue/extension/invalid/`.
+Exit `0` means valid, with findings allowed unless `--require-compatible` is set. Exit `1` means invalid content,
+invalid composition or strict-mode incompatibility or invalid defaults. Exit `2` means bad usage or command
+load failure. The strict reference command above emits:
+
+```text
+ANIMATION_VARIANT_VALIDATION_JSON={"valid":true,"passed":true,"errors":[],"incompatible":[],"invalid_defaults":[]}
+```
+
+See the [author guide](../../game/assets/animations/README.md#validating-variants) for the authoring workflow.
 
 Focused checks for both commands (they run Blender and Godot and write only beneath
 `game/temp/anim003-idle-clip-tests`):
@@ -164,15 +175,15 @@ and evidence paths cannot be destinations. Inputs are hashed before/after. There
 
 ### Shipped Feminine Source Replay
 
-The shipped descriptor and review still bind the original relative paths and exact input bytes. To verify ingestion,
-use the relocated source `.blend` (materialise Git LFS content first), descriptor, review and approval. Check
-their hashes against the preserved [published bundle][feminine-bundle] before staging them and again inside
+The protected descriptor and review still bind the original relative paths and exact input bytes. To verify ingestion,
+use the take, descriptor, review and approval under `locomotion/feminine/source/`. Materialise Git LFS content
+first. Check their hashes against the preserved [published bundle][feminine-bundle] before staging and again inside
 the mirror. Run Blender with the mirror as its working directory; keep the descriptor and review arguments
 relative. Use absolute paths to the checkout's tool and relocated calibration and to the scratch output. Do not
 restore the original layout in the checkout or edit retained evidence.
 
-Run with Bash, Blender 5.3.0, `jq` and `sha256sum` from the checkout root. Scratch needs space for a copy of the
-source and the replayed JSON.
+Run with Bash, Blender 5.3.0, `jq`, `sha256sum` and the [Blender Python dependencies](#environment) from the checkout
+root. Scratch needs space for a copy of the source and the replayed JSON.
 
 ```bash
 set -euo pipefail
@@ -181,8 +192,8 @@ scratch=$(mktemp -d "$root/game/temp/feminine-source-replay.XXXXXX")
 mirror="$scratch/mirror"
 # Original path prefix, used only inside the scratch mirror.
 old=game/assets/characters/animations/source/locomotion/locomotion_feminine_landing_ablation_01
-new=game/assets/animations/source/locomotion/locomotion_feminine_landing_ablation_01
-published="$root/game/assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json"
+new=game/assets/animations/locomotion/feminine/source/locomotion_feminine_landing_ablation_01
+published="$root/game/assets/animations/locomotion/feminine/landing-ablation-01.json"
 calibration="$root/game/assets/animations/motionbricks/poses.json"
 output="$scratch/replayed-reviewed-source.json"
 mkdir -p "$mirror/$(dirname "$old")"
@@ -211,8 +222,9 @@ cmp "$scratch/published-payload.json" "$scratch/replayed-payload.json"
 ```
 
 Compare the sorted JSON payloads, including ordered samples and review bindings, not the published and replayed
-files byte-for-byte: export provenance is separate from the payload. If a pre-move replay is available, compare
-replayed files byte-for-byte as an additional check. This replays approved ingestion only. The archived receipts
+files byte-for-byte: export provenance is separate from the payload. If a baseline replay is available, compare the
+two replays byte-for-byte as an additional check. Relocated inputs passed both comparisons without any changes to the
+protected files. This replays approved ingestion only. The archived receipts
 and capture records do not reconstruct the historical full review, including transient review files and recordings.
 It does not regenerate motion, give new approval or verify motion quality.
 
@@ -271,17 +283,19 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/animation-pipeli
 
 ## Repository Source Assets
 
-Durable authoring inputs split into two families: the three repository-fixed `.blend` artefacts under
-`game/assets/animations/source/` (shared by every character) and per-character authored inputs under
-`source/reference/{female,male}/` within the animation asset tree. Godot ignores `source/`, not the runtime asset
-directories. Generated workspaces, staged copies, published reviewed sources and sets, exported MotionBricks data,
+Under `game/assets/animations/`, `authoring/` holds repository-fixed assets, the calibrated female setup under
+`authoring/reference/female/`, shared workspaces and generator inputs. Dedicated
+inputs live beside their outputs in `idle/<variant>/source/`, `locomotion/feminine/source/` or `player-pose/source/`.
+Godot ignores `authoring/` and those `source/` children, not the runtime asset directories. See the
+[animation asset guide](../../game/assets/animations/README.md#category-first-storage) for the source-to-output map.
+Generated workspaces, staged copies, published reviewed sources and sets, exported MotionBricks data,
 native idle clips, metadata and reports are derivatives and cannot replace a source merely because they contain
 similar data. Locomotion sources reach runtime only through [reviewed-source ingestion](#reviewed-source-ingestion)
 and set publication. The [authoritative specification][spec] owns their preservation and retirement requirements.
 
 ### Canonical Clean Rig
 
-[`game/assets/animations/source/kimodo_source.blend`][canonical-source] is the repository-fixed clean
+[`game/assets/animations/authoring/kimodo_source.blend`][canonical-source] is the repository-fixed clean
 `Kimodo_Source` rig used by bootstrap and workspace composition. It contains no actions, meshes, or materials.
 [`bootstrap_paths.py`][bootstrap-paths] owns the path; [`bootstrap_workspace.py`][bootstrap-workspace] owns and enforces
 the exact approved baseline digest. Preserve the file byte-for-byte. Replace it only through deliberate baseline
@@ -289,7 +303,7 @@ re-approval with coordinated path, validation, and test updates.
 
 ### Character-Neutral Locomotion Template
 
-[`game/assets/animations/source/locomotion/locomotion_template.blend`][locomotion-template] contains the pose
+[`game/assets/animations/authoring/locomotion/locomotion_template.blend`][locomotion-template] contains the pose
 references, root waypoints, and neutral reference actions used for bootstrap workspace composition.
 [`bootstrap_paths.py`][bootstrap-paths] owns this repository-fixed path, and
 [`bootstrap_workspace.py`][bootstrap-workspace] owns and enforces its approved baseline digest. Preserve it
@@ -297,7 +311,7 @@ byte-for-byte. Replacement requires baseline re-approval and coordinated composi
 
 ### Monolithic Locomotion Input
 
-[`game/assets/animations/source/locomotion/locomotion.blend`][locomotion-source] is the read-only monolithic
+[`game/assets/animations/authoring/locomotion/locomotion.blend`][locomotion-source] is the read-only monolithic
 bootstrap and extraction input. It carries source actions and semantic segments together with character and template
 content. [`bootstrap_extraction.py`][bootstrap-extraction] owns this input and must never save over it. It is not a
 runtime input. Retire it only after bootstrap extraction and every reproducibility and provenance dependency has an
@@ -305,14 +319,14 @@ approved replacement.
 
 ### Per-Character Authored Inputs
 
-Each character owns two protected input families beneath its animation source directory
-(KIMODO-SRC-006): the calibrated retarget setup at `kimodo_retarget_setup.blend` and the animated idle sources at
-`idle/<variant>.blend` (for example the reference female's `sad.blend`). `--character-root` points to that source
-directory, not the character model directory. These are authored inputs, not repository-fixed assets or derivatives.
-[`bootstrap_paths.py`][bootstrap-paths] owns their path derivation. Idle sources are created only through
-[`idle_source_bootstrap`][idle-source-bootstrap] (below), which stages a byte-verified copy of the character's
-approved setup with the donor idle action appended, and refuses to overwrite an existing idle source. The pipeline
-never modifies them.
+KIMODO-SRC-006 protects the calibrated `kimodo_retarget_setup.blend` and the animated idle sources.
+`--character-root` selects the character's setup directory, not the model directory or the idle output root.
+The checked-in male generator input is not a calibrated male setup.
+[`bootstrap_paths.py`][bootstrap-paths] derives the staging destination independently:
+`game/assets/animations/idle/<variant>/source/<variant>.blend` by default. The shipped
+[`sad.blend`][sad-source] and [`sad.tres`][sad-clip] use this category-first layout. Only
+[`idle_source_bootstrap`][idle-source-bootstrap] publishes new idle sources; neither it nor the exporter modifies an
+existing source. The exporter takes the animated input explicitly via `--source`.
 
 Repository bootstrap and character input paths must report a clear error when a required input is missing; they must not
 silently select a generated derivative. Source validation covers structure, path ownership, provenance, and read-only
@@ -339,14 +353,16 @@ Use these supported entry points:
 
 ```sh
 blender --background --factory-startup --python tools/animation-pipeline/commands/idle_source_bootstrap.py -- \
-    --character-root game/assets/animations/source/reference/female --variant sad \
-    --donor-blend <donor.blend> --donor-action <idle_action>
+    --character-root game/assets/animations/authoring/reference/female --variant my_idle \
+    --donor-blend "$DONOR_BLEND" --donor-action "$IDLE_ACTION"
 python3 tools/animation-pipeline/commands/export_idle_clip.py --help
 ```
 
-`idle_source_bootstrap` creates one per-character idle source. It alone publishes new sources to that `idle/` directory:
-`--character-root`, `--variant`, `--donor-blend`, and `--donor-action` are required (`--setup`, `--temp-root`,
-`--repository-root`, and `--approved-character-baselines` exist for disposable tests). It resolves the character's
+Set `DONOR_BLEND` and `IDLE_ACTION` to the donor file and exact action for a new variant. `idle_source_bootstrap`
+requires `--character-root`, `--variant`, `--donor-blend` and `--donor-action`. To use a different idle category
+directory, pass `--idle-root`; it replaces `game/assets/animations/idle` in the derived destination. Successful
+publication ensures `.gdignore` in the new variant's `source/` child. `--setup`, `--temp-root`, `--repository-root`
+and `--approved-character-baselines` are available for disposable tests. The command resolves the character's
 Gate-1 approved baseline, copies the character setup byte-verified, appends only the donor's animated Kimodo-space
 idle action (admission requires an animated loop: more than one distinct frame, Kimodo-space pose-bone channels,
 finite values), reopens the staged blend to verify setup calibration parity, inert-rig absence, and the
@@ -395,11 +411,13 @@ synthetic fixtures; production motion data are structural, provenance, and immut
 oracles.
 
 [spec]: ../../specs/tooling/kimodo-pipeline/locomotive-animation-set.md
-[canonical-source]: ../../game/assets/animations/source/kimodo_source.blend
-[locomotion-template]: ../../game/assets/animations/source/locomotion/locomotion_template.blend
-[locomotion-source]: ../../game/assets/animations/source/locomotion/locomotion.blend
-[feminine-set]: ../../game/assets/animations/packs/default/locomotion/feminine/README.md
-[feminine-bundle]: ../../game/assets/animations/packs/default/locomotion/feminine/landing-ablation-01.json
+[canonical-source]: ../../game/assets/animations/authoring/kimodo_source.blend
+[locomotion-template]: ../../game/assets/animations/authoring/locomotion/locomotion_template.blend
+[locomotion-source]: ../../game/assets/animations/authoring/locomotion/locomotion.blend
+[feminine-set]: ../../game/assets/animations/locomotion/feminine/README.md
+[feminine-bundle]: ../../game/assets/animations/locomotion/feminine/landing-ablation-01.json
+[sad-source]: ../../game/assets/animations/idle/sad/source/sad.blend
+[sad-clip]: ../../game/assets/animations/idle/sad/sad.tres
 [bootstrap-paths]: kimodo_pipeline/bootstrap_paths.py
 [bootstrap-workspace]: kimodo_pipeline/bootstrap_workspace.py
 [bootstrap-extraction]: kimodo_pipeline/bootstrap_extraction.py

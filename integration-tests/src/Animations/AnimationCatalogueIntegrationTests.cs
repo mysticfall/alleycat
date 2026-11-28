@@ -14,106 +14,117 @@ namespace AlleyCat.IntegrationTests.Animations;
 /// </summary>
 public sealed class AnimationCatalogueIntegrationTests
 {
-    private const string DefaultPack = "res://assets/animations/packs/default/pack.json";
-    private const string ExtensionPack = "res://tests/animation/catalogue/extension/pack.json";
-    private const string FixtureRoot = "res://tests/animation/catalogue/fixture/";
     private const string FemaleBase = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string MaleBase = "res://assets/characters/templates/reference_male/reference_male_base.tscn";
 
-    /// <summary>The default pack validates under the production-derived default context and lists sad and feminine.</summary>
+    /// <summary>Reference descriptors resolve exact base-owned payloads and fixture entries are never discovered.</summary>
     [Fact]
     [Headless]
-    public void DefaultPack_ValidatesUnderDerivedDefaultContext()
-    {
-        ContentContext context = AnimationPackLoader.DeriveContext(DefaultPack);
-        AnimationPackManifest manifest = AnimationPackLoader.Load(DefaultPack, context, GodotAnimationPackResources.Instance);
-
-        Assert.Same(ContentContext.Default, context);
-        Assert.Equal("default", manifest.ID);
-        Assert.Collection(manifest.Entries,
-            sad => Assert.Equal((AnimationCategory.Idle, "sad", "res://assets/animations/packs/default/idle/sad.tres"), (sad.Category, sad.ID, sad.ResourcePath)),
-            feminine => Assert.Equal((AnimationCategory.Locomotion, "feminine", "res://assets/animations/packs/default/locomotion/feminine/set.json"),
-                (feminine.Category, feminine.ID, feminine.ResourcePath)));
-    }
-
-    /// <summary>The idle-only fixture resolves and loads its clip through an injected content-pack context.</summary>
-    [Fact]
-    [Headless]
-    public void FixturePack_LoadsThroughInjectedContentPackContext()
+    public void BaseCatalogue_SelectsOnlyTheDeclaredVariants()
     {
         using var rig = new FemaleRig();
-        AnimationCatalogue catalogue = Catalogue(rig.Logger, (FixtureRoot + "pack.json", 0, new ContentContext("fixture", FixtureRoot)));
-
-        catalogue.Build(rig.Skeleton);
-
-        AnimationEntry slump = Assert.Single(catalogue.Idle.Entries);
-        Assert.Equal(("slump", "fixture", FixtureRoot + "idle/slump.tres"), (slump.ID, slump.PackID, slump.ResourcePath));
-        Assert.Equal(FixtureRoot + "idle/slump.tres", catalogue.Idle.GetClip().ResourcePath);
-        Assert.Empty(catalogue.Locomotion.Entries);
-        catalogue.Free();
+        AnimationCatalogue catalogue = Catalogue(AnimationFixtureVariants.Sad, AnimationFixtureVariants.Feminine);
+        try
+        {
+            catalogue.Build(rig.Skeleton, ContentContext.Default, rig.Logger);
+            Assert.Collection(catalogue.Entries,
+                sad => Assert.Equal((AnimationCategory.Idle, "sad", "default", "res://assets/animations/idle/sad/sad.tres"),
+                    (sad.Category, sad.ID, sad.OwnerID, sad.ResourcePath)),
+                gait => Assert.Equal((AnimationCategory.Locomotion, "feminine", "default", "res://assets/animations/locomotion/feminine/set.json"),
+                    (gait.Category, gait.ID, gait.OwnerID, gait.ResourcePath)));
+            Assert.Null(catalogue.Idle.Find("slump"));
+        }
+        finally
+        {
+            catalogue.Free();
+        }
     }
 
-    /// <summary>
-    /// The extension pack, given the default context by location, overrides a default entry with a log line and adds a
-    /// locomotion entry whose set the ANIM-002 loader accepts.
-    /// </summary>
+    /// <summary>Remove preserves unaffected order; replacement appends; category/id, not id alone, is the key.</summary>
     [Fact]
     [Headless]
-    public void ExtensionPack_OverridesDefaultAndAddsLocomotion()
+    public void Layers_ApplyOperationsInOrderAndKeepCategoryKeysDistinct()
     {
         using var rig = new FemaleRig();
-        AnimationCatalogue catalogue = Catalogue(rig.Logger, (ExtensionPack, 10, null), (DefaultPack, 0, null));
-        catalogue.DefaultLocomotion = "feminine";
-
-        catalogue.Build(rig.Skeleton);
-
-        Assert.Equal("extension", Assert.Single(catalogue.Idle.Entries).PackID);
-        Assert.Contains(rig.Logger.Messages, m => m == "Animation catalogue: idle entry 'sad' from pack 'extension' overrides pack 'default'");
-        Assert.Equal(["feminine", "stroll"], catalogue.Locomotion.Entries.Select(e => e.ID));
-        Assert.Equal("feminine", catalogue.Locomotion.Effective.ID);
-        var calibration = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
-        Assert.NotSame(catalogue.Locomotion.CreateSampler(calibration), catalogue.Locomotion.CreateSampler(calibration, "stroll"));
-        catalogue.Free();
+        AnimationCatalogue catalogue = Catalogue(AnimationFixtureVariants.Sad, AnimationFixtureVariants.Feminine, AnimationFixtureVariants.Slump);
+        try
+        {
+            catalogue.AddChild(AnimationFixtureVariants.Layer("Derived",
+                AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Remove, "idle", "slump"),
+                AnimationFixtureVariants.Add(AnimationFixtureVariants.GaitWithIdleID()),
+                AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Replace, "idle", "sad",
+                    "res://tests/animation/catalogue/fixture/idle/sad_replacement.json")));
+            catalogue.Build(rig.Skeleton, ContentContext.Default, rig.Logger);
+            Assert.Equal(["locomotion/feminine", "locomotion/sad", "idle/sad"],
+                catalogue.Entries.Select(entry => $"{entry.Category.ToName()}/{entry.ID}"));
+            Assert.Equal("res://tests/animation/catalogue/fixture/idle/slump.tres", catalogue.Idle.GetClip().ResourcePath);
+            Assert.Equal("feminine", catalogue.Locomotion.Effective.ID);
+            var calibration = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+            Assert.NotSame(catalogue.Locomotion.CreateSampler(calibration), catalogue.Locomotion.CreateSampler(calibration, "sad"));
+        }
+        finally
+        {
+            catalogue.Free();
+        }
     }
 
-    /// <summary>A disabled pack node contributes nothing; a duplicate enabled pack id fails construction.</summary>
+    /// <summary>All conflicts leave the installed state unpublished, including when a valid earlier operation ran.</summary>
     [Fact]
     [Headless]
-    public void PackNodes_EnabledOverrideAndDuplicateIDs()
+    public void Layers_RejectConflictsWithoutPublishingPartialCatalogue()
     {
         using var rig = new FemaleRig();
-        AnimationCatalogue disabled = Catalogue(rig.Logger, (DefaultPack, 0, null), (ExtensionPack, 10, null));
-        disabled.GetChild<AnimationPack>(1).Enabled = false;
-        disabled.Build(rig.Skeleton);
-        Assert.Equal("default", Assert.Single(disabled.Idle.Entries).PackID);
-        disabled.Free();
-
-        AnimationCatalogue duplicate = Catalogue(rig.Logger, (DefaultPack, 0, null), (DefaultPack, 5, null));
-        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => duplicate.Build(rig.Skeleton));
-        Assert.Contains("'default'", error.Message, StringComparison.Ordinal);
-        Assert.False(duplicate.IsBuilt);
-        duplicate.Free();
+        (AnimationVariantOperation[] Operations, string Expected)[] cases =
+        [
+            ([AnimationFixtureVariants.Add(AnimationFixtureVariants.Sad)], "cannot add existing idle/sad"),
+            ([AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Remove, "idle", "sad"),
+                AnimationFixtureVariants.Add(AnimationFixtureVariants.Sad)], "multiple operations on idle/sad"),
+            ([AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Remove, "idle", "missing")], "no inherited idle/missing"),
+            ([AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Replace, "idle", "missing", AnimationFixtureVariants.Slump)], "does not match idle/missing"),
+            ([AnimationFixtureVariants.Operation(AnimationVariantOperation.Action.Replace, "idle", "slump", AnimationFixtureVariants.Slump)], "no inherited idle/slump")
+        ];
+        foreach ((AnimationVariantOperation[] operations, string expected) in cases)
+        {
+            AnimationCatalogue catalogue = Catalogue(AnimationFixtureVariants.Sad, AnimationFixtureVariants.Feminine);
+            try
+            {
+                catalogue.AddChild(AnimationFixtureVariants.Layer("Derived", operations));
+                InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => catalogue.Build(rig.Skeleton, ContentContext.Default, rig.Logger));
+                Assert.Contains(expected, error.Message, StringComparison.Ordinal);
+                Assert.Contains("Derived[", error.Message, StringComparison.Ordinal);
+                Assert.False(catalogue.IsBuilt);
+            }
+            finally
+            {
+                catalogue.Free();
+            }
+        }
     }
 
-    /// <summary>Preference beats the template default, which beats the fallback; unknown ids are ignored.</summary>
+    /// <summary>Preference beats category default, then fallback; an unknown preference never changes selection.</summary>
     [Fact]
     [Headless]
     public void Views_ResolveDefaultsInOrder()
     {
         using var rig = new FemaleRig();
-        AnimationCatalogue catalogue = Catalogue(rig.Logger, (DefaultPack, 0, null), (ExtensionPack, 10, null));
+        AnimationCatalogue catalogue = Catalogue(AnimationFixtureVariants.Sad, AnimationFixtureVariants.Feminine, AnimationFixtureVariants.Stroll);
         catalogue.DefaultLocomotion = "stroll";
-        catalogue.Build(rig.Skeleton);
-        LocomotionAnimationView view = catalogue.Locomotion;
-
-        Assert.Equal("stroll", view.Effective.ID);
-        view.Preference = "feminine";
-        Assert.Equal("feminine", view.Effective.ID);
-        view.Preference = "sprint";
-        Assert.Equal("stroll", view.Effective.ID);
-        Assert.Contains(rig.Logger.Messages, m => m.Contains("agent preference 'sprint'", StringComparison.Ordinal));
-        Assert.Equal(["stroll"], view.FindByTag("leisurely").Select(e => e.ID));
-        catalogue.Free();
+        try
+        {
+            catalogue.Build(rig.Skeleton, ContentContext.Default, rig.Logger);
+            LocomotionAnimationView view = catalogue.Locomotion;
+            Assert.Equal("stroll", view.Effective.ID);
+            view.Preference = "feminine";
+            Assert.Equal("feminine", view.Effective.ID);
+            view.Preference = "sprint";
+            Assert.Equal("stroll", view.Effective.ID);
+            Assert.Contains(rig.Logger.Messages, message => message.Contains("agent preference 'sprint'", StringComparison.Ordinal));
+            Assert.Equal(["stroll"], view.FindByTag("leisurely").Select(entry => entry.ID));
+        }
+        finally
+        {
+            catalogue.Free();
+        }
     }
 
     /// <summary>
@@ -129,13 +140,13 @@ public sealed class AnimationCatalogueIntegrationTests
         {
             Skeleton3D skeleton = male.FindChild("GeneralSkeleton", true, false) as Skeleton3D
                 ?? throw new InvalidOperationException("Male base has no GeneralSkeleton.");
-            Animation clip = GD.Load<Animation>("res://assets/animations/packs/default/idle/sad.tres");
+            Animation clip = GD.Load<Animation>("res://assets/animations/idle/sad/sad.tres");
             Assert.True(skeleton.FindBone("breast_l") < 0);
             Assert.Contains(Enumerable.Range(0, clip.GetTrackCount()), i => clip.TrackGetPath(i).GetSubName(0) == "breast_l");
 
             var logger = new CapturingLogger();
-            AnimationCatalogue catalogue = Catalogue(logger, (DefaultPack, 0, null));
-            catalogue.Build(skeleton);
+            AnimationCatalogue catalogue = Catalogue(AnimationFixtureVariants.Sad);
+            catalogue.Build(skeleton, ContentContext.Default, logger);
 
             Assert.Equal("sad", Assert.Single(catalogue.Idle.Entries).ID);
             Assert.DoesNotContain(logger.Messages, m => m.Contains("excluding idle/", StringComparison.Ordinal));
@@ -159,8 +170,8 @@ public sealed class AnimationCatalogueIntegrationTests
         }
 
         var logger = new CapturingLogger();
-        AnimationCatalogue catalogue = Catalogue(logger, (DefaultPack, 0, null));
-        catalogue.Build(skeleton);
+        AnimationCatalogue catalogue = Catalogue(AnimationFixtureVariants.Sad);
+        catalogue.Build(skeleton, ContentContext.Default, logger);
 
         Assert.Empty(catalogue.Idle.Entries);
         string exclusion = Assert.Single(logger.Messages, m => m.Contains("excluding idle/sad", StringComparison.Ordinal));
@@ -189,7 +200,7 @@ public sealed class AnimationCatalogueIntegrationTests
         }
     }
 
-    /// <summary>Templates declare packs and defaults: base locomotion default, NPC idle default, no player idle default.</summary>
+    /// <summary>Templates declare variants and defaults: base locomotion default, NPC idle default, no player idle default.</summary>
     [Fact]
     [Headless]
     public void Templates_DeclareCatalogueDefaults()
@@ -208,8 +219,8 @@ public sealed class AnimationCatalogueIntegrationTests
                 var catalogue = AnimationCatalogue.RequireFor(root);
                 Assert.Equal(idle, catalogue.DefaultIdle);
                 Assert.Equal("feminine", catalogue.DefaultLocomotion);
-                AnimationPack pack = Assert.Single(catalogue.GetChildren().OfType<AnimationPack>());
-                Assert.Equal((DefaultPack, true, 0), (pack.Manifest, pack.Enabled, pack.Priority));
+                AnimationVariantLayer layer = Assert.Single(catalogue.GetChildren().OfType<AnimationVariantLayer>());
+                Assert.Equal([AnimationFixtureVariants.Sad, AnimationFixtureVariants.Feminine], layer.Operations.Select(operation => operation.Descriptor));
             }
             finally
             {
@@ -218,14 +229,10 @@ public sealed class AnimationCatalogueIntegrationTests
         }
     }
 
-    private static AnimationCatalogue Catalogue(ILogger logger, params (string Manifest, int Priority, ContentContext? Context)[] packs)
+    private static AnimationCatalogue Catalogue(params string[] descriptors)
     {
-        var catalogue = new AnimationCatalogue { LoggerOverride = logger };
-        foreach ((string manifest, int priority, ContentContext? context) in packs)
-        {
-            catalogue.AddChild(new AnimationPack { Manifest = manifest, Priority = priority, ContextOverride = context });
-        }
-
+        var catalogue = new AnimationCatalogue();
+        catalogue.AddChild(AnimationFixtureVariants.Layer("Base", [.. descriptors.Select(AnimationFixtureVariants.Add)]));
         return catalogue;
     }
 

@@ -9,8 +9,8 @@ contract:
 * ``kimodo_retarget_setup`` — per-character, at the character authoring root.
 * ``locomotion_[variant]_authoring`` — per-character authoring workspace.
 
-The per-character animated idle sources (KIMODO-SRC-006) are a fifth,
-character-scoped authored input family derived by ``derive_idle_source_path``.
+Animated idle sources (KIMODO-SRC-006) sit beside their playable variant,
+independently of the character root that owns the calibrated setup.
 """
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ from typing import Union
 
 from .contracts import validate_variant
 
-CANONICAL_SOURCE_RELATIVE = Path("game/assets/animations/source/kimodo_source.blend")
-NEUTRAL_TEMPLATE_RELATIVE = Path("game/assets/animations/source/locomotion/locomotion_template.blend")
-DEFAULT_CHARACTER_ROOT_RELATIVE = Path("game/assets/animations/source/reference/female")
+CANONICAL_SOURCE_RELATIVE = Path("game/assets/animations/authoring/kimodo_source.blend")
+NEUTRAL_TEMPLATE_RELATIVE = Path("game/assets/animations/authoring/locomotion/locomotion_template.blend")
+DEFAULT_CHARACTER_ROOT_RELATIVE = Path("game/assets/animations/authoring/reference/female")
 CHARACTER_SETUP_RELATIVE = Path("kimodo_retarget_setup.blend")
-IDLE_SOURCE_DIRECTORY_RELATIVE = Path("idle")
+IDLE_CATEGORY_RELATIVE = Path("game/assets/animations/idle")
 AUTHORING_WORKSPACE_DIRECTORY_RELATIVE = Path("locomotion")
 
 
@@ -104,22 +104,21 @@ def derive_artefact_paths(
 
 
 def derive_idle_source_path(
-    character_asset_root: Union[str, Path],
+    idle_root: Union[str, Path],
     variant: str,
 ) -> Path:
-    """Derive the per-character animated idle-source path for ``variant``.
+    """Derive the protected animated idle source under an idle category root.
 
-    Idle sources live at ``[character authoring root]/idle/
-    <variant>.blend`` (KIMODO-SRC-006); they are protected character-authored
-    inputs the pipeline never modifies.  Paths are derived only — existence is
-    a later idle-staging-phase concern.
+    Idle sources live at ``<idle root>/<variant>/source/<variant>.blend``.
+    Paths are derived only — existence is a later idle-staging-phase concern.
     """
     try:
         validated_variant = validate_variant(variant)
     except ValueError as error:
         raise BootstrapPathError(f"Invalid variant for the idle source: {error}") from error
     return (
-        _character_asset_root(character_asset_root)
-        / IDLE_SOURCE_DIRECTORY_RELATIVE
+        _character_asset_root(idle_root)
+        / validated_variant
+        / "source"
         / f"{validated_variant}.blend"
     )

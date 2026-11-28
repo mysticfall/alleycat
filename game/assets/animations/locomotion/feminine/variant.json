@@ -1,0 +1,8 @@
+{
+  "schema": "anim003_variant_v1",
+  "category": "locomotion",
+  "id": "feminine",
+  "tags": ["relaxed", "feminine"],
+  "description": "walks with an easy, relaxed feminine gait",
+  "set": "assets/animations/locomotion/feminine/set.json"
+}

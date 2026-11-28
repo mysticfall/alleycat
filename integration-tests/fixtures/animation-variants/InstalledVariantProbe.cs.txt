@@ -1,0 +1,169 @@
+using AlleyCat.Animations;
+using AlleyCat.Core.Content;
+using AlleyCat.Motion;
+using AlleyCat.Navigation;
+using Godot;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace AlleyCat.Testing;
+
+/// <summary>Process-level proof run outside the normal integration host's CORE-008 bypass.</summary>
+public partial class InstalledVariantProbe : Node
+{
+    private const string BaseFixture = "res://assets/testing/animation_variants/";
+    private const string PackID = "animation_variant_probe";
+    private const string Pack = "res://content/" + PackID + "/";
+    private const string ShippedBaseTemplate = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string BaseSad = "res://assets/animations/idle/sad/";
+    private const string BaseGait = "res://assets/animations/locomotion/feminine/";
+    private const string SourceSHA256 = "dd5837bd66f83a5117ca06d3305b5789d377f447673743961f2a198f8fd023af";
+
+    /// <inheritdoc />
+    public override void _Ready() => Callable.From(() => _ = RunAsync()).CallDeferred();
+
+    private async Task RunAsync()
+    {
+        ILogger<InstalledVariantProbe> logger = Game.Instance.GetRequiredService<ILogger<InstalledVariantProbe>>();
+        SceneTree tree = GetTree();
+        tree.NodeAdded += BindNativeFree;
+        try
+        {
+            Check(!RuntimeContext.IsIntegrationTest(), "The integration startup bypass must not be active.");
+            IContentResolver resolver = Game.Instance.GetRequiredService<IContentResolver>();
+            ContentContext active = resolver.GetCurrentContentContext();
+            string start = resolver.ResolveStartScenePath("res://not_the_active_pack.tscn");
+            Check(active.ContentID == PackID && active.RootPath == Pack && start == Pack + "start.tscn",
+                $"CORE-008 did not select the real fixture pack: {active}, start='{start}'.");
+            logger.LogInformation("VARIANT_PROOF_ACTIVE {ContentID} {Root} {Start}", active.ContentID, active.RootPath, start);
+
+            Character.Character baseActor = await InstallAsync(BaseFixture + "base_actor.tscn");
+            var baseCatalogue = AnimationCatalogue.RequireFor(baseActor);
+            CheckLayers(baseCatalogue, [ShippedBaseTemplate], ["BaseVariants"]);
+            CheckKeys(baseCatalogue, ["idle/sad", "locomotion/feminine"]);
+            CheckIdle(baseActor, baseCatalogue, "sad", "default", BaseSad + "variant.json", BaseSad + "sad.tres", logger);
+            AnimationEntry gait = CheckGait(baseCatalogue, logger);
+            Check(baseActor.GetNode<MotionBricksNavigation>("MotionBricksNavigation").CurrentIdle?.ResourcePath == BaseSad + "sad.tres",
+                "The installed base NPC did not start in the selected native sad clip.");
+
+            Character.Character derivedActor = await InstallAsync(start);
+            var derived = AnimationCatalogue.RequireFor(derivedActor);
+            CheckLayers(derived, [ShippedBaseTemplate, Pack + "derived_template.tscn"], ["BaseVariants", "FixtureVariants"]);
+            CheckKeys(derived, ["locomotion/feminine", "idle/quiet", "idle/sad"]);
+            CheckIdle(derivedActor, derived, "quiet", PackID, Pack + "idle/quiet/variant.json", Pack + "idle/quiet/quiet.tres", logger);
+            CheckIdle(derivedActor, derived, "sad", PackID, Pack + "idle/sad/variant.json", Pack + "idle/sad/replacement.tres", logger);
+            AnimationEntry inheritedGait = CheckGait(derived, logger);
+            Check(gait.ID == inheritedGait.ID && gait.Category == inheritedGait.Category
+                && gait.DescriptorPath == inheritedGait.DescriptorPath && gait.ResourcePath == inheritedGait.ResourcePath
+                && gait.OwnerID == inheritedGait.OwnerID && gait.Description == inheritedGait.Description
+                && gait.Tags.SequenceEqual(inheritedGait.Tags), "The inherited gait entry changed.");
+            Check(derived.Idle.TemplateDefault == "sad" && derivedActor.GetNode<MotionBricksNavigation>("MotionBricksNavigation")
+                .CurrentIdle?.ResourcePath == Pack + "idle/sad/replacement.tres",
+                "The replacement did not supply the inherited default's active native clip.");
+            CheckIdle(baseActor, baseCatalogue, "sad", "default", BaseSad + "variant.json", BaseSad + "sad.tres", logger);
+
+            logger.LogInformation("VARIANT_PROOF_PASS installed base and derived NPCs bind exact owner-local payloads");
+            Game.Instance.RequestExit();
+        }
+        catch (Exception error)
+        {
+            logger.LogError(error, "VARIANT_PROOF_FAIL");
+            Game.Instance.RequestExit(1);
+        }
+        finally
+        {
+            tree.NodeAdded -= BindNativeFree;
+        }
+    }
+
+    private async Task<Character.Character> InstallAsync(string scenePath)
+    {
+        Character.Character actor = ResourceLoader.Load<PackedScene>(scenePath).Instantiate<Character.Character>();
+        AddChild(actor);
+        for (int frame = 0; frame < 60; frame++)
+        {
+            MotionBricksNavigation? navigation = actor.GetNodeOrNull<MotionBricksNavigation>("MotionBricksNavigation");
+            Check(string.IsNullOrEmpty(navigation?.Failure), navigation?.Failure ?? "");
+            if (navigation?.NativeIdleOwnsBody == true)
+            {
+                Check(AnimationCatalogue.RequireFor(actor).IsBuilt, $"'{scenePath}' did not build the runtime catalogue.");
+                return actor;
+            }
+
+            _ = await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        }
+
+        throw new InvalidOperationException($"'{scenePath}' never installed and entered native idle.");
+    }
+
+    private static void CheckLayers(AnimationCatalogue catalogue, string[] sources, string[] names)
+    {
+        AnimationVariantLayer[] layers = [.. catalogue.GetChildren().OfType<AnimationVariantLayer>()];
+        Check(layers.Length == sources.Length,
+            $"'{catalogue.GetPath()}' did not retain the exact authored layer chain.");
+        for (int index = 0; index < sources.Length; index++)
+        {
+            AnimationVariantLayer layer = layers.Single(item => item.Name == names[index]);
+            Check(layer.Operations.Length == 2
+                && layer.Operations.All(operation => operation.ResourcePath.StartsWith(sources[index] + "::", StringComparison.Ordinal)),
+                $"Layer '{layer.Name}' lost declaration ownership '{sources[index]}'.");
+        }
+    }
+
+    private static void CheckKeys(AnimationCatalogue catalogue, string[] expected)
+        => Check(catalogue.Entries.Select(entry => $"{entry.Category.ToName()}/{entry.ID}").SequenceEqual(expected),
+            $"Unexpected installed keys: {string.Join(", ", catalogue.Entries)}.");
+
+    private static void CheckIdle(
+        Character.Character actor, AnimationCatalogue catalogue, string id, string owner, string descriptor, string payload, ILogger logger)
+    {
+        AnimationEntry? entry = catalogue.Idle.Find(id);
+        Animation clip = catalogue.Idle.GetClip(id);
+        Skeleton3D skeleton = actor.RequireMotionTarget();
+        Check(entry is { Category: AnimationCategory.Idle } && entry.OwnerID == owner && entry.DescriptorPath == descriptor
+            && entry.ResourcePath == payload && clip.ResourcePath == payload, $"Idle {id} resolved the wrong owner, descriptor or payload.");
+        Check(skeleton.FindBone("Hips") >= 0 && AnimationCatalogue.ReadBoneTracks(clip).Any(track => track.Bone == "Hips"),
+            $"Idle {id} has no binding for Hips on the installed native skeleton.");
+        logger.LogInformation("VARIANT_PROOF_IDLE {Actor} idle/{Id} owner={Owner} descriptor={Descriptor} payload={Payload} tracks={Tracks}",
+            actor.Name, id, owner, descriptor, payload, clip.GetTrackCount());
+    }
+
+    private static AnimationEntry CheckGait(AnimationCatalogue catalogue, ILogger logger)
+    {
+        AnimationEntry gait = catalogue.Locomotion.Effective;
+        Check(gait is { Category: AnimationCategory.Locomotion, ID: "feminine", OwnerID: "default" }
+            && gait.DescriptorPath == BaseGait + "variant.json" && gait.ResourcePath == BaseGait + "set.json", "Wrong inherited gait.");
+        var data = new SomaMotionData(ProjectSettings.GlobalizePath("res://assets/animations/motionbricks/poses.json"));
+        ReviewedRoleSampler sampler = catalogue.Locomotion.CreateSampler(data);
+        Check(sampler.RoleSourceSHA256("forward") == SourceSHA256, "The gait did not bind the unchanged reviewed source.");
+        logger.LogInformation("VARIANT_PROOF_GAIT locomotion/feminine owner={Owner} descriptor={Descriptor} set={Set} take={SHA256}",
+            gait.OwnerID, gait.DescriptorPath, gait.ResourcePath, SourceSHA256);
+        return gait;
+    }
+
+    private static void BindNativeFree(Node node)
+    {
+        if (node is MotionBricksNavigation nav)
+        {
+            nav.SessionFactory = static () => new NativeFreeSession();
+        }
+    }
+
+    private static void Check(bool pass, string message)
+    {
+        if (!pass)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    private sealed class NativeFreeSession : SomaInferenceWorker.ISession
+    {
+        public Transform3D[][] Generate(Transform3D[][] context, Transform3D[][] target)
+            => throw new InvalidOperationException("This stationary installed proof must not request inference.");
+
+        public void Dispose()
+        {
+        }
+    }
+}
